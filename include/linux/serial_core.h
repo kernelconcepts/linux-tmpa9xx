@@ -164,6 +164,8 @@
 /* NWPSERIAL */
 #define PORT_NWPSERIAL	85
 
+#define PORT_TMPA910	83
+
 #ifdef __KERNEL__
 
 #include <linux/compiler.h>
