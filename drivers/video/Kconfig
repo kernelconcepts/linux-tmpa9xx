@@ -920,6 +920,14 @@ config FB_EPSON1355
 	  framebuffer.  Product specs at
 	  <http://www.erd.epson.com/vdc/html/products.htm>.
 
+
+config FB_TMPA910
+	bool "Tohiba TMPA910 buffer device support"
+	depends on (FB = y) && (ARCH_TMPA910)
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
+	  
 config FB_S1D13XXX
 	tristate "Epson S1D13XXX framebuffer support"
 	depends on FB

@@ -656,6 +656,27 @@ config SERIAL_PXA_CONSOLE
 	  your boot loader (lilo or loadlin) about how to pass options to the
 	  kernel at boot time.)
 
+config SERIAL_TMPA910
+	bool "Additional TMPA910 serial port support"
+	depends on ARM && ARCH_TMPA910
+	select SERIAL_CORE
+	help
+	  If you have a Firmware TMPA910 based machine and you 
+	  want to use an additional serial port
+	  
+config SERIAL_TMPA910_CONSOLE
+	bool "Console on Additional TMPA910 serial port"
+	depends on SERIAL_TMPA910
+	select SERIAL_CORE_CONSOLE
+	help
+	  Add TMPA910 serial port to console
+	  serial port
+	  
+config SERIAL_TMPA910_CONSOLE_PREFERED
+	bool "Add the first TMPA910 additional serial port to prefered console"
+	depends on SERIAL_TMPA910_CONSOLE
+ 
+
 config SERIAL_SA1100
 	bool "SA1100 serial port support"
 	depends on ARM && ARCH_SA1100
