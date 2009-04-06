@@ -1,11 +1,25 @@
 /*
- * arch/arm/mach-tmpa910/topas910.c -- Topas 910 machine 
+ *  arch/arm/mach-tmpa910/topas910.c 
  *
- *	Copyright (C) 2008 bplan GmbH
+ * Copyright (C) 2008 bplan GmbH. All rights reserved.
+ * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
  *
- *  This file is subject to the terms and conditions of the GNU General Public
- *  License. See the file COPYING in the main directory of this archive for
- *  more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * Toshiba Topas 910 machine, reference design for the TMPA910CRAXBG SoC 
+ *
  */
 
 #include <linux/device.h>
@@ -285,7 +299,6 @@ _setup_lcdc_device(void)
 static void __init
 topas910_init(void)
 {
-
 	NPRINTK("->");
 
 	platform_bus.coherent_dma_mask=0xffffffff;
@@ -293,16 +306,14 @@ topas910_init(void)
 	
 	_setup_lcdc_device();
 		
-  platform_add_devices(devices, ARRAY_SIZE(devices));
-
-  
+	platform_add_devices(devices, ARRAY_SIZE(devices));
 }
 
 
 MACHINE_START(TOPAS910, "Toshiba Topas910")
-        /* Maintainer:  */
+        /* Maintainer:  Florian Boor <florian.boor@kernelconcepts.de> */
         .phys_io        = TMPA910_IO_PHYS_BASE,
-				.boot_params    = 0,
+	.boot_params    = 0,
         .io_pg_offst    = (io_p2v(TMPA910_IO_PHYS_BASE) >> 18) & 0xfffc,
         .map_io         = topas910_map_io,
         .init_irq       = topas910_init_irq,
