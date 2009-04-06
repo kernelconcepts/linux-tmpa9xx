@@ -319,13 +319,15 @@ config ARCH_IMX
 	  Support for Motorola's i.MX family of processors (MX1, MXL).
 
 config ARCH_TMPA910
-	bool "Toshiba TMPA910 based bard support"
+	bool "Toshiba TMPA910-based"
 	select CPU_ARM926T
 	select GENERIC_GPIO
+	select ARCH_REQUIRE_GPIOLIB
 	select GENERIC_CLOCKEVENTS
 	select GENERIC_CLOCKEVENTS_BUILD
 	help
-		This enables support for Toshiba TMPA910 board
+		This enables support for Toshiba TMPA910 / TMPA910CR based
+		devices.
 
 config ARCH_IOP13XX
 	bool "IOP13xx-based"
