@@ -1,5 +1,5 @@
 /*
- *  linux/include/asm-arm/arch-imx2/system.h
+ *  arch/arm/mach-tmpa910/include/mach/system.h
  *
  *  Copyright (C) 1999 ARM Limited
  *  Copyright (C) 2000 Deep Blue Solutions Ltd
@@ -42,18 +42,15 @@ arch_reset(char mode)
 
   wdt_base = (char *) (0xf0010000);
 
-  //printk("wdt_base=0x%p reset\n", wdt_base);
-
   if (wdt_base==NULL )
   {
-          //printk("force base\n");
           wdt_base = (uint8_t *) 0xf0010000;
   }
 
   outl( 0x1, (uint32_t *) (wdt_base + 0));
   outl( 0x3, (uint32_t *) (wdt_base + 8));
 
-  // Bye !
+  /* Bye ! */
 }
 
 #endif

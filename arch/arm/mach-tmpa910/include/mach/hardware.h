@@ -1,10 +1,8 @@
 /*
- *  linux/include/asm-arm/arch-mx2ads/hardware.h
+ *  arch/arm/mach-tmpa910/include/mach/hardware.h
  *
+ *  Based on arch-mx2ads/hardware.h, which is:
  *  Copyright (C) 2004 Metrowerks Corp.
- *
- *  Based on arch-integrator/hardware.h, which is:
- *    Copyright (C) 1999 ARM Limited.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
