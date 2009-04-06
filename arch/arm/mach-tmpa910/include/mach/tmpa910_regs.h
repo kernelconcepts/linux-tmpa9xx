@@ -1,31 +1,67 @@
 /*
  * Copyright (C) 2008 bplan GmbH. All rights reserved.
+ * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
  *
- * TMPA910 register
- * header
-*/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * TMPA910 register header
+ */
 
 #ifndef __TMPA910_REGS__
 #define __TMPA910_REGS__
 
-/********/
+/* GPIO PORTS */
+
 /*
- *   Base address = 0xF0805000
- *    Register    Address
+ * Base address = 0xF0805000
+ * Register    Address
  *                                                       Description
- *   Name        (base+)
+ * Name        (base+)
  * GPIOFDATA   0x03FC      PortF Data Regsiter
  * GPIOFDIR    0x0400      PortF Data Direction Register
  * GPIOFFR1    0x0424      PortF Function Register1
 */
+
+#define PORT_BASE          0xF0800000
+
+#define PORT_OFS_DATA      0x03FC  /* 0x000 - 0x3FC, data register masked from 0x00 to 0xFF << 2 */
+#define PORT_OFS_DIR       0x0400  /* direction register */
+#define PORT_OFS_FR1       0x0424  /* function register 1 */
+#define PORT_OFS_FF2       0x0428  /* function register 2 */
+#define PORT_OFS_IS        0x0804  /* interrupt sensitivity */
+#define PORT_OFS_IBE       0x0808  /* interrupt both edge register */
+#define PORT_OFS_IEV       0x080C  /* interrupt event register */
+#define PORT_OFS_IE        0x0810  /* interrupt enable register*/
+#define PORT_OFS_RIS       0x0814  /* raw interrupt status register */
+#define PORT_OFS_MIS       0x0818  /* masked interrupt status */
+#define PORT_OFS_IC        0x081C  /* interrupt clear register */
+#define PORT_OFS_ODE       0x0C00  /* open drain output */
+
+#define TMPA910_GPIO_REG(x,y) (PORT_BASE | (x) | (y)) /* base addr + port offset + register offset */
+
+/********/
+#define PORTB_BASE       (PORT_BASE + 0x1000)
+
+#define PORTB_GPIODATA	 (PORTB_BASE + PORT_OFS_DATA)
+
 
 #define PORTF_BASE  			0xF0805000
 #define PORTF_GPIOFDIR		(PORTF_BASE + 0x0400)
 #define PORTF_GPIOFFR     (PORTF_BASE + 0x0424)
 #define PORTF_GPIOFODE    (PORTF_BASE + 0x0c00)
 
-/********/
-#define TMPA910_TIMER0 0xf0040000
 
 /********/
 #define PORTD_BASE  			0xF0803000
@@ -39,13 +75,13 @@
 #define PORTE_GPIOEFR 		(PORTE_BASE + 0x0424)
 
 /********/
-#define PORTB_BASE  			0xF0801000
-#define PORTB_GPIODATA	 (PORTB_BASE + 0x03fc)
-
-/********/
 #define PORTG_BASE  			0xF0806000
 #define PORTG_GPIOFR	 (PORTG_BASE + 0x0424)
 
+
+
+/********/
+#define TMPA910_TIMER0 0xf0040000
 /********/
 #define LCDC_BASE 0xf4200000
 /********/
