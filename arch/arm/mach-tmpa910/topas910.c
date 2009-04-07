@@ -335,10 +335,10 @@ static void topas910_plat_nand_cmd_ctrl(struct mtd_info *mtd, int cmd, unsigned 
 	else
 		*reg_control &= ~TMPA910_NAND_ALE;
     
-	if (ctrl & NAND_WE)
-		*reg_control |= TMPA910_NAND_WE;
+	if (ctrl & NAND_NCE)
+		*reg_control &= ~TMPA910_NAND_CE0;
 	else
-		*reg_control &= ~TMPA910_NAND_WE;
+		*reg_control |= TMPA910_NAND_CE0;
 }
 
 static int topas910_plat_nand_dev_ready(struct mtd_info *mtd)
@@ -385,7 +385,7 @@ static void topas910_plat_nand_init(void) {
     
     printk(KERN_INFO "TMPA910 simple NAMD driver initializing\n");
     
-    return (*reg_control |= TMPA910_NAND_CE0);
+    return;
 }
 #endif
 
