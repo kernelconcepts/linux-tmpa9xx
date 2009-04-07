@@ -35,6 +35,22 @@
 */
 
 #define PORT_BASE          0xF0800000
+#define PORTA    0x0000
+#define PORTB    0x1000
+#define PORTC    0x2000
+#define PORTD    0x3000
+#define PORTE    0x4000
+#define PORTF    0x5000
+#define PORTG    0x6000
+#define PORTH    0x7000
+#define PORTJ    0x8000
+#define PORTK    0x9000
+#define PORTL    0xA000
+#define PORTM    0xB000
+#define PORTN    0xC000
+#define PORTP    0xD000
+#define PORTR    0xE000
+#define PORTT    0xF000
 
 #define PORT_OFS_DATA      0x03FC  /* 0x000 - 0x3FC, data register masked from 0x00 to 0xFF << 2 */
 #define PORT_OFS_DIR       0x0400  /* direction register */
@@ -50,6 +66,8 @@
 #define PORT_OFS_ODE       0x0C00  /* open drain output */
 
 #define TMPA910_GPIO_REG(x,y) (PORT_BASE | (x) | (y)) /* base addr + port offset + register offset */
+
+#define TMPA910_CFG_PORT_GPIO(x) (*((volatile int*)(PORT_BASE | (x) | PORT_OFS_FR1)) = 0)
 
 /********/
 #define PORTB_BASE       (PORT_BASE + 0x1000)

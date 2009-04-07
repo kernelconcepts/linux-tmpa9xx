@@ -30,8 +30,8 @@ struct tmpa910_gpio_chip {
 	unsigned int data_reg;
 	unsigned int data_dir_reg;
     
-    unsigned int input_mask;
-    unsigned int output_mask;
+	unsigned int input_mask;
+	unsigned int output_mask;
 };
 
 #define to_tmpa910_gpio_chip(c) container_of(c, struct tmpa910_gpio_chip, chip)
@@ -142,22 +142,22 @@ static void tmpa910_gpio_dbg_show(struct seq_file *s, struct gpio_chip *chip)
 	}
 
 static struct tmpa910_gpio_chip tmpa910_gpio_banks[] = {
-	TMPA910_GPIO_BANK("A", 0x0000, 8, 0),
-	TMPA910_GPIO_BANK("B", 0x1000, 8, 8),
-	TMPA910_GPIO_BANK("C", 0x2000, 8, 16),
-	TMPA910_GPIO_BANK("D", 0x3000, 8, 24),
-	TMPA910_GPIO_BANK("E", 0x4000, 8, 32),
-	TMPA910_GPIO_BANK("F", 0x5000, 8, 40),
-	TMPA910_GPIO_BANK("G", 0x6000, 8, 48),
-	TMPA910_GPIO_BANK("H", 0x7000, 8, 56),
-	TMPA910_GPIO_BANK("J", 0x8000, 8, 72),
-	TMPA910_GPIO_BANK("K", 0x9000, 8, 80),
-	TMPA910_GPIO_BANK("L", 0xA000, 8, 88),
-	TMPA910_GPIO_BANK("M", 0xB000, 8, 96),
-	TMPA910_GPIO_BANK("N", 0xC000, 8, 104),
-	TMPA910_GPIO_BANK("P", 0xD000, 8, 112),
-	TMPA910_GPIO_BANK("R", 0xE000, 8, 120),
-	TMPA910_GPIO_BANK("T", 0xF000, 8, 128),
+	TMPA910_GPIO_BANK("A", PORTA, 8, 0),
+	TMPA910_GPIO_BANK("B", PORTB, 8, 8),
+	TMPA910_GPIO_BANK("C", PORTC, 8, 16),
+	TMPA910_GPIO_BANK("D", PORTD, 8, 24),
+	TMPA910_GPIO_BANK("E", PORTE, 8, 32),
+	TMPA910_GPIO_BANK("F", PORTF, 8, 40),
+	TMPA910_GPIO_BANK("G", PORTG, 8, 48),
+	TMPA910_GPIO_BANK("H", PORTH, 8, 56),
+	TMPA910_GPIO_BANK("J", PORTJ, 8, 72),
+	TMPA910_GPIO_BANK("K", PORTK, 8, 80),
+	TMPA910_GPIO_BANK("L", PORTL, 8, 88),
+	TMPA910_GPIO_BANK("M", PORTM, 8, 96),
+	TMPA910_GPIO_BANK("N", PORTN, 8, 104),
+	TMPA910_GPIO_BANK("P", PORTP, 8, 112),
+	TMPA910_GPIO_BANK("R", PORTR, 8, 120),
+	TMPA910_GPIO_BANK("T", PORTT, 8, 128),
 };
 
 void __init tmpa910_gpio_init(void)
