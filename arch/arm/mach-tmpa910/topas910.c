@@ -20,12 +20,16 @@
  * 
  * Toshiba Topas 910 machine, reference design for the TMPA910CRAXBG SoC 
  *
+ * TODO: LED, input pad, audio codec, NAND, i2c, spi
  */
 
 #include <linux/device.h>
 #include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
+#include <linux/spi/spi.h>
+#include <linux/spi/spi_gpio.h>
+#include <linux/spi/mmc_spi.h>
 
 #include <asm/system.h>
 #include <mach/hardware.h>
@@ -53,11 +57,9 @@
 #include "topas910.h"
 
 /*********/
-/*********/
 //#define __DEBUG__
 #include <linux/debug.h>
 
-/*********/
 /*********/
 int topas910_io_mapped = 0;
 
@@ -80,14 +82,13 @@ void __init topas910_map_io(void)
 
 
 /*********/
-/*********/
 static void dummy_release(struct device *dev)
 {
         /* normally not freed */
 }
 
 static u64  topas910_dmamask = 0xffffffffUL;
-/*********/
+
 /*********/
 #ifdef CONFIG_USB_ISP1362_HCD
 static struct isp1362_platform_data isp1362_priv = {
@@ -136,6 +137,39 @@ static struct platform_device topas910_isp1362_device = {
 #endif
 
 
+/* 
+ * SPI and MMC/SD 
+ * This is a workaround only - we have a full featured SD slot but no 
+ * documentation about it.
+ */
+
+static struct spi_gpio_platform_data spi_gpio_priv = {
+        .miso = 48,
+	.mosi = 52,
+	.sck = 55,
+	.num_chipselect = 1,
+};
+
+static struct platform_device topas910_spi_gpio_device = {
+	.name = "spi_gpio",
+	.id = 0,
+	.num_resources = 0,
+	.dev = {
+		.platform_data = &spi_gpio_priv,
+	},
+};
+
+static struct spi_board_info topas910_spi_devices[] = {
+	{
+		.modalias = "mmc_spi",
+		.max_speed_hz = 2000000,
+		.chip_select = 0,
+		.controller_data = (void *)54,//SPI_GPIO_NO_CHIPSELECT,//(void *) 54,
+	},
+};
+
+/* Ethernet */
+ 
 static struct resource dm9000_resources[] = {
         [0] = {
                 .start  = 0x60000002,
@@ -161,12 +195,14 @@ static struct platform_device topas910_dm9000_device = {
         .num_resources  = ARRAY_SIZE(dm9000_resources),
         .resource       = dm9000_resources,
         .dev = {
-		.release        = dummy_release, // not needed
+		.release        = dummy_release,
 		.coherent_dma_mask = 0xffffffff,		
         },
 };
-/*********/
-/*********/
+
+/*
+ * Serial UART
+ */ 
 static struct resource tmpa910_resource_uart0[] = {
 	{
 		.start	= 0xf2000000,
@@ -187,11 +223,10 @@ struct platform_device tmpa910_device_uart0= {
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart0),
 };
 
-/*********/
-/*********/
+
 /*
- * Tousch screen
-*/
+ * Touchscreen
+ */
 static struct resource tmpa910_resource_ts[] = {
 	{
 		.start	= TS_BASE,
@@ -258,6 +293,7 @@ static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_uart0,
 	&tmpa910_device_ts,
 	&tmpa910_device_lcdc,
+	&topas910_spi_gpio_device,
 #ifdef CONFIG_USB_ISP1362_HCD
 	&topas910_isp1362_device
 #endif
@@ -301,12 +337,21 @@ topas910_init(void)
 {
 	NPRINTK("->");
 
+	/* DMA setup */
 	platform_bus.coherent_dma_mask=0xffffffff;
 	platform_bus.dma_mask=&topas910_dmamask;
 	
+	/* Pin configuration */
+	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
+	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
+    
+        /* Configure LCD interface */
 	_setup_lcdc_device();
-		
+
+	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
+	spi_register_board_info(topas910_spi_devices,
+				ARRAY_SIZE(topas910_spi_devices));
 }
 
 
