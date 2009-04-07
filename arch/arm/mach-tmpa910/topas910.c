@@ -20,7 +20,7 @@
  * 
  * Toshiba Topas 910 machine, reference design for the TMPA910CRAXBG SoC 
  *
- * TODO: LED, input pad, audio codec, NAND, i2c, spi
+ * TODO: LED, input pad (gpio-keys), audio codec (TI1773), NAND, i2c, spi
  */
 
 #include <linux/device.h>
@@ -30,6 +30,9 @@
 #include <linux/spi/spi.h>
 #include <linux/spi/spi_gpio.h>
 #include <linux/spi/mmc_spi.h>
+#include <linux/mtd/mtd.h>
+#include <linux/mtd/nand.h>
+#include <linux/mtd/partitions.h>
 
 #include <asm/system.h>
 #include <mach/hardware.h>
@@ -60,8 +63,10 @@
 //#define __DEBUG__
 #include <linux/debug.h>
 
-/*********/
-int topas910_io_mapped = 0;
+
+
+/* I/O Mapping related, might want to be moved to a CPU specific file */
+static int topas910_io_mapped = 0;
 
 static struct map_desc tmpa910_io_desc[] __initdata = {
 	{
@@ -81,7 +86,6 @@ void __init topas910_map_io(void)
 }
 
 
-/*********/
 static void dummy_release(struct device *dev)
 {
         /* normally not freed */
@@ -89,7 +93,8 @@ static void dummy_release(struct device *dev)
 
 static u64  topas910_dmamask = 0xffffffffUL;
 
-/*********/
+
+/* USB Controller device */
 #ifdef CONFIG_USB_ISP1362_HCD
 static struct isp1362_platform_data isp1362_priv = {
         .sel15Kres = 1,
@@ -138,7 +143,7 @@ static struct platform_device topas910_isp1362_device = {
 
 
 /* 
- * SPI and MMC/SD 
+ * GPIO SPI and MMC/SD 
  * This is a workaround only - we have a full featured SD slot but no 
  * documentation about it.
  */
@@ -162,11 +167,12 @@ static struct platform_device topas910_spi_gpio_device = {
 static struct spi_board_info topas910_spi_devices[] = {
 	{
 		.modalias = "mmc_spi",
-		.max_speed_hz = 2000000,
+		.max_speed_hz = 5000000,
 		.chip_select = 0,
-		.controller_data = (void *)54,//SPI_GPIO_NO_CHIPSELECT,//(void *) 54,
+		.controller_data = (void *)54,
 	},
 };
+
 
 /* Ethernet */
  
@@ -200,9 +206,11 @@ static struct platform_device topas910_dm9000_device = {
         },
 };
 
+
 /*
  * Serial UART
  */ 
+
 static struct resource tmpa910_resource_uart0[] = {
 	{
 		.start	= 0xf2000000,
@@ -216,7 +224,7 @@ static struct resource tmpa910_resource_uart0[] = {
 };
 
 
-struct platform_device tmpa910_device_uart0= {
+struct platform_device tmpa910_device_uart0 = {
 	.name		= "tmpa910-uart",
 	.id		= 0,
 	.resource	= tmpa910_resource_uart0,
@@ -227,6 +235,7 @@ struct platform_device tmpa910_device_uart0= {
 /*
  * Touchscreen
  */
+
 static struct resource tmpa910_resource_ts[] = {
 	{
 		.start	= TS_BASE,
@@ -259,8 +268,8 @@ struct platform_device tmpa910_device_ts = {
 };
 
 
-/*********/
-/*********/
+/* LCD controller device */
+
 static struct resource tmpa910_resource_lcdc[] = {
 	{
 		.start	= LCDC_BASE,
@@ -288,12 +297,108 @@ struct platform_device tmpa910_device_lcdc= {
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_lcdc),
 };
 
+/* NAMD Flash */
+#if defined(CONFIG_MTD_NAND_PLATFORM) || defined(CONFIG_MTD_NAND_PLATFORM_MODULE)
+#ifdef CONFIG_MTD_PARTITIONS
+const char *part_probes[] = { "cmdlinepart", NULL };
+
+static struct mtd_partition topas910_plat_nand_partitions[] = {
+	{
+		.name   = "NAND file system",
+		.size   = MTDPART_SIZ_FULL,
+		.offset = 0,
+	},
+};
+#endif
+
+#define TMPA910_NAND_CLE (1 << 5)
+#define TMPA910_NAND_ALE (1 << 6)
+#define TMPA910_NAND_WE  (1 << 7)
+#define TMPA910_NAND_CE0 (1 << 4)
+#define TMPA910_NAND_BUSY (1 << 1)
+
+static void topas910_plat_nand_cmd_ctrl(struct mtd_info *mtd, int cmd, unsigned int ctrl)
+{
+	struct nand_chip *this = mtd->priv;
+    volatile int *reg_control = (int *)NDFMCR0;
+
+	if (cmd == NAND_CMD_NONE)
+		return;
+
+	if (ctrl & NAND_CLE)
+		*reg_control |= TMPA910_NAND_CLE;
+	else
+		*reg_control &= ~TMPA910_NAND_CLE;
+    
+	if (ctrl & NAND_ALE)
+		*reg_control |= TMPA910_NAND_ALE;
+	else
+		*reg_control &= ~TMPA910_NAND_ALE;
+    
+	if (ctrl & NAND_WE)
+		*reg_control |= TMPA910_NAND_WE;
+	else
+		*reg_control &= ~TMPA910_NAND_WE;
+}
+
+static int topas910_plat_nand_dev_ready(struct mtd_info *mtd)
+{
+    volatile int *reg_control = (int *)NDFMCR0;
+    
+    return (*reg_control & TMPA910_NAND_BUSY);
+}
+
+static struct platform_nand_data topas910_plat_nand_data = {
+	.chip = {
+		.chip_delay = 30, //TODO check
+#ifdef CONFIG_MTD_PARTITIONS
+		.part_probe_types = part_probes,
+		.partitions = topas910_plat_nand_partitions,
+		.nr_partitions = ARRAY_SIZE(topas910_plat_nand_partitions),
+#endif
+	},
+	.ctrl = {
+		.cmd_ctrl  = topas910_plat_nand_cmd_ctrl,
+		.dev_ready = topas910_plat_nand_dev_ready,
+	},
+};
+
+static struct resource topas910_plat_nand_resources = {
+	.start = NDFDTR, /* This is the NAND data register */
+	.end   = NDFDTR,
+	.flags = IORESOURCE_IO,
+};
+
+static struct platform_device topas910_plat_nand_device = {
+	.name = "gen_nand",
+	.id = -1,
+	.num_resources = 1,
+	.resource = &topas910_plat_nand_resources,
+	.dev = {
+		.platform_data = &topas910_plat_nand_data,
+	},
+};
+
+static void topas910_plat_nand_init(void) {
+    
+    volatile int *reg_control = (int *)NDFMCR0;
+    
+    printk(KERN_INFO "TMPA910 simple NAMD driver initializing\n");
+    
+    return (*reg_control |= TMPA910_NAND_CE0);
+}
+#endif
+
+
 static struct platform_device *devices[] __initdata = {
 	&topas910_dm9000_device,
 	&tmpa910_device_uart0,
 	&tmpa910_device_ts,
 	&tmpa910_device_lcdc,
 	&topas910_spi_gpio_device,
+#if defined(CONFIG_MTD_NAND_PLATFORM) || defined(CONFIG_MTD_NAND_PLATFORM_MODULE)
+	&topas910_plat_nand_device,
+#endif
 #ifdef CONFIG_USB_ISP1362_HCD
 	&topas910_isp1362_device
 #endif
@@ -331,14 +436,16 @@ _setup_lcdc_device(void)
 	tmpa910_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
 }
 
-/***/
+
+/* Topas910 device initialisation */
+
 static void __init
 topas910_init(void)
 {
 	NPRINTK("->");
 
 	/* DMA setup */
-	platform_bus.coherent_dma_mask=0xffffffff;
+	platform_bus.coherent_dma_mask = 0xffffffff;
 	platform_bus.dma_mask=&topas910_dmamask;
 	
 	/* Pin configuration */
@@ -358,7 +465,7 @@ topas910_init(void)
 MACHINE_START(TOPAS910, "Toshiba Topas910")
         /* Maintainer:  Florian Boor <florian.boor@kernelconcepts.de> */
         .phys_io        = TMPA910_IO_PHYS_BASE,
-	.boot_params    = 0,
+        .boot_params    = 0,
         .io_pg_offst    = (io_p2v(TMPA910_IO_PHYS_BASE) >> 18) & 0xfffc,
         .map_io         = topas910_map_io,
         .init_irq       = topas910_init_irq,
