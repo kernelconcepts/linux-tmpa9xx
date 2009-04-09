@@ -71,9 +71,9 @@ static int topas910_io_mapped = 0;
 static struct map_desc tmpa910_io_desc[] __initdata = {
 	{
 		.virtual = TMPA910_IO_VIRT_BASE,
-		.pfn		 = __phys_to_pfn(TMPA910_IO_PHYS_BASE),
-		.length	 = TMPA910_IO_SIZE,
-		.type		 = MT_DEVICE,
+		.pfn = __phys_to_pfn(TMPA910_IO_PHYS_BASE),
+		.length	= TMPA910_IO_SIZE,
+		.type = MT_DEVICE,
 	}
 };
 
@@ -129,15 +129,15 @@ static struct resource tmpa910_resource_isp1362[] = {
 };
 
 static struct platform_device topas910_isp1362_device = {
-        .name           = "isp1362-hcd",
-        .id             = 0,
-        .num_resources  = ARRAY_SIZE(tmpa910_resource_isp1362),
-        .resource       = tmpa910_resource_isp1362,
-        .dev = {
-					.platform_data = &isp1362_priv,
-						.release        = dummy_release, // not needed
-					.coherent_dma_mask = 0xffffffff,		
-        },
+	.name           = "isp1362-hcd",
+	.id             = 0,
+	.num_resources  = ARRAY_SIZE(tmpa910_resource_isp1362),
+	.resource       = tmpa910_resource_isp1362,
+	.dev = {
+		.platform_data = &isp1362_priv,
+		.release = dummy_release,
+		.coherent_dma_mask = 0xffffffff,		
+	},
 };
 #endif
 
@@ -214,7 +214,7 @@ static struct platform_device topas910_dm9000_device = {
 static struct resource tmpa910_resource_uart0[] = {
 	{
 		.start	= 0xf2000000,
-		.end	= 0xf2000000+0x100,
+		.end	= 0xf2000000 + 0x100,
 		.flags	= IORESOURCE_MEM,
 	}, {
 		.start	= 10,
@@ -239,11 +239,11 @@ struct platform_device tmpa910_device_uart0 = {
 static struct resource tmpa910_resource_ts[] = {
 	{
 		.start	= TS_BASE,
-		.end	= TS_BASE+0x40,
+		.end	= TS_BASE + 0x40,
 		.flags	= IORESOURCE_MEM,
 	}, {
 		.start	= ADC_BASE,
-		.end	= ADC_BASE+0x100,
+		.end	= ADC_BASE + 0x100,
 		.flags	= IORESOURCE_MEM,
 	}, {
 		.start	= INTR_VECT_GPIOD,
@@ -273,7 +273,7 @@ struct platform_device tmpa910_device_ts = {
 static struct resource tmpa910_resource_lcdc[] = {
 	{
 		.start	= LCDC_BASE,
-		.end	= LCDC_BASE+0x400,
+		.end	= LCDC_BASE + 0x400,
 		.flags	= IORESOURCE_MEM,
 	}, {
 		.start	= FB_OFFSET,
@@ -320,37 +320,40 @@ static struct mtd_partition topas910_plat_nand_partitions[] = {
 static void topas910_plat_nand_cmd_ctrl(struct mtd_info *mtd, int cmd, unsigned int ctrl)
 {
 	struct nand_chip *this = mtd->priv;
-    volatile int *reg_control = (int *)NDFMCR0;
-
+    
+printk("nand ctl %i %x\n", cmd, NDFMCR0);
+	if (ctrl & NAND_CTRL_CHANGE) {
+		if (ctrl & NAND_CLE)
+			NDFMCR0 |= TMPA910_NAND_CLE;
+		else
+			NDFMCR0 &= ~TMPA910_NAND_CLE;
+	
+		if (ctrl & NAND_ALE)
+			NDFMCR0 |= TMPA910_NAND_ALE;
+		else
+			NDFMCR0 &= ~TMPA910_NAND_ALE;
+    
+		if (ctrl & NAND_NCE) /* controller inverts value */
+			NDFMCR0 |= TMPA910_NAND_CE0;
+		else
+			NDFMCR0 &= ~TMPA910_NAND_CE0;
+	}
+    
 	if (cmd == NAND_CMD_NONE)
 		return;
-
-	if (ctrl & NAND_CLE)
-		*reg_control |= TMPA910_NAND_CLE;
-	else
-		*reg_control &= ~TMPA910_NAND_CLE;
-    
-	if (ctrl & NAND_ALE)
-		*reg_control |= TMPA910_NAND_ALE;
-	else
-		*reg_control &= ~TMPA910_NAND_ALE;
-    
-	if (ctrl & NAND_NCE)
-		*reg_control &= ~TMPA910_NAND_CE0;
-	else
-		*reg_control |= TMPA910_NAND_CE0;
+ 
+	writeb(cmd, this->IO_ADDR_W);
 }
 
 static int topas910_plat_nand_dev_ready(struct mtd_info *mtd)
 {
-    volatile int *reg_control = (int *)NDFMCR0;
-    
-    return (*reg_control & TMPA910_NAND_BUSY);
+    printk("nand ready %i\n", !(NDFMCR0 & TMPA910_NAND_BUSY));
+	return !(NDFMCR0 & TMPA910_NAND_BUSY);
 }
 
 static struct platform_nand_data topas910_plat_nand_data = {
 	.chip = {
-		.chip_delay = 30, //TODO check
+		.chip_delay = 50, //TODO check
 #ifdef CONFIG_MTD_PARTITIONS
 		.part_probe_types = part_probes,
 		.partitions = topas910_plat_nand_partitions,
@@ -364,8 +367,8 @@ static struct platform_nand_data topas910_plat_nand_data = {
 };
 
 static struct resource topas910_plat_nand_resources = {
-	.start = NDFDTR, /* This is the NAND data register */
-	.end   = NDFDTR,
+	.start = NANDF_BASE | 0x0010, /* This is the NAND data register */
+	.end   = NANDF_BASE | 0x0010,
 	.flags = IORESOURCE_IO,
 };
 
@@ -378,19 +381,17 @@ static struct platform_device topas910_plat_nand_device = {
 		.platform_data = &topas910_plat_nand_data,
 	},
 };
-
-static void topas910_plat_nand_init(void) {
-    
-    volatile int *reg_control = (int *)NDFMCR0;
-    
-    printk(KERN_INFO "TMPA910 simple NAMD driver initializing\n");
-    
-    return;
-}
 #endif
 
 
+static struct platform_device topas910_led_device = {
+	.name = "led-topas",
+	.id = -1,
+};
+
+
 static struct platform_device *devices[] __initdata = {
+	&topas910_led_device,
 	&topas910_dm9000_device,
 	&tmpa910_device_uart0,
 	&tmpa910_device_ts,
@@ -417,18 +418,15 @@ _setup_lcdc_device(void)
 	topas910_v1_lcdc_platforminfo.pitch  = width*4;
 	
 	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
-	LCDReg[0] = 
-				  ( ((height/16)-1) << 2)	// pixel per line
-				| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
-				| ( (8-1) << 16 ) 			// tHFP, Horizontal front porch
-				| ( (8-1) << 24 ) 			// tHBP, Horizontal back porch
-				;
+	LCDReg[0] =	( ((height/16)-1) << 2)	// pixel per line
+			| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
+			| ( (8-1) << 16 ) 			// tHFP, Horizontal front porch
+			| ( (8-1) << 24 ); 			// tHBP, Horizontal back porch
 
-	LCDReg[1] = 
-				(2 << 24) 		// tVBP		
-				| (2 << 16) 		// tVFP
-				| ((2-1) << 10) 		// tVSP
-				| (width-1);
+	LCDReg[1] =     (2 << 24) 		// tVBP		
+			| (2 << 16) 		// tVFP
+			| ((2-1) << 10) 		// tVSP
+			| (width-1);
 
 	LCDReg[2] = ((width-1)<<16) | 0x0000e | 1<<13 | 0<<12 | 0<<11;
 	LCDReg[3] = 0;
@@ -449,11 +447,20 @@ topas910_init(void)
 	platform_bus.dma_mask=&topas910_dmamask;
 	
 	/* Pin configuration */
+	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
 	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
     
         /* Configure LCD interface */
 	_setup_lcdc_device();
+    
+	/* NAND Controller */
+	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
+	NDFMCR1 = 0x00000000; // ECC = Hamming
+	NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
+              	             // NDREn L = 4clks,H = 3clks
+	NDFINTC = 0x00000000; // ALL Interrupt Disable
+
 
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
@@ -472,18 +479,3 @@ MACHINE_START(TOPAS910, "Toshiba Topas910")
         .timer          = &topas910_timer,
         .init_machine   = topas910_init,
 MACHINE_END
-
-
-void tmpa910_led_blink(void)
-{
-	if(topas910_io_mapped)
-	{
-		uint32_t reg;
-	
-		reg = _in32(0xf08013FC);
-		reg ++;
-		_out32(0xf08013FC, reg);
-	}
-}
-
-EXPORT_SYMBOL(tmpa910_led_blink);
