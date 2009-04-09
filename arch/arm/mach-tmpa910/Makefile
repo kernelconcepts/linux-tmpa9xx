@@ -7,4 +7,4 @@
 
 # Object file lists.
 
-obj-y                   += irq.o time.o topas910.o gpio.o
+obj-y                   += irq.o time.o topas910.o gpio.o led-topas910.o
