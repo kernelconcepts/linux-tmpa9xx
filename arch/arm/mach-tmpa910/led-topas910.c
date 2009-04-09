@@ -74,7 +74,7 @@ static int segments_get(void)
     
 	for (i=0; i<num_pattern; i++)
 		if (p == pattern[i])
-			return (i - 1);
+			return i;
     
 	return -1;
 }
