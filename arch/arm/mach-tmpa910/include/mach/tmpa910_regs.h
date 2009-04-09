@@ -22,6 +22,8 @@
 #ifndef __TMPA910_REGS__
 #define __TMPA910_REGS__
 
+#define _REG(x) ((volatile *int)(x))
+
 /* GPIO Ports */
 
 #define PORT_BASE          0xF0800000
@@ -111,22 +113,22 @@
 /* NAND Flash Controller */
 #define NANDF_BASE  0xF2010000
 
-#define NDFMCR0  (NANDF_BASE | 0x0000) /* NAND-Flash Control Register 0 */
-#define NDFMCR1  (NANDF_BASE | 0x0004) /* NAND-Flash Control Register 1 */
-#define NDFMCR2  (NANDF_BASE | 0x0008) /* NAND-Flash Control Register 2 */
-#define NDFINTC  (NANDF_BASE | 0x000C) /* NAND-Flash Interrupt Control Register */
-#define NDFDTR   (NANDF_BASE | 0x0010) /* NAND-Flash Data Register */
-#define NDECCRD0 (NANDF_BASE | 0x0020) /* NAND-Flash ECC Read Register 0 */
-#define NDECCRD1 (NANDF_BASE | 0x0024) /* NAND-Flash ECC Read Register 1 */
-#define NDECCRD2 (NANDF_BASE | 0x0028) /* NAND-Flash ECC Read Register 2 */
-#define NDRSCA0  (NANDF_BASE | 0x0030) /* NAND-Flash Reed-Solomon Calculation Result Address Register 0 */
-#define NDRSCD0  (NANDF_BASE | 0x0034) /* NAND-Flash Reed-Solomon Calculation Result Data Register 0 */
-#define NDRSCA1  (NANDF_BASE | 0x0038) /* NAND-Flash Reed-Solomon Calculation Result Address Register 1 */
-#define NDRSCD1  (NANDF_BASE | 0x003C) /* NAND-Flash Reed-Solomon Calculation Result Data Register 1 */
-#define NDRSCA2  (NANDF_BASE | 0x0040) /* NAND-Flash Reed-Solomon Calculation Result Address Register 2 */
-#define NDRSCD2  (NANDF_BASE | 0x0044) /* NAND-Flash Reed-Solomon Calculation Result Data Register 2 */
-#define NDRSCA3  (NANDF_BASE | 0x0048) /* NAND-Flash Reed-Solomon Calculation Result Address Register 3 */
-#define NDRSCD3  (NANDF_BASE | 0x004C) /* NAND-Flash Reed-Solomon Calculation Result Data Register 3 */
+#define NDFMCR0  __REG(NANDF_BASE | 0x0000) /* NAND-Flash Control Register 0 */
+#define NDFMCR1  __REG(NANDF_BASE | 0x0004) /* NAND-Flash Control Register 1 */
+#define NDFMCR2  __REG(NANDF_BASE | 0x0008) /* NAND-Flash Control Register 2 */
+#define NDFINTC  __REG(NANDF_BASE | 0x000C) /* NAND-Flash Interrupt Control Register */
+#define NDFDTR   __REG(NANDF_BASE | 0x0010) /* NAND-Flash Data Register */
+#define NDECCRD0 __REG(NANDF_BASE | 0x0020) /* NAND-Flash ECC Read Register 0 */
+#define NDECCRD1 __REG(NANDF_BASE | 0x0024) /* NAND-Flash ECC Read Register 1 */
+#define NDECCRD2 __REG(NANDF_BASE | 0x0028) /* NAND-Flash ECC Read Register 2 */
+#define NDRSCA0  __REG(NANDF_BASE | 0x0030) /* NAND-Flash Reed-Solomon Calculation Result Address Register 0 */
+#define NDRSCD0  __REG(NANDF_BASE | 0x0034) /* NAND-Flash Reed-Solomon Calculation Result Data Register 0 */
+#define NDRSCA1  __REG(NANDF_BASE | 0x0038) /* NAND-Flash Reed-Solomon Calculation Result Address Register 1 */
+#define NDRSCD1  __REG(NANDF_BASE | 0x003C) /* NAND-Flash Reed-Solomon Calculation Result Data Register 1 */
+#define NDRSCA2  __REG(NANDF_BASE | 0x0040) /* NAND-Flash Reed-Solomon Calculation Result Address Register 2 */
+#define NDRSCD2  __REG(NANDF_BASE | 0x0044) /* NAND-Flash Reed-Solomon Calculation Result Data Register 2 */
+#define NDRSCA3  __REG(NANDF_BASE | 0x0048) /* NAND-Flash Reed-Solomon Calculation Result Address Register 3 */
+#define NDRSCD3  __REG(NANDF_BASE | 0x004C) /* NAND-Flash Reed-Solomon Calculation Result Data Register 3 */
 
 
 
