@@ -20,7 +20,8 @@
  * 
  * Toshiba Topas 910 machine, reference design for the TMPA910CRAXBG SoC 
  *
- * TODO: LED, input pad (gpio-keys), audio codec (TI1773), NAND, i2c, spi
+ * TODO: input pad (gpio-keys), audio codec (TI1773), NAND, i2c, spi
+ * TODO: separate SoC and board code
  */
 
 #include <linux/device.h>
