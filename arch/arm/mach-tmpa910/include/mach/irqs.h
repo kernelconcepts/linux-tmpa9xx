@@ -41,8 +41,8 @@
 #define TOPAS910_INT_DM9000 26
 
 /*
- * cHip internal -> not of the board
-*/
+ * Chip internal -> not of the board
+ */
 	#define INTR_VECT_WDT         0
 	#define INTR_VECT_RTC         1
 	#define INTR_VECT_TIMER01     2
