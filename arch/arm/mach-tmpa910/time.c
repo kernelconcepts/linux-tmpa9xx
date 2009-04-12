@@ -1,5 +1,5 @@
 /*
- *  linux/arch/arm/mach-topas/time.c
+ *  arch/arm/mach-tmpa910/time.c
  *
  *  Copyright (C) 2000-2001 Deep Blue Solutions
  *  Copyright (C) 2002 Shane Nay (shane@minirl.com)
