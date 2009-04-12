@@ -20,7 +20,7 @@
  * 
  * Toshiba Topas 910 machine, reference design for the TMPA910CRAXBG SoC 
  *
- * TODO: input pad (gpio-keys), audio codec (TI1773), NAND, i2c, spi
+ * TODO: input pad (gpio-keys), audio codec (TI1773), NAND, I2C, SPI, ADC
  * TODO: separate SoC and board code
  */
 
@@ -406,8 +406,8 @@ static struct platform_device *devices[] __initdata = {
 #endif
 };
 
-static void __init
-_setup_lcdc_device(void)
+
+static void __init _setup_lcdc_device(void)
 {
 	uint32_t *LCDReg;
 	int width  = 320;
@@ -436,10 +436,14 @@ _setup_lcdc_device(void)
 }
 
 
+void __init topas910_init_irq(void) {
+	tmpa910_init_irq();
+}
+
+
 /* Topas910 device initialisation */
 
-static void __init
-topas910_init(void)
+static void __init topas910_init(void)
 {
 	NPRINTK("->");
 
