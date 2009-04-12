@@ -11,6 +11,11 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
+ *
+ * GPIO functions implementation
+ *
+ * The GPIO ports are are organized in 16 ports of 8bit each, even if the 
+ * are all 32bit. Not all ports allow all functions / directions.
  */
 
 /* TODO: Interrupt support, check valid modes */
@@ -27,11 +32,12 @@
 struct tmpa910_gpio_chip {
 	struct gpio_chip chip;
 
-	unsigned int data_reg;
-	unsigned int data_dir_reg;
+	unsigned int data_reg;     /* Associated data register for GPIO bank */	  
+	unsigned int data_dir_reg; /* Register for pin direction setting     */
     
-	unsigned int input_mask;
-	unsigned int output_mask;
+	unsigned int input_mask;   /* Bits that are allowed to be input */
+	unsigned int output_mask;  /* Bits that are allowed to be output */
+	unsigned int irq_mask;     /* Bits that can trigger an interrupt */
 };
 
 #define to_tmpa910_gpio_chip(c) container_of(c, struct tmpa910_gpio_chip, chip)
@@ -42,6 +48,9 @@ static int tmpa910_gpio_direction_input(struct gpio_chip *chip, unsigned offset)
 	unsigned long flags;
 	u8 v;
 
+	if (!(tmpa910_chip->input_mask & (1 << offset)))
+		return -EINVAL;
+    
 	local_irq_save(flags);
 	v = __raw_readb(tmpa910_chip->data_dir_reg);
 	v &= ~(1 << offset);
@@ -58,6 +67,9 @@ static int tmpa910_gpio_direction_output(struct gpio_chip *chip,
 	unsigned long flags;
 //	int line;
 	u8 v;
+
+	if (!(tmpa910_chip->output_mask & (1 << offset)))
+		return -EINVAL;
 
 	local_irq_save(flags);
 
@@ -100,6 +112,7 @@ static void tmpa910_gpio_set(struct gpio_chip *chip, unsigned offset, int val)
 	unsigned long flags;
 	u8 v;
 
+	/* TODO: We could use the clever address based writing function here. */
 	local_irq_save(flags);
 	v = __raw_readb(tmpa910_chip->data_reg);
 	if (val)
@@ -125,7 +138,7 @@ static void tmpa910_gpio_dbg_show(struct seq_file *s, struct gpio_chip *chip)
 			   (data_dir_reg & (1 << i)) ? "out" : "in");
 }
 
-#define TMPA910_GPIO_BANK(name, port_base, num, base_gpio)	\
+#define TMPA910_GPIO_BANK(name, port_base, base_gpio, im, om, irqm)	\
 	{								\
 		.chip = {						\
 			.label		  = name,			\
@@ -135,29 +148,32 @@ static void tmpa910_gpio_dbg_show(struct seq_file *s, struct gpio_chip *chip)
 			.set		  = tmpa910_gpio_set,		\
 			.dbg_show	  = tmpa910_gpio_dbg_show,	\
 			.base		  = base_gpio,			\
-			.ngpio		  = num,				\
+			.ngpio		  = 8,				\
 		},							\
 		.data_reg	= TMPA910_GPIO_REG(port_base, PORT_OFS_DATA),	\
 		.data_dir_reg	= TMPA910_GPIO_REG(port_base, PORT_OFS_DIR),\
+		.input_mask	= im,	\
+		.output_mask	= om,\
+		.irq_mask	= irqm,	\
 	}
 
 static struct tmpa910_gpio_chip tmpa910_gpio_banks[] = {
-	TMPA910_GPIO_BANK("A", PORTA, 8, 0),
-	TMPA910_GPIO_BANK("B", PORTB, 8, 8),
-	TMPA910_GPIO_BANK("C", PORTC, 8, 16),
-	TMPA910_GPIO_BANK("D", PORTD, 8, 24),
-	TMPA910_GPIO_BANK("E", PORTE, 8, 32),
-	TMPA910_GPIO_BANK("F", PORTF, 8, 40),
-	TMPA910_GPIO_BANK("G", PORTG, 8, 48),
-	TMPA910_GPIO_BANK("H", PORTH, 8, 56),
-	TMPA910_GPIO_BANK("J", PORTJ, 8, 72),
-	TMPA910_GPIO_BANK("K", PORTK, 8, 80),
-	TMPA910_GPIO_BANK("L", PORTL, 8, 88),
-	TMPA910_GPIO_BANK("M", PORTM, 8, 96),
-	TMPA910_GPIO_BANK("N", PORTN, 8, 104),
-	TMPA910_GPIO_BANK("P", PORTP, 8, 112),
-	TMPA910_GPIO_BANK("R", PORTR, 8, 120),
-	TMPA910_GPIO_BANK("T", PORTT, 8, 128),
+	TMPA910_GPIO_BANK("A", PORTA, 0,  0xFF, 0x00, 0xFF),
+	TMPA910_GPIO_BANK("B", PORTB, 8,  0x00, 0xFF, 0x00),
+	TMPA910_GPIO_BANK("C", PORTC, 16, 0xE0, 0xFF, 0xA0),
+	TMPA910_GPIO_BANK("D", PORTD, 24, 0xFF, 0x00, 0xC0),
+	TMPA910_GPIO_BANK("E", PORTE, 32, 0xFF, 0x00, 0x00),
+	TMPA910_GPIO_BANK("F", PORTF, 40, 0xCF, 0xC0, 0x80),
+	TMPA910_GPIO_BANK("G", PORTG, 48, 0xFF, 0xFF, 0x00),
+	TMPA910_GPIO_BANK("H", PORTH, 56, 0xFF, 0xFF, 0x00),
+	TMPA910_GPIO_BANK("J", PORTJ, 72, 0x00, 0xFF, 0x00),
+	TMPA910_GPIO_BANK("K", PORTK, 80, 0x00, 0xFF, 0x00),
+	TMPA910_GPIO_BANK("L", PORTL, 88, 0x1F, 0x1F, 0x00),
+	TMPA910_GPIO_BANK("M", PORTM, 96, 0x0F, 0x0F, 0x00),
+	TMPA910_GPIO_BANK("N", PORTN, 104, 0xFF, 0xFF, 0xF0),
+	TMPA910_GPIO_BANK("P", PORTP, 112, 0xFF, 0xFF, 0xFF),
+	TMPA910_GPIO_BANK("R", PORTR, 120, 0x04, 0x07, 0x04),
+	TMPA910_GPIO_BANK("T", PORTT, 128, 0xFF, 0xFF, 0x00),
 };
 
 void __init tmpa910_gpio_init(void)
