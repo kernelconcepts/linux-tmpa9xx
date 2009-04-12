@@ -33,7 +33,7 @@
 #include <mach/tmpa910_regs.h>
 
 /*********/
-/*********/
+
 //#define __DEBUG__
 #include <linux/debug.h>
 
@@ -58,24 +58,24 @@ struct hw_ictl
 	uint32_t rsd3[32 + 0xc00/4];  // 0x0280 - 0x0dfc
 	uint32_t vicaddress;         	// 0x0f00
 };
+
 /*********/
-/*********/
-static void   tmpa910_ena_irq(unsigned int irq){
+
+static void tmpa910_ena_irq(unsigned int irq) {
 
 	volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
-	//NPRINTK("irq=%d\n", irq);
+    
 	hw_ictl->vicintenable = 1 << irq;
-
 }
 
-static void   tmpa910_dis_irq(unsigned int irq){
+static void tmpa910_dis_irq(unsigned int irq) {
 
 	volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
-	//NPRINTK("irq=%d\n", irq);
+
 	hw_ictl->vicintenclear = 1 << irq;
 }
 
-static void   tmpa910_ack_irq(unsigned int irq){
+static void tmpa910_ack_irq(unsigned int irq) {
 
 	volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
 
@@ -86,14 +86,13 @@ static void   tmpa910_ack_irq(unsigned int irq){
 
 }
 
-static void   tmpa910_end_irq(unsigned int irq){
+static void tmpa910_end_irq(unsigned int irq) {
 
 	volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
 	
 	NPRINTK("irq=%d, hw_ictl->vicaddress at 0x%p\n", irq, &hw_ictl->vicaddress);
 	
-  if (!(irq_desc[irq].status & (IRQ_DISABLED|IRQ_INPROGRESS)))
-	{
+	if (!(irq_desc[irq].status & (IRQ_DISABLED|IRQ_INPROGRESS))) {
 		hw_ictl->vicintenable = 1 << irq;
 	}
 }
@@ -116,18 +115,15 @@ static struct irq_chip  tmpa910_chip = {
   .set_type  = tmpa910_set_type,
 };
 
-void __init
- topas910_init_irq(void)
+void __init tmpa910_init_irq(void)
 {
-  volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
+	volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
 	int i;
 
 	NPRINTK("\n");
 
-
-
 	// Every interrupt to the IRQ execpetion
-	hw_ictl->vicintselect 			= 0;
+	hw_ictl->vicintselect = 0;
 
 	// make sure every pri unmasked
 	hw_ictl->vicswprioritymask  = 0xffff;
@@ -142,6 +138,5 @@ void __init
 		set_irq_chip(i,& tmpa910_chip);
 		set_irq_handler(i, handle_level_irq);
 		set_irq_flags(i, IRQF_VALID );
-  }
-
+	}
 }
