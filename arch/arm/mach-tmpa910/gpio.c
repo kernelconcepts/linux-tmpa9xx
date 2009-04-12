@@ -176,12 +176,14 @@ static struct tmpa910_gpio_chip tmpa910_gpio_banks[] = {
 	TMPA910_GPIO_BANK("T", PORTT, 128, 0xFF, 0xFF, 0x00),
 };
 
-void __init tmpa910_gpio_init(void)
+static int __init tmpa910_gpio_init(void)
 {
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(tmpa910_gpio_banks); i++)
 		gpiochip_add(&tmpa910_gpio_banks[i].chip);
+    
+	return 0;
 }
 
 arch_initcall(tmpa910_gpio_init);
