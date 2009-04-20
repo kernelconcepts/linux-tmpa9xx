@@ -192,32 +192,36 @@ static void tmpa910_gpioa_irq_handler(unsigned int irq, struct irq_desc *desc)
 	unsigned char status;
 	int i;
 
+	desc->chip->ack(irq);
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTA));
-	for (i = 0; i < 8; i++) {
-		if (status & (1 << i)) {
-		        // maybe don't look up nfrom table
-			int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(i)); /* or just the offset number from 0?! */
-		  printk("IRQ GPIOA gi: %i irq: %i\n", gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(i)), irq); 
-			generic_handle_irq(gpio_irq);
+        while (status) {
+		for (i = 0; i < 8; i++) {
+			if (status & (1 << i)) {
+				int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(i)); 
+			        /* or just the offset number from 0?! */
+				generic_handle_irq(gpio_irq);
+			}
 		}
+		status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTA));
 	}
+	desc->chip->unmask(irq);
 }
 
 static void tmpa910_gpioc_irq_handler(unsigned int irq, struct irq_desc *desc)
 {
 	unsigned char status;
 
+	desc->chip->ack(irq);
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTC));
 	if (status & (1 << 5)) {
 		int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(8));
-		  printk("IRQ GPIOC gi: %i irq: %i\n", gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(8)), irq); 
 		generic_handle_irq(gpio_irq);
 	}
 	if (status & (1 << 7)) {
 		int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(9));
-		  printk("IRQ GPIOC gi: %i irq: %i\n", gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(9)), irq); 
 		generic_handle_irq(gpio_irq);
 	}
+	desc->chip->unmask(irq);
 }
 
 static void tmpa910_gpiod_irq_handler(unsigned int irq, struct irq_desc *desc)
@@ -225,14 +229,15 @@ static void tmpa910_gpiod_irq_handler(unsigned int irq, struct irq_desc *desc)
 	unsigned char status;
 	int i;
 
+	desc->chip->ack(irq);
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTD));
 	for (i = 6; i < 8; i++) {
 		if (status & (1 << i)) {
 			int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(i + 4));
-		  printk("IRQ GPIOD gi: %i irq: %i\n", gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(i+4)), irq); 
 			generic_handle_irq(gpio_irq);
 		}
 	}
+	desc->chip->unmask(irq);
 }
 
 
@@ -240,12 +245,13 @@ static void tmpa910_gpiof_irq_handler(unsigned int irq, struct irq_desc *desc)
 {
 	unsigned char status;
 
+	desc->chip->ack(irq);
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTF));
 	if (status & (1 << 7)) {
 		int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(12));
-		  printk("IRQ GPIOF gi: %i irq: %i\n", gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(12)), irq); 
 		generic_handle_irq(gpio_irq);
 	}
+	desc->chip->unmask(irq);
 }
 
 
@@ -254,14 +260,15 @@ static void tmpa910_gpion_irq_handler(unsigned int irq, struct irq_desc *desc)
 	unsigned char status;
 	int i;
 
+	desc->chip->ack(irq);
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTN));
 	for (i = 4; i < 8; i++) {
 		if (status & (1 << i)) {
 			int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(i + 9));
-		  printk("IRQ GPION gi: %i irq: %i\n", gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(i+9)), irq); 
 			generic_handle_irq(gpio_irq);
 		}
 	}
+	desc->chip->unmask(irq);
 }
 
 static void tmpa910_gpiop_irq_handler(unsigned int irq, struct irq_desc *desc)
@@ -269,26 +276,28 @@ static void tmpa910_gpiop_irq_handler(unsigned int irq, struct irq_desc *desc)
 	unsigned char status;
 	int i;
 
+	desc->chip->ack(irq);
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTP));
 	for (i = 0; i < 8; i++) {
 		if (status & (1 << i)) {
 			int gpio_irq = gpio_to_irq(112 + i);
-		  printk("IRQ GPIOP gi: %i irq: %i\n", gpio_to_irq(112 + i), irq); 
 			generic_handle_irq(gpio_irq);
 		}
 	}
+	desc->chip->unmask(irq);
 }
 
 static void tmpa910_gpior_irq_handler(unsigned int irq, struct irq_desc *desc)
 {
 	unsigned char status;
 
+	desc->chip->ack(irq);
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTR));
 	if (status & (1 << 2)) {
 		int gpio_irq = gpio_to_irq(122);
-		  printk("IRQ GPIOR gi: %i irq: %i\n", gpio_to_irq(122), irq); 
 		generic_handle_irq(gpio_irq);
 	}
+	desc->chip->unmask(irq);
 }
 
 
@@ -298,7 +307,7 @@ static void tmpa910_gpio_irq_ack(unsigned int irq)
 	struct tmpa910_gpio_irq girq;
 	
 	BUG_ON((irq < TMPA910_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
-
+    
 	girq = irq_gpio_desc[gpio_irq];
     
 	__raw_writeb(1 << girq.bit, TMPA910_GPIO_REG_IC(girq.port));
@@ -344,11 +353,10 @@ static int tmpa910_gpio_irq_type(unsigned int irq, unsigned int type)
 	unsigned char reg_raise_high;
 	unsigned char reg_enable;
 	unsigned char port_mask;
-	
+
 	BUG_ON((irq < TMPA910_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
 
 	girq = irq_gpio_desc[gpio_irq];
-    
         reg_level_sel = __raw_readb(TMPA910_GPIO_REG_IS(girq.port));
         reg_edge_both = __raw_readb(TMPA910_GPIO_REG_IBE(girq.port));
         reg_raise_high = __raw_readb(TMPA910_GPIO_REG_IEV(girq.port));
@@ -436,21 +444,21 @@ static struct irq_chip tmpa910_gpio_irq_chip = {
 	}
 
 static struct tmpa910_gpio_chip tmpa910_gpio_banks[] = {
-	TMPA910_GPIO_BANK("A", PORTA, 0,  0xFF, 0x00, 0xFF), //8
+	TMPA910_GPIO_BANK("A", PORTA, 0,  0xFF, 0x00, 0xFF), /* 8 interrupts */
 	TMPA910_GPIO_BANK("B", PORTB, 8,  0x00, 0xFF, 0x00), 
-	TMPA910_GPIO_BANK("C", PORTC, 16, 0xE0, 0xFF, 0xA0), //2 
-	TMPA910_GPIO_BANK("D", PORTD, 24, 0xFF, 0x00, 0xC0), //2
+	TMPA910_GPIO_BANK("C", PORTC, 16, 0xE0, 0xFF, 0xA0), /* 2 interrupts */
+	TMPA910_GPIO_BANK("D", PORTD, 24, 0xFF, 0x00, 0xC0), /* 2 interrupts */
 	TMPA910_GPIO_BANK("E", PORTE, 32, 0xFF, 0x00, 0x00),
-	TMPA910_GPIO_BANK("F", PORTF, 40, 0xCF, 0xC0, 0x80), //1
+	TMPA910_GPIO_BANK("F", PORTF, 40, 0xCF, 0xC0, 0x80), /* 1 interrupt  */
 	TMPA910_GPIO_BANK("G", PORTG, 48, 0xFF, 0xFF, 0x00),
 	TMPA910_GPIO_BANK("H", PORTH, 56, 0xFF, 0xFF, 0x00),
 	TMPA910_GPIO_BANK("J", PORTJ, 72, 0x00, 0xFF, 0x00),
 	TMPA910_GPIO_BANK("K", PORTK, 80, 0x00, 0xFF, 0x00),
 	TMPA910_GPIO_BANK("L", PORTL, 88, 0x1F, 0x1F, 0x00),
 	TMPA910_GPIO_BANK("M", PORTM, 96, 0x0F, 0x0F, 0x00),
-	TMPA910_GPIO_BANK("N", PORTN, 104, 0xFF, 0xFF, 0xF0), //4
-	TMPA910_GPIO_BANK("P", PORTP, 112, 0xFF, 0xFF, 0xFF), //8
-	TMPA910_GPIO_BANK("R", PORTR, 120, 0x04, 0x07, 0x04), //1
+	TMPA910_GPIO_BANK("N", PORTN, 104, 0xFF, 0xFF, 0xF0), /* 4 interrupts */
+	TMPA910_GPIO_BANK("P", PORTP, 112, 0xFF, 0xFF, 0xFF), /* 8 interrupts */
+	TMPA910_GPIO_BANK("R", PORTR, 120, 0x04, 0x07, 0x04), /* 1 interrupt  */
 	TMPA910_GPIO_BANK("T", PORTT, 128, 0xFF, 0xFF, 0x00),
 };
 
@@ -465,8 +473,7 @@ static int __init tmpa910_gpio_init(void)
     
 	/* Now the interrupts */
 	for (i = 0; i < TMPA910_NUM_GPIO_IRQS; i++) {
-printk("GPIO: install handler gi_base: %i nr: %i gpio %i\n", gpio_to_irq(0), i, irq_gpio_desc[i].gpio);  
-		gpio_irq = gpio_to_irq(0) + i; //irq_gpio_desc[i].gpio;
+		gpio_irq = gpio_to_irq(0) + i;
 		set_irq_chip(gpio_irq, &tmpa910_gpio_irq_chip);
 		set_irq_handler(gpio_irq, handle_level_irq);
 		set_irq_flags(gpio_irq, IRQF_VALID);
