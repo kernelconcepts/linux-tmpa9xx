@@ -41,10 +41,10 @@
 #define _in32(__ofs)         ( * ( (volatile unsigned long *) (__ofs) ) )
 #define _out32(__ofs,__val)  { (* ( (volatile unsigned long *) (__ofs)) ) = __val; }
 
-void tmpa910_led_blink(void);
 #endif
 
-# define __REG(x)	(*((volatile u32 *)io_p2v(x)))
+#define __REG(x)	(*((volatile u32 *)io_p2v(x)))
+#define __PREG(x)       (io_v2p((u32)&(x)))
 
 /* For assembler  the C-type using macros are not useful */
 #define IO_ADDRESS(x) ((x)) 
