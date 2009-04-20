@@ -482,7 +482,9 @@ static int __init tmpa910_gpio_init(void)
 	/* Finally install the interrrupt handlers we need for the GPIOs */
 	set_irq_chained_handler(INTR_VECT_GPIOA, tmpa910_gpioa_irq_handler);
 	set_irq_chained_handler(INTR_VECT_GPIOC, tmpa910_gpioc_irq_handler);
+#if !defined(CONFIG_TOUCHSCREEN_TMPA910) && !defined(CONFIG_TOUCHSCREEN_TMPA910_MODULE)
 	set_irq_chained_handler(INTR_VECT_GPIOD, tmpa910_gpiod_irq_handler);
+#endif
 	set_irq_chained_handler(INTR_VECT_GPIOF, tmpa910_gpiof_irq_handler);
 	set_irq_chained_handler(INTR_VECT_GPION, tmpa910_gpion_irq_handler);
 	set_irq_chained_handler(INTR_VECT_GPIOP, tmpa910_gpiop_irq_handler);
