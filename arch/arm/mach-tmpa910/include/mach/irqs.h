@@ -32,7 +32,7 @@
  * ------------------------------------------------------------
  */
 
-#define NR_IRQS		(MAXIRQNUM + 1)
+#define NR_IRQS		(MAXIRQNUM + 1 + TMPA910_NUM_GPIO_IRQS)
 #define NR_FIQS		(MAXFIQNUM + 1)
 
 /*
@@ -40,45 +40,92 @@
  */
 #define TOPAS910_INT_DM9000 26
 
+
+#define TMPA910_NUM_IRQS	32
+
 /*
  * Chip internal -> not of the board
  */
-	#define INTR_VECT_WDT         0
-	#define INTR_VECT_RTC         1
-	#define INTR_VECT_TIMER01     2
-	#define INTR_VECT_TIMER23     3
-	#define INTR_VECT_TIMER45     4
-	#define INTR_VECT_GPIOD       5
-	#define INTR_VECT_I2C_CH0     6 
-	#define INTR_VECT_I2C_CH1     7 
-	#define INTR_VECT_ADC         8 
+#define INTR_VECT_WDT         0
+#define INTR_VECT_RTC         1
+#define INTR_VECT_TIMER01     2
+#define INTR_VECT_TIMER23     3
+#define INTR_VECT_TIMER45     4
+#define INTR_VECT_GPIOD       5
+#define INTR_VECT_I2C_CH0     6 
+#define INTR_VECT_I2C_CH1     7 
+#define INTR_VECT_ADC         8 
 
-	#define INTR_VECT_UART_CH0    10
-	#define INTR_VECT_UART_CH1    11
-	#define INTR_VECT_SSP_CH0     12
-	#define INTR_VECT_SSP_CH1     13
-	#define INTR_VECT_NDFC        14
-	#define INTR_VECT_CMSIF       15
-	#define INTR_VECT_DMA_ERROR   16
-	#define INTR_VECT_DMA_END     17
-	#define INTR_VECT_LCDC        18 
+#define INTR_VECT_UART_CH0    10
+#define INTR_VECT_UART_CH1    11
+#define INTR_VECT_SSP_CH0     12
+#define INTR_VECT_SSP_CH1     13
+#define INTR_VECT_NDFC        14
+#define INTR_VECT_CMSIF       15
+#define INTR_VECT_DMA_ERROR   16
+#define INTR_VECT_DMA_END     17
+#define INTR_VECT_LCDC        18 
 
-	#define INTR_VECT_LCDDA       20 
-	#define INTR_VECT_USB         21
-	#define INTR_VECT_SDHC        22 
-	#define INTR_VECT_I2S         23
+#define INTR_VECT_LCDDA       20 
+#define INTR_VECT_USB         21
+#define INTR_VECT_SDHC        22 
+#define INTR_VECT_I2S         23
 
-	#define INTR_VECT_GPIOR       26
-	#define INTR_VECT_GPIOP       27
-	#define INTR_VECT_GPION       28
-	#define INTR_VECT_GPIOF       29
-	#define INTR_VECT_GPIOC       30
-	#define INTR_VECT_GPIOA       31
-
-#define TOPAS910_NUM_IRQS	      (32)
-
+#define INTR_VECT_GPIOR       26
+#define INTR_VECT_GPIOP       27
+#define INTR_VECT_GPION       28
+#define INTR_VECT_GPIOF       29
+#define INTR_VECT_GPIOC       30
+#define INTR_VECT_GPIOA       31
 
 #define MAXIRQNUM             31 
 #define MAXFIQNUM             31
+
+
+/* 
+ * GPIO Interrupts
+ */
+
+#define TMPA910_NUM_GPIO_IRQS  26
+
+/* Port A */
+#define INT_GPIO_KI0	       33
+#define INT_GPIO_KI1	       34
+#define INT_GPIO_KI2	       35
+#define INT_GPIO_KI3	       36
+#define INT_GPIO_KI4	       37
+#define INT_GPIO_KI5	       38
+#define INT_GPIO_KI6	       39
+#define INT_GPIO_KI7	       40
+
+/* Port C */
+#define INT_GPIO_INT8	       41
+#define INT_GPIO_INT9	       42
+
+/* Port D */
+#define INT_GPIO_INTA          43
+#define INT_GPIO_INTB          44
+
+/* Port F */
+#define INT_GPIO_INTC	       45
+
+/* Port N */
+#define INT_GPIO_INTD	       46
+#define INT_GPIO_INTE	       47
+#define INT_GPIO_INTF	       48
+#define INT_GPIO_INTG	       49
+
+/* Port P */
+#define INT_GPIO_INT0	       50
+#define INT_GPIO_INT1	       51
+#define INT_GPIO_INT2	       52
+#define INT_GPIO_INT3	       53
+#define INT_GPIO_INT4	       54
+#define INT_GPIO_INT5	       55
+#define INT_GPIO_INT6	       56
+#define INT_GPIO_INT7	       57
+
+/* Port R */
+#define INT_GPIO_INTH	       58
 
 #endif
