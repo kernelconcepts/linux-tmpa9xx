@@ -20,7 +20,7 @@
  * 
  * Toshiba Topas 910 machine, reference design for the TMPA910CRAXBG SoC 
  *
- * TODO: input pad (gpio-keys), audio codec (TI1773), NAND, I2C, SPI, ADC
+ * TODO: audio codec (TI1773), NAND, I2C, SPI, ADC
  * TODO: separate SoC and board code
  */
 
@@ -28,6 +28,8 @@
 #include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
+#include <linux/input.h>
+#include <linux/gpio_keys.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/spi_gpio.h>
 #include <linux/spi/mmc_spi.h>
@@ -390,6 +392,62 @@ static struct platform_device topas910_led_device = {
 	.id = -1,
 };
 
+static struct gpio_keys_button topas910_buttons[] = {
+	{
+		.code	= KEY_LEFT,
+		.gpio	= 0,
+		.active_low = 0,
+		.desc	= "JOY_LEFT",
+		.type	= EV_KEY,
+		.wakeup = 0,
+	},
+	{
+		.code	= KEY_DOWN,
+		.gpio	= 1,
+		.active_low = 0,
+		.desc	= "JOY_DOWN",
+		.type	= EV_KEY,
+		.wakeup = 0,
+	},
+	{
+		.code	= KEY_UP,
+		.gpio	= 2,
+		.active_low = 0,
+		.desc	= "JOY_UP",
+		.type	= EV_KEY,
+		.wakeup = 0,
+	},
+	{
+		.code	= KEY_RIGHT,
+		.gpio	= 3,
+		.active_low = 0,
+		.desc	= "JOY_RIGHT",
+		.type	= EV_KEY,
+		.wakeup = 0,
+	},
+	{
+		.code	= KEY_ENTER,
+		.gpio	= 4,
+		.active_low = 0,
+		.desc	= "JOY_CENTER",
+		.type	= EV_KEY,
+		.wakeup = 1,
+	},
+};
+
+static struct gpio_keys_platform_data topas910_keys_data = {
+	.buttons	= topas910_buttons,
+	.nbuttons	= ARRAY_SIZE(topas910_buttons),
+};
+
+static struct platform_device topas910_keys_device = {
+	.name	= "gpio-keys",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &topas910_keys_data,
+	},
+};
+
 
 static struct platform_device *devices[] __initdata = {
 	&topas910_led_device,
@@ -398,6 +456,7 @@ static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_ts,
 	&tmpa910_device_lcdc,
 	&topas910_spi_gpio_device,
+	&topas910_keys_device,
 #if defined(CONFIG_MTD_NAND_PLATFORM) || defined(CONFIG_MTD_NAND_PLATFORM_MODULE)
 	&topas910_plat_nand_device,
 #endif
