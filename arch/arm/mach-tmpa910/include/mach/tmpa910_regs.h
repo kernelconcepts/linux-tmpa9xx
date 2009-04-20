@@ -59,7 +59,16 @@
 
 #define TMPA910_GPIO_REG(x,y) (PORT_BASE | (x) | (y)) /* base addr + port offset + register offset */
 
-#define TMPA910_CFG_PORT_GPIO(x) (*((volatile int*)(PORT_BASE | (x) | PORT_OFS_FR1)) = 0)
+#define TMPA910_GPIO_REG_DATA(x) __REG(PORT_BASE | PORT_OFS_DATA | (x))
+#define TMPA910_GPIO_REG_IS(x)   __REG(PORT_BASE | PORT_OFS_IS | (x))
+#define TMPA910_GPIO_REG_IBE(x)  __REG(PORT_BASE | PORT_OFS_IBE | (x))
+#define TMPA910_GPIO_REG_IEV(x)  __REG(PORT_BASE | PORT_OFS_IEV | (x))
+#define TMPA910_GPIO_REG_IE(x)  __REG(PORT_BASE | PORT_OFS_IE | (x))
+#define TMPA910_GPIO_REG_MIS(x)  __REG(PORT_BASE | PORT_OFS_MIS | (x))
+#define TMPA910_GPIO_REG_IC(x)   __REG(PORT_BASE | PORT_OFS_IC | (x))
+
+//#define TMPA910_CFG_PORT_GPIO(x) (*((volatile int*)(PORT_BASE | (x) | PORT_OFS_FR1)) = 0)
+#define TMPA910_CFG_PORT_GPIO(x) (__REG(PORT_BASE | (x) | PORT_OFS_FR1) = 0)
 
 /********/
 #define PORTB_BASE       (PORT_BASE + 0x1000)
@@ -74,14 +83,14 @@
 
 
 /********/
-#define PORTD_BASE  			0xF0803000
+#define PORTD_BASE  		0xF0803000
 #define PORTD_GPIOFR1 		(PORTD_BASE + 0x0424)
 #define PORTD_GPIOFR2 		(PORTD_BASE + 0x0428)
 #define PORTD_GPIOIE  		(PORTD_BASE + 0x0810)
 #define PORTD_GPIOIC  		(PORTD_BASE + 0x081C)
 #define PORTD_GPIOMIS  		(PORTD_BASE + 0x0818)
 /********/
-#define PORTE_BASE  			0xF0804000
+#define PORTE_BASE  		0xF0804000
 #define PORTE_GPIOEFR 		(PORTE_BASE + 0x0424)
 
 /********/
