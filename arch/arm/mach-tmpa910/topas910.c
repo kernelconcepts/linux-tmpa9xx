@@ -69,7 +69,6 @@
 
 
 /* I/O Mapping related, might want to be moved to a CPU specific file */
-static int topas910_io_mapped = 0;
 
 static struct map_desc tmpa910_io_desc[] __initdata = {
 	{
@@ -83,9 +82,7 @@ static struct map_desc tmpa910_io_desc[] __initdata = {
 
 void __init topas910_map_io(void)
 {
-	NPRINTK("->");
 	iotable_init(tmpa910_io_desc, ARRAY_SIZE(tmpa910_io_desc));
-	topas910_io_mapped = 1;
 }
 
 
