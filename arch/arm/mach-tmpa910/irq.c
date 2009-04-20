@@ -86,7 +86,6 @@ static void tmpa910_ack_irq(unsigned int irq) {
 	hw_ictl->vicaddress = 0;
 	
 	NPRINTK("irq=%d, vicirqstatus=0x%x, vicaddress at 0x%p\n", irq, hw_ictl->vicirqstatus, &hw_ictl->vicaddress);
-
 }
 
 static void tmpa910_end_irq(unsigned int irq) {
@@ -137,8 +136,8 @@ void __init tmpa910_init_irq(void)
 		hw_ictl->vicvectaddr[i] = i;
 
 
-	for (i = 0; i < NR_IRQS; i++) {
-		set_irq_chip(i,& tmpa910_chip);
+	for (i = 0; i < TMPA910_NUM_IRQS; i++) {
+		set_irq_chip(i, &tmpa910_chip);
 		set_irq_handler(i, handle_level_irq);
 		set_irq_flags(i, IRQF_VALID );
 	}
