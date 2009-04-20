@@ -632,14 +632,11 @@ static int serial_tmpa910_startup(struct uart_port *port)
 	 * Allocate the IRQ
 	 */
 	ret = request_irq(uart_tmpa910_handle->port.irq, serial_tmpa910_irq, 0, uart_tmpa910_handle->name, uart_tmpa910_handle);
-	if (ret)
-	{
-		NPRINTK("Fail allocate the interrupt (vector=%d)\n", uart_tmpa910_handle->port.irq );
+	if (ret) {
+		printk(KERN_ERR "TMPA910 UART: Fail allocate the interrupt (vector=%d)\n", uart_tmpa910_handle->port.irq );
 		return ret;
 	}
 
-	NPRINTK("irq %d allocated\n", uart_tmpa910_handle->port.irq);
-		
 	uart_tmpa910_handle->irq_allocated = 1;
 
 	/*
