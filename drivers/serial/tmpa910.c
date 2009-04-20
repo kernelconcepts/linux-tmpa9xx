@@ -253,8 +253,7 @@ static void _dump_regs(struct uart_tmpa910_handle *uart_tmpa910_handle)
 static int _map_tmpa910(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
 
-	volatile struct tmpa910_uart_regs *regs;
-	regs = uart_tmpa910_handle->regs;
+	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	
 	NPRINTK("-> regs = %p\n", regs);
 
