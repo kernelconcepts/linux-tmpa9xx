@@ -1,5 +1,5 @@
 /*
- *  linux/include/asm-arm/arch-topas910/irqs.h
+ *  include/asm-arm/arch-topas910/irqs.h
  *
  *  Copyright (C) 2004 Metrowerks Corp.
  *
@@ -89,43 +89,43 @@
 #define TMPA910_NUM_GPIO_IRQS  26
 
 /* Port A */
-#define INT_GPIO_KI0	       33
-#define INT_GPIO_KI1	       34
-#define INT_GPIO_KI2	       35
-#define INT_GPIO_KI3	       36
-#define INT_GPIO_KI4	       37
-#define INT_GPIO_KI5	       38
-#define INT_GPIO_KI6	       39
-#define INT_GPIO_KI7	       40
+#define INT_GPIO_KI0	       32
+#define INT_GPIO_KI1	       33
+#define INT_GPIO_KI2	       34
+#define INT_GPIO_KI3	       35
+#define INT_GPIO_KI4	       36
+#define INT_GPIO_KI5	       37
+#define INT_GPIO_KI6	       38
+#define INT_GPIO_KI7	       39
 
 /* Port C */
-#define INT_GPIO_INT8	       41
-#define INT_GPIO_INT9	       42
+#define INT_GPIO_INT8	       40
+#define INT_GPIO_INT9	       41
 
 /* Port D */
-#define INT_GPIO_INTA          43
-#define INT_GPIO_INTB          44
+#define INT_GPIO_INTA          42
+#define INT_GPIO_INTB          43
 
 /* Port F */
-#define INT_GPIO_INTC	       45
+#define INT_GPIO_INTC	       44
 
 /* Port N */
-#define INT_GPIO_INTD	       46
-#define INT_GPIO_INTE	       47
-#define INT_GPIO_INTF	       48
-#define INT_GPIO_INTG	       49
+#define INT_GPIO_INTD	       45
+#define INT_GPIO_INTE	       46
+#define INT_GPIO_INTF	       47
+#define INT_GPIO_INTG	       48
 
 /* Port P */
-#define INT_GPIO_INT0	       50
-#define INT_GPIO_INT1	       51
-#define INT_GPIO_INT2	       52
-#define INT_GPIO_INT3	       53
-#define INT_GPIO_INT4	       54
-#define INT_GPIO_INT5	       55
-#define INT_GPIO_INT6	       56
-#define INT_GPIO_INT7	       57
+#define INT_GPIO_INT0	       49
+#define INT_GPIO_INT1	       50
+#define INT_GPIO_INT2	       51
+#define INT_GPIO_INT3	       52
+#define INT_GPIO_INT4	       53
+#define INT_GPIO_INT5	       54
+#define INT_GPIO_INT6	       55
+#define INT_GPIO_INT7	       56
 
 /* Port R */
-#define INT_GPIO_INTH	       58
+#define INT_GPIO_INTH	       57
 
 #endif
