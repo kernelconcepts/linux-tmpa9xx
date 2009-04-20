@@ -20,7 +20,7 @@
  * 
  * Toshiba Topas 910 machine, reference design for the TMPA910CRAXBG SoC 
  *
- * TODO: audio codec (TI1773), NAND, I2C, SPI, ADC
+ * TODO: audio codec (TI1773), NAND, I2C, SPI, ADC, power manager
  * TODO: separate SoC and board code
  */
 
@@ -394,7 +394,7 @@ static struct gpio_keys_button topas910_buttons[] = {
 		.code	= KEY_LEFT,
 		.gpio	= 0,
 		.active_low = 0,
-		.desc	= "JOY_LEFT",
+		.desc	= "Joystick left",
 		.type	= EV_KEY,
 		.wakeup = 0,
 	},
@@ -402,7 +402,7 @@ static struct gpio_keys_button topas910_buttons[] = {
 		.code	= KEY_DOWN,
 		.gpio	= 1,
 		.active_low = 0,
-		.desc	= "JOY_DOWN",
+		.desc	= "Joystick down",
 		.type	= EV_KEY,
 		.wakeup = 0,
 	},
@@ -410,7 +410,7 @@ static struct gpio_keys_button topas910_buttons[] = {
 		.code	= KEY_UP,
 		.gpio	= 2,
 		.active_low = 0,
-		.desc	= "JOY_UP",
+		.desc	= "Joystick up",
 		.type	= EV_KEY,
 		.wakeup = 0,
 	},
@@ -418,7 +418,7 @@ static struct gpio_keys_button topas910_buttons[] = {
 		.code	= KEY_RIGHT,
 		.gpio	= 3,
 		.active_low = 0,
-		.desc	= "JOY_RIGHT",
+		.desc	= "Joystick right",
 		.type	= EV_KEY,
 		.wakeup = 0,
 	},
@@ -426,7 +426,7 @@ static struct gpio_keys_button topas910_buttons[] = {
 		.code	= KEY_ENTER,
 		.gpio	= 4,
 		.active_low = 0,
-		.desc	= "JOY_CENTER",
+		.desc	= "Joystick center",
 		.type	= EV_KEY,
 		.wakeup = 1,
 	},
