@@ -22,8 +22,6 @@
 #ifndef __TMPA910_REGS__
 #define __TMPA910_REGS__
 
-#define _REG(x) ((volatile *int)(x))
-
 /* GPIO Ports */
 
 #define PORT_BASE          0xF0800000
@@ -59,13 +57,13 @@
 
 #define TMPA910_GPIO_REG(x,y) (PORT_BASE | (x) | (y)) /* base addr + port offset + register offset */
 
-#define TMPA910_GPIO_REG_DATA(x) __REG(PORT_BASE | PORT_OFS_DATA | (x))
-#define TMPA910_GPIO_REG_IS(x)   __REG(PORT_BASE | PORT_OFS_IS | (x))
-#define TMPA910_GPIO_REG_IBE(x)  __REG(PORT_BASE | PORT_OFS_IBE | (x))
-#define TMPA910_GPIO_REG_IEV(x)  __REG(PORT_BASE | PORT_OFS_IEV | (x))
-#define TMPA910_GPIO_REG_IE(x)  __REG(PORT_BASE | PORT_OFS_IE | (x))
-#define TMPA910_GPIO_REG_MIS(x)  __REG(PORT_BASE | PORT_OFS_MIS | (x))
-#define TMPA910_GPIO_REG_IC(x)   __REG(PORT_BASE | PORT_OFS_IC | (x))
+#define TMPA910_GPIO_REG_DATA(x) (PORT_BASE | PORT_OFS_DATA | (x))
+#define TMPA910_GPIO_REG_IS(x)   (PORT_BASE | PORT_OFS_IS | (x))
+#define TMPA910_GPIO_REG_IBE(x)  (PORT_BASE | PORT_OFS_IBE | (x))
+#define TMPA910_GPIO_REG_IEV(x)  (PORT_BASE | PORT_OFS_IEV | (x))
+#define TMPA910_GPIO_REG_IE(x)   (PORT_BASE | PORT_OFS_IE | (x))
+#define TMPA910_GPIO_REG_MIS(x)  (PORT_BASE | PORT_OFS_MIS | (x))
+#define TMPA910_GPIO_REG_IC(x)   (PORT_BASE | PORT_OFS_IC | (x))
 
 //#define TMPA910_CFG_PORT_GPIO(x) (*((volatile int*)(PORT_BASE | (x) | PORT_OFS_FR1)) = 0)
 #define TMPA910_CFG_PORT_GPIO(x) (__REG(PORT_BASE | (x) | PORT_OFS_FR1) = 0)
