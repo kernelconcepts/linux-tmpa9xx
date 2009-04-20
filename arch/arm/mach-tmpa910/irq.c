@@ -1,24 +1,27 @@
 /*
- *  linux/arch/arm/mach-topas910/irq.c
+ *  arch/arm/mach-tmpa910/irq.c
  *
  *  Copyright (C) 2008 bplan GmbH
+ *  Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
  *
  *  Based on mach-mx1ads/irq.c, which is:
  *    Copyright (C) 1999 ARM Limited
  *    Copyright (C) 2002 Shane Nay (shane@minirl.com)
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ *  TMPA910 main interrupt handling
  */
 #include <linux/init.h>
 #include <linux/module.h>
@@ -38,7 +41,7 @@
 #include <linux/debug.h>
 
 /*********/
-/*********/
+
 struct hw_ictl
 {
 	uint32_t vicirqstatus;      	// 0x0000
@@ -97,7 +100,7 @@ static void tmpa910_end_irq(unsigned int irq) {
 	}
 }
 
-int	tmpa910_set_type(unsigned int irq, unsigned int flow_type)
+int tmpa910_set_type(unsigned int irq, unsigned int flow_type)
 {
 	NPRINTK("irq=%d, type=%x\n", irq, flow_type);
 	return 0;
@@ -107,8 +110,8 @@ int	tmpa910_set_type(unsigned int irq, unsigned int flow_type)
 static struct irq_chip  tmpa910_chip = {
   .typename  = "tmpa910",
 
-  .ack       = tmpa910_ack_irq,		/* ack */
-  .end       = tmpa910_end_irq,		/* end */
+  .ack       = tmpa910_ack_irq,
+  .end       = tmpa910_end_irq,
 
   .mask	     = tmpa910_dis_irq,
   .unmask    = tmpa910_ena_irq,
