@@ -114,8 +114,6 @@ static irqreturn_t topas910_timer_interrupt(int irq, void *dev_id)
 
 	struct clock_event_device *c = dev_id;
 
-	//tmpa910_led_blink();
-		
 	//NPRINTK("-> irq=%d, c =%p, TimerMIS=0x%x, TimerRIS=0x%x, TimerControl=0x%x\n",
 	//	irq, c, hw_timer->TimerMIS, hw_timer->TimerRIS,  hw_timer->TimerControl);
 
