@@ -164,7 +164,11 @@
 /* NWPSERIAL */
 #define PORT_NWPSERIAL	85
 
-#define PORT_TMPA910	83
+/* MAX3100 */
+#define PORT_MAX3100    86
+
+/* TMPA910 SoC */
+#define PORT_TMPA910	87
 
 #ifdef __KERNEL__
 
@@ -279,7 +283,7 @@ struct uart_port {
 	struct uart_icount	icount;			/* statistics */
 
 	struct console		*cons;			/* struct console, if any */
-#ifdef CONFIG_SERIAL_CORE_CONSOLE
+#if defined(CONFIG_SERIAL_CORE_CONSOLE) || defined(SUPPORT_SYSRQ)
 	unsigned long		sysrq;			/* sysrq timeout */
 #endif
 
