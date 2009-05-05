@@ -161,7 +161,7 @@ static int topas_led_resume(struct platform_device *pdev)
 
 static struct platform_driver topas_led_driver = {
 	.probe		= topas_led_probe,
-	.remove		= topas_led_remove,
+	.remove		= __devexit_p(topas_led_remove),
 	.suspend	= topas_led_suspend,
 	.resume		= topas_led_resume,
 	.driver		= {
