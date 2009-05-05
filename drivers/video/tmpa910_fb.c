@@ -99,8 +99,7 @@ static void _init_it(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t *LCDReg, 
 
 	hw_tmpa910_lcdc->LCDIMSC		= 0;
 	hw_tmpa910_lcdc->LCDControl = LCDReg[4];
-
-
+	barrier();
 }
 
 static void _setup_fb(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t fb_addr)
@@ -109,6 +108,7 @@ static void _setup_fb(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t fb_addr)
 	hw_tmpa910_lcdc->LCDUPBASE	= fb_addr;
 	hw_tmpa910_lcdc->LCDLPBASE	= fb_addr;
 	hw_tmpa910_lcdc->LCDControl |= 0x1;
+	barrier();
 }
 
 static void _stop_it(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc)
@@ -400,7 +400,7 @@ static struct platform_driver tmpa910_lcdc_driver = {
 static int __init tmpa910_lcdc_init(void)
 {
 	NPRINTK("->\n");
-	return platform_driver_probe(&tmpa910_lcdc_driver, tmpa910_lcdc_probe);
+    return platform_driver_probe(&tmpa910_lcdc_driver, tmpa910_lcdc_probe);
 }
 
 static void __exit tmpa910_lcdc_exit(void)
@@ -410,7 +410,4 @@ static void __exit tmpa910_lcdc_exit(void)
 
 module_init(tmpa910_lcdc_init);
 module_exit(tmpa910_lcdc_exit);
-MODULE_LICENSE("GPL");
-
-
-
+MODULE_LICENSE("GPL")

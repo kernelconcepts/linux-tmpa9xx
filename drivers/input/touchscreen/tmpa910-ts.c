@@ -44,7 +44,7 @@ MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL");
 
 /*******/
-/*******/
+
 struct tmpa910_ts_priv
 {
 	struct tmpa910_ts *ts_regs;
@@ -65,7 +65,7 @@ struct tmpa910_ts_priv
 };
 
 /*******/
-/*******/
+
 enum{
 	ADC_PASS_NONE,
 	ADC_PASS_X,
@@ -522,7 +522,7 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 	}
 	NPRINTK( "adc_irq=%d\n", adc_irq);
 
-	// Now allocate some meory for our private handle
+	// Now allocate some memory for our private handle
 	tmpa910_ts_priv = kzalloc(sizeof(struct tmpa910_ts_priv), GFP_KERNEL);
 	if (tmpa910_ts_priv==NULL)
 	{
@@ -574,16 +574,16 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&tmpa910_ts_priv->scheduled_restart, _scheduled_restart);
 	
 	// Our irqs...
-	ret = request_irq(ts_irq, topas910_ts_interrupt, IRQF_DISABLED, "ts / ts", tmpa910_ts_priv);
+	ret = request_irq(ts_irq, topas910_ts_interrupt, IRQF_SHARED, "ts / ts", tmpa910_ts_priv);
 	if (ret)
 	{
-		NPRINTK("Fail allocate the interrupt (vector=%d)\n", ts_irq );
+		NPRINTK("Fail allocate the interrupt (vector=%d), %i\n", ts_irq, ret );
 		err = -ENOMEM;
 		goto fail;
 	}
 	tmpa910_ts_priv->ts_irq = ts_irq;
 
-	ret = request_irq(adc_irq, topas910_adc_interrupt, IRQF_DISABLED, "ts / adc", tmpa910_ts_priv);
+	ret = request_irq(adc_irq, topas910_adc_interrupt, IRQF_SHARED, "ts / adc", tmpa910_ts_priv);
 	if (ret)
 	{
 		NPRINTK("Fail allocate the interrupt (vector=%d)\n", adc_irq );
