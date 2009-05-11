@@ -373,7 +373,7 @@ static struct resource topas910_plat_nand_resources = {
 };
 
 static struct platform_device topas910_plat_nand_device = {
-	.name = "gen_nand",
+	.name = "topas910_nand",
 	.id = -1,
 	.num_resources = 1,
 	.resource = &topas910_plat_nand_resources,

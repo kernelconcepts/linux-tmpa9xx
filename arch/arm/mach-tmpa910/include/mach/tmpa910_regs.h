@@ -113,6 +113,13 @@
 
 /* DMA */
 #define DMAC_BASE  0xF4100000
+#define	DMACConfiguration	__REG(DMAC_BASE + 0x30)
+#define	DMACIntTCStatus		__REG(DMAC_BASE + 0x4)
+#define	DMACIntTCClear		__REG(DMAC_BASE + 0x8)
+#define	DMACC5SrcAddr		__REG(DMAC_BASE + 0x1a0)
+#define	DMACC5DestAddr		__REG(DMAC_BASE + 0x1a4)
+#define	DMACC5Control		__REG(DMAC_BASE + 0x1ac)
+#define	DMACC5Configuration	__REG(DMAC_BASE + 0x1b0)
 
 /* System Control */
 #define SYSCTRL_BASE  (0xF0050000)
@@ -137,6 +144,22 @@
 #define NDRSCA3  __REG(NANDF_BASE | 0x0048) /* NAND-Flash Reed-Solomon Calculation Result Address Register 3 */
 #define NDRSCD3  __REG(NANDF_BASE | 0x004C) /* NAND-Flash Reed-Solomon Calculation Result Data Register 3 */
 
+#define NDFMCR0_ECCRST  (1 << 0)
+#define NDFMCR0_BUSY    (1 << 1)
+#define NDFMCR0_ECCE    (1 << 2)
+#define NDFMCR0_CE1     (1 << 3)
+#define NDFMCR0_CE0     (1 << 4)
+#define NDFMCR0_CLE     (1 << 5)
+#define NDFMCR0_ALE     (1 << 6)
+#define NDFMCR0_WE      (1 << 7)
+#define NDFMCR0_RSEDN   (1 << 10)
+
+#define NDFMCR1_ECCS    (1 << 1)
+#define NDFMCR1_SELAL   (1 << 9)
+#define NDFMCR1_ALS     (1 << 8)
+
+#define NAND_DMAC_STATUS   (1 << 5)
+#define NAND_DMAC_CLEAR    (1 << 5)
 
 
 /* LCDDA (LCD Data Process Accelerator) */
