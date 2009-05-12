@@ -65,7 +65,6 @@
 #define TMPA910_GPIO_REG_MIS(x)  (PORT_BASE | PORT_OFS_MIS | (x))
 #define TMPA910_GPIO_REG_IC(x)   (PORT_BASE | PORT_OFS_IC | (x))
 
-//#define TMPA910_CFG_PORT_GPIO(x) (*((volatile int*)(PORT_BASE | (x) | PORT_OFS_FR1)) = 0)
 #define TMPA910_CFG_PORT_GPIO(x) (__REG(PORT_BASE | (x) | PORT_OFS_FR1) = 0)
 
 /********/
@@ -113,13 +112,13 @@
 
 /* DMA */
 #define DMAC_BASE  0xF4100000
-#define	DMACConfiguration	__REG(DMAC_BASE + 0x30)
-#define	DMACIntTCStatus		__REG(DMAC_BASE + 0x4)
-#define	DMACIntTCClear		__REG(DMAC_BASE + 0x8)
-#define	DMACC5SrcAddr		__REG(DMAC_BASE + 0x1a0)
-#define	DMACC5DestAddr		__REG(DMAC_BASE + 0x1a4)
-#define	DMACC5Control		__REG(DMAC_BASE + 0x1ac)
-#define	DMACC5Configuration	__REG(DMAC_BASE + 0x1b0)
+#define	DMACIntTCStatus		__REG(DMAC_BASE | 0x004)
+#define	DMACIntTCClear		__REG(DMAC_BASE | 0x008)
+#define	DMACConfiguration	__REG(DMAC_BASE | 0x030)
+#define	DMACC5SrcAddr		__REG(DMAC_BASE | 0x1a0)
+#define	DMACC5DestAddr		__REG(DMAC_BASE | 0x1a4)
+#define	DMACC5Control		__REG(DMAC_BASE | 0x1ac)
+#define	DMACC5Configuration	__REG(DMAC_BASE | 0x1b0)
 
 /* System Control */
 #define SYSCTRL_BASE  (0xF0050000)
