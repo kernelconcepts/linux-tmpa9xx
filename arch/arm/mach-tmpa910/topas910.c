@@ -445,11 +445,11 @@ static struct platform_device topas910_keys_device = {
 
 
 static struct platform_device *devices[] __initdata = {
+	&tmpa910_device_ts,
 	&topas910_led_device,
 	&topas910_dm9000_device,
 	&tmpa910_device_uart0,
 	&topas910_keys_device,
-	&tmpa910_device_ts,
 	&tmpa910_device_lcdc,
 	&topas910_spi_gpio_device,
 #if defined(CONFIG_MTD_NAND_PLATFORM) || defined(CONFIG_MTD_NAND_PLATFORM_MODULE)
