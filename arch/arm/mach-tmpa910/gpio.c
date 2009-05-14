@@ -487,9 +487,13 @@ static int __init tmpa910_gpio_init(void)
 #endif
 	set_irq_chained_handler(INTR_VECT_GPIOF, tmpa910_gpiof_irq_handler);
 	set_irq_chained_handler(INTR_VECT_GPION, tmpa910_gpion_irq_handler);
+#if !defined(CONFIG_USB_ISP1362_HCD) && !defined(CONFIG_USB_ISP1362_HCD_MODULE) 
 	set_irq_chained_handler(INTR_VECT_GPIOP, tmpa910_gpiop_irq_handler);
+#endif
+#if 0 
+        /* conflicts with dm9000 */
 	set_irq_chained_handler(INTR_VECT_GPIOR, tmpa910_gpior_irq_handler);
-    
+#endif
 	return 0;
 }
 

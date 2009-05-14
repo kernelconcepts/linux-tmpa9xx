@@ -321,7 +321,6 @@ static void topas910_plat_nand_cmd_ctrl(struct mtd_info *mtd, int cmd, unsigned 
 {
 	struct nand_chip *this = mtd->priv;
     
-printk("nand ctl %i %x\n", cmd, NDFMCR0);
 	if (ctrl & NAND_CTRL_CHANGE) {
 		if (ctrl & NAND_CLE)
 			NDFMCR0 |= TMPA910_NAND_CLE;
@@ -347,7 +346,6 @@ printk("nand ctl %i %x\n", cmd, NDFMCR0);
 
 static int topas910_plat_nand_dev_ready(struct mtd_info *mtd)
 {
-    printk("nand ready %i\n", !(NDFMCR0 & TMPA910_NAND_BUSY));
 	return !(NDFMCR0 & TMPA910_NAND_BUSY);
 }
 
@@ -450,10 +448,10 @@ static struct platform_device *devices[] __initdata = {
 	&topas910_led_device,
 	&topas910_dm9000_device,
 	&tmpa910_device_uart0,
+	&topas910_keys_device,
 	&tmpa910_device_ts,
 	&tmpa910_device_lcdc,
 	&topas910_spi_gpio_device,
-	&topas910_keys_device,
 #if defined(CONFIG_MTD_NAND_PLATFORM) || defined(CONFIG_MTD_NAND_PLATFORM_MODULE)
 	&topas910_plat_nand_device,
 #endif
