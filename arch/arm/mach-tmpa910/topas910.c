@@ -185,7 +185,7 @@ static struct resource dm9000_resources[] = {
         [2] = {
                 .start  = TOPAS910_INT_DM9000,
                 .end    = TOPAS910_INT_DM9000,
-                .flags  = IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+                .flags  = IORESOURCE_IRQ | IRQF_TRIGGER_LOW,
         },
 };
 
@@ -462,6 +462,11 @@ void __init topas910_init_irq(void) {
 
 static void __init topas910_init(void)
 {
+	/* Memory controller - for DM9000 */
+	SMC_SET_CYCLES_3 = 0x0004AFAA;
+	SMC_SET_OPMODE_3 = 0x00000002;
+	SMC_DIRECT_CMD_3 = 0x00C00000;
+
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = 0xffffffff;
 	platform_bus.dma_mask=&topas910_dmamask;
