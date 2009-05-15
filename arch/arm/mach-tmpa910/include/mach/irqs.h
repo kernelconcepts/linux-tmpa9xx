@@ -38,7 +38,7 @@
 /*
  *  Topas910 IRQ Vectors
  */
-#define TOPAS910_INT_DM9000 26
+#define TOPAS910_INT_DM9000 26 //154
 
 
 #define TMPA910_NUM_IRQS	32
