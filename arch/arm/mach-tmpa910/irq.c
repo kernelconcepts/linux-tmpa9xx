@@ -35,12 +35,6 @@
 #include <mach/gpio.h>
 #include <mach/tmpa910_regs.h>
 
-/*********/
-
-//#define __DEBUG__
-#include <linux/debug.h>
-
-/*********/
 
 struct hw_ictl
 {
@@ -62,7 +56,6 @@ struct hw_ictl
 	uint32_t vicaddress;         	// 0x0f00
 };
 
-/*********/
 
 static void tmpa910_ena_irq(unsigned int irq) {
 
@@ -71,6 +64,7 @@ static void tmpa910_ena_irq(unsigned int irq) {
 	hw_ictl->vicintenable = 1 << irq;
 }
 
+
 static void tmpa910_dis_irq(unsigned int irq) {
 
 	volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
@@ -78,63 +72,51 @@ static void tmpa910_dis_irq(unsigned int irq) {
 	hw_ictl->vicintenclear = 1 << irq;
 }
 
+
 static void tmpa910_ack_irq(unsigned int irq) {
 
 	volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
 
 	hw_ictl->vicintenclear = 1 << irq;
 	hw_ictl->vicaddress = 0;
-	
-	NPRINTK("irq=%d, vicirqstatus=0x%x, vicaddress at 0x%p\n", irq, hw_ictl->vicirqstatus, &hw_ictl->vicaddress);
 }
+
 
 static void tmpa910_end_irq(unsigned int irq) {
 
 	volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
-	
-	NPRINTK("irq=%d, hw_ictl->vicaddress at 0x%p\n", irq, &hw_ictl->vicaddress);
 	
 	if (!(irq_desc[irq].status & (IRQ_DISABLED|IRQ_INPROGRESS))) {
 		hw_ictl->vicintenable = 1 << irq;
 	}
 }
 
-int tmpa910_set_type(unsigned int irq, unsigned int flow_type)
-{
-	NPRINTK("irq=%d, type=%x\n", irq, flow_type);
-	return 0;
-}
-
 
 static struct irq_chip  tmpa910_chip = {
-  .typename  = "tmpa910",
+	.typename  = "tmpa910",
 
-  .ack       = tmpa910_ack_irq,
-  .end       = tmpa910_end_irq,
+	.ack       = tmpa910_ack_irq,
+	.end       = tmpa910_end_irq,
 
-  .mask	     = tmpa910_dis_irq,
-  .unmask    = tmpa910_ena_irq,
-  .set_type  = tmpa910_set_type,
+	.mask	     = tmpa910_dis_irq,
+	.unmask    = tmpa910_ena_irq,
 };
+
 
 void __init tmpa910_init_irq(void)
 {
 	volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
 	int i;
 
-	NPRINTK("\n");
-
-	// Every interrupt to the IRQ execpetion
+	/* Every interrupt to the IRQ execpetion */
 	hw_ictl->vicintselect = 0;
 
-	// make sure every pri unmasked
+	/* make sure every pri unmasked */
 	hw_ictl->vicswprioritymask  = 0xffff;
 
-	// this help to obtain the interrupt vector in 
-	// the Service call
+	/* this help to obtain the interrupt vector in the service call */
 	for(i=0; i < 32; i++)
 		hw_ictl->vicvectaddr[i] = i;
-
 
 	for (i = 0; i < TMPA910_NUM_IRQS; i++) {
 		set_irq_chip(i, &tmpa910_chip);
@@ -142,3 +124,4 @@ void __init tmpa910_init_irq(void)
 		set_irq_flags(i, IRQF_VALID );
 	}
 }
+
