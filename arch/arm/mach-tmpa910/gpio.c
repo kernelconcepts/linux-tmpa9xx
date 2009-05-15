@@ -18,6 +18,7 @@
  * are all 32bit. Not all ports allow all functions / directions.
  * The same applies to interrupts.
  *
+ * TODO: Allow sharing beween GPIO and non-GPIO IRQs
  */
 
 #include <linux/init.h>
@@ -185,8 +186,25 @@ static struct tmpa910_gpio_irq irq_gpio_desc[TMPA910_NUM_GPIO_IRQS] = {
 
 #define GPIO_NUM_FOR_GPIO_IRQ(_x) (irq_gpio_desc[_x].gpio)
 
+inline int __tmpa910_gpio_to_irq(unsigned gpio) {
+	int i;
 
-/* luckily irq vector + port are unique */
+	for (i = 0; i < TMPA910_NUM_GPIO_IRQS; i++)
+		if (irq_gpio_desc[i].gpio == gpio)
+			return (i + TMPA910_NUM_IRQS);
+
+	BUG(); /* not found */
+	return -1;		
+}
+
+inline int __tmpa910_irq_to_gpio(unsigned irq) {
+	return GPIO_NUM_FOR_GPIO_IRQ(irq - TMPA910_NUM_IRQS);
+}
+
+/* 
+ * Interrupt handlers
+ * The matching GPIO is easy to find: Port base GPIO number + bit offset.
+ */
 static void tmpa910_gpioa_irq_handler(unsigned int irq, struct irq_desc *desc)
 {
 	unsigned char status;
@@ -197,8 +215,7 @@ static void tmpa910_gpioa_irq_handler(unsigned int irq, struct irq_desc *desc)
         while (status) {
 		for (i = 0; i < 8; i++) {
 			if (status & (1 << i)) {
-				int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(i)); 
-			        /* or just the offset number from 0?! */
+				int gpio_irq = gpio_to_irq(0 + i);
 				generic_handle_irq(gpio_irq);
 			}
 		}
@@ -214,11 +231,11 @@ static void tmpa910_gpioc_irq_handler(unsigned int irq, struct irq_desc *desc)
 	desc->chip->ack(irq);
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTC));
 	if (status & (1 << 5)) {
-		int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(8));
+		int gpio_irq = gpio_to_irq(16 + 5);
 		generic_handle_irq(gpio_irq);
 	}
 	if (status & (1 << 7)) {
-		int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(9));
+		int gpio_irq = gpio_to_irq(16 + 7);
 		generic_handle_irq(gpio_irq);
 	}
 	desc->chip->unmask(irq);
@@ -233,7 +250,7 @@ static void tmpa910_gpiod_irq_handler(unsigned int irq, struct irq_desc *desc)
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTD));
 	for (i = 6; i < 8; i++) {
 		if (status & (1 << i)) {
-			int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(i + 4));
+			int gpio_irq = gpio_to_irq(24 + i);
 			generic_handle_irq(gpio_irq);
 		}
 	}
@@ -248,7 +265,7 @@ static void tmpa910_gpiof_irq_handler(unsigned int irq, struct irq_desc *desc)
 	desc->chip->ack(irq);
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTF));
 	if (status & (1 << 7)) {
-		int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(12));
+		int gpio_irq = gpio_to_irq(40 + 7);
 		generic_handle_irq(gpio_irq);
 	}
 	desc->chip->unmask(irq);
@@ -264,7 +281,7 @@ static void tmpa910_gpion_irq_handler(unsigned int irq, struct irq_desc *desc)
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTN));
 	for (i = 4; i < 8; i++) {
 		if (status & (1 << i)) {
-			int gpio_irq = gpio_to_irq(GPIO_NUM_FOR_GPIO_IRQ(i + 9));
+			int gpio_irq = gpio_to_irq(104 + i);
 			generic_handle_irq(gpio_irq);
 		}
 	}
@@ -291,10 +308,11 @@ static void tmpa910_gpior_irq_handler(unsigned int irq, struct irq_desc *desc)
 {
 	unsigned char status;
 
+	desc->chip->mask(irq);
 	desc->chip->ack(irq);
 	status = __raw_readb(TMPA910_GPIO_REG_MIS(PORTR));
 	if (status & (1 << 2)) {
-		int gpio_irq = gpio_to_irq(122);
+		int gpio_irq = gpio_to_irq(120 + 2);
 		generic_handle_irq(gpio_irq);
 	}
 	desc->chip->unmask(irq);
@@ -363,7 +381,7 @@ static int tmpa910_gpio_irq_type(unsigned int irq, unsigned int type)
     
 	port_mask = (1 << girq.bit);
 
-	/* we following the prodcedure mentioned in section 3.9.3 of the data sheet */   
+	/* we following the prodcedure mentioned in section 3.9.3 of the data sheet */
     	gpio_direction_input(gpio);
 	tmpa910_gpio_irq_mask(irq); /* disable interrupt */
 
@@ -479,6 +497,7 @@ static int __init tmpa910_gpio_init(void)
 	/* Now the interrupts */
 	for (i = 0; i < TMPA910_NUM_GPIO_IRQS; i++) {
 		gpio_irq = gpio_to_irq(0) + i;
+	    	gpio_request(irq_gpio_desc[i].gpio, "IRQ");
 		set_irq_chip(gpio_irq, &tmpa910_gpio_irq_chip);
 		set_irq_handler(gpio_irq, handle_level_irq);
 		set_irq_flags(gpio_irq, IRQF_VALID);
@@ -495,8 +514,7 @@ static int __init tmpa910_gpio_init(void)
 #if !defined(CONFIG_USB_ISP1362_HCD) && !defined(CONFIG_USB_ISP1362_HCD_MODULE) 
 	set_irq_chained_handler(INTR_VECT_GPIOP, tmpa910_gpiop_irq_handler);
 #endif
-        /* conflicts with dm9000 */
-//	set_irq_chained_handler(INTR_VECT_GPIOR, tmpa910_gpior_irq_handler);
+	set_irq_chained_handler(INTR_VECT_GPIOR, tmpa910_gpior_irq_handler);
 
 	return 0;
 }
