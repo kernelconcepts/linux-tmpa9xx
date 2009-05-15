@@ -66,6 +66,8 @@
 #define TMPA910_GPIO_REG_IC(x)   (PORT_BASE | PORT_OFS_IC | (x))
 
 #define TMPA910_CFG_PORT_GPIO(x) (__REG(PORT_BASE | (x) | PORT_OFS_FR1) = 0)
+#define TMPA910_PORT_FR1(x) __REG(PORT_BASE | (x) | PORT_OFS_FR1)
+#define TMPA910_PORT_T_FR1  TMPA910_PORT_FR1(PORTT)
 
 /********/
 #define PORTB_BASE       (PORT_BASE + 0x1000)
