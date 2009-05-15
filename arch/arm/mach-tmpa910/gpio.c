@@ -362,8 +362,10 @@ static int tmpa910_gpio_irq_type(unsigned int irq, unsigned int type)
         reg_raise_high = __raw_readb(TMPA910_GPIO_REG_IEV(girq.port));
     
 	port_mask = (1 << girq.bit);
-    
+
+	/* we following the prodcedure mentioned in section 3.9.3 of the data sheet */   
     	gpio_direction_input(gpio);
+	tmpa910_gpio_irq_mask(irq); /* disable interrupt */
 
 	switch (type) {
 	case IRQ_TYPE_EDGE_RISING:
@@ -401,9 +403,12 @@ static int tmpa910_gpio_irq_type(unsigned int irq, unsigned int type)
 		return -EINVAL;
 	}
 
+	/* apply settings */
 	__raw_writeb(reg_level_sel, TMPA910_GPIO_REG_IS(girq.port));
 	__raw_writeb(reg_edge_both, TMPA910_GPIO_REG_IBE(girq.port));
 	__raw_writeb(reg_raise_high, TMPA910_GPIO_REG_IEV(girq.port));
+
+	tmpa910_gpio_irq_ack(irq); /* clear interrupt state */
 
 	desc->status &= ~IRQ_TYPE_SENSE_MASK;
 	desc->status |= type & IRQ_TYPE_SENSE_MASK;
@@ -469,7 +474,7 @@ static int __init tmpa910_gpio_init(void)
 
 	/* Register GPIO banks */
 	for (i = 0; i < ARRAY_SIZE(tmpa910_gpio_banks); i++)
-		gpiochip_add(&tmpa910_gpio_banks[i].chip);
+		BUG_ON(gpiochip_add(&tmpa910_gpio_banks[i].chip) < 0);
     
 	/* Now the interrupts */
 	for (i = 0; i < TMPA910_NUM_GPIO_IRQS; i++) {
@@ -490,10 +495,9 @@ static int __init tmpa910_gpio_init(void)
 #if !defined(CONFIG_USB_ISP1362_HCD) && !defined(CONFIG_USB_ISP1362_HCD_MODULE) 
 	set_irq_chained_handler(INTR_VECT_GPIOP, tmpa910_gpiop_irq_handler);
 #endif
-#if 0 
         /* conflicts with dm9000 */
-	set_irq_chained_handler(INTR_VECT_GPIOR, tmpa910_gpior_irq_handler);
-#endif
+//	set_irq_chained_handler(INTR_VECT_GPIOR, tmpa910_gpior_irq_handler);
+
 	return 0;
 }
 
