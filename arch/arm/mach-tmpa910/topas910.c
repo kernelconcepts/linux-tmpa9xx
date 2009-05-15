@@ -62,11 +62,6 @@
 
 #include "topas910.h"
 
-/*********/
-//#define __DEBUG__
-#include <linux/debug.h>
-
-
 
 /* I/O Mapping related, might want to be moved to a CPU specific file */
 
@@ -297,7 +292,9 @@ struct platform_device tmpa910_device_lcdc= {
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_lcdc),
 };
 
+
 /* NAMD Flash */
+
 #if defined(CONFIG_MTD_NAND_PLATFORM) || defined(CONFIG_MTD_NAND_PLATFORM_MODULE)
 #ifdef CONFIG_MTD_PARTITIONS
 const char *part_probes[] = { "cmdlinepart", NULL };
@@ -311,81 +308,22 @@ static struct mtd_partition topas910_plat_nand_partitions[] = {
 };
 #endif
 
-#define TMPA910_NAND_CLE (1 << 5)
-#define TMPA910_NAND_ALE (1 << 6)
-#define TMPA910_NAND_WE  (1 << 7)
-#define TMPA910_NAND_CE0 (1 << 4)
-#define TMPA910_NAND_BUSY (1 << 1)
-
-static void topas910_plat_nand_cmd_ctrl(struct mtd_info *mtd, int cmd, unsigned int ctrl)
-{
-	struct nand_chip *this = mtd->priv;
-    
-	if (ctrl & NAND_CTRL_CHANGE) {
-		if (ctrl & NAND_CLE)
-			NDFMCR0 |= TMPA910_NAND_CLE;
-		else
-			NDFMCR0 &= ~TMPA910_NAND_CLE;
-	
-		if (ctrl & NAND_ALE)
-			NDFMCR0 |= TMPA910_NAND_ALE;
-		else
-			NDFMCR0 &= ~TMPA910_NAND_ALE;
-    
-		if (ctrl & NAND_NCE) /* controller inverts value */
-			NDFMCR0 |= TMPA910_NAND_CE0;
-		else
-			NDFMCR0 &= ~TMPA910_NAND_CE0;
-	}
-    
-	if (cmd == NAND_CMD_NONE)
-		return;
- 
-	writeb(cmd, this->IO_ADDR_W);
-}
-
-static int topas910_plat_nand_dev_ready(struct mtd_info *mtd)
-{
-	return !(NDFMCR0 & TMPA910_NAND_BUSY);
-}
-
-static struct platform_nand_data topas910_plat_nand_data = {
-	.chip = {
-		.chip_delay = 50, //TODO check
-#ifdef CONFIG_MTD_PARTITIONS
-		.part_probe_types = part_probes,
-		.partitions = topas910_plat_nand_partitions,
-		.nr_partitions = ARRAY_SIZE(topas910_plat_nand_partitions),
-#endif
-	},
-	.ctrl = {
-		.cmd_ctrl  = topas910_plat_nand_cmd_ctrl,
-		.dev_ready = topas910_plat_nand_dev_ready,
-	},
-};
-
-static struct resource topas910_plat_nand_resources = {
-	.start = NANDF_BASE | 0x0010, /* This is the NAND data register */
-	.end   = NANDF_BASE | 0x0010,
-	.flags = IORESOURCE_IO,
-};
-
-static struct platform_device topas910_plat_nand_device = {
-	.name = "topas910_nand",
-	.id = -1,
-	.num_resources = 1,
-	.resource = &topas910_plat_nand_resources,
-	.dev = {
-		.platform_data = &topas910_plat_nand_data,
-	},
-};
 #endif
 
+
+/* 
+ * 7 segment LED display
+ */
 
 static struct platform_device topas910_led_device = {
 	.name = "led-topas",
 	.id = -1,
 };
+
+
+/*
+ * Joystick 
+ */
 
 static struct gpio_keys_button topas910_buttons[] = {
 	{
@@ -499,8 +437,6 @@ void __init topas910_init_irq(void) {
 
 static void __init topas910_init(void)
 {
-	NPRINTK("->");
-
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = 0xffffffff;
 	platform_bus.dma_mask=&topas910_dmamask;
@@ -509,7 +445,8 @@ static void __init topas910_init(void)
 	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
 	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
-    
+	TMPA910_PORT_T_FR1 = 0x00F0; /* Enable USB function pin */
+
         /* Configure LCD interface */
 	_setup_lcdc_device();
     
@@ -519,7 +456,6 @@ static void __init topas910_init(void)
 	NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
               	             // NDREn L = 4clks,H = 3clks
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
-
 
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
@@ -538,3 +474,4 @@ MACHINE_START(TOPAS910, "Toshiba Topas910")
         .timer          = &topas910_timer,
         .init_machine   = topas910_init,
 MACHINE_END
+
