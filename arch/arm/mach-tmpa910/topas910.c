@@ -382,6 +382,30 @@ static struct platform_device topas910_keys_device = {
 };
 
 
+#define RTC_BASE		0xF0030000
+
+static struct resource tmpa910_resource_rtc[] = {
+	{
+		.start = RTC_BASE,
+		.end   = RTC_BASE + 0x3ff,
+		.flags = IORESOURCE_MEM
+	},{
+		.start = INTR_VECT_RTC,
+		.end   = INTR_VECT_RTC,
+		.flags = IORESOURCE_IRQ | IRQF_TRIGGER_HIGH
+	}
+};
+
+static struct platform_device tmpa910_device_rtc = {
+	.name           = "tmpa910_rtc",
+	.id             = 0,
+	.num_resources  = ARRAY_SIZE(tmpa910_resource_rtc),
+	.resource       = tmpa910_resource_rtc
+	}
+;
+
+
+
 static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_ts,
 	&topas910_led_device,
@@ -394,8 +418,9 @@ static struct platform_device *devices[] __initdata = {
 	&topas910_plat_nand_device,
 #endif
 #ifdef CONFIG_USB_ISP1362_HCD
-	&topas910_isp1362_device
+	&topas910_isp1362_device,
 #endif
+	&tmpa910_device_rtc
 };
 
 
