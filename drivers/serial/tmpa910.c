@@ -40,13 +40,6 @@
 /*********/
 /*********/
 
-//#define __DEBUG__
-#include <linux/debug.h>
-
-/*********/
-/*********/
-
-
 
 #define DRIVER_NAME  	"tmpa910_uart"
 
@@ -255,26 +248,18 @@ static int _map_tmpa910(struct uart_tmpa910_handle *uart_tmpa910_handle)
 
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	
-	NPRINTK("-> regs = %p\n", regs);
-
-	if (regs)
-	{
-		NPRINTK("port already requested or mapped (regs=0x%p)\n", regs);
+	if (regs) {
+		printk(KERN_ERR "port already requested or mapped (regs=0x%p)\n", regs);
 		return 0;
 	}
 	
-	NPRINTK("regs = %p\n", regs);
-
 	regs = uart_tmpa910_handle->port.mapbase;
-	if (regs == NULL)
-	{
-		NPRINTK("Fail to map UART controller (mapbase=0x%x)\n", uart_tmpa910_handle->port.mapbase);
+	if (regs == NULL) {
+		printk(KERN_ERR "Fail to map UART controller (mapbase=0x%x)\n", uart_tmpa910_handle->port.mapbase);
 		return -EINVAL;
 	}
 	
 
-	NPRINTK("%s mapped at 0x%p\n", uart_tmpa910_handle->name, regs);
-	
 	uart_tmpa910_handle->port.membase = (void *) regs;
 	uart_tmpa910_handle->regs = regs;
 
@@ -282,8 +267,6 @@ static int _map_tmpa910(struct uart_tmpa910_handle *uart_tmpa910_handle)
 #ifdef __DEBUG__
 	_dump_regs(uart_tmpa910_handle);
 #endif
-	
-	NPRINTK("return 0\n");
 	
 	return 0;
 }
@@ -296,9 +279,6 @@ static int _map_tmpa910(struct uart_tmpa910_handle *uart_tmpa910_handle)
 
 static void serial_tmpa910_enable_ms(struct uart_port *port)
 {
-	//struct uart_tmpa910_handle *up = (struct uart_tmpa910_handle *)port;
-
-	NPRINTK("->\n");
 }
 
 static void serial_tmpa910_stop_tx(struct uart_port *port)
@@ -306,7 +286,6 @@ static void serial_tmpa910_stop_tx(struct uart_port *port)
 	struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)port;
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	
-	NPRINTK("->\n");
 	regs->imsc &= ~INT_TX;
 }
 
@@ -315,7 +294,6 @@ static void serial_tmpa910_stop_rx(struct uart_port *port)
 	struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)port;
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	
-	NPRINTK("->\n");
 	regs->imsc &= ~INT_RX;
 }
 
@@ -326,8 +304,6 @@ static void transmit_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	struct circ_buf *xmit = &uart_tmpa910_handle->port.info->xmit;
 	int count;
-
-	NPRINTK("->\n");
 
 	if (uart_tmpa910_handle->port.x_char) {
 		wait_for_xmitr(uart_tmpa910_handle);
@@ -441,7 +417,6 @@ static void serial_tmpa910_start_tx(struct uart_port *port)
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	struct circ_buf *xmit = &uart_tmpa910_handle->port.info->xmit;
 	
-	NPRINTK("->\n uart_circ_chars_pending(xmit)=%d", uart_circ_chars_pending(xmit) );
 	regs->imsc |= INT_TX;
 	
 	if (uart_circ_chars_pending(xmit) )
@@ -456,8 +431,6 @@ static inline void check_modem_status(struct uart_tmpa910_handle *uart_tmpa910_h
 
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	uint32_t fr_reg;
-	
-	NPRINTK("->\n");
 	
 	fr_reg = regs->fr;
 
@@ -489,14 +462,11 @@ static unsigned int serial_tmpa910_tx_empty(struct uart_port *port)
 	unsigned int ret;
 	
 
-	NPRINTK("->\n");
-		
 	spin_lock_irqsave(&uart_tmpa910_handle->port.lock, flags);
 
 	ret = regs->fr & FR_TXFE;
 
 	spin_unlock_irqrestore(&uart_tmpa910_handle->port.lock, flags);
-	NPRINTK("<- ret=%d. regs->fr=0x%x\n", ret, regs->fr);
 	
 	return ret;
 }
@@ -509,8 +479,6 @@ serial_tmpa910_irq(int irq, void *dev_id)
 	
 	uint32_t mis_reg;
 	uint32_t icr_reg;
-	
-	NPRINTK("->\n");
 	
 	icr_reg = 0;
 	mis_reg = regs->mis;
@@ -546,8 +514,6 @@ static unsigned int serial_tmpa910_get_mctrl(struct uart_port *port)
 	unsigned int ret;
 	uint32_t fr_reg;
 	
-	NPRINTK("->\n");
-
 	ret    = 0;
 	fr_reg = regs->fr;
 
@@ -563,7 +529,6 @@ static unsigned int serial_tmpa910_get_mctrl(struct uart_port *port)
 	if (fr_reg & FR_CTS)
 		ret |= TIOCM_CTS;
 		
-	NPRINTK("<- ret=0x%x, fr_reg=0x%x\n", ret, fr_reg);
 	return ret;
 }
 
@@ -573,8 +538,6 @@ static void serial_tmpa910_set_mctrl(struct uart_port *port, unsigned int mctrl)
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	uint32_t cr_reg;
 	
-	NPRINTK("->mctrl=0x%x, regs=0x%p\n", mctrl, regs);
-
 	cr_reg = 0;
 	
 	if (mctrl & TIOCM_RTS)
@@ -592,8 +555,6 @@ static void serial_tmpa910_break_ctl(struct uart_port *port, int break_state)
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	unsigned long flags;
 	uint32_t lcrh_reg;
-
-	NPRINTK("->break_state=%d\n", break_state);
 
 	spin_lock_irqsave(&uart_tmpa910_handle->port.lock, flags);
 
@@ -617,8 +578,6 @@ static int serial_tmpa910_startup(struct uart_port *port)
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	unsigned long flags;
 	int ret;
-
-	NPRINTK("-> regs=0x%p\n", regs);
 
 	// Make sure the port is off and no IRQ could be generated
 	regs->cr   = 0;
@@ -654,8 +613,6 @@ static int serial_tmpa910_startup(struct uart_port *port)
 	 * Now, initialize the UART
 	 */
 
-	NPRINTK("initialize the UART\n");
-	
 	spin_lock_irqsave(&uart_tmpa910_handle->port.lock, flags);
 	serial_tmpa910_set_mctrl(&uart_tmpa910_handle->port, uart_tmpa910_handle->port.mctrl);
 	spin_unlock_irqrestore(&uart_tmpa910_handle->port.lock, flags);
@@ -673,7 +630,6 @@ static int serial_tmpa910_startup(struct uart_port *port)
 	_dump_regs(uart_tmpa910_handle);
 #endif
 
-	NPRINTK("done\n");
 	return 0;
 }
 
@@ -683,8 +639,6 @@ static void serial_tmpa910_shutdown(struct uart_port *port)
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	unsigned long flags;
 
-	NPRINTK("->\n");
-	
 	/*
 	 * Disable interrupts from this port
 	 */
@@ -744,8 +698,6 @@ serial_tmpa910_set_termios(struct uart_port *port, struct ktermios *termios,
 	int div_integer;
 	int div_fract;
 
-	NPRINTK("-> regs = 0x%x\n");
-	
 	switch (termios->c_cflag & CSIZE) {
 	case CS5:
 		lcrh_reg = LCRH_WLEN_5B;
@@ -776,8 +728,6 @@ serial_tmpa910_set_termios(struct uart_port *port, struct ktermios *termios,
 	div_integer = uart_get_divisor(port, baud);
 	div_fract   = _get_div_fract(_get_uartclk(uart_tmpa910_handle), baud, div_integer);
 	
-	NPRINTK("baud=%d, div_integer=%d, div_fract=%d\n", baud, div_integer, div_fract);
-
 	regs->ibrd = div_integer;
 	regs->fbrd = div_fract;
 	/*
@@ -845,17 +795,11 @@ static void
 serial_tmpa910_pm(struct uart_port *port, unsigned int state,
 	      unsigned int oldstate)
 {
-	//struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)port;
-	NPRINTK("->\n");
 }
 
 static void serial_tmpa910_release_port(struct uart_port *port)
 {
 	struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)port;
-	NPRINTK("->\n");
-	
-
-
 
 	port->membase = NULL;
 }
@@ -871,7 +815,6 @@ static void serial_tmpa910_config_port(struct uart_port *port, int flags)
 {
 	struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)port;
 	
-	NPRINTK("->\n");
 	uart_tmpa910_handle->port.type = PORT_TMPA910;
 }
 
@@ -879,7 +822,6 @@ static int
 serial_tmpa910_verify_port(struct uart_port *port, struct serial_struct *ser)
 {
 	/* we don't want the core code to modify any port params */
-	NPRINTK("->\n");
 	return -EINVAL;
 }
 
@@ -888,7 +830,6 @@ serial_tmpa910_type(struct uart_port *port)
 {
 	struct uart_tmpa910_handle *up = (struct uart_tmpa910_handle *)port;
 	
-	NPRINTK("->\n");
 	return up->name;
 }
 
@@ -933,8 +874,6 @@ static int _fill_uarthandle(
 	irq = 10+index;
 	mapbase = 0xf2000000 + 0x1000*index;
 
-	NPRINTK("index=%d. irq=%d, mappase=%lx\n", index, irq, mapbase);
-
 	snprintf(uart_tmpa910_handle->name, sizeof(uart_tmpa910_handle->name), TMPA910_NAME_PATTERN, index);
 
 	uart_tmpa910_handle->channel		   = index;
@@ -958,9 +897,6 @@ static inline void wait_for_xmitr(struct uart_tmpa910_handle *uart_tmpa910_handl
 {
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	unsigned int tmout = 10000;
-
-
-	//NPRINTK("-> regs=0x%x. regs->fr=%x, port flags=0x%x\n", regs, regs->fr, uart_tmpa910_handle->port.flags);
 
 	/* Wait up to 10ms for the character(s) to be sent. */
 	while( (regs->fr & FR_TXFF) )
@@ -988,8 +924,6 @@ static inline void wait_for_txempty(struct uart_tmpa910_handle *uart_tmpa910_han
 {
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	unsigned int tmout = 10000;
-
-	//NPRINTK("-> regs=0x%x. regs->fr=%x, port flags=0x%x\n", regs, regs->fr, uart_tmpa910_handle->port.flags);
 	
 	/* Wait up to 10ms for the character(s) to be sent. */
 	while( (regs->fr & FR_TXFE) == 0 )
@@ -1014,7 +948,6 @@ static void serial_tmpa910_console_putchar(struct uart_port *port, int ch)
 {
 	struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)port;
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
-	//NPRINTK("->\n");
 	
 	wait_for_xmitr(uart_tmpa910_handle);
 	regs->dr = ch & 0xff;
@@ -1033,8 +966,6 @@ serial_tmpa910_console_write(struct console *co, const char *s, unsigned int cou
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	uint32_t imsc_reg;
 	
-	NPRINTK("-> co->index = %d\n", co->index);
-
 
 	/*
 	 *	First save the IER then disable the interrupts
@@ -1064,8 +995,6 @@ serial_tmpa910_console_setup(struct console *co, char *options)
 	int flow = 'n';
 	int ret;
 	
-	NPRINTK("-> co->index=%d\n");
-	
 
 	if (co->index == -1 || co->index >= serial_tmpa910_reg.nr)
 		co->index = 0;
@@ -1080,16 +1009,13 @@ serial_tmpa910_console_setup(struct console *co, char *options)
 
 
 	ret = _fill_uarthandle(uart_tmpa910_handle, co->index);
-	if (ret<0)
-	{
-		NPRINTK("_fill_uarthandle failed. ret=%d\n", ret);
+	if (ret<0) {
 		return ret;
 	}
 
 	ret = _map_tmpa910(uart_tmpa910_handle);
-	if( ret < 0)
-	{
-		NPRINTK("Fail to map IO mem. ret=%d\n", ret);
+	if( ret < 0) {
+		printk(KERN_ERR "Fail to map IO mem. ret=%d\n", ret);
 		return ret;
 	}
 	
@@ -1114,9 +1040,6 @@ static struct console serial_tmpa910_console = {
 static int __init
 serial_tmpa910_console_init(void)
 {
-	NPRINTK("->\n");
-
-	
 #ifdef CONFIG_SERIAL_TMPA910_CONSOLE_PREFERED
   	add_preferred_console("ttyS", 0, NULL);
 	printk(DRIVER_NAME ": Welcome. Myself as prefered console :-)\n" );
@@ -1180,39 +1103,28 @@ static int serial_tmpa910_probe(struct platform_device *pdev)
 	int irq;
 	struct resource *addr;
 
-	NPRINTK("-> pdev = %p\n", pdev);
-
-	// pb
-	//if (pdev->id==0)
-	//	return -1;
-
 	uart_tmpa910_handle = &serial_ports[pdev->id];
 
 
-	if (pdev->num_resources < 2)
-	{
-		NPRINTK("no enough ressources! %d\n", pdev->num_resources);
+	if (pdev->num_resources < 2) {
+		printk(KERN_ERR "not enough ressources! %d\n", pdev->num_resources);
 		return -ENODEV;
 	}
 
 	addr = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	irq  = platform_get_irq(pdev, 0);
 
-	if (addr == NULL)
-	{
-		NPRINTK("no IO mem ressources!\n");
+	if (addr == NULL) {
+		printk(KERN_ERR "no IO mem ressources!\n");
 		return -ENODEV;
 	}
 
-	if (irq == NO_IRQ)
-	{
-		NPRINTK("no IRQ ressources! irq=%d\n", irq);
+	if (irq == NO_IRQ) {
+		printk(KERN_ERR "no IRQ ressources! irq=%d\n", irq);
 		return -ENODEV;
 	}
 
 	mapbase = addr->start;
-
-	NPRINTK("index=%d. irq=%d, mappase=%lx\n",  pdev->id, irq, mapbase);
 
 	snprintf(uart_tmpa910_handle->name, sizeof(uart_tmpa910_handle->name), TMPA910_NAME_PATTERN, pdev->id);
 
@@ -1230,17 +1142,12 @@ static int serial_tmpa910_probe(struct platform_device *pdev)
 	port = &uart_tmpa910_handle->port;
 	spin_lock_init(&port->lock);
 	
-	NPRINTK("tmpa910_uart_portsetup i=%d, port=%p\n", pdev->id, port);
 	// do the needed setup (ressournces, allocation, hardware config...)
 	ret = tmpa910_uart_portsetup(uart_tmpa910_handle);
-	if(ret<0)
-	{
-		NPRINTK("_fill_uarthandle with error %d\n", ret);
+	if (ret < 0) {
 		return ret;
 	}
 
-
-	NPRINTK("uart_add_one_port pdev->id=%d, port=%p\n", pdev->id, port);
 	ret = uart_add_one_port(&serial_tmpa910_reg, port);
 	if (ret != 0)
 	{
@@ -1248,8 +1155,6 @@ static int serial_tmpa910_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-
-	NPRINTK("platform_set_drvdata and co pdev->id=%d, port=%p\n", pdev->id, port);
 	serial_tmpa910_ports[pdev->id].port.dev = &pdev->dev;
 	platform_set_drvdata(pdev, port);
 
@@ -1259,8 +1164,6 @@ static int serial_tmpa910_probe(struct platform_device *pdev)
 static int serial_tmpa910_remove(struct platform_device *pdev)
 {
 	struct uart_tmpa910_handle *sport = platform_get_drvdata(pdev);
-
-	NPRINTK("-> pdev = %p\n", pdev);
 
 	platform_set_drvdata(pdev, NULL);
 
@@ -1292,8 +1195,6 @@ int __init serial_tmpa910_init(void)
 {
 	int ret;
 	
-	NPRINTK("->\n");
-
 	ret = uart_register_driver(&serial_tmpa910_reg);
 	if (ret != 0)
 		return ret;
@@ -1304,8 +1205,6 @@ int __init serial_tmpa910_init(void)
 
 void __exit serial_tmpa910_exit(void)
 {
-	NPRINTK("->\n");
-	
 	platform_driver_unregister(&serial_tmpa910_driver);
 }
 
