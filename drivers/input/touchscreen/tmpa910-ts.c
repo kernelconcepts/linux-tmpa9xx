@@ -1,3 +1,4 @@
+
 /*
  * TMPA910 touchscreen driver
  *
@@ -30,12 +31,6 @@
 #include <mach/ts.h>
 #include <mach/adc.h>
 
-/*******/
-/*******/
-//#define __DEBUG__
-#include <linux/debug.h>
-
-/*******/
 /*******/
 #define DRIVER_DESC	"TMPA910 touchscreen driver"
 
@@ -188,7 +183,6 @@ static void _update_pendown(struct tmpa910_ts_priv *tmpa910_ts_priv, int pen_is_
 	input_sync(input_dev);
 
 	tmpa910_ts_priv->pen_is_down = pen_is_down;
-	NPRINTK("Pen %s\n",pen_is_down ? "dw" : "up" );
 }
 
 static void _update_pos(struct tmpa910_ts_priv *tmpa910_ts_priv)
@@ -242,7 +236,6 @@ static void _scheduled_restart(struct work_struct *work)
 	pen_is_down               = ts_pen_is_down(tmpa910_ts_priv->ts_regs);
 	tmpa910_ts_priv->adc_pass = ADC_PASS_NONE;
 
-	NPRINTK("tmpa910_ts_priv=0x%p, pen_is_down=%d\n", tmpa910_ts_priv,pen_is_down );
 	_ts_enable_interrupt(tmpa910_ts_priv->ts_regs);
 
 	if (pen_is_down)
@@ -267,7 +260,6 @@ static void _start_convertion(struct tmpa910_ts_priv *tmpa910_ts_priv)
 
 	if (tmpa910_ts_priv->pen_is_down == 0)
 	{
-		NPRINTK("No pen, no conversion!\n");
 		tmpa910_ts_priv->adc_pass = ADC_PASS_NONE;
 
 		// better reamle the ts 
@@ -283,7 +275,6 @@ static void _start_convertion(struct tmpa910_ts_priv *tmpa910_ts_priv)
 	{
 		case ADC_PASS_NONE:
 			// no oconvm start x
-			//NPRINTK("ADC_PASS_NONE -> ADC_PASS_X\n", adc_pass);
 			ts->tsicr0 = 0xc5;
 			adc_startchannel(tmpa910_ts_priv, 5);
 			adc_pass = ADC_PASS_X;
@@ -291,15 +282,12 @@ static void _start_convertion(struct tmpa910_ts_priv *tmpa910_ts_priv)
 			
 		case ADC_PASS_X:
 			// x done, start y
-			//NPRINTK("ADC_PASS_X -> ADC_PASS_Y\n");
 			ts->tsicr0 = 0xca;
 			adc_startchannel(tmpa910_ts_priv, 4);
 			adc_pass = ADC_PASS_Y;
 			break;
 			
 		case ADC_PASS_Y:
-			NPRINTK("pos %dx%d\n", tmpa910_ts_priv->x, tmpa910_ts_priv->y);
-
 			input_dev = tmpa910_ts_priv->input_dev;
 
 			// Convertion done, report the abs pos and tell input
@@ -346,8 +334,6 @@ static irqreturn_t topas910_ts_interrupt(int irq, void *dev_id)
 
 	// report this information to us and to the
 	// input system
-	NPRINTK(" pen_is_down=%d, ts->tsicr0=0x%x\n",  pen_is_down, ts->tsicr0);
-
 	tmpa910_ts_priv->pen_is_down = pen_is_down;
 
 	// Start the conversion in a little while to give
@@ -385,8 +371,6 @@ static irqreturn_t topas910_adc_interrupt(int irq, void *dev_id)
 	switch(tmpa910_ts_priv->adc_pass)
 	{
 		case ADC_PASS_NONE:
-			NPRINTK("ADC_PASS_NONE ???\n");
-
 			// strange better renable the ctrl
 			ts_init(ts);
 			_ts_enable_interrupt(ts);
@@ -398,7 +382,6 @@ static irqreturn_t topas910_adc_interrupt(int irq, void *dev_id)
 
 			_start_convertion(tmpa910_ts_priv);
 			
-			//NPRINTK("ADC_PASS_X %d\n", tmpa910_ts_priv->x);
 			break;
 			
 		case ADC_PASS_Y:
@@ -406,8 +389,7 @@ static irqreturn_t topas910_adc_interrupt(int irq, void *dev_id)
 			tmpa910_ts_priv->y = _read_y(ts, adc);
 
 			_start_convertion(tmpa910_ts_priv);
-			
-			//NPRINTK("ADC_PASS_Y %d\n", mpa910_ts_priv->y);
+
 			break;
 	
 	}
@@ -489,43 +471,35 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 
 	ts_r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!ts_r) {
-		NPRINTK( "resources unusable\n");
+		printk(KERN_ERR "resources unusable\n");
 		ret = -ENXIO;
 		return ret;
 	}
-	NPRINTK( "ts at 0x%p / 0x%x\n", ts_r, ts_r->start);
 		
 	adc_r = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	if (!adc_r) {
-		NPRINTK( "resources unusable\n");
+		printk(KERN_ERR "resources unusable\n");
 		ret = -ENXIO;
 		return ret;
 	}
-	
-	NPRINTK( "adc at 0x%p / 0x%x\n", adc_r, adc_r->start);
 	
 	ts_irq  = platform_get_irq(pdev, 0);
-	if (ts_irq == NO_IRQ)
-	{
-		NPRINTK( "platform_get_irq 0 failed\n");
+	if (ts_irq == NO_IRQ) {
+		printk(KERN_ERR "platform_get_irq 0 failed\n");
 		ret = -ENXIO;
 		return ret;
 	}
-	NPRINTK( "ts_irq=%d\n", ts_irq);	
 
 	adc_irq  = platform_get_irq(pdev, 1);
-	if (adc_irq == NO_IRQ)
-	{
-		NPRINTK( "platform_get_irq 1 failed\n");
+	if (adc_irq == NO_IRQ) {
+		printk(KERN_ERR "platform_get_irq 1 failed\n");
 		ret = -ENXIO;
 		return ret;
 	}
-	NPRINTK( "adc_irq=%d\n", adc_irq);
 
 	// Now allocate some memory for our private handle
 	tmpa910_ts_priv = kzalloc(sizeof(struct tmpa910_ts_priv), GFP_KERNEL);
-	if (tmpa910_ts_priv==NULL)
-	{
+	if (tmpa910_ts_priv==NULL) {
 		err = -ENOMEM;
 		return err;
 	}
@@ -566,7 +540,7 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 	// Create our work queue
 	tmpa910_ts_priv->ts_workq = create_singlethread_workqueue("tmpa910_ts");
 	if (tmpa910_ts_priv->ts_workq == NULL) {
-		NPRINTK("Failed to create workqueue\n");
+		printk(KERN_ERR "Failed to create workqueue\n");
 		err = -ENOMEM;
 		goto fail;
 	}
@@ -575,18 +549,16 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 	
 	// Our irqs...
 	ret = request_irq(ts_irq, topas910_ts_interrupt, IRQF_SHARED, "ts / ts", tmpa910_ts_priv);
-	if (ret)
-	{
-		NPRINTK("Fail allocate the interrupt (vector=%d), %i\n", ts_irq, ret );
+	if (ret) {
+		printk(KERN_ERR "Fail allocate the interrupt (vector=%d), %i\n", ts_irq, ret );
 		err = -ENOMEM;
 		goto fail;
 	}
 	tmpa910_ts_priv->ts_irq = ts_irq;
 
 	ret = request_irq(adc_irq, topas910_adc_interrupt, IRQF_SHARED, "ts / adc", tmpa910_ts_priv);
-	if (ret)
-	{
-		NPRINTK("Fail allocate the interrupt (vector=%d)\n", adc_irq );
+	if (ret) {
+		printk(KERN_ERR "Fail allocate the interrupt (vector=%d)\n", adc_irq );
 		err = -ENOMEM;
 		goto fail;
 	}
@@ -601,9 +573,8 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 	// touched or not -> 1 or 0
 	input_set_abs_params(input_dev, ABS_PRESSURE, 0, 1, 0, 0);
 	err = input_register_device(tmpa910_ts_priv->input_dev);
-	if (err)
-	{
-		NPRINTK("input_register_device failed (err=%d)\n", err );
+	if (err) {
+		printk(KERN_ERR "input_register_device failed (err=%d)\n", err );
 		goto fail;
 	}
 
@@ -636,7 +607,6 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 
 
  fail:
- 	NPRINTK("Failure!\n");
 	
 	_free_priv (tmpa910_ts_priv);
 
@@ -713,7 +683,6 @@ static struct platform_driver tmpa910_ts_driver = {
 
 static int __init tmpa910_ts_init(void)
 {
-	NPRINTK("->\n");
 	return platform_driver_probe(&tmpa910_ts_driver, tmpa910_ts_probe);
 }
 
