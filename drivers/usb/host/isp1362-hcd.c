@@ -102,10 +102,6 @@ module_param(dbg_level, int, 0);
 #include "../core/usb.h"
 #include "isp1362.h"
 
-/***/
-//#define __DEBUG__
-#include <linux/debug.h>
-/***/
 #define DRIVER_VERSION	"2005-04-04"
 #define DRIVER_DESC	"ISP1362 USB Host Controller Driver"
 
@@ -1083,8 +1079,6 @@ static irqreturn_t isp1362_irq(struct usb_hcd *hcd)
 
 	spin_lock(&isp1362_hcd->lock);
 
-	NPRINTK("->\n");
-
 	BUG_ON(isp1362_hcd->irq_active++);
 
 	isp1362_write_reg16(isp1362_hcd, HCuPINTENB, 0);
@@ -1096,8 +1090,6 @@ static irqreturn_t isp1362_irq(struct usb_hcd *hcd)
 	irqstat &= isp1362_hcd->irqenb;
 	isp1362_write_reg16(isp1362_hcd, HCuPINT, irqstat);
 	svc_mask = irqstat;
-
-	NPRINTK("irqstat = %x, svc_mask=0x%x\n", irqstat, svc_mask);
 
 	if (irqstat & HCuPINT_SOF) {
 		isp1362_hcd->irqenb &= ~HCuPINT_SOF;
@@ -1237,7 +1229,6 @@ static irqreturn_t isp1362_irq(struct usb_hcd *hcd)
 
 			reg16    = isp1362_read_reg16(isp1362_hcd, OTGINT);
 
-			NPRINTK("%s: OTG IRQ. otg status = 0x%x\n", __FUNCTION__, reg16);
 			INFO("%s: OTG IRQ. otg status = 0x%x\n", __FUNCTION__, reg16);
 		}
 	}
@@ -1265,8 +1256,6 @@ static irqreturn_t isp1362_irq(struct usb_hcd *hcd)
 		svc_mask &= ~HCuPINT_CLKRDY;
 		INFO("%s: CLKRDY IRQ\n", __FUNCTION__);
 	}
-
-	NPRINTK("<- irqstat = %x, svc_mask=0x%x. handled=%d\n", irqstat, svc_mask, handled);
 
 	if (svc_mask) {
 		ERR("%s: Unserviced interrupt(s) %04x\n", __func__, svc_mask);
@@ -1698,12 +1687,10 @@ static int isp1362_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 		DBG(0, "ClearHubFeature: ");
 		switch (wValue) {
 		case C_HUB_OVER_CURRENT:
-			NPRINTK("C_HUB_OVER_CURRENT\n");
 			spin_lock_irqsave(&isp1362_hcd->lock, flags);
 			isp1362_write_reg32(isp1362_hcd, HCRHSTATUS, RH_HS_OCIC);
 			spin_unlock_irqrestore(&isp1362_hcd->lock, flags);
 		case C_HUB_LOCAL_POWER:
-			NPRINTK("C_HUB_LOCAL_POWER\n");
 			break;
 		default:
 			goto error;
@@ -1714,7 +1701,6 @@ static int isp1362_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 		switch (wValue) {
 		case C_HUB_OVER_CURRENT:
 		case C_HUB_LOCAL_POWER:
-			NPRINTK("C_HUB_OVER_CURRENT or C_HUB_LOCAL_POWER\n");
 			break;
 		default:
 			goto error;
@@ -1738,11 +1724,8 @@ static int isp1362_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 		tmp = isp1362_hcd->rhport[--wIndex];
 		put_unaligned (cpu_to_le32(tmp), (__le32 *) buf);
 
-		NPRINTK("GetPortStatus. tmp=%x\n", tmp);
-
 		break;
 	case ClearPortFeature:
-		NPRINTK( "ClearPortFeature: ");
 		if (!wIndex || wIndex > ports) {
 			goto error;
 		}
@@ -1750,36 +1733,28 @@ static int isp1362_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 
 		switch (wValue) {
 		case USB_PORT_FEAT_ENABLE:
-			NPRINTK("USB_PORT_FEAT_ENABLE\n");
 			tmp = RH_PS_CCS;
 			break;
 		case USB_PORT_FEAT_C_ENABLE:
-			NPRINTK("USB_PORT_FEAT_C_ENABLE\n");
 			tmp = RH_PS_PESC;
 			break;
 		case USB_PORT_FEAT_SUSPEND:
-			NPRINTK("USB_PORT_FEAT_SUSPEND\n");
 			tmp = RH_PS_POCI;
 			break;
 		case USB_PORT_FEAT_C_SUSPEND:
-			NPRINTK("USB_PORT_FEAT_C_SUSPEND\n");
 			tmp = RH_PS_PSSC;
 			break;
 		case USB_PORT_FEAT_POWER:
-			NPRINTK("USB_PORT_FEAT_POWER\n");
 			tmp = RH_PS_LSDA;
 
 			break;
 		case USB_PORT_FEAT_C_CONNECTION:
-			NPRINTK("USB_PORT_FEAT_C_CONNECTION\n");
 			tmp = RH_PS_CSC;
 			break;
 		case USB_PORT_FEAT_C_OVER_CURRENT:
-			NPRINTK("USB_PORT_FEAT_C_OVER_CURRENT\n");
 			tmp = RH_PS_OCIC;
 			break;
 		case USB_PORT_FEAT_C_RESET:
-			NPRINTK("USB_PORT_FEAT_C_RESET\n");
 			tmp = RH_PS_PRSC;
 			break;
 		default:
@@ -1800,7 +1775,6 @@ static int isp1362_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 		wIndex--;
 		switch (wValue) {
 		case USB_PORT_FEAT_SUSPEND:
-			NPRINTK("USB_PORT_FEAT_SUSPEND\n");
 #if defined(CONFIG_USB_OTG) && 0
 			if (ohci->hcd.self.otg_port == (wIndex + 1) &&
 			    ohci->hcd.self.b_hnp_enable) {
@@ -1815,7 +1789,6 @@ static int isp1362_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 			spin_unlock_irqrestore(&isp1362_hcd->lock, flags);
 			break;
 		case USB_PORT_FEAT_POWER:
-			NPRINTK("USB_PORT_FEAT_POWER\n");
 			spin_lock_irqsave(&isp1362_hcd->lock, flags);
 			isp1362_write_reg32(isp1362_hcd, HCRHPORT1 + wIndex, RH_PS_PPS);
 			isp1362_hcd->rhport[wIndex] =
@@ -1823,7 +1796,6 @@ static int isp1362_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 			spin_unlock_irqrestore(&isp1362_hcd->lock, flags);
 			break;
 		case USB_PORT_FEAT_RESET:
-			NPRINTK("USB_PORT_FEAT_RESET\n");
 			spin_lock_irqsave(&isp1362_hcd->lock, flags);
 
 			t1 = jiffies + msecs_to_jiffies(USB_RESET_WIDTH);
@@ -1859,7 +1831,6 @@ static int isp1362_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 	default:
 	error:
 		/* "protocol stall" on error */
-		NPRINTK("PROTOCOL STALL\n");
 		retval = -EPIPE;
 	}
 
@@ -2522,9 +2493,6 @@ static int isp1362_hc_reset(struct usb_hcd *hcd)
 	unsigned long flags;
 	int clkrdy = 0;
 
-	//INFO("%s:\n", __FUNCTION__);
-	NPRINTK("board=%p, isp1362_hcd->board->reset = %p\n", isp1362_hcd->board, isp1362_hcd->board ? isp1362_hcd->board->reset : NULL);
-
 	if (isp1362_hcd->board && isp1362_hcd->board->reset) {
 		isp1362_hcd->board->reset(hcd->self.controller, 1);
 		msleep(20);
@@ -2733,7 +2701,6 @@ static int isp1362_hc_start(struct usb_hcd *hcd)
 	unsigned long flags;
 
 	INFO("%s:\n", __FUNCTION__);
-	NPRINTK("-> board=%p, OTG=%d\n", board, board ? board->is_otg : 0);
 
 	spin_lock_irqsave(&isp1362_hcd->lock, flags);
 	chipid = isp1362_read_reg16(isp1362_hcd, HCCHIPID);
@@ -2758,8 +2725,6 @@ static int isp1362_hc_start(struct usb_hcd *hcd)
 
 	if (board && board->is_otg)
 	{
-		NPRINTK("OTG: Enable host mode, VBUS and interrupt\n");
-
 		// Write 1 to clear any prevrious interrupt
 		isp1362_write_reg16(isp1362_hcd, OTGINT, OTG_INT_ALL);
 
@@ -2831,8 +2796,6 @@ static int isp1362_hc_start(struct usb_hcd *hcd)
 		isp1362_hcd->rhdesca |= (25 << 24) & RH_A_POTPGT;
 	}
 
-	NPRINTK("rhdesca = 0x%x\n", isp1362_hcd->rhdesca);
-
 	isp1362_write_reg32(isp1362_hcd, HCRHDESCA, isp1362_hcd->rhdesca & ~RH_A_OCPM);
 	isp1362_write_reg32(isp1362_hcd, HCRHDESCA, isp1362_hcd->rhdesca | RH_A_OCPM);
 	isp1362_hcd->rhdesca = isp1362_read_reg32(isp1362_hcd, HCRHDESCA);
@@ -2867,8 +2830,6 @@ static int isp1362_hc_start(struct usb_hcd *hcd)
 	// enable global power
 	isp1362_write_reg32(isp1362_hcd, HCRHSTATUS, RH_HS_LPSC | RH_HS_DRWE);
 
-
-	NPRINTK("start done. OHCI_USB_OPER=%x\n", OHCI_USB_OPER);
 
 	spin_unlock_irqrestore(&isp1362_hcd->lock, flags);
 
@@ -2949,13 +2910,11 @@ static int __init isp1362_probe(struct platform_device *pdev)
 	int retval = 2;
 
 	if (pdev == NULL) {
-		NPRINTK("no pdev!\n"  );
 		retval = -ENODEV;
 		goto err1;
 	}
 
 	dbg_level = 0;
-	NPRINTK("-> pdev=%p. dbg_level=%d\n", pdev, dbg_level);
 
 	/* basic sanity checks first.  board-specific init logic should
 	 * have initialized this the three resources and probably board
@@ -2963,7 +2922,6 @@ static int __init isp1362_probe(struct platform_device *pdev)
 	 * minimal sanity checking.
 	 */
 	if (pdev->num_resources < 3) {
-		NPRINTK("not enough ressources (%d)\n", pdev->num_resources );
 		retval = -ENODEV;
 		goto err1;
 	}
@@ -2973,7 +2931,6 @@ static int __init isp1362_probe(struct platform_device *pdev)
 	irq  = platform_get_irq(pdev, 0);
 
 	if (!addr || !data || irq < 0) {
-		NPRINTK("ressources (data=%p, addr=%p, irq ==%p)\n", data, addr, irq );
 		retval = -ENODEV;
 		goto err1;
 	}
@@ -2998,38 +2955,28 @@ static int __init isp1362_probe(struct platform_device *pdev)
 #endif
 
 	if (!request_mem_region(addr->start, resource_len(addr), hcd_name)) {
-		NPRINTK("request_mem_region addr failed\n" );
 		retval = -EBUSY;
 		goto err1;
 	}
 	addr_reg = ioremap(addr->start, resource_len(addr));
 	if (addr_reg == NULL) {
-		NPRINTK("ioremap addr failed\n" );
 		retval = -ENOMEM;
 		goto err2;
 	}
 
 	if (!request_mem_region(data->start, resource_len(data), hcd_name)) {
-		NPRINTK("request_mem_region data failed\n" );
 		retval = -EBUSY;
 		goto err3;
 	}
 	data_reg = ioremap(data->start, resource_len(data));
 	if (data_reg == NULL) {
-		NPRINTK("ioremap data failed\n" );
 		retval = -ENOMEM;
 		goto err4;
 	}
 
-
-	NPRINTK("data_reg =%p / 0x%x\n", data_reg, data->start );
-	NPRINTK("addr_reg =%p / 0x%x\n", addr_reg, addr->start );
-	NPRINTK("irq      =%d\n", irq );
-
 	/* allocate and initialize hcd */
 	hcd = usb_create_hcd(&isp1362_hc_driver, &pdev->dev, dev_name(&pdev->dev));
 	if (!hcd) {
-		NPRINTK("usb_create_hcd failed\n" );
 		retval = -ENOMEM;
 		goto err5;
 	}
@@ -3055,7 +3002,6 @@ static int __init isp1362_probe(struct platform_device *pdev)
 
 #ifdef	CONFIG_ARM
 	if (isp1362_hcd->board) {
-		NPRINTK("irq type <%s>\n", isp1362_hcd->board->int_act_high ? "IRQ_TYPE_EDGE_RISING" : "IRQ_TYPE_EDGE_FALLING" );
 		set_irq_type(irq, isp1362_hcd->board->int_act_high ? IRQ_TYPE_EDGE_RISING : IRQ_TYPE_EDGE_FALLING);
 	}
 #endif
@@ -3162,8 +3108,6 @@ static struct platform_driver isp1362_driver = {
 
 static int __init isp1362_init(void)
 {
-	NPRINTK("driver %s, %s. usb_disabled=%d\n", hcd_name, DRIVER_VERSION, usb_disabled());
-
 	if (usb_disabled()) {
 		return -ENODEV;
 	}
