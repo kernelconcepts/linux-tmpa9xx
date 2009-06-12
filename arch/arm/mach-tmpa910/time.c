@@ -33,12 +33,7 @@
 #include <mach/tmpa910_regs.h>
 
 /*********/
-/*********/
-//#define __DEBUG__
-#include <linux/debug.h>
 
-/*********/
-/*********/
 struct hw_timer {
 	uint32_t TimerLoad;	// 0x0000
 	uint32_t TimerValue;	// 0x0004
@@ -136,8 +131,6 @@ tmpa910_set_mode(enum clock_event_mode mode, struct clock_event_device *dev)
 	volatile struct hw_timer *hw_timer =
 	    (volatile struct hw_timer *)TMPA910_TIMER0;
 
-	NPRINTK("-> demodelta=%d. dev=%p\n", mode, dev);
-
 	TimerControl = 0;
 
 	raw_local_irq_save(irqflags);
@@ -148,24 +141,17 @@ tmpa910_set_mode(enum clock_event_mode mode, struct clock_event_device *dev)
 	case CLOCK_EVT_MODE_UNUSED:
 	case CLOCK_EVT_MODE_SHUTDOWN:
 		/* initializing, released, or preparing for suspend */
-
-		NPRINTK("Off\n");
-
 		break;
 
 	case CLOCK_EVT_MODE_RESUME:
-		NPRINTK("CLOCK_EVT_MODE_RESUME\n");
 		break;
 		
 	case CLOCK_EVT_MODE_ONESHOT:
-		NPRINTK("CLOCK_EVT_MODE_ONESHOT\n");
 		TimerControl |=TIMxOSCTL_NORESTART;
 		
 	case CLOCK_EVT_MODE_PERIODIC:
 
 
-
-		NPRINTK("On\n");
 		hw_timer->TimerLoad = TIMER_RELOAD;
 		hw_timer->TimerValue = 0;
 
@@ -184,7 +170,6 @@ tmpa910_set_mode(enum clock_event_mode mode, struct clock_event_device *dev)
 
 }
 
-/*********/
 /*********/
 static int
 tmpa910_set_next_event(unsigned long delta, struct clock_event_device *dev)
@@ -226,8 +211,6 @@ static cycle_t tmpa910_readcycle(void)
 
 	unsigned long ticks = 10;
 
-	//NPRINTK("->\n");
-
 	ticks = hw_timer->TimerValue;
 	
 	//NPRINTK("ticks=%ld\n", ticks);
@@ -262,8 +245,6 @@ static struct clocksource cksrc_tmpa910 = {
 static int tmpa910_clockevent_init(int clock_tick_rate)
 {
 
-	NPRINTK("->clock_tick_rate=%d\n", clock_tick_rate);
-
 	cksrc_tmpa910.mask = CLOCKSOURCE_MASK(32);
 	cksrc_tmpa910.shift = 20;
 	cksrc_tmpa910.mult =
@@ -283,11 +264,6 @@ static int tmpa910_clockevent_init(int clock_tick_rate)
 	clocksource_register(&cksrc_tmpa910);
 	clockevents_register_device(&clockevent_tmpa910);
 
-	NPRINTK
-	    ("<- &clockevent_aura=0x%p. clockevent_aura.mult=%d, features=0x%x\n",
-	     &clockevent_tmpa910, clockevent_tmpa910.mult,
-	     clockevent_tmpa910.features);
-
 	return 0;
 }
 
@@ -296,18 +272,14 @@ static void topas910_timer_init(void)
 	volatile struct hw_timer *hw_timer =
 	    (volatile struct hw_timer *)TMPA910_TIMER0;
 
-	NPRINTK("->using IRQ%d, ctrl at 0x%p, TIMER_RELOAD=%d\n", INTR_VECT_TIMER01, TMPA910_TIMER0, TIMER_RELOAD);
-
 	hw_timer->TimerControl = 0;
 
 	setup_irq(INTR_VECT_TIMER01, &topas910_timer_irq);
 
 	tmpa910_clockevent_init(REFCLK);
-	
-
-	NPRINTK("<-\n");
 }
 
 struct sys_timer topas910_timer = {
 	.init = topas910_timer_init,
 };
+
