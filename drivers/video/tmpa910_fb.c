@@ -27,12 +27,6 @@
 #include <video/tmpa910_fb.h>
 
 /********/
-/********/
-//#define __DEBUG__
-#include <linux/debug.h>
-
-/********/
-/********/
 /* Supported palette hacks */
 enum {
 	cmap_unknown,
@@ -104,7 +98,6 @@ static void _init_it(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t *LCDReg, 
 
 static void _setup_fb(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t fb_addr)
 {
-	NPRINTK("fb_addr=0x%x\n", fb_addr);
 	hw_tmpa910_lcdc->LCDUPBASE	= fb_addr;
 	hw_tmpa910_lcdc->LCDLPBASE	= fb_addr;
 	hw_tmpa910_lcdc->LCDControl |= 0x1;
@@ -113,7 +106,6 @@ static void _setup_fb(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t fb_addr)
 
 static void _stop_it(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc)
 {
-	NPRINTK("->\n");
 	hw_tmpa910_lcdc->LCDControl = 0;
 }
 
@@ -186,7 +178,6 @@ static int __init tmpa910_lcdc_init_fb(
 
 	info = framebuffer_alloc(0, &pdev->dev);
 	if (info == NULL) {
-		NPRINTK("Out of mem!\n");
 		return -ENOMEM;
 	}
 
@@ -315,37 +306,29 @@ static int __init tmpa910_lcdc_probe(struct platform_device *pdev)
 	int ret;
 	struct tmpa910_lcdc_platforminfo *platforminfo;
 
-	NPRINTK("-> dev =%p\n", dev);
-
 	ret = -ENOMEM;
 
 	platforminfo = (struct tmpa910_lcdc_platforminfo *) dev->platform_data;
 	
-	if (!platforminfo)
-	{
-		NPRINTK( "no platforminfo\n");
+	if (!platforminfo) {
+		printk(KERN_ERR "no platforminfo\n");
 		ret = -ENXIO;
 		return ret;
 	}
-
-	NPRINTK( "platforminfo at 0x%p\n", platforminfo);
 
 	regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!regs) {
-		NPRINTK( "resources unusable\n");
+		printk(KERN_ERR "resources unusable\n");
 		ret = -ENXIO;
 		return ret;
 	}
-	NPRINTK( "regs at 0x%p\n", regs);
-		
+
 	fb = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	if (!fb) {
-		NPRINTK( "resources unusable\n");
+		printk(KERN_ERR "resources unusable\n");
 		ret = -ENXIO;
 		return ret;
 	}
-	
-	NPRINTK( "fb at 0x%p\n", fb);
 	
 	ret = tmpa910_lcdc_init_fb(pdev,
 		"TMPA910 FB" , "Toshiba TMPA910 Frame Buffer",
@@ -362,8 +345,6 @@ static int __exit tmpa910_lcdc_remove(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct fb_info *info = dev_get_drvdata(dev);
 	struct tmpa910_lcdc_par *par = info->par;
-
-	NPRINTK("-> par=0x%p\n", par);
 
 	if (!par)
 		return 0;
@@ -399,8 +380,7 @@ static struct platform_driver tmpa910_lcdc_driver = {
 
 static int __init tmpa910_lcdc_init(void)
 {
-	NPRINTK("->\n");
-    return platform_driver_probe(&tmpa910_lcdc_driver, tmpa910_lcdc_probe);
+	return platform_driver_probe(&tmpa910_lcdc_driver, tmpa910_lcdc_probe);
 }
 
 static void __exit tmpa910_lcdc_exit(void)
