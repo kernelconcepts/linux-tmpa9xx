@@ -47,13 +47,6 @@
 
 /********************* CIO/QDIO SPECIFIC DEFINES *****************************/
 
-/* Adapter Identification Parameters */
-#define ZFCP_CONTROL_UNIT_TYPE  0x1731
-#define ZFCP_CONTROL_UNIT_MODEL 0x03
-#define ZFCP_DEVICE_TYPE        0x1732
-#define ZFCP_DEVICE_MODEL       0x03
-#define ZFCP_DEVICE_MODEL_PRIV	0x04
-
 /* DMQ bug workaround: don't use last SBALE */
 #define ZFCP_MAX_SBALES_PER_SBAL	(QDIO_MAX_ELEMENTS_PER_BUFFER - 1)
 
@@ -255,7 +248,6 @@ enum zfcp_wka_status {
 /* logical unit status */
 #define ZFCP_STATUS_UNIT_SHARED			0x00000004
 #define ZFCP_STATUS_UNIT_READONLY		0x00000008
-#define ZFCP_STATUS_UNIT_SCSI_WORK_PENDING	0x00000020
 
 /* FSF request status (this does not have a common part) */
 #define ZFCP_STATUS_FSFREQ_TASK_MANAGEMENT	0x00000002
@@ -530,6 +522,7 @@ struct zfcp_unit {
 	struct zfcp_erp_action erp_action;     /* pending error recovery */
         atomic_t               erp_counter;
 	struct zfcp_latencies	latencies;
+	struct work_struct	scsi_work;
 };
 
 /* FSF request */

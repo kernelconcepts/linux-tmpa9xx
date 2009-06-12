@@ -812,10 +812,8 @@ asmlinkage long compat_sys_mount(char __user * dev_name, char __user * dir_name,
 		}
 	}
 
-	lock_kernel();
 	retval = do_mount((char*)dev_page, dir_page, (char*)type_page,
 			flags, (void*)data_page);
-	unlock_kernel();
 
  out4:
 	free_page(data_page);
@@ -1476,6 +1474,7 @@ int compat_do_execve(char * filename,
 	struct linux_binprm *bprm;
 	struct file *file;
 	struct files_struct *displaced;
+	bool clear_in_exec;
 	int retval;
 
 	retval = unshare_files(&displaced);
@@ -1487,7 +1486,7 @@ int compat_do_execve(char * filename,
 	if (!bprm)
 		goto out_files;
 
-	retval = mutex_lock_interruptible(&current->cred_exec_mutex);
+	retval = mutex_lock_interruptible(&current->cred_guard_mutex);
 	if (retval < 0)
 		goto out_free;
 	current->in_execve = 1;
@@ -1498,8 +1497,9 @@ int compat_do_execve(char * filename,
 		goto out_unlock;
 
 	retval = check_unsafe_exec(bprm);
-	if (retval)
+	if (retval < 0)
 		goto out_unlock;
+	clear_in_exec = retval;
 
 	file = open_exec(filename);
 	retval = PTR_ERR(file);
@@ -1546,11 +1546,9 @@ int compat_do_execve(char * filename,
 		goto out;
 
 	/* execve succeeded */
-	write_lock(&current->fs->lock);
 	current->fs->in_exec = 0;
-	write_unlock(&current->fs->lock);
 	current->in_execve = 0;
-	mutex_unlock(&current->cred_exec_mutex);
+	mutex_unlock(&current->cred_guard_mutex);
 	acct_update_integrals(current);
 	free_bprm(bprm);
 	if (displaced)
@@ -1568,13 +1566,12 @@ out_file:
 	}
 
 out_unmark:
-	write_lock(&current->fs->lock);
-	current->fs->in_exec = 0;
-	write_unlock(&current->fs->lock);
+	if (clear_in_exec)
+		current->fs->in_exec = 0;
 
 out_unlock:
 	current->in_execve = 0;
-	mutex_unlock(&current->cred_exec_mutex);
+	mutex_unlock(&current->cred_guard_mutex);
 
 out_free:
 	free_bprm(bprm);

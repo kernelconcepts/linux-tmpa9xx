@@ -38,7 +38,7 @@
 /*
  * Version Information
  */
-#define DRIVER_VERSION "1.3.1"
+#define DRIVER_VERSION "1.3.2"
 #define DRIVER_DESC "Moschip 7840/7820 USB Serial Driver"
 
 /*
@@ -123,6 +123,11 @@
 #define BANDB_DEVICE_ID_USOPTL4_4       0xAC44
 #define BANDB_DEVICE_ID_USOPTL4_2       0xAC42
 
+/* This driver also supports the ATEN UC2324 device since it is mos7840 based
+ *  - if I knew the device id it would also support the ATEN UC2322 */
+#define USB_VENDOR_ID_ATENINTL		0x0557
+#define ATENINTL_DEVICE_ID_UC2324	0x2011
+
 /* Interrupt Routine Defines    */
 
 #define SERIAL_IIR_RLS      0x06
@@ -170,6 +175,7 @@ static struct usb_device_id moschip_port_id_table[] = {
 	{USB_DEVICE(USB_VENDOR_ID_MOSCHIP, MOSCHIP_DEVICE_ID_7820)},
 	{USB_DEVICE(USB_VENDOR_ID_BANDB, BANDB_DEVICE_ID_USOPTL4_4)},
 	{USB_DEVICE(USB_VENDOR_ID_BANDB, BANDB_DEVICE_ID_USOPTL4_2)},
+	{USB_DEVICE(USB_VENDOR_ID_ATENINTL, ATENINTL_DEVICE_ID_UC2324)},
 	{}			/* terminating entry */
 };
 
@@ -178,6 +184,7 @@ static __devinitdata struct usb_device_id moschip_id_table_combined[] = {
 	{USB_DEVICE(USB_VENDOR_ID_MOSCHIP, MOSCHIP_DEVICE_ID_7820)},
 	{USB_DEVICE(USB_VENDOR_ID_BANDB, BANDB_DEVICE_ID_USOPTL4_4)},
 	{USB_DEVICE(USB_VENDOR_ID_BANDB, BANDB_DEVICE_ID_USOPTL4_2)},
+	{USB_DEVICE(USB_VENDOR_ID_ATENINTL, ATENINTL_DEVICE_ID_UC2324)},
 	{}			/* terminating entry */
 };
 
@@ -1000,12 +1007,6 @@ static int mos7840_open(struct tty_struct *tty,
 	status = mos7840_set_reg_sync(port, mos7840_port->ControlRegOffset,
 									Data);
 
-	/* force low_latency on so that our tty_push actually forces *
-	 * the data through,otherwise it is scheduled, and with      *
-	 * high data rates (like with OHCI) data can get lost.       */
-	if (tty)
-		tty->low_latency = 1;
-
 	/* Check to see if we've set up our endpoint info yet    *
 	 * (can't set it up in mos7840_startup as the structures *
 	 * were not set up at that time.)                        */
@@ -1134,54 +1135,12 @@ static int mos7840_chars_in_buffer(struct tty_struct *tty)
 
 }
 
-/************************************************************************
- *
- * mos7840_block_until_tx_empty
- *
- *	This function will block the close until one of the following:
- *		1. TX count are 0
- *		2. The mos7840 has stopped
- *		3. A timeout of 3 seconds without activity has expired
- *
- ************************************************************************/
-static void mos7840_block_until_tx_empty(struct tty_struct *tty,
-				struct moschip_port *mos7840_port)
-{
-	int timeout = HZ / 10;
-	int wait = 30;
-	int count;
-
-	while (1) {
-
-		count = mos7840_chars_in_buffer(tty);
-
-		/* Check for Buffer status */
-		if (count <= 0)
-			return;
-
-		/* Block the thread for a while */
-		interruptible_sleep_on_timeout(&mos7840_port->wait_chase,
-					       timeout);
-
-		/* No activity.. count down section */
-		wait--;
-		if (wait == 0) {
-			dbg("%s - TIMEOUT", __func__);
-			return;
-		} else {
-			/* Reset timeout value back to seconds */
-			wait = 30;
-		}
-	}
-}
-
 /*****************************************************************************
  * mos7840_close
  *	this function is called by the tty driver when a port is closed
  *****************************************************************************/
 
-static void mos7840_close(struct tty_struct *tty,
-			struct usb_serial_port *port, struct file *filp)
+static void mos7840_close(struct usb_serial_port *port)
 {
 	struct usb_serial *serial;
 	struct moschip_port *mos7840_port;
@@ -1221,10 +1180,6 @@ static void mos7840_close(struct tty_struct *tty,
 			usb_free_urb(mos7840_port->write_urb_pool[j]);
 		}
 	}
-
-	if (serial->dev)
-		/* flush and block until tx is empty */
-		mos7840_block_until_tx_empty(tty, mos7840_port);
 
 	/* While closing port, shutdown all bulk read, write  *
 	 * and interrupt read if they exists                  */
@@ -2477,9 +2432,14 @@ static int mos7840_startup(struct usb_serial *serial)
 		mos7840_set_port_private(serial->port[i], mos7840_port);
 		spin_lock_init(&mos7840_port->pool_lock);
 
-		mos7840_port->port_num = ((serial->port[i]->number -
-					   (serial->port[i]->serial->minor)) +
-					  1);
+		/* minor is not initialised until later by
+		 * usb-serial.c:get_free_serial() and cannot therefore be used
+		 * to index device instances */
+		mos7840_port->port_num = i + 1;
+		dbg ("serial->port[i]->number = %d", serial->port[i]->number);
+		dbg ("serial->port[i]->serial->minor = %d", serial->port[i]->serial->minor);
+		dbg ("mos7840_port->port_num = %d", mos7840_port->port_num);
+		dbg ("serial->minor = %d", serial->minor);
 
 		if (mos7840_port->port_num == 1) {
 			mos7840_port->SpRegOffset = 0x0;
@@ -2690,13 +2650,16 @@ static void mos7840_shutdown(struct usb_serial *serial)
 
 	for (i = 0; i < serial->num_ports; ++i) {
 		mos7840_port = mos7840_get_port_private(serial->port[i]);
-		spin_lock_irqsave(&mos7840_port->pool_lock, flags);
-		mos7840_port->zombie = 1;
-		spin_unlock_irqrestore(&mos7840_port->pool_lock, flags);
-		usb_kill_urb(mos7840_port->control_urb);
-		kfree(mos7840_port->ctrl_buf);
-		kfree(mos7840_port->dr);
-		kfree(mos7840_port);
+		dbg ("mos7840_port %d = %p", i, mos7840_port);
+		if (mos7840_port) {
+			spin_lock_irqsave(&mos7840_port->pool_lock, flags);
+			mos7840_port->zombie = 1;
+			spin_unlock_irqrestore(&mos7840_port->pool_lock, flags);
+			usb_kill_urb(mos7840_port->control_urb);
+			kfree(mos7840_port->ctrl_buf);
+			kfree(mos7840_port->dr);
+			kfree(mos7840_port);
+		}
 		mos7840_set_port_private(serial->port[i], NULL);
 	}
 

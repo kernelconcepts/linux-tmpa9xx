@@ -61,6 +61,9 @@ struct btrfs_device {
 	/* size of the device */
 	u64 total_bytes;
 
+	/* size of the disk */
+	u64 disk_total_bytes;
+
 	/* bytes used */
 	u64 bytes_used;
 
@@ -93,7 +96,12 @@ struct btrfs_fs_devices {
 	u64 rw_devices;
 	u64 total_rw_bytes;
 	struct block_device *latest_bdev;
-	/* all of the devices in the FS */
+
+	/* all of the devices in the FS, protected by a mutex
+	 * so we can safely walk it to write out the supers without
+	 * worrying about add/remove by the multi-device code
+	 */
+	struct mutex device_list_mutex;
 	struct list_head devices;
 
 	/* devices not currently being allocated */
@@ -104,6 +112,11 @@ struct btrfs_fs_devices {
 	int seeding;
 
 	int opened;
+
+	/* set when we find or add a device that doesn't have the
+	 * nonrot flag set
+	 */
+	int rotating;
 };
 
 struct btrfs_bio_stripe {

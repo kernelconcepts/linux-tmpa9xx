@@ -332,13 +332,17 @@ int btrfs_remove_free_space(struct btrfs_block_group_cache *block_group,
 			printk(KERN_ERR "couldn't find space %llu to free\n",
 			       (unsigned long long)offset);
 			printk(KERN_ERR "cached is %d, offset %llu bytes %llu\n",
-			       block_group->cached, block_group->key.objectid,
-			       block_group->key.offset);
+			       block_group->cached,
+			       (unsigned long long)block_group->key.objectid,
+			       (unsigned long long)block_group->key.offset);
 			btrfs_dump_free_space(block_group, bytes);
 		} else if (info) {
 			printk(KERN_ERR "hmm, found offset=%llu bytes=%llu, "
 			       "but wanted offset=%llu bytes=%llu\n",
-			       info->offset, info->bytes, offset, bytes);
+			       (unsigned long long)info->offset,
+			       (unsigned long long)info->bytes,
+			       (unsigned long long)offset,
+			       (unsigned long long)bytes);
 		}
 		WARN_ON(1);
 	}
@@ -357,8 +361,9 @@ void btrfs_dump_free_space(struct btrfs_block_group_cache *block_group,
 		info = rb_entry(n, struct btrfs_free_space, offset_index);
 		if (info->bytes >= bytes)
 			count++;
-		printk(KERN_ERR "entry offset %llu, bytes %llu\n", info->offset,
-		       info->bytes);
+		printk(KERN_ERR "entry offset %llu, bytes %llu\n",
+		       (unsigned long long)info->offset,
+		       (unsigned long long)info->bytes);
 	}
 	printk(KERN_INFO "%d blocks of free space at or bigger than bytes is"
 	       "\n", count);
@@ -574,6 +579,7 @@ out:
  * it returns -enospc
  */
 int btrfs_find_space_cluster(struct btrfs_trans_handle *trans,
+			     struct btrfs_root *root,
 			     struct btrfs_block_group_cache *block_group,
 			     struct btrfs_free_cluster *cluster,
 			     u64 offset, u64 bytes, u64 empty_size)
@@ -590,7 +596,9 @@ int btrfs_find_space_cluster(struct btrfs_trans_handle *trans,
 	int ret;
 
 	/* for metadata, allow allocates with more holes */
-	if (block_group->flags & BTRFS_BLOCK_GROUP_METADATA) {
+	if (btrfs_test_opt(root, SSD_SPREAD)) {
+		min_bytes = bytes + empty_size;
+	} else if (block_group->flags & BTRFS_BLOCK_GROUP_METADATA) {
 		/*
 		 * we want to do larger allocations when we are
 		 * flushing out the delayed refs, it helps prevent
@@ -640,14 +648,15 @@ again:
 		 * we haven't filled the empty size and the window is
 		 * very large.  reset and try again
 		 */
-		if (next->offset - window_start > (bytes + empty_size) * 2) {
+		if (next->offset - (last->offset + last->bytes) > 128 * 1024 ||
+		    next->offset - window_start > (bytes + empty_size) * 2) {
 			entry = next;
 			window_start = entry->offset;
 			window_free = entry->bytes;
 			last = entry;
 			max_extent = 0;
 			total_retries++;
-			if (total_retries % 256 == 0) {
+			if (total_retries % 64 == 0) {
 				if (min_bytes >= (bytes + empty_size)) {
 					ret = -ENOSPC;
 					goto out;

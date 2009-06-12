@@ -62,8 +62,6 @@ struct bus_type {
 	void (*shutdown)(struct device *dev);
 
 	int (*suspend)(struct device *dev, pm_message_t state);
-	int (*suspend_late)(struct device *dev, pm_message_t state);
-	int (*resume_early)(struct device *dev);
 	int (*resume)(struct device *dev);
 
 	struct dev_pm_ops *pm;
@@ -291,9 +289,6 @@ struct device_type {
 	int (*uevent)(struct device *dev, struct kobj_uevent_env *env);
 	void (*release)(struct device *dev);
 
-	int (*suspend)(struct device *dev, pm_message_t state);
-	int (*resume)(struct device *dev);
-
 	struct dev_pm_ops *pm;
 };
 
@@ -384,13 +379,8 @@ struct device {
 	struct device_driver *driver;	/* which driver has allocated this
 					   device */
 	void		*driver_data;	/* data private to the driver */
-
-	void		*platform_data;	/* We will remove platform_data
-					   field if all platform devices
-					   pass its platform specific data
-					   from platform_device->platform_data,
-					   other kind of devices should not
-					   use platform_data. */
+	void		*platform_data;	/* Platform specific data, device
+					   core doesn't touch it */
 	struct dev_pm_info	power;
 
 #ifdef CONFIG_NUMA

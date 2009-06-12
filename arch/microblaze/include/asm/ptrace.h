@@ -10,7 +10,6 @@
 #define _ASM_MICROBLAZE_PTRACE_H
 
 #ifndef __ASSEMBLY__
-#include <linux/types.h>
 
 typedef unsigned long microblaze_reg_t;
 
@@ -52,10 +51,10 @@ struct pt_regs {
 	microblaze_reg_t ear;
 	microblaze_reg_t esr;
 	microblaze_reg_t fsr;
-	int kernel_mode;
+	int pt_mode;
 };
 
-#define kernel_mode(regs)		((regs)->kernel_mode)
+#define kernel_mode(regs)		((regs)->pt_mode)
 #define user_mode(regs)			(!kernel_mode(regs))
 
 #define instruction_pointer(regs)	((regs)->pc)

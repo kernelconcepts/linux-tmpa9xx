@@ -973,14 +973,6 @@ static int garmin_open(struct tty_struct *tty,
 
 	dbg("%s - port %d", __func__, port->number);
 
-	/*
-	 * Force low_latency on so that our tty_push actually forces the data
-	 * through, otherwise it is scheduled, and with high data rates (like
-	 * with OHCI) data can get lost.
-	 */
-	if (tty)
-		tty->low_latency = 1;
-
 	spin_lock_irqsave(&garmin_data_p->lock, flags);
 	garmin_data_p->mode  = initial_mode;
 	garmin_data_p->count = 0;
@@ -1001,8 +993,7 @@ static int garmin_open(struct tty_struct *tty,
 }
 
 
-static void garmin_close(struct tty_struct *tty,
-			struct usb_serial_port *port, struct file *filp)
+static void garmin_close(struct usb_serial_port *port)
 {
 	struct usb_serial *serial = port->serial;
 	struct garmin_data *garmin_data_p = usb_get_serial_port_data(port);

@@ -15,16 +15,11 @@
 #include <linux/kernel.h>
 #include <linux/param.h>
 #include <linux/init.h>
-#include <linux/interrupt.h>
 #include <linux/io.h>
 #include <asm/machdep.h>
 #include <asm/coldfire.h>
 #include <asm/mcfsim.h>
 #include <asm/mcfuart.h>
-
-/***************************************************************************/
-
-void coldfire_reset(void);
 
 /***************************************************************************/
 
@@ -189,10 +184,15 @@ static void __init m527x_fec_init(void)
 	m527x_fec_irq_init(0);
 
 	/* Set multi-function pins to ethernet mode for fec0 */
+#if defined(CONFIG_M5271)
+	v = readb(MCF_IPSBAR + 0x100047);
+	writeb(v | 0xf0, MCF_IPSBAR + 0x100047);
+#else
 	par = readw(MCF_IPSBAR + 0x100082);
 	writew(par | 0xf00, MCF_IPSBAR + 0x100082);
 	v = readb(MCF_IPSBAR + 0x100078);
 	writeb(v | 0xc0, MCF_IPSBAR + 0x100078);
+#endif
 
 #ifdef CONFIG_FEC2
 	m527x_fec_irq_init(1);
@@ -222,10 +222,18 @@ void mcf_autovector(unsigned int vec)
 
 /***************************************************************************/
 
+static void m527x_cpu_reset(void)
+{
+	local_irq_disable();
+	__raw_writeb(MCF_RCR_SWRESET, MCF_IPSBAR + MCF_RCR);
+}
+
+/***************************************************************************/
+
 void __init config_BSP(char *commandp, int size)
 {
 	mcf_disableall();
-	mach_reset = coldfire_reset;
+	mach_reset = m527x_cpu_reset;
 	m527x_uarts_init();
 	m527x_fec_init();
 }

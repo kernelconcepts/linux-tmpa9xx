@@ -76,8 +76,7 @@ static int initial_wait;
 /* Function prototypes for an ipaq */
 static int  ipaq_open(struct tty_struct *tty,
 			struct usb_serial_port *port, struct file *filp);
-static void ipaq_close(struct tty_struct *tty,
-			struct usb_serial_port *port, struct file *filp);
+static void ipaq_close(struct usb_serial_port *port);
 static int  ipaq_calc_num_ports(struct usb_serial *serial);
 static int  ipaq_startup(struct usb_serial *serial);
 static void ipaq_shutdown(struct usb_serial *serial);
@@ -631,13 +630,7 @@ static int ipaq_open(struct tty_struct *tty,
 		priv->free_len += PACKET_SIZE;
 	}
 
-	/*
-	 * Force low latency on. This will immediately push data to the line
-	 * discipline instead of queueing.
-	 */
-
 	if (tty) {
-		tty->low_latency = 1;
 		/* FIXME: These two are bogus */
 		tty->raw = 1;
 		tty->real_raw = 1;
@@ -720,8 +713,7 @@ error:
 }
 
 
-static void ipaq_close(struct tty_struct *tty,
-			struct usb_serial_port *port, struct file *filp)
+static void ipaq_close(struct usb_serial_port *port)
 {
 	struct ipaq_private	*priv = usb_get_serial_port_data(port);
 

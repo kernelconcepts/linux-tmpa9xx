@@ -61,8 +61,7 @@ static int cyberjack_startup(struct usb_serial *serial);
 static void cyberjack_shutdown(struct usb_serial *serial);
 static int  cyberjack_open(struct tty_struct *tty,
 			struct usb_serial_port *port, struct file *filp);
-static void cyberjack_close(struct tty_struct *tty,
-			struct usb_serial_port *port, struct file *filp);
+static void cyberjack_close(struct usb_serial_port *port);
 static int cyberjack_write(struct tty_struct *tty,
 	struct usb_serial_port *port, const unsigned char *buf, int count);
 static int cyberjack_write_room(struct tty_struct *tty);
@@ -175,13 +174,6 @@ static int  cyberjack_open(struct tty_struct *tty,
 	dbg("%s - usb_clear_halt", __func__);
 	usb_clear_halt(port->serial->dev, port->write_urb->pipe);
 
-	/* force low_latency on so that our tty_push actually forces
-	 * the data through, otherwise it is scheduled, and with high
-	 * data rates (like with OHCI) data can get lost.
-	 */
-	if (tty)
-		tty->low_latency = 1;
-
 	priv = usb_get_serial_port_data(port);
 	spin_lock_irqsave(&priv->lock, flags);
 	priv->rdtodo = 0;
@@ -192,8 +184,7 @@ static int  cyberjack_open(struct tty_struct *tty,
 	return result;
 }
 
-static void cyberjack_close(struct tty_struct *tty,
-			struct usb_serial_port *port, struct file *filp)
+static void cyberjack_close(struct usb_serial_port *port)
 {
 	dbg("%s - port %d", __func__, port->number);
 

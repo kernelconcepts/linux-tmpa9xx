@@ -1,4 +1,8 @@
+ifeq ($(CONFIG_MMU),y)
+UTS_SYSNAME = -DUTS_SYSNAME=\"Linux\"
+else
 UTS_SYSNAME = -DUTS_SYSNAME=\"uClinux\"
+endif
 
 # What CPU vesion are we building for, and crack it open
 # as major.minor.rev
@@ -26,21 +30,21 @@ ifeq (,$(findstring spartan2,$(CONFIG_XILINX_MICROBLAZE0_FAMILY)))
 endif
 CPUFLAGS-$(CONFIG_XILINX_MICROBLAZE0_USE_DIV) += -mno-xl-soft-div
 CPUFLAGS-$(CONFIG_XILINX_MICROBLAZE0_USE_BARREL) += -mxl-barrel-shift
-CPUFLAGS-$(CONFIG_XILINX_MICROBLAZE0_USE_PCMP) += -mxl-pattern-compare
+CPUFLAGS-$(CONFIG_XILINX_MICROBLAZE0_USE_PCMP_INSTR) += -mxl-pattern-compare
 
 CPUFLAGS-1 += $(call cc-option,-mcpu=v$(CPU_VER))
 
 # The various CONFIG_XILINX cpu features options are integers 0/1/2...
 # rather than bools y/n
-CFLAGS += $(CPUFLAGS-1)
-CFLAGS += $(CPUFLAGS-2)
 
 # r31 holds current when in kernel mode
-CFLAGS += -ffixed-r31
+CFLAGS_KERNEL += -ffixed-r31 $(CPUFLAGS-1) $(CPUFLAGS-2)
 
+LDFLAGS		:=
+LDFLAGS_vmlinux	:=
 LDFLAGS_BLOB := --format binary --oformat elf32-microblaze
 
-LIBGCC := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
+LIBGCC := $(shell $(CC) $(CFLAGS_KERNEL) -print-libgcc-file-name)
 
 head-y		:= arch/microblaze/kernel/head.o
 libs-y		+= arch/microblaze/lib/ $(LIBGCC)

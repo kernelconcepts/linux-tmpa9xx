@@ -76,7 +76,6 @@ struct edgeport_uart_buf_desc {
 #define EDGE_READ_URB_STOPPING	1
 #define EDGE_READ_URB_STOPPED	2
 
-#define EDGE_LOW_LATENCY	1
 #define EDGE_CLOSING_WAIT	4000	/* in .01 sec */
 
 #define EDGE_OUT_BUF_SIZE	1024
@@ -232,7 +231,6 @@ static unsigned short OperationalBuildNumber;
 
 static int debug;
 
-static int low_latency = EDGE_LOW_LATENCY;
 static int closing_wait = EDGE_CLOSING_WAIT;
 static int ignore_cpu_rev;
 static int default_uart_mode;		/* RS232 */
@@ -1850,9 +1848,6 @@ static int edge_open(struct tty_struct *tty,
 	if (edge_port == NULL)
 		return -ENODEV;
 
-	if (tty)
-		tty->low_latency = low_latency;
-
 	port_number = port->number - port->serial->minor;
 	switch (port_number) {
 	case 0:
@@ -2014,8 +2009,7 @@ release_es_lock:
 	return status;
 }
 
-static void edge_close(struct tty_struct *tty,
-			struct usb_serial_port *port, struct file *filp)
+static void edge_close(struct usb_serial_port *port)
 {
 	struct edgeport_serial *edge_serial;
 	struct edgeport_port *edge_port;
@@ -3007,9 +3001,6 @@ MODULE_FIRMWARE("edgeport/down3.bin");
 
 module_param(debug, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(debug, "Debug enabled or not");
-
-module_param(low_latency, bool, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(low_latency, "Low latency enabled or not");
 
 module_param(closing_wait, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(closing_wait, "Maximum wait for data to drain, in .01 secs");

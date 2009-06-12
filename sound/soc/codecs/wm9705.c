@@ -282,14 +282,14 @@ struct snd_soc_dai wm9705_dai[] = {
 			.channels_min = 1,
 			.channels_max = 2,
 			.rates = WM9705_AC97_RATES,
-			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.formats = SND_SOC_STD_AC97_FMTS,
 		},
 		.capture = {
 			.stream_name = "HiFi Capture",
 			.channels_min = 1,
 			.channels_max = 2,
 			.rates = WM9705_AC97_RATES,
-			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.formats = SND_SOC_STD_AC97_FMTS,
 		},
 		.ops = &wm9705_dai_ops,
 	},
@@ -318,7 +318,7 @@ static int wm9705_reset(struct snd_soc_codec *codec)
 }
 
 #ifdef CONFIG_PM
-static int wm9705_soc_suspend(struct platform_device *pdev)
+static int wm9705_soc_suspend(struct platform_device *pdev, pm_message_t msg)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
 	struct snd_soc_codec *codec = socdev->card->codec;

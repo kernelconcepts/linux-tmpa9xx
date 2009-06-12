@@ -50,11 +50,10 @@
 
 #define TI_TRANSFER_TIMEOUT	2
 
-#define TI_DEFAULT_LOW_LATENCY	0
 #define TI_DEFAULT_CLOSING_WAIT	4000		/* in .01 secs */
 
 /* supported setserial flags */
-#define TI_SET_SERIAL_FLAGS	(ASYNC_LOW_LATENCY)
+#define TI_SET_SERIAL_FLAGS	0
 
 /* read urb states */
 #define TI_READ_URB_RUNNING	0
@@ -101,8 +100,7 @@ static int ti_startup(struct usb_serial *serial);
 static void ti_shutdown(struct usb_serial *serial);
 static int ti_open(struct tty_struct *tty, struct usb_serial_port *port,
 		struct file *file);
-static void ti_close(struct tty_struct *tty, struct usb_serial_port *port,
-		struct file *file);
+static void ti_close(struct usb_serial_port *port);
 static int ti_write(struct tty_struct *tty, struct usb_serial_port *port,
 		const unsigned char *data, int count);
 static int ti_write_room(struct tty_struct *tty);
@@ -161,7 +159,6 @@ static int ti_buf_get(struct circ_buf *cb, char *buf, int count);
 
 /* module parameters */
 static int debug;
-static int low_latency = TI_DEFAULT_LOW_LATENCY;
 static int closing_wait = TI_DEFAULT_CLOSING_WAIT;
 static ushort vendor_3410[TI_EXTRA_VID_PID_COUNT];
 static unsigned int vendor_3410_count;
@@ -295,10 +292,6 @@ MODULE_FIRMWARE("mts_edge.fw");
 
 module_param(debug, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(debug, "Enable debugging, 0=no, 1=yes");
-
-module_param(low_latency, bool, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(low_latency,
-		"TTY low_latency flag, 0=off, 1=on, default is off");
 
 module_param(closing_wait, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(closing_wait,
@@ -448,7 +441,6 @@ static int ti_startup(struct usb_serial *serial)
 		spin_lock_init(&tport->tp_lock);
 		tport->tp_uart_base_addr = (i == 0 ?
 				TI_UART1_BASE_ADDR : TI_UART2_BASE_ADDR);
-		tport->tp_flags = low_latency ? ASYNC_LOW_LATENCY : 0;
 		tport->tp_closing_wait = closing_wait;
 		init_waitqueue_head(&tport->tp_msr_wait);
 		init_waitqueue_head(&tport->tp_write_wait);
@@ -527,10 +519,6 @@ static int ti_open(struct tty_struct *tty,
 	/* only one open on any port on a device at a time */
 	if (mutex_lock_interruptible(&tdev->td_open_close_lock))
 		return -ERESTARTSYS;
-
-	if (tty)
-		tty->low_latency =
-				(tport->tp_flags & ASYNC_LOW_LATENCY) ? 1 : 0;
 
 	port_number = port->number - port->serial->minor;
 
@@ -658,8 +646,7 @@ release_lock:
 }
 
 
-static void ti_close(struct tty_struct *tty, struct usb_serial_port *port,
-							struct file *file)
+static void ti_close(struct usb_serial_port *port)
 {
 	struct ti_device *tdev;
 	struct ti_port *tport;
@@ -1454,7 +1441,6 @@ static int ti_set_serial_info(struct tty_struct *tty, struct ti_port *tport,
 		return -EFAULT;
 
 	tport->tp_flags = new_serial.flags & TI_SET_SERIAL_FLAGS;
-	tty->low_latency = (tport->tp_flags & ASYNC_LOW_LATENCY) ? 1 : 0;
 	tport->tp_closing_wait = new_serial.closing_wait;
 
 	return 0;

@@ -771,8 +771,6 @@ static int pci_netmos_init(struct pci_dev *dev)
 }
 
 /*
- * ITE support by Niels de Vos <niels.devos@wincor-nixdorf.com>
- *
  * These chips are available with optionally one parallel port and up to
  * two serial ports. Unfortunately they all have the same product id.
  *
@@ -2778,6 +2776,9 @@ static struct pci_device_id serial_pci_tbl[] = {
 	{	PCI_VENDOR_ID_OXSEMI, 0x950a,
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 		pbn_b0_2_1130000 },
+	{	PCI_VENDOR_ID_OXSEMI, PCI_DEVICE_ID_OXSEMI_C950,
+		PCI_VENDOR_ID_OXSEMI, PCI_SUBDEVICE_ID_OXSEMI_C950, 0, 0,
+		pbn_b0_1_921600 },
 	{	PCI_VENDOR_ID_OXSEMI, PCI_DEVICE_ID_OXSEMI_16PCI954,
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 		pbn_b0_4_115200 },

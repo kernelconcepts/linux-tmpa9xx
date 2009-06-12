@@ -637,6 +637,7 @@ struct fc_disc {
 			      enum fc_disc_event);
 
 	struct list_head	 rports;
+	struct list_head	 rogue_rports;
 	struct fc_lport		*lport;
 	struct mutex		disc_mutex;
 	struct fc_gpn_ft_resp	partial_buf;	/* partial name buffer */
@@ -678,6 +679,7 @@ struct fc_lport {
 	unsigned int		e_d_tov;
 	unsigned int		r_a_tov;
 	u8			max_retry_count;
+	u8			max_rport_retry_count;
 	u16			link_speed;
 	u16			link_supported_speeds;
 	u16			lro_xid;	/* max xid for fcoe lro */

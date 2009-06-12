@@ -1411,7 +1411,8 @@ sub dump_struct($$) {
     my $file = shift;
     my $nested;
 
-    if ($x =~/(struct|union)\s+(\w+)\s*{(.*)}/) {
+    if ($x =~ /(struct|union)\s+(\w+)\s*{(.*)}/) {
+	#my $decl_type = $1;
 	$declaration_name = $2;
 	my $members = $3;
 
@@ -1420,8 +1421,8 @@ sub dump_struct($$) {
 	$nested = $1;
 
 	# ignore members marked private:
-	$members =~ s/\/\*.*?private:.*?public:.*?\*\///gos;
-	$members =~ s/\/\*.*?private:.*//gos;
+	$members =~ s/\/\*\s*private:.*?\/\*\s*public:.*?\*\///gos;
+	$members =~ s/\/\*\s*private:.*//gos;
 	# strip comments:
 	$members =~ s/\/\*.*?\*\///gos;
 	$nested =~ s/\/\*.*?\*\///gos;
@@ -1827,6 +1828,25 @@ sub reset_state {
     $state = 0;
 }
 
+sub tracepoint_munge($) {
+	my $file = shift;
+	my $tracepointname = 0;
+	my $tracepointargs = 0;
+
+	if($prototype =~ m/TRACE_EVENT\((.*?),/) {
+		$tracepointname = $1;
+	}
+	if($prototype =~ m/TP_PROTO\((.*?)\)/) {
+		$tracepointargs = $1;
+	}
+	if (($tracepointname eq 0) || ($tracepointargs eq 0)) {
+		print STDERR "Warning(${file}:$.): Unrecognized tracepoint format: \n".
+			     "$prototype\n";
+	} else {
+		$prototype = "static inline void trace_$tracepointname($tracepointargs)";
+	}
+}
+
 sub syscall_munge() {
 	my $void = 0;
 
@@ -1880,6 +1900,9 @@ sub process_state3_function($$) {
 	$prototype =~ s@^\s+@@gos; # strip leading spaces
 	if ($prototype =~ /SYSCALL_DEFINE/) {
 		syscall_munge();
+	}
+	if ($prototype =~ /TRACE_EVENT/) {
+		tracepoint_munge($file);
 	}
 	dump_function($prototype, $file);
 	reset_state();

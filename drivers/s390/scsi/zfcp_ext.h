@@ -27,6 +27,7 @@ extern int zfcp_sg_setup_table(struct scatterlist *, int);
 
 /* zfcp_ccw.c */
 extern int zfcp_ccw_register(void);
+extern int zfcp_ccw_priv_sch(struct zfcp_adapter *);
 extern struct zfcp_adapter *zfcp_get_adapter_by_busid(char *);
 
 /* zfcp_cfdc.c */
@@ -106,6 +107,7 @@ extern void zfcp_fc_plogi_evaluate(struct zfcp_port *, struct fsf_plogi *);
 extern void zfcp_test_link(struct zfcp_port *);
 extern void zfcp_fc_link_test_work(struct work_struct *);
 extern void zfcp_fc_nameserver_init(struct zfcp_adapter *);
+extern void zfcp_fc_wka_port_force_offline(struct zfcp_wka_port *);
 
 /* zfcp_fsf.c */
 extern int zfcp_fsf_open_port(struct zfcp_erp_action *);
@@ -158,6 +160,7 @@ extern void zfcp_scsi_rport_work(struct work_struct *);
 extern void zfcp_scsi_schedule_rport_register(struct zfcp_port *);
 extern void zfcp_scsi_schedule_rport_block(struct zfcp_port *);
 extern void zfcp_scsi_schedule_rports_block(struct zfcp_adapter *);
+extern void zfcp_scsi_scan(struct work_struct *);
 
 /* zfcp_sysfs.c */
 extern struct attribute_group zfcp_sysfs_unit_attrs;

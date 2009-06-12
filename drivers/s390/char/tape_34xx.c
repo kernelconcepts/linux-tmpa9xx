@@ -1134,7 +1134,7 @@ tape_34xx_bread(struct tape_device *device, struct request *req)
 	/* Setup ccws. */
 	request->op = TO_BLOCK;
 	start_block = (struct tape_34xx_block_id *) request->cpdata;
-	start_block->block = req->sector >> TAPEBLOCK_HSEC_S2B;
+	start_block->block = blk_rq_pos(req) >> TAPEBLOCK_HSEC_S2B;
 	DBF_EVENT(6, "start_block = %i\n", start_block->block);
 
 	ccw = request->cpaddr;
@@ -1294,12 +1294,6 @@ tape_34xx_online(struct ccw_device *cdev)
 	);
 }
 
-static int
-tape_34xx_offline(struct ccw_device *cdev)
-{
-	return tape_generic_offline(cdev->dev.driver_data);
-}
-
 static struct ccw_driver tape_34xx_driver = {
 	.name = "tape_34xx",
 	.owner = THIS_MODULE,
@@ -1307,7 +1301,7 @@ static struct ccw_driver tape_34xx_driver = {
 	.probe = tape_generic_probe,
 	.remove = tape_generic_remove,
 	.set_online = tape_34xx_online,
-	.set_offline = tape_34xx_offline,
+	.set_offline = tape_generic_offline,
 };
 
 static int

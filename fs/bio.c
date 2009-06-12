@@ -26,10 +26,9 @@
 #include <linux/mempool.h>
 #include <linux/workqueue.h>
 #include <linux/blktrace_api.h>
-#include <trace/block.h>
 #include <scsi/sg.h>		/* for struct sg_iovec */
 
-DEFINE_TRACE(block_split);
+#include <trace/events/block.h>
 
 /*
  * Test patch to inline a certain number of bi_io_vec's inside the bio
@@ -175,14 +174,6 @@ struct bio_vec *bvec_alloc_bs(gfp_t gfp_mask, int nr, unsigned long *idx,
 	struct bio_vec *bvl;
 
 	/*
-	 * If 'bs' is given, lookup the pool and do the mempool alloc.
-	 * If not, this is a bio_kmalloc() allocation and just do a
-	 * kzalloc() for the exact number of vecs right away.
-	 */
-	if (!bs)
-		bvl = kmalloc(nr * sizeof(struct bio_vec), gfp_mask);
-
-	/*
 	 * see comment near bvec_array define!
 	 */
 	switch (nr) {
@@ -260,21 +251,6 @@ void bio_free(struct bio *bio, struct bio_set *bs)
 	mempool_free(p, bs->bio_pool);
 }
 
-/*
- * default destructor for a bio allocated with bio_alloc_bioset()
- */
-static void bio_fs_destructor(struct bio *bio)
-{
-	bio_free(bio, fs_bio_set);
-}
-
-static void bio_kmalloc_destructor(struct bio *bio)
-{
-	if (bio_has_allocated_vec(bio))
-		kfree(bio->bi_io_vec);
-	kfree(bio);
-}
-
 void bio_init(struct bio *bio)
 {
 	memset(bio, 0, sizeof(*bio));
@@ -301,21 +277,15 @@ void bio_init(struct bio *bio)
  **/
 struct bio *bio_alloc_bioset(gfp_t gfp_mask, int nr_iovecs, struct bio_set *bs)
 {
+	unsigned long idx = BIO_POOL_NONE;
 	struct bio_vec *bvl = NULL;
-	struct bio *bio = NULL;
-	unsigned long idx = 0;
-	void *p = NULL;
+	struct bio *bio;
+	void *p;
 
-	if (bs) {
-		p = mempool_alloc(bs->bio_pool, gfp_mask);
-		if (!p)
-			goto err;
-		bio = p + bs->front_pad;
-	} else {
-		bio = kmalloc(sizeof(*bio), gfp_mask);
-		if (!bio)
-			goto err;
-	}
+	p = mempool_alloc(bs->bio_pool, gfp_mask);
+	if (unlikely(!p))
+		return NULL;
+	bio = p + bs->front_pad;
 
 	bio_init(bio);
 
@@ -332,20 +302,48 @@ struct bio *bio_alloc_bioset(gfp_t gfp_mask, int nr_iovecs, struct bio_set *bs)
 
 		nr_iovecs = bvec_nr_vecs(idx);
 	}
+out_set:
 	bio->bi_flags |= idx << BIO_POOL_OFFSET;
 	bio->bi_max_vecs = nr_iovecs;
-out_set:
 	bio->bi_io_vec = bvl;
-
 	return bio;
 
 err_free:
-	if (bs)
-		mempool_free(p, bs->bio_pool);
-	else
-		kfree(bio);
-err:
+	mempool_free(p, bs->bio_pool);
 	return NULL;
+}
+
+static void bio_fs_destructor(struct bio *bio)
+{
+	bio_free(bio, fs_bio_set);
+}
+
+/**
+ *	bio_alloc - allocate a new bio, memory pool backed
+ *	@gfp_mask: allocation mask to use
+ *	@nr_iovecs: number of iovecs
+ *
+ *	Allocate a new bio with @nr_iovecs bvecs.  If @gfp_mask
+ *	contains __GFP_WAIT, the allocation is guaranteed to succeed.
+ *
+ *	RETURNS:
+ *	Pointer to new bio on success, NULL on failure.
+ */
+struct bio *bio_alloc(gfp_t gfp_mask, int nr_iovecs)
+{
+	struct bio *bio = bio_alloc_bioset(gfp_mask, nr_iovecs, fs_bio_set);
+
+	if (bio)
+		bio->bi_destructor = bio_fs_destructor;
+
+	return bio;
+}
+
+static void bio_kmalloc_destructor(struct bio *bio)
+{
+	if (bio_integrity(bio))
+		bio_integrity_free(bio);
+	kfree(bio);
 }
 
 /**
@@ -366,29 +364,20 @@ err:
  *   do so can cause livelocks under memory pressure.
  *
  **/
-struct bio *bio_alloc(gfp_t gfp_mask, int nr_iovecs)
-{
-	struct bio *bio = bio_alloc_bioset(gfp_mask, nr_iovecs, fs_bio_set);
-
-	if (bio)
-		bio->bi_destructor = bio_fs_destructor;
-
-	return bio;
-}
-
-/*
- * Like bio_alloc(), but doesn't use a mempool backing. This means that
- * it CAN fail, but while bio_alloc() can only be used for allocations
- * that have a short (finite) life span, bio_kmalloc() should be used
- * for more permanent bio allocations (like allocating some bio's for
- * initalization or setup purposes).
- */
 struct bio *bio_kmalloc(gfp_t gfp_mask, int nr_iovecs)
 {
-	struct bio *bio = bio_alloc_bioset(gfp_mask, nr_iovecs, NULL);
+	struct bio *bio;
 
-	if (bio)
-		bio->bi_destructor = bio_kmalloc_destructor;
+	bio = kmalloc(sizeof(struct bio) + nr_iovecs * sizeof(struct bio_vec),
+		      gfp_mask);
+	if (unlikely(!bio))
+		return NULL;
+
+	bio_init(bio);
+	bio->bi_flags |= BIO_POOL_NONE << BIO_POOL_OFFSET;
+	bio->bi_max_vecs = nr_iovecs;
+	bio->bi_io_vec = bio->bi_inline_vecs;
+	bio->bi_destructor = bio_kmalloc_destructor;
 
 	return bio;
 }
@@ -509,11 +498,11 @@ int bio_get_nr_vecs(struct block_device *bdev)
 	struct request_queue *q = bdev_get_queue(bdev);
 	int nr_pages;
 
-	nr_pages = ((q->max_sectors << 9) + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	if (nr_pages > q->max_phys_segments)
-		nr_pages = q->max_phys_segments;
-	if (nr_pages > q->max_hw_segments)
-		nr_pages = q->max_hw_segments;
+	nr_pages = ((queue_max_sectors(q) << 9) + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	if (nr_pages > queue_max_phys_segments(q))
+		nr_pages = queue_max_phys_segments(q);
+	if (nr_pages > queue_max_hw_segments(q))
+		nr_pages = queue_max_hw_segments(q);
 
 	return nr_pages;
 }
@@ -572,8 +561,8 @@ static int __bio_add_page(struct request_queue *q, struct bio *bio, struct page
 	 * make this too complex.
 	 */
 
-	while (bio->bi_phys_segments >= q->max_phys_segments
-	       || bio->bi_phys_segments >= q->max_hw_segments) {
+	while (bio->bi_phys_segments >= queue_max_phys_segments(q)
+	       || bio->bi_phys_segments >= queue_max_hw_segments(q)) {
 
 		if (retried_segments)
 			return 0;
@@ -644,7 +633,8 @@ static int __bio_add_page(struct request_queue *q, struct bio *bio, struct page
 int bio_add_pc_page(struct request_queue *q, struct bio *bio, struct page *page,
 		    unsigned int len, unsigned int offset)
 {
-	return __bio_add_page(q, bio, page, len, offset, q->max_hw_sectors);
+	return __bio_add_page(q, bio, page, len, offset,
+			      queue_max_hw_sectors(q));
 }
 
 /**
@@ -664,7 +654,7 @@ int bio_add_page(struct bio *bio, struct page *page, unsigned int len,
 		 unsigned int offset)
 {
 	struct request_queue *q = bdev_get_queue(bio->bi_bdev);
-	return __bio_add_page(q, bio, page, len, offset, q->max_sectors);
+	return __bio_add_page(q, bio, page, len, offset, queue_max_sectors(q));
 }
 
 struct bio_map_data {
@@ -731,7 +721,7 @@ static int __bio_copy_iov(struct bio *bio, struct bio_vec *iovecs,
 
 		while (bv_len && iov_idx < iov_count) {
 			unsigned int bytes;
-			char *iov_addr;
+			char __user *iov_addr;
 
 			bytes = min_t(unsigned int,
 				      iov[iov_idx].iov_len - iov_off, bv_len);
@@ -827,12 +817,15 @@ struct bio *bio_copy_user_iov(struct request_queue *q,
 		len += iov[i].iov_len;
 	}
 
+	if (offset)
+		nr_pages++;
+
 	bmd = bio_alloc_map_data(nr_pages, iov_count, gfp_mask);
 	if (!bmd)
 		return ERR_PTR(-ENOMEM);
 
 	ret = -ENOMEM;
-	bio = bio_alloc(gfp_mask, nr_pages);
+	bio = bio_kmalloc(gfp_mask, nr_pages);
 	if (!bio)
 		goto out_bmd;
 
@@ -956,7 +949,7 @@ static struct bio *__bio_map_user_iov(struct request_queue *q,
 	if (!nr_pages)
 		return ERR_PTR(-EINVAL);
 
-	bio = bio_alloc(gfp_mask, nr_pages);
+	bio = bio_kmalloc(gfp_mask, nr_pages);
 	if (!bio)
 		return ERR_PTR(-ENOMEM);
 
@@ -1140,7 +1133,7 @@ static struct bio *__bio_map_kern(struct request_queue *q, void *data,
 	int offset, i;
 	struct bio *bio;
 
-	bio = bio_alloc(gfp_mask, nr_pages);
+	bio = bio_kmalloc(gfp_mask, nr_pages);
 	if (!bio)
 		return ERR_PTR(-ENOMEM);
 
@@ -1208,7 +1201,7 @@ static void bio_copy_kern_endio(struct bio *bio, int err)
 		char *addr = page_address(bvec->bv_page);
 		int len = bmd->iovecs[i].bv_len;
 
-		if (read && !err)
+		if (read)
 			memcpy(p, addr, len);
 
 		__free_page(bvec->bv_page);
@@ -1497,11 +1490,12 @@ struct bio_pair *bio_split(struct bio *bi, int first_sectors)
 sector_t bio_sector_offset(struct bio *bio, unsigned short index,
 			   unsigned int offset)
 {
-	unsigned int sector_sz = queue_hardsect_size(bio->bi_bdev->bd_disk->queue);
+	unsigned int sector_sz;
 	struct bio_vec *bv;
 	sector_t sectors;
 	int i;
 
+	sector_sz = queue_logical_block_size(bio->bi_bdev->bd_disk->queue);
 	sectors = 0;
 
 	if (index >= bio->bi_idx)

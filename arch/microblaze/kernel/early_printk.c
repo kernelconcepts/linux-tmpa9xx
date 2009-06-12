@@ -36,7 +36,7 @@ static void early_printk_putc(char c)
 
 	unsigned retries = 10000;
 	/* read status bit - 0x8 offset */
-	while (retries-- && (in_be32(base_addr + 8) & (1 << 3)))
+	while (--retries && (in_be32(base_addr + 8) & (1 << 3)))
 		;
 
 	/* Only attempt the iowrite if we didn't timeout */
@@ -87,6 +87,9 @@ int __init setup_early_printk(char *opt)
 	base_addr = early_uartlite_console();
 	if (base_addr) {
 		early_console_initialized = 1;
+#ifdef CONFIG_MMU
+		early_console_reg_tlb_alloc(base_addr);
+#endif
 		early_printk("early_printk_console is enabled at 0x%08x\n",
 							base_addr);
 

@@ -38,8 +38,7 @@
 /* function prototypes for a handspring visor */
 static int  visor_open(struct tty_struct *tty, struct usb_serial_port *port,
 					struct file *filp);
-static void visor_close(struct tty_struct *tty, struct usb_serial_port *port,
-					struct file *filp);
+static void visor_close(struct usb_serial_port *port);
 static int  visor_write(struct tty_struct *tty, struct usb_serial_port *port,
 					const unsigned char *buf, int count);
 static int  visor_write_room(struct tty_struct *tty);
@@ -296,14 +295,6 @@ static int visor_open(struct tty_struct *tty, struct usb_serial_port *port,
 	priv->throttled = 0;
 	spin_unlock_irqrestore(&priv->lock, flags);
 
-	/*
-	 * Force low_latency on so that our tty_push actually forces the data
-	 * through, otherwise it is scheduled, and with high data rates (like
-	 * with OHCI) data can get lost.
-	 */
-	if (tty)
-		tty->low_latency = 1;
-
 	/* Start reading from the device */
 	usb_fill_bulk_urb(port->read_urb, serial->dev,
 			   usb_rcvbulkpipe(serial->dev,
@@ -332,8 +323,7 @@ exit:
 }
 
 
-static void visor_close(struct tty_struct *tty,
-			struct usb_serial_port *port, struct file *filp)
+static void visor_close(struct usb_serial_port *port)
 {
 	struct visor_private *priv = usb_get_serial_port_data(port);
 	unsigned char *transfer_buffer;
