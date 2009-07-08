@@ -260,7 +260,7 @@
 
 /* I2C Ports */
 #define I2C0_BASE   0xF0070000
-#define I2C1_BASE   0xF0071000
+
 
 /* Camera sensor controller */
 #define CMOSCAM_BASE  0xF2020000
@@ -366,22 +366,26 @@
 #define NDRSCA3  __REG(NANDF_BASE | 0x0048) /* NAND-Flash Reed-Solomon Calculation Result Address Register 3 */
 #define NDRSCD3  __REG(NANDF_BASE | 0x004C) /* NAND-Flash Reed-Solomon Calculation Result Data Register 3 */
 
-#define NDFMCR0_ECCRST  (1 << 0)
-#define NDFMCR0_BUSY    (1 << 1)
-#define NDFMCR0_ECCE    (1 << 2)
-#define NDFMCR0_CE1     (1 << 3)
-#define NDFMCR0_CE0     (1 << 4)
-#define NDFMCR0_CLE     (1 << 5)
-#define NDFMCR0_ALE     (1 << 6)
-#define NDFMCR0_WE      (1 << 7)
-#define NDFMCR0_RSEDN   (1 << 10)
+#define NDFDTR_PHY NANDF_BASE + 0x10
 
-#define NDFMCR1_ECCS    (1 << 1)
-#define NDFMCR1_SELAL   (1 << 9)
-#define NDFMCR1_ALS     (1 << 8)
 
-#define NAND_DMAC_STATUS   (1 << 5)
-#define NAND_DMAC_CLEAR    (1 << 5)
+#define	NDFMCR0_ECCRST	(0x1 << 0)
+#define	NDFMCR0_BUSY	(0x1 << 1)
+#define	NDFMCR0_ECCE	(0x1 << 2)
+#define	NDFMCR0_CE1	(0x1 << 3)
+#define	NDFMCR0_CE0	(0x1 << 4)
+#define	NDFMCR0_CLE	(0x1 << 5)
+#define	NDFMCR0_ALE	(0x1 << 6)
+#define	NDFMCR0_WE	(0x1 << 7)
+#define	NDFMCR0_RSEDN	(0x1 << 10)
+
+#define	NDFMCR1_ECCS	(0x1 << 1)
+#define	NDFMCR1_SELAL	(0x1 << 9)
+#define	NDFMCR1_ALS	(0x1 << 8)
+
+#define	NAND_DMAC_STATUS	(0x1 << 5)
+#define	NAND_DMAC_CLEAR		(0x1 << 5)
+
 
 
 /* LCDDA (LCD Data Process Accelerator) */
@@ -400,5 +404,63 @@
 /* SDRAM */
 #define SRAM_BASE      0xF8002000
 #define SRAM_SIZE      0x0000C000
+
+/* DMA registers */
+#define	DMA_BASE		(0xF4100000)
+#define	DMA_INT_STATUS		__REG(DMA_BASE)
+#define	DMA_TC_STATUS		__REG(DMA_BASE + 0x0004)
+#define	DMA_TC_CLEAR		__REG(DMA_BASE + 0x0008)
+#define	DMA_ERR_STATUS		__REG(DMA_BASE + 0x000c)
+#define	DMA_ERR_CLEAR		__REG(DMA_BASE + 0x0010)
+#define	DMA_RAW_TC_STATUS	__REG(DMA_BASE + 0x0014)
+#define	DMA_RAW_ERR_STATUS	__REG(DMA_BASE + 0x0018)
+#define	DMA_ENABLED_CHN		__REG(DMA_BASE + 0x001c)
+#define	DMA_CONFIGURE		__REG(DMA_BASE + 0x0030)
+
+#define	DMA_SRC_ADDR(x)		__REG(DMA_BASE + 0x100 + ((x) << 5))
+#define	DMA_DEST_ADDR(x)	__REG(DMA_BASE + 0x100 + ((x) << 5) + 0x04)
+#define	DMA_LLI(x)		    __REG(DMA_BASE + 0x100 + ((x) << 5) + 0x08)
+#define	DMA_CONTROL(x)		__REG(DMA_BASE + 0x100 + ((x) << 5) + 0x0c)
+#define	DMA_CONFIG(x)		__REG(DMA_BASE + 0x100 + ((x) << 5) + 0x10)
+
+#define	DMA_CONFIG_EN		(1 << 0)
+
+
+/* I2C_1 : 0xf0071000	*/
+#define	I2C1_BASE			    (0xF0071000)         
+#define	I2C1CR1				    __REG(I2C1_BASE + 0x00)
+#define	I2C1DBR				    __REG(I2C1_BASE + 0x04)
+#define	I2C1AR				    __REG(I2C1_BASE + 0x08)
+#define	I2C1CR2				    __REG(I2C1_BASE + 0x0c)
+#define	I2C1SR				    __REG(I2C1_BASE + 0x0c)
+#define	I2C1PRS				    __REG(I2C1_BASE + 0x10)
+#define	I2C1IE				    __REG(I2C1_BASE + 0x14)
+#define	I2C1IR				    __REG(I2C1_BASE + 0x18)
+
+/* I2S : 0xf2040000   */
+#define I2S_BASE                0xF2040000
+#define I2STCON                 __REG(I2S_BASE + 0x000)
+#define I2STSLVON               __REG(I2S_BASE + 0x004)
+#define I2STFCLR                __REG(I2S_BASE + 0x008)
+#define I2STMS                  __REG(I2S_BASE + 0x00C)
+#define I2STMCON                __REG(I2S_BASE + 0x010)
+#define I2STMSTP                __REG(I2S_BASE + 0x014)
+#define I2STDMA1                __REG(I2S_BASE + 0x018)
+#define I2SRCON                 __REG(I2S_BASE + 0x020)
+#define I2SRSLVON               __REG(I2S_BASE + 0x024)
+#define I2SFRFCLR               __REG(I2S_BASE + 0x028)
+#define I2SRMS                  __REG(I2S_BASE + 0x02C)
+#define I2SRMCON                __REG(I2S_BASE + 0x030)
+#define I2SRMSTP                __REG(I2S_BASE + 0x034)
+#define I2SRDMA1                __REG(I2S_BASE + 0x038)
+#define I2SCOMMON               __REG(I2S_BASE + 0x044) 
+#define I2STST                  __REG(I2S_BASE + 0x048)
+#define I2SRST                  __REG(I2S_BASE + 0x04C)
+#define I2SINT                  __REG(I2S_BASE + 0x050)
+#define I2SINTMSK               __REG(I2S_BASE + 0x054)
+#define I2STDAT                 __REG(I2S_BASE + 0x1000)
+#define I2SRDAT                 __REG(I2S_BASE + 0x2000)
+#define I2STDAT_ADR            (I2S_BASE + 0x1000)
+#define I2SRDAT_ADR            (I2S_BASE + 0x2000)
 
 #endif /* __TMPA910_REGS__ */

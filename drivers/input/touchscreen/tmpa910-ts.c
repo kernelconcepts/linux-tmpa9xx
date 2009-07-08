@@ -32,7 +32,7 @@
 #include <mach/adc.h>
 
 /*******/
-#define DRIVER_DESC	"TMPA910 touchscreen driver"
+#define DRIVER_DESC	"TMPA9x0 touchscreen driver"
 
 MODULE_AUTHOR("bplan GmbH <opensource@bplan-gmbh.de>");
 MODULE_DESCRIPTION(DRIVER_DESC);

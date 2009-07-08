@@ -39,6 +39,6 @@ obj-$(CONFIG_MTD_NAND_SH_FLCTL)		+= sh_flctl.o
 obj-$(CONFIG_MTD_NAND_MXC)		+= mxc_nand.o
 obj-$(CONFIG_MTD_NAND_SOCRATES)		+= socrates_nand.o
 obj-$(CONFIG_MTD_NAND_TXX9NDFMC)	+= txx9ndfmc.o
-obj-$(CONFIG_MTD_NAND_TOPAS910)		+= topas910_nand.o
+obj-$(CONFIG_MTD_NAND_TMPA910)		+= tmpa910_nand.o
 
 nand-objs := nand_base.o nand_bbt.o

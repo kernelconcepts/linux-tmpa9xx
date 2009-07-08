@@ -11,6 +11,21 @@ menuconfig SND_ARM
 
 if SND_ARM
 
+config SND_TMPA910_WM8976
+	tristate "TMPA910 WM8976 driver"
+	depends on ARCH_TMPA910 && SND
+	select SND_PCM
+	help
+	  Say Y here if you have a Toshiba tmpa910 EVB
+	  and want to use its WM8976 audio chip.
+
+config SND_TMPA910_PCM1773
+	tristate "TMPA910 PCM1773 driver"
+	depends on ARCH_TMPA910 && SND
+	select SND_PCM
+	help
+	  Say Y here if you have a Toshiba tmpa910
+	  and want to use the TOPAS910 PCM1773 audio chip.
 config SND_ARMAACI
 	tristate "ARM PrimeCell PL041 AC Link support"
 	depends on ARM_AMBA
