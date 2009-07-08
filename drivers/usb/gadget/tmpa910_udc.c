@@ -42,25 +42,17 @@
 #include <linux/usb/gadget.h>
 
 #include <asm/byteorder.h>
-#include <asm/hardware.h>
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/system.h>
 #include <asm/mach-types.h>
 
-#include <asm/arch/hardware.h>
-//#include <asm/arch/tmpa910-regs.h>
-#include <asm/arch/tmpa910_regs.h>
+#include <mach/hardware.h>
+#include <mach/tmpa910_regs.h>
 
 #include "tmpa910_udc.h"
 
 
-//#include <stdlib.h>
-//#include <string.h>
-//#include "cmn_type.h"
-//#include "ELDIO_reg.h"
-
-//const unsigned char __align(4) Dev_Desc[DEVICE_DESC_SIZE] = {
 const unsigned char Dev_Desc[DEVICE_DESC_SIZE] = {
 	0x12, 	/* bLength*/
 	0x01, 	/* bDescriptorType*/
@@ -233,7 +225,6 @@ static struct tmpa910_udc controller = {
                 .ep0    = &controller.ep[0].ep,
                 .name   = driver_name,
                 .dev    = {
-                        .bus_id = "gadget",
                         .release = nop_release,
                 }       
         },      
