@@ -20,7 +20,7 @@
  * 
  * Toshiba Topas 910 machine, reference design for the TMPA910CRAXBG SoC 
  *
- * TODO: audio codec (TI1773), NAND, I2C, SPI, ADC, power manager
+ * TODO: MMC, ADC, power manager
  * TODO: separate SoC and board code
  */
 
@@ -31,7 +31,6 @@
 #include <linux/input.h>
 #include <linux/gpio_keys.h>
 #include <linux/spi/spi.h>
-#include <linux/spi/spi_gpio.h>
 #include <linux/spi/mmc_spi.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
@@ -60,7 +59,7 @@
 #include <linux/usb/isp1362.h>
 #endif
 
-#ifdef CONFIG_SPI_MASTER
+#ifdef CONFIG_SPI_TMPA910
 #include <linux/spi/spi.h>
 #endif
 
@@ -192,38 +191,6 @@ static void _configure_isp1362_expansion_irq(void)
 #endif
 
 
-/* 
- * GPIO SPI and MMC/SD 
- * This is a workaround only - we have a full featured SD slot but no 
- * documentation about it.
- */
-
-static struct spi_gpio_platform_data spi_gpio_priv = {
-        .miso = 48,
-	.mosi = 52,
-	.sck = 55,
-	.num_chipselect = 1,
-};
-
-static struct platform_device topas910_spi_gpio_device = {
-	.name = "spi_gpio",
-	.id = 0,
-	.num_resources = 0,
-	.dev = {
-		.platform_data = &spi_gpio_priv,
-	},
-};
-
-static struct spi_board_info topas910_spi_devices[] = {
-	{
-		.modalias = "mmc_spi",
-		.max_speed_hz = 5000000,
-		.chip_select = 0,
-		.controller_data = (void *)54,
-	},
-};
-
-
 /* Ethernet */
  
 static struct resource dm9000_resources[] = {
@@ -281,37 +248,7 @@ struct platform_device tmpa910_device_uart0 = {
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart0),
 };
 
-/*********/
-/*********/
-/*
- * NDFC
-*/
-static struct resource tmpa910_resource_nand[] = {
-	{
-		.start	=  NANDF_BASE ,
-		.end	=  NANDF_BASE +0x200,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= INTR_VECT_NDFC,
-		.end	= INTR_VECT_NDFC,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
 
-struct platform_device tmpa910_device_nand = {
-	.name		= "topas910_nand",
-	.id		= 0,
-	.dev =
-	{
-		.platform_data = NULL
-	},
-	.resource	= tmpa910_resource_nand,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_nand),
-};
-
-
-/*********/
-/*********/
 /*
  * DMA
 */
@@ -334,15 +271,13 @@ static struct resource tmpa910_resource_dmac[] = {
 struct platform_device tmpa910_device_dmac = {
 	.name		= "tmpa910-dmac",
 	.id		= 0,
-	.dev =
-	{
+	.dev = {
 		.platform_data = NULL
 	},
 	.resource	= tmpa910_resource_dmac,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_dmac),
 };
-/*********/
-/*********/
+
 
 static struct resource tmpa910_resource_i2c[] = {
 	{
@@ -367,8 +302,7 @@ static struct resource tmpa910_resource_i2c[] = {
 struct platform_device tmpa910_device_i2c = {
 	.name		 = "tmpa910-i2c",
 	.id = 0,
-	.dev =
-	{
+	.dev = {
 		.platform_data = NULL,
 		.coherent_dma_mask = 0xffffffff,
 	},
@@ -413,8 +347,7 @@ static struct resource tmpa910_resource_spi1[] = {
 struct platform_device tmpa910_device_spi0 = {
 	.name		 = "tmpa910-spi",
 	.id = 0,
-	.dev =
-	{
+	.dev = {
 		.platform_data = NULL,
 	},
 	.resource	= tmpa910_resource_spi0,
@@ -426,8 +359,7 @@ struct platform_device tmpa910_device_spi0 = {
 struct platform_device tmpa910_device_spi1 = {
 	.name		 = "tmpa910-spi",
 	.id = 1,
-	.dev =
-	{
+	.dev = {
 		.platform_data = NULL,
 	},
 	.resource	= tmpa910_resource_spi1,
@@ -464,8 +396,7 @@ static struct resource tmpa910_resource_ts[] = {
 struct platform_device tmpa910_device_ts = {
 	.name		= "tmpa910_ts",
 	.id		= 0,
-	.dev =
-	{
+	.dev = {
 		.platform_data = NULL
 	},
 	.resource	= tmpa910_resource_ts,
@@ -501,24 +432,6 @@ struct platform_device tmpa910_device_lcdc= {
 	.resource	= tmpa910_resource_lcdc,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_lcdc),
 };
-
-
-/* NAMD Flash */
-
-#if defined(CONFIG_MTD_NAND_PLATFORM) || defined(CONFIG_MTD_NAND_PLATFORM_MODULE)
-#ifdef CONFIG_MTD_PARTITIONS
-const char *part_probes[] = { "cmdlinepart", NULL };
-
-static struct mtd_partition topas910_plat_nand_partitions[] = {
-	{
-		.name   = "NAND file system",
-		.size   = MTDPART_SIZ_FULL,
-		.offset = 0,
-	},
-};
-#endif
-
-#endif
 
 
 /* 
@@ -592,11 +505,15 @@ static struct platform_device topas910_keys_device = {
 };
 
 
+/*
+ * NDFC
+*/
+
 #ifdef CONFIG_MTD_NAND_TMPA910
 static struct resource tmpa910_nand_resources[] = {
 	[0] = {
-		.start	= 0xF2010000,
-		.end 	= 0xF2010FFF,
+		.start	=  NANDF_BASE ,
+		.end	=  NANDF_BASE +0x200,
 		.flags	= IORESOURCE_MEM,
 	},
 };
@@ -703,13 +620,13 @@ static struct platform_device tmpa910_device_rtc = {
 
 
 static struct platform_device *devices[] __initdata = {
+	&tmpa910_device_dmac,
 	&tmpa910_device_ts,
 	&topas910_led_device,
 	&topas910_dm9000_device,
 	&tmpa910_device_uart0,
 	&topas910_keys_device,
 	&tmpa910_device_lcdc,
-	&tmpa910_device_dmac,
 	&tmpa910_device_i2c,
 #ifdef CONFIG_MTD_NAND_TMPA910
  	&tmpa910_nand_device,
@@ -722,9 +639,9 @@ static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_spi1,
 #endif
 
-  #ifdef CONFIG_USB_ISP1362_HCD
+#ifdef CONFIG_USB_ISP1362_HCD
 	&topas910_isp1362_device,
-  #endif
+#endif
 	&tmpa910_device_rtc
 };
 
@@ -785,18 +702,6 @@ static void __init topas910_init(void)
         /* Configure LCD interface */
 	_setup_lcdc_device();
 
-
-#ifdef CONFIG_USB_ISP1362_HCD
-	// Force configuration on the ISP expansion port interrupt line
-	_configure_isp1362_expansion_irq();
-#endif
-
-	platform_add_devices(devices, ARRAY_SIZE(devices));
-  
-#if defined(CONFIG_SPI_AT25) || defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
-	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
-#endif
-    
 	/* NAND Controller */
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
 	NDFMCR1 = 0x00000000; // ECC = Hamming
@@ -804,10 +709,17 @@ static void __init topas910_init(void)
               	             // NDREn L = 4clks,H = 3clks
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
+#ifdef CONFIG_USB_ISP1362_HCD
+	// Force configuration on the ISP expansion port interrupt line
+#warning	_configure_isp1362_expansion_irq();
+#endif
+
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
-	spi_register_board_info(topas910_spi_devices,
-				ARRAY_SIZE(topas910_spi_devices));
+  
+#if defined(CONFIG_SPI_AT25) || defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
+	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
+#endif
 }
 
 
