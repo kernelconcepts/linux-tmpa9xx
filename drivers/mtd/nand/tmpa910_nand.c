@@ -1,3 +1,26 @@
+/*
+ *  drivers/mtd/nand/tmpa910_nand.c 
+ *
+ * Copyright (C) 2008 bplan GmbH. All rights reserved. (?)
+ * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * TMPA 910 NAND controller driver, unclear origin (BPlan or Toshiba likely)
+ */
+ 
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/module.h>
@@ -61,15 +84,15 @@ struct tmpa910_nand_private tmpa910_nand = {
  */
 static struct mtd_partition mtd_parts[] = {
 	{
-		.name		= "UBOOT",
+		.name		= "bootloader",
 		.offset		= 0x00000000,
 		.size		= 0x00080000,
 	}, {
-		.name		= "LINUX",
+		.name		= "kernel",
 		.offset		= 0x00080000,
 		.size		= 0x00200000,
 	}, {
-		.name		= "FILESYSTEM",
+		.name		= "filesystem",
 		.offset		= 0x00280000,
 		.size		= 0x08000000 - 0x00280000,
 	}, 
@@ -78,12 +101,6 @@ static struct mtd_partition mtd_parts[] = {
 
 void tmpa910_nand_dma_read(struct tmpa910_nand_private *priv, unsigned int phy_addr, unsigned short size)
 {
-/*	DMACConfiguration = 0x00000001;	// DMAC Enable ON
-	DMACC5SrcAddr=(unsigned int)&NDFDTR;		// Source address
-	DMACC5DestAddr=phy_addr;		// Destination address
-	DMACC5Control = 0x88489000+(size/4);
-	DMACC5Configuration=0x00009009; //FlowCntrl:peripheral to Memory,ITC=1;DMA=EN
-*/
 	//tmpa910_dma_enable(priv->dma_ch);
 	DMA_SRC_ADDR(priv->dma_ch) = NDFDTR_PHY;
 	DMA_DEST_ADDR(priv->dma_ch) = phy_addr;
@@ -94,12 +111,6 @@ void tmpa910_nand_dma_read(struct tmpa910_nand_private *priv, unsigned int phy_a
 void tmpa910_nand_dma_write(struct tmpa910_nand_private *priv, unsigned int phy_addr, unsigned short size)
 {
 
-/*	DMACConfiguration = 0x00000001;	// DMAC Enable ON
-	DMACC5SrcAddr=phy_addr;			// Source address
-	DMACC5DestAddr=(unsigned int)&NDFDTR;	// Destination address
-	DMACC5Control = 0x84489000+(size/4);
-	DMACC5Configuration=0x00008901;//FlowCntrl:Memory to peripheral,ITC=1;DMA=EN
-*/
 	//tmpa910_dma_enable(priv->dma_ch);
 	DMA_SRC_ADDR(priv->dma_ch) = phy_addr;		// Source address
 	DMA_DEST_ADDR(priv->dma_ch) = NDFDTR_PHY;	// Destination address
@@ -109,15 +120,10 @@ void tmpa910_nand_dma_write(struct tmpa910_nand_private *priv, unsigned int phy_
 
 static int tmpa910_nand_dev_ready(struct mtd_info *mtd)
 {
-	//struct nand_chip *this = mtd->priv;
-       //struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
-
        return !(NDFMCR0 & NDFMCR0_BUSY);
 }
 static int tmpa910_nand_als_ready(struct mtd_info *mtd)
 {
-        //struct nand_chip *this = mtd->priv;
-       //struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
        int i;
        for (i=0;i<0x800;i++);
        return !(NDFMCR1 & 0x100);
@@ -639,7 +645,6 @@ static int tmpa910_nand_correct_data(struct mtd_info *mtd, u_char *data, u_char 
 {
 	struct nand_chip *this = mtd->priv;
 	int eccsize = this->ecc.size;
-       //struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
 	unsigned int size;
 	unsigned char ecc1, ecc2, ecc3; /* FIXME should define as U8 */
 	unsigned int ret, ret_tmp;
@@ -652,12 +657,8 @@ static int tmpa910_nand_correct_data(struct mtd_info *mtd, u_char *data, u_char 
 		ecc2 = *calc_ecc++;
 		ecc1 = *calc_ecc++;
 		ecc3 = *calc_ecc++;
-	//	printk("1: readecc;%x, %x, %x, calecc:%x, %x, %x\n", read_ecc[0], read_ecc[1], read_ecc[2], ecc1, ecc2, ecc3);
 		ret = tmpa910_nand_part_correctdata(data, read_ecc, ecc1, ecc2, ecc3);
-	//	printk("2: hwecc returned %x\n", ret);
 		if(ret > ret_tmp) {
-	//		printk("1: readecc;%x, %x, %x, calecc:%x, %x, %x, ret=%x, ret_tmp=%x\n", read_ecc[0], read_ecc[1], read_ecc[2], ecc1, ecc2, ecc3,ret,ret_tmp);
-	//	    printk("data %x,%x,%x,%x,%x\n",data[0],data[1],data[2],data[3],data[4]);
 			ret_tmp = ret;
 		}
 			
@@ -735,7 +736,7 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 
 	mtd = (struct mtd_info *)kzalloc(sizeof(struct mtd_info) + sizeof(struct tmpa910_nand_private), GFP_KERNEL);
 	if (mtd == NULL) {
-		printk("TMPA910_NAND: not enough mempry");
+		printk(KERN_ERR "TMPA910_NAND: not enough mempry");
 		ret = -ENOMEM;
 		goto error;
 	}
@@ -784,8 +785,6 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 		goto free_dma_buf;	
 	}
 	
-	printk("Begin nand scan\n");
-
 	mtd->owner    = THIS_MODULE;
 	/* Many callers got this wrong, so check for it for a while... */
 	ret = nand_scan_ident(mtd, 1);
@@ -802,9 +801,7 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 		goto free_dma_ch;
 	}
 
-	printk("after nand scan, %x\n", nand->ecc.layout->oobavail);
 #ifdef CONFIG_MTD_PARTITIONS
-#warning NAND uses partitions!
 	add_mtd_partitions(mtd, mtd_parts, NUM_PARTITIONS);
 #else
 	add_mtd_device(mtd);
