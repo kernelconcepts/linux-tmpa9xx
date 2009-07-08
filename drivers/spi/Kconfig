@@ -204,6 +204,13 @@ config SPI_SH_SCI
 	help
 	  SPI driver for SuperH SCI blocks.
 
+config SPI_TMPA910
+	tristate "Toshiba TMPA910 SPI controller"
+	depends on SPI_MASTER && ARCH_TMPA910
+	help
+	  This enables using the Toshiba TMPA910 SPI
+	  Controller in master SPI mode.
+
 config SPI_TXX9
 	tristate "Toshiba TXx9 SPI controller"
 	depends on GENERIC_GPIO && CPU_TX49XX

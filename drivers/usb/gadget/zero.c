@@ -56,7 +56,8 @@
 #include "g_zero.h"
 #include "gadget_chips.h"
 
-
+#define __DEBUG__
+#include <linux/debug.h>
 /*-------------------------------------------------------------------------*/
 
 /*
@@ -328,6 +329,7 @@ static int __init zero_bind(struct usb_composite_dev *cdev)
 		init_utsname()->sysname, init_utsname()->release,
 		gadget->name);
 
+	NPRINTK("success\n");
 	return 0;
 }
 

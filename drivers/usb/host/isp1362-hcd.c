@@ -61,7 +61,7 @@
 /* This enables a memory test on the ISP1362 chip memory to make sure the
  * chip access timing is correct.
  */
-//#define CHIP_BUFFER_TEST
+#define CHIP_BUFFER_TEST
 
 #include <linux/module.h>
 #include <linux/moduleparam.h>
@@ -1196,7 +1196,10 @@ static irqreturn_t isp1362_irq(struct usb_hcd *hcd)
 		isp1362_hcd->irq_stat[ISP1362_INT_OPR]++;
 
 		svc_mask &= ~HCuPINT_OPR;
+
 		DBG(2, "%s: OPR %08x:%08x\n", __FUNCTION__, intstat, isp1362_hcd->intenb);
+
+
 		intstat &= isp1362_hcd->intenb;
 		if (intstat & OHCI_INTR_UE) {
 			ERR("Unrecoverable error\n");
@@ -1206,6 +1209,12 @@ static irqreturn_t isp1362_irq(struct usb_hcd *hcd)
 			isp1362_hcd->rhstatus = isp1362_read_reg32(isp1362_hcd, HCRHSTATUS);
 			isp1362_hcd->rhport[0] = isp1362_read_reg32(isp1362_hcd, HCRHPORT1);
 			isp1362_hcd->rhport[1] = isp1362_read_reg32(isp1362_hcd, HCRHPORT2);
+
+			DBG("%s: isp1362_hcd->rhport[0]=0x%x / 0x%x\n",
+				__FUNCTION__, isp1362_hcd->rhport[0], isp1362_hcd->rhport[1]);
+
+			usb_hcd_poll_rh_status(hcd);
+
 		}
 		if (intstat & OHCI_INTR_RD) {
 			INFO("%s: RESUME DETECTED\n", __FUNCTION__);
@@ -1765,10 +1774,12 @@ static int isp1362_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 		isp1362_write_reg32(isp1362_hcd, HCRHPORT1 + wIndex, tmp);
 		isp1362_hcd->rhport[wIndex] =
 			isp1362_read_reg32(isp1362_hcd, HCRHPORT1 + wIndex);
+
+		DBG(0, "ClearPortFeature: isp1362_hcd->rhport[%d]=0x%x, tmp=0x%x\n", wIndex, isp1362_hcd->rhport[wIndex], tmp);
 		spin_unlock_irqrestore(&isp1362_hcd->lock, flags);
 		break;
 	case SetPortFeature:
-		DBG(0, "SetPortFeature: ");
+		DBG(0, "SetPortFeature: wValue=0x%x\n", wValue);
 		if (!wIndex || wIndex > ports) {
 			goto error;
 		}
@@ -2338,6 +2349,8 @@ static void create_debug_file(struct isp1362_hcd *isp1362_hcd)
 	pde->proc_fops = &proc_ops;
 	pde->data = isp1362_hcd;
 	isp1362_hcd->pde = pde;
+
+	DBG(0, "proc entry created\n");
 }
 
 static void remove_debug_file(struct isp1362_hcd *isp1362_hcd)
@@ -2731,14 +2744,24 @@ static int isp1362_hc_start(struct usb_hcd *hcd)
 		// enable all
 		isp1362_write_reg16(isp1362_hcd, OTGINTENB, OTG_INT_ALL);
 
-		// enable host and VBUS
+		// OTG control:
+		// - enable host (OTG_CTRL_SEL_HC_DC: 1 Device, 0 Host)#
+		// - Enable VBUS (OTG_CTRL_DRV_VBUS)
+		// - Enable externak VBUS (OTG_CTRL_SEL_CP_EXT)
+		// - connect DP and DM pull down resistor for host
+		//   (OTG_CTRL_LOC_PULLDN_DP | OTG_CTRL_LOC_PULLDN_DM)
+		//   Found in USB2 spec pdf page 141, figure 7-21
 		isp1362_write_reg16(isp1362_hcd, OTGCONTROL, 0
 			| OTG_CTRL_DRV_VBUS
+			| OTG_CTRL_LOC_PULLDN_DP | OTG_CTRL_LOC_PULLDN_DM
 			//| OTG_CTRL_LOC_CONN
 			//| OTG_CTRL_A_SEL_SRP
 			//| OTG_CTRL_A_SRP_DET_EN
+			//| OTG_CTRL_A_RDIS_LCON_EN
 			| OTG_CTRL_SEL_CP_EXT);
 
+
+		DBG(0, "OTGCONTROL = 0x%x\n", isp1362_read_reg16(isp1362_hcd, OTGCONTROL));
 	}
 
 
@@ -2914,6 +2937,8 @@ static int __init isp1362_probe(struct platform_device *pdev)
 		goto err1;
 	}
 
+
+
 	dbg_level = 0;
 
 	/* basic sanity checks first.  board-specific init logic should
@@ -2992,6 +3017,12 @@ static int __init isp1362_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&isp1362_hcd->isoc);
 	INIT_LIST_HEAD(&isp1362_hcd->remove_list);
 	isp1362_hcd->board = pdev->dev.platform_data;
+
+#ifdef PLATFORM_BUG_WORKAROUND
+	isp_1362_bug_workaround = isp1362_hcd->board->bug_workaround;
+	printk("%s: Using platform bug workaround\n", hcd_name);
+#endif
+
 #if USE_PLATFORM_DELAY
 	if (!isp1362_hcd->board->delay) {
 		dev_err(hcd->self.controller, "No platform delay function given\n");
@@ -3015,7 +3046,7 @@ static int __init isp1362_probe(struct platform_device *pdev)
 	if (retval != 0) {
 		goto err6;
 	}
-	INFO("%s, irq %d\n", hcd->product_desc, irq);
+	INFO("%s on irq %d, %d ports\n", hcd->product_desc, irq, MAX_ROOT_PORTS);
 
 	create_debug_file(isp1362_hcd);
 

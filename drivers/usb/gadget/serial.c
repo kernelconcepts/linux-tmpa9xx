@@ -20,6 +20,9 @@
 #include "gadget_chips.h"
 
 
+#define __DEBUG__
+#include <linux/debug.h>
+
 /* Defines */
 
 #define GS_VERSION_STR			"v2.4"

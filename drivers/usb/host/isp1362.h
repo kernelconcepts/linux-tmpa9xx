@@ -77,7 +77,7 @@ static inline void delayed_insw(unsigned int addr, void *buf, int len)
 // let's fall back to the nromal equivalent
 #define __test_bit(a,b) test_bit(a,b)
 
-#define MAX_ROOT_PORTS		1
+#define MAX_ROOT_PORTS		2
 
 #define USE_32BIT		0
 
@@ -85,8 +85,9 @@ static inline void delayed_insw(unsigned int addr, void *buf, int len)
 #define USE_PLATFORM_DELAY	0
 #define USE_NDELAY		1
 
-
-#define DUMMY_DELAY_ACCESS do{ } while(0)
+#define PLATFORM_BUG_WORKAROUND
+static void (*isp_1362_bug_workaround) (void) = NULL;
+#define DUMMY_DELAY_ACCESS do{ if (isp_1362_bug_workaround) isp_1362_bug_workaround() ; } while(0)
 
 #undef insw
 #undef outsw

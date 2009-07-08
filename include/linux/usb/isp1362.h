@@ -43,4 +43,5 @@ struct isp1362_platform_data {
 	   WE MUST NOT be activated during these intervals (even without CS!)
 	 */
 	void (*delay) (struct device *dev, unsigned int delay);
+	void (*bug_workaround) (void);
 };

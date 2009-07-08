@@ -60,7 +60,17 @@
 #include <linux/usb/isp1362.h>
 #endif
 
+#ifdef CONFIG_SPI_MASTER
+#include <linux/spi/spi.h>
+#endif
+
+#ifdef CONFIG_SPI_AT25
+#include <linux/spi/eeprom.h>
+#endif
+
 #include "topas910.h"
+
+#define CONFIG_SPI_CHANNEL0
 
 
 /* I/O Mapping related, might want to be moved to a CPU specific file */
@@ -134,6 +144,51 @@ static struct platform_device topas910_isp1362_device = {
 		.coherent_dma_mask = 0xffffffff,		
 	},
 };
+
+static void _configure_isp1362_expansion_irq(void)
+{
+// Mask the ISP related bit
+#define GPIO_INT_MASK ( (1<<0) | (1<<1) )
+#define PORTP_BASE  			0xF080d000
+#define PORTP_GPIODATA	 (PORTP_BASE + 0x03fc)
+#define PORTP_GPIODIR 	 (PORTP_BASE + 0x0400)
+#define PORTP_GPIOIS  	 (PORTP_BASE + 0x0804)
+#define PORTP_GPIOIBE  	 (PORTP_BASE + 0x0808)
+#define PORTP_GPIOIEV  	 (PORTP_BASE + 0x080C)
+#define PORTP_GPIOIB  	 (PORTP_BASE + 0x0810)
+#define PORTP_GPIORIS  	 (PORTP_BASE + 0x0814)
+#define PORTP_GPIOMIS  	 (PORTP_BASE + 0x0818)
+#define PORTP_GPIOPIC  	 (PORTP_BASE + 0x081C)
+
+
+	// Enable interrupt INT0 and INT1 on port P0 and P1
+	uint32_t reg;
+
+	// Make sure input
+	reg = _in32(PORTP_GPIODIR);
+	reg &= ~(GPIO_INT_MASK);
+	_out32(PORTP_GPIODIR, reg);
+
+	// Use level.
+	// Note: The ISP1362 supports both
+  // but level is default
+	reg = _in32(PORTP_GPIOIS);
+	reg |= GPIO_INT_MASK;
+	_out32(PORTP_GPIOIS, reg);
+
+	// Enable the interrupt
+	// -> this isok as the CPU and interrupt
+	// controller have int disable
+	reg = _in32(PORTP_GPIOIB);
+	reg |= GPIO_INT_MASK;
+	_out32(PORTP_GPIOIB, reg);
+
+	// Clear. should not be needed
+	reg = _in32(PORTP_GPIOPIC);
+	reg |= GPIO_INT_MASK;
+	_out32(PORTP_GPIOPIC, reg);
+}
+
 #endif
 
 
@@ -225,6 +280,161 @@ struct platform_device tmpa910_device_uart0 = {
 	.resource	= tmpa910_resource_uart0,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart0),
 };
+
+/*********/
+/*********/
+/*
+ * NDFC
+*/
+static struct resource tmpa910_resource_nand[] = {
+	{
+		.start	=  NANDF_BASE ,
+		.end	=  NANDF_BASE +0x200,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= INTR_VECT_NDFC,
+		.end	= INTR_VECT_NDFC,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+
+struct platform_device tmpa910_device_nand = {
+	.name		= "topas910_nand",
+	.id		= 0,
+	.dev =
+	{
+		.platform_data = NULL
+	},
+	.resource	= tmpa910_resource_nand,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_nand),
+};
+
+
+/*********/
+/*********/
+/*
+ * DMA
+*/
+static struct resource tmpa910_resource_dmac[] = {
+	{
+		.start	= DMAC_BASE,
+		.end	= DMAC_BASE+0x200,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= INTR_VECT_DMA_END,
+		.end	= INTR_VECT_DMA_END,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}, {
+		.start	= INTR_VECT_DMA_ERROR,
+		.end	= INTR_VECT_DMA_ERROR,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+
+struct platform_device tmpa910_device_dmac = {
+	.name		= "tmpa910-dmac",
+	.id		= 0,
+	.dev =
+	{
+		.platform_data = NULL
+	},
+	.resource	= tmpa910_resource_dmac,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_dmac),
+};
+/*********/
+/*********/
+
+static struct resource tmpa910_resource_i2c[] = {
+	{
+		.start	= I2C0_BASE,
+		.end	= I2C0_BASE+0x1F,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= I2C1_BASE,
+		.end	= I2C1_BASE+0x1F,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= INTR_VECT_I2C_CH0,
+		.end	= INTR_VECT_I2C_CH0,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}, {
+		.start	= INTR_VECT_I2C_CH1,
+		.end	= INTR_VECT_I2C_CH1,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+
+struct platform_device tmpa910_device_i2c = {
+	.name		 = "tmpa910-i2c",
+	.id = 0,
+	.dev =
+	{
+		.platform_data = NULL,
+		.coherent_dma_mask = 0xffffffff,
+	},
+	.resource	= tmpa910_resource_i2c,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
+};
+
+
+
+
+
+
+#ifdef CONFIG_SPI_CHANNEL0
+static struct resource tmpa910_resource_spi0[] = {
+	{
+		.start	= 0xF2002000,
+		.end	= 0xF2002000+0x27,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= INTR_VECT_SSP_CH0,
+		.end	= INTR_VECT_SSP_CH0,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+#endif
+
+#ifdef CONFIG_SPI_CHANNEL1
+static struct resource tmpa910_resource_spi1[] = {
+	{
+		.start	= 0xF2003000,
+		.end	= 0xF2003000+0x27,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= INTR_VECT_SSP_CH1,
+		.end	= INTR_VECT_SSP_CH1,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+#endif
+
+#ifdef CONFIG_SPI_CHANNEL0
+struct platform_device tmpa910_device_spi0 = {
+	.name		 = "tmpa910-spi",
+	.id = 0,
+	.dev =
+	{
+		.platform_data = NULL,
+	},
+	.resource	= tmpa910_resource_spi0,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_spi0),
+};
+#endif
+
+#ifdef CONFIG_SPI_CHANNEL1
+struct platform_device tmpa910_device_spi1 = {
+	.name		 = "tmpa910-spi",
+	.id = 1,
+	.dev =
+	{
+		.platform_data = NULL,
+	},
+	.resource	= tmpa910_resource_spi1,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_spi1),
+};
+#endif
+
 
 
 /*
@@ -382,6 +592,92 @@ static struct platform_device topas910_keys_device = {
 };
 
 
+#ifdef CONFIG_MTD_NAND_TMPA910
+static struct resource tmpa910_nand_resources[] = {
+	[0] = {
+		.start	= 0xF2010000,
+		.end 	= 0xF2010FFF,
+		.flags	= IORESOURCE_MEM,
+	},
+};
+
+static struct platform_device tmpa910_nand_device = {
+	.name		= "tmpa910-nand",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(tmpa910_nand_resources),
+	.resource	= tmpa910_nand_resources,
+};
+
+#endif
+
+
+static struct platform_device tmpa910_i2s_device = {
+	.name = "WM8976-I2S",
+	.id   = -1,
+};
+
+
+#ifdef CONFIG_MMC_SPI
+static struct spi_board_info spi_board_info[] = 
+{
+{
+	.modalias = "mmc_spi",
+	.platform_data = NULL,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 1000000,
+	.bus_num = 0,
+
+}
+};
+#elif defined(CONFIG_SPI_AT25)
+static struct spi_eeprom spi_eeprom_info = {
+	.page_size = 256,
+	.name = "AT25F512",
+	.flags = EE_ADDR3|EE_READONLY
+};
+ 
+static struct spi_board_info spi_board_info[] = {
+{
+	.modalias = "at25",
+	.platform_data = &spi_eeprom_info,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 20000000,
+	.bus_num = 0,
+},
+{
+	.modalias = "at25",
+	.platform_data = &spi_eeprom_info,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 20000000,
+	.bus_num = 1,
+}
+};
+#elif defined(CONFIG_SPI_SPIDEV)
+static struct spi_board_info spi_board_info[] = {
+{
+	.modalias = "spidev",
+	.platform_data = NULL,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 20000000,
+	.bus_num = 0,
+},
+{
+	.modalias = "spidev",
+	.platform_data = NULL,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 20000000,
+	.bus_num = 1,
+}
+};
+
+#endif
+
+
 #define RTC_BASE		0xF0030000
 
 static struct resource tmpa910_resource_rtc[] = {
@@ -413,13 +709,22 @@ static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_uart0,
 	&topas910_keys_device,
 	&tmpa910_device_lcdc,
-	&topas910_spi_gpio_device,
-#if defined(CONFIG_MTD_NAND_PLATFORM) || defined(CONFIG_MTD_NAND_PLATFORM_MODULE)
-	&topas910_plat_nand_device,
+	&tmpa910_device_dmac,
+	&tmpa910_device_i2c,
+#ifdef CONFIG_MTD_NAND_TMPA910
+ 	&tmpa910_nand_device,
 #endif
-#ifdef CONFIG_USB_ISP1362_HCD
+ 	&tmpa910_i2s_device,	
+#ifdef CONFIG_SPI_CHANNEL0
+	&tmpa910_device_spi0,
+#endif
+#ifdef CONFIG_SPI_CHANNEL1
+	&tmpa910_device_spi1,
+#endif
+
+  #ifdef CONFIG_USB_ISP1362_HCD
 	&topas910_isp1362_device,
-#endif
+  #endif
 	&tmpa910_device_rtc
 };
 
@@ -479,6 +784,18 @@ static void __init topas910_init(void)
 
         /* Configure LCD interface */
 	_setup_lcdc_device();
+
+
+#ifdef CONFIG_USB_ISP1362_HCD
+	// Force configuration on the ISP expansion port interrupt line
+	_configure_isp1362_expansion_irq();
+#endif
+
+	platform_add_devices(devices, ARRAY_SIZE(devices));
+  
+#if defined(CONFIG_SPI_AT25) || defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
+	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
+#endif
     
 	/* NAND Controller */
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable

@@ -633,6 +633,13 @@ config RTC_DRV_TMPA910
 	  Driver for the internal RTC (Realtime Clock) module found on
 	  Toshiba TMPA910 chip.
 
+config RTC_DRV_TMPA910
+	tristate "Toshiba TMPA910 RTC"
+	depends on ARCH_TMPA910
+	help
+	  Driver for the internal RTC (Realtime Clock) module found on
+	  Toshiba TMPA910 chip.
+
 config RTC_DRV_AT91SAM9
 	tristate "AT91SAM9x/AT91CAP9"
 	depends on ARCH_AT91 && !(ARCH_AT91RM9200 || ARCH_AT91X40)

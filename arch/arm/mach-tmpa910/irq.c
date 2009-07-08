@@ -78,7 +78,7 @@ static void tmpa910_ack_irq(unsigned int irq) {
 	volatile struct hw_ictl *hw_ictl = (volatile struct hw_ictl *) INTR_BASE;
 
 	hw_ictl->vicintenclear = 1 << irq;
-	hw_ictl->vicaddress = 0;
+	hw_ictl->vicaddress = 0x12345678;
 }
 
 
@@ -112,7 +112,7 @@ void __init tmpa910_init_irq(void)
 	hw_ictl->vicintselect = 0;
 
 	/* make sure every pri unmasked */
-	hw_ictl->vicswprioritymask  = 0xffff;
+	hw_ictl->vicswprioritymask  = 0xffffffff;
 
 	/* this help to obtain the interrupt vector in the service call */
 	for(i=0; i < 32; i++)
