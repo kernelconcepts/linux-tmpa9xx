@@ -167,6 +167,8 @@
 /* MAX3100 */
 #define PORT_MAX3100    86
 
+#define PORT_TMPA910	87
+
 #ifdef __KERNEL__
 
 #include <linux/compiler.h>
