@@ -497,7 +497,6 @@ static int __init tmpa910_gpio_init(void)
 	/* Now the interrupts */
 	for (i = 0; i < TMPA910_NUM_GPIO_IRQS; i++) {
 		gpio_irq = gpio_to_irq(0) + i;
-	    	gpio_request(irq_gpio_desc[i].gpio, "IRQ");
 		set_irq_chip(gpio_irq, &tmpa910_gpio_irq_chip);
 		set_irq_handler(gpio_irq, handle_level_irq);
 		set_irq_flags(gpio_irq, IRQF_VALID);
