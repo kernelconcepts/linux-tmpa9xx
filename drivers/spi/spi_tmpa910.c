@@ -238,7 +238,6 @@ static void tmpa910_spi_work(struct work_struct *work)
 	volatile int dat=0;
 	int cnt=0;
 	int first=1;
-	//unsigned long *GPIO=PORTL_GPIODATA;
 
 	//tmpa910_spi_dump_regs(tsp);
 
@@ -268,15 +267,15 @@ static void tmpa910_spi_work(struct work_struct *work)
 			regs->cpsr= cs->cpsr;	
 
 			regs->cr0 = (cs->scr << 8)	// set SCR to 0
-				|		(((spi->mode & SPI_CPHA) ? 1UL : 0UL) << 7)	// SPCLK phase 
-				|		(((spi->mode & SPI_CPOL) ? 1UL : 0UL) << 6)	// SPCLK polarity
-				|		(DEFAULT_FRAME_FMT << 4)	// we only support Microwire frame format
-				|		((cs->bits_per_word - 1)<< 0);	// data-width (7==8bit,15==16bit)
+				|	(((spi->mode & SPI_CPHA) ? 1UL : 0UL) << 7)	// SPCLK phase 
+				|	(((spi->mode & SPI_CPOL) ? 1UL : 0UL) << 6)	// SPCLK polarity
+				|	(DEFAULT_FRAME_FMT << 4)	// we only support Microwire frame format
+				|	((cs->bits_per_word - 1)<< 0);	// data-width (7==8bit,15==16bit)
 
 			regs->cr1 = (0UL << 3)	// Slave mode SP0D0 output disable
-				|		(0UL << 2)	// Master (0)/slave (1) mode select
-				|		(0UL << 1)	// Synchronous serial port enable
-				|		(((spi->mode & SPI_LOOP) ? 1UL : 0UL) << 0);	// Loop back mode enable
+				|	(0UL << 2)	// Master (0)/slave (1) mode select
+				|	(0UL << 1)	// Synchronous serial port enable
+				|	(((spi->mode & SPI_LOOP) ? 1UL : 0UL) << 0);	// Loop back mode enable
 	
 			#if 0
 			regs->imsc = (1UL << 3)	// Transmit FIFO interrupt enable
@@ -355,55 +354,6 @@ static void tmpa910_spi_work(struct work_struct *work)
 		}
 
 		m->status = status;
-
-#if 0
-		list_for_each_entry(t, &m->transfers, transfer_list) {
-
-			printk("transfer %p len %d tx_buf %p rx_buf %p\n",t,t->len,t->rx_buf,t->tx_buf);
-			if(t->len)
-			{
-			    unsigned char *rx_buf = (unsigned char *)t->rx_buf;
-			    unsigned char *tx_buf = (unsigned char *)t->tx_buf;
-
-				if(tx_buf)
-				{
-					int i;
-
-					printk("TXbuf[%d]: ",t->len);
-					for(i=0;i < t->len;i++)
-					{
-						printk(" %02X",tx_buf[i]);
-					}
-					printk("\n");
-				}
-				else
-				{
-				}
-
-				if(t->rx_buf)
-				{
-					int i;
-
-#if 0
-					if(t->len == 1)
-					{
-						rx_buf[0] = 0xFF;
-					}
-#endif
-					printk("RXbuf[%d]: ",t->len);
-					for(i=0;i < t->len;i++)
-					{
-						printk(" %02X",rx_buf[i]);
-					}
-					printk("\n");
-				}
-				else
-				{
-				}
-
-			}
-		}
-#endif
 		m->complete(m->context);
 
 		tmpa910_spi_transfer_setup(spi, NULL);	// reset to default setup
@@ -417,7 +367,6 @@ static void tmpa910_spi_work(struct work_struct *work)
 			|		(0UL << 2)	// Master (0)/slave (1) mode select
 			|		(0UL << 1)	// Synchronous serial port disable
 			|		(0UL << 0);	// Loop back mode enable
-		//GPIO[0] = 1;
 	}
 
 	spin_unlock_irq(&tsp->lock);
@@ -538,7 +487,6 @@ static void tmpa910_spi_cleanup(struct spi_device *spi)
 
 int tmpa910_spi_port_config(int id, struct tmpa910_spi_priv *tsp)
 {
-//	struct tmpa910_spi_regs __iomem *regs=tsp->regs;
 
 	tsp->bits_per_word = 8;
 
@@ -570,11 +518,6 @@ static irqreturn_t tmpa910_spi_isr(int irq, void *dev_id)
 		i++;
 	};
 
-
-//	for(i=0;i < 8;i++)
-//	{
-//		printk("%s.l%d_%ld: SR %08x RIS %08x MIS %08x IMSC %08x DR %08x\n",__FUNCTION__,__LINE__,tv.tv_usec,sr[i],ris[i],mis[i],regs->imsc,data[i]);
-//	}
 
 	ris[0] = 0;
 
@@ -623,7 +566,7 @@ static int __init tmpa910_spi_probe(struct platform_device *pdev)
 	struct device *dev=&pdev->dev;
 	struct tmpa910_spi_priv *tsp;
 	struct spi_master *master;
-    struct resource *r;
+	struct resource *r;
 	int irq;
 	int ret;
 	
