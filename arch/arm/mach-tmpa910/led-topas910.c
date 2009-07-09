@@ -100,20 +100,26 @@ DEVICE_ATTR(led_segment, 0644, led_segment_show, led_segment_store);
 
 static int __init topas_led_probe(struct platform_device *pdev)
 {
-	int ret;
+	int ret = 0;
     
 	platform_set_drvdata(pdev, NULL);
     
 	/* Yes we could have this easier, but I need a customer for the GPIO implementation */
-	gpio_request(GPIO_LED_SEG_A, "LED_SEG_A");
-	gpio_request(GPIO_LED_SEG_B, "LED_SEG_B");
-	gpio_request(GPIO_LED_SEG_C, "LED_SEG_C");
-	gpio_request(GPIO_LED_SEG_D, "LED_SEG_D");
-	gpio_request(GPIO_LED_SEG_E, "LED_SEG_E");
-	gpio_request(GPIO_LED_SEG_F, "LED_SEG_F");
-	gpio_request(GPIO_LED_SEG_G, "LED_SEG_G");
-	gpio_request(GPIO_LED_SEG_DP, "LED_SEG_DP");
+	ret += gpio_request(GPIO_LED_SEG_A, "LED_SEG_A");
+	ret += gpio_request(GPIO_LED_SEG_B, "LED_SEG_B");
+	ret += gpio_request(GPIO_LED_SEG_C, "LED_SEG_C");
+	ret += gpio_request(GPIO_LED_SEG_D, "LED_SEG_D");
+	ret += gpio_request(GPIO_LED_SEG_E, "LED_SEG_E");
+	ret += gpio_request(GPIO_LED_SEG_F, "LED_SEG_F");
+	ret += gpio_request(GPIO_LED_SEG_G, "LED_SEG_G");
+	ret += gpio_request(GPIO_LED_SEG_DP, "LED_SEG_DP");
 
+	if (ret < 0) {
+		printk(KERN_ERR "Topas910 LED: Unable to get GPIO for LEDs %i\n", ret);
+	    	return -1;
+	}
+		
+    
 	/* Clear state, bootloader leaves it undefined */
         segments_set(10);
 	
