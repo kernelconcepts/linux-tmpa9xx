@@ -23,14 +23,5 @@
 #define irq_to_gpio __tmpa910_irq_to_gpio
 extern int __tmpa910_irq_to_gpio(unsigned irq);
 extern int __tmpa910_gpio_to_irq(unsigned gpio);
-/*static inline int gpio_to_irq(unsigned gpio)
-{
-	return TMPA910_NUM_IRQS + gpio;
-}
 
-static inline int irq_to_gpio(unsigned irq)
-{
-	return irq - TMPA910_NUM_IRQS;
-}
-*/
 #endif
