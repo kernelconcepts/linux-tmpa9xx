@@ -144,50 +144,6 @@ static struct platform_device topas910_isp1362_device = {
 	},
 };
 
-static void _configure_isp1362_expansion_irq(void)
-{
-// Mask the ISP related bit
-#define GPIO_INT_MASK ( (1<<0) | (1<<1) )
-#define PORTP_BASE  			0xF080d000
-#define PORTP_GPIODATA	 (PORTP_BASE + 0x03fc)
-#define PORTP_GPIODIR 	 (PORTP_BASE + 0x0400)
-#define PORTP_GPIOIS  	 (PORTP_BASE + 0x0804)
-#define PORTP_GPIOIBE  	 (PORTP_BASE + 0x0808)
-#define PORTP_GPIOIEV  	 (PORTP_BASE + 0x080C)
-#define PORTP_GPIOIB  	 (PORTP_BASE + 0x0810)
-#define PORTP_GPIORIS  	 (PORTP_BASE + 0x0814)
-#define PORTP_GPIOMIS  	 (PORTP_BASE + 0x0818)
-#define PORTP_GPIOPIC  	 (PORTP_BASE + 0x081C)
-
-
-	// Enable interrupt INT0 and INT1 on port P0 and P1
-	uint32_t reg;
-
-	// Make sure input
-	reg = _in32(PORTP_GPIODIR);
-	reg &= ~(GPIO_INT_MASK);
-	_out32(PORTP_GPIODIR, reg);
-
-	// Use level.
-	// Note: The ISP1362 supports both
-  // but level is default
-	reg = _in32(PORTP_GPIOIS);
-	reg |= GPIO_INT_MASK;
-	_out32(PORTP_GPIOIS, reg);
-
-	// Enable the interrupt
-	// -> this isok as the CPU and interrupt
-	// controller have int disable
-	reg = _in32(PORTP_GPIOIB);
-	reg |= GPIO_INT_MASK;
-	_out32(PORTP_GPIOIB, reg);
-
-	// Clear. should not be needed
-	reg = _in32(PORTP_GPIOPIC);
-	reg |= GPIO_INT_MASK;
-	_out32(PORTP_GPIOPIC, reg);
-}
-
 #endif
 
 
@@ -506,8 +462,8 @@ static struct platform_device topas910_keys_device = {
 
 
 /*
- * NDFC
-*/
+ * NAND Flash Controller
+ */
 
 #ifdef CONFIG_MTD_NAND_TMPA910
 static struct resource tmpa910_nand_resources[] = {
@@ -547,6 +503,7 @@ static struct spi_board_info spi_board_info[] =
 
 }
 };
+
 #elif defined(CONFIG_SPI_AT25)
 static struct spi_eeprom spi_eeprom_info = {
 	.page_size = 256,
@@ -694,6 +651,7 @@ static void __init topas910_init(void)
 	platform_bus.dma_mask=&topas910_dmamask;
 	
 	/* Pin configuration */
+	TMPA910_CFG_PORT_GPIO(PORTA); /* Keypad */
 	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
 	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
