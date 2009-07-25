@@ -367,10 +367,12 @@ static int tmpa910_gpio_irq_type(unsigned int irq, unsigned int type)
 	struct tmpa910_gpio_irq girq;
 	unsigned int gpio_irq = irq - TMPA910_NUM_IRQS; 
 	unsigned char reg_level_sel;
+	unsigned char reg_dir_sel;
 	unsigned char reg_edge_both;
 	unsigned char reg_raise_high;
 	unsigned char reg_enable;
 	unsigned char port_mask;
+	unsigned long flags;
 
 	BUG_ON((irq < TMPA910_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
 
@@ -382,7 +384,13 @@ static int tmpa910_gpio_irq_type(unsigned int irq, unsigned int type)
 	port_mask = (1 << girq.bit);
 
 	/* we following the prodcedure mentioned in section 3.9.3 of the data sheet */
-    	gpio_direction_input(gpio);
+
+	local_irq_save(flags);
+	reg_dir_sel = __raw_readb(TMPA910_GPIO_REG_DIR(girq.port));
+	reg_dir_sel &= ~(1 << girq.bit);
+	__raw_writeb(reg_dir_sel, TMPA910_GPIO_REG_DIR(girq.port));
+	local_irq_restore(flags);
+
 	tmpa910_gpio_irq_mask(irq); /* disable interrupt */
 
 	switch (type) {

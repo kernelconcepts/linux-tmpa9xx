@@ -58,6 +58,7 @@
 #define TMPA910_GPIO_REG(x,y) (PORT_BASE | (x) | (y)) /* base addr + port offset + register offset */
 
 #define TMPA910_GPIO_REG_DATA(x) (PORT_BASE | PORT_OFS_DATA | (x))
+#define TMPA910_GPIO_REG_DIR(x)  (PORT_BASE | PORT_OFS_DIR | (x))
 #define TMPA910_GPIO_REG_IS(x)   (PORT_BASE | PORT_OFS_IS | (x))
 #define TMPA910_GPIO_REG_IBE(x)  (PORT_BASE | PORT_OFS_IBE | (x))
 #define TMPA910_GPIO_REG_IEV(x)  (PORT_BASE | PORT_OFS_IEV | (x))
