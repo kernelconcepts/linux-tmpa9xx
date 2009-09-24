@@ -171,8 +171,11 @@
 /* Timberdale UART */
 #define PORT_TIMBUART	87
 
-/* TMPA910 SoC */
-#define PORT_TMPA910	88
+/* Qualcomm MSM SoCs */
+#define PORT_MSM	88
+
+#define PORT_TMPA910	89
+
 
 #ifdef __KERNEL__
 

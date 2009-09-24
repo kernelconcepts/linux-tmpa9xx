@@ -1542,28 +1542,31 @@ int may_open(struct path *path, int acc_mode, int flag)
 	 * An append-only file must be opened in append mode for writing.
 	 */
 	if (IS_APPEND(inode)) {
+		error = -EPERM;
 		if  ((flag & FMODE_WRITE) && !(flag & O_APPEND))
-			return -EPERM;
+			goto err_out;
 		if (flag & O_TRUNC)
-			return -EPERM;
+			goto err_out;
 	}
 
 	/* O_NOATIME can only be set by the owner or superuser */
 	if (flag & O_NOATIME)
-		if (!is_owner_or_cap(inode))
-			return -EPERM;
+		if (!is_owner_or_cap(inode)) {
+			error = -EPERM;
+			goto err_out;
+		}
 
 	/*
 	 * Ensure there are no outstanding leases on the file.
 	 */
 	error = break_lease(inode, flag);
 	if (error)
-		return error;
+		goto err_out;
 
 	if (flag & O_TRUNC) {
 		error = get_write_access(inode);
 		if (error)
-			return error;
+			goto err_out;
 
 		/*
 		 * Refuse to truncate files with mandatory locks held on them.
@@ -1581,12 +1584,17 @@ int may_open(struct path *path, int acc_mode, int flag)
 		}
 		put_write_access(inode);
 		if (error)
-			return error;
+			goto err_out;
 	} else
 		if (flag & FMODE_WRITE)
 			vfs_dq_init(inode);
 
 	return 0;
+err_out:
+	ima_counts_put(path, acc_mode ?
+		       acc_mode & (MAY_READ | MAY_WRITE | MAY_EXEC) :
+		       ACC_MODE(flag) & (MAY_READ | MAY_WRITE));
+	return error;
 }
 
 /*
@@ -1698,8 +1706,11 @@ struct file *do_filp_open(int dfd, const char *pathname,
 	if (error)
 		return ERR_PTR(error);
 	error = path_walk(pathname, &nd);
-	if (error)
+	if (error) {
+		if (nd.root.mnt)
+			path_put(&nd.root);
 		return ERR_PTR(error);
+	}
 	if (unlikely(!audit_dummy_context()))
 		audit_inode(pathname, nd.path.dentry);
 
@@ -1758,7 +1769,13 @@ do_last:
 			goto exit;
 		}
 		filp = nameidata_to_filp(&nd, open_flag);
+		if (IS_ERR(filp))
+			ima_counts_put(&nd.path,
+				       acc_mode & (MAY_READ | MAY_WRITE |
+						   MAY_EXEC));
 		mnt_drop_write(nd.path.mnt);
+		if (nd.root.mnt)
+			path_put(&nd.root);
 		return filp;
 	}
 
@@ -1812,6 +1829,9 @@ ok:
 		goto exit;
 	}
 	filp = nameidata_to_filp(&nd, open_flag);
+	if (IS_ERR(filp))
+		ima_counts_put(&nd.path,
+			       acc_mode & (MAY_READ | MAY_WRITE | MAY_EXEC));
 	/*
 	 * It is now safe to drop the mnt write
 	 * because the filp has had a write taken
@@ -1819,6 +1839,8 @@ ok:
 	 */
 	if (will_write)
 		mnt_drop_write(nd.path.mnt);
+	if (nd.root.mnt)
+		path_put(&nd.root);
 	return filp;
 
 exit_mutex_unlock:
@@ -1859,6 +1881,8 @@ do_link:
 		 * with "intent.open".
 		 */
 		release_open_intent(&nd);
+		if (nd.root.mnt)
+			path_put(&nd.root);
 		return ERR_PTR(error);
 	}
 	nd.flags &= ~LOOKUP_PARENT;

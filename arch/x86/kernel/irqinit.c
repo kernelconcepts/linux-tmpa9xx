@@ -173,6 +173,9 @@ static void __init smp_intr_init(void)
 	/* Low priority IPI to cleanup after moving an irq */
 	set_intr_gate(IRQ_MOVE_CLEANUP_VECTOR, irq_move_cleanup_interrupt);
 	set_bit(IRQ_MOVE_CLEANUP_VECTOR, used_vectors);
+
+	/* IPI used for rebooting/stopping */
+	alloc_intr_gate(REBOOT_VECTOR, reboot_interrupt);
 #endif
 #endif /* CONFIG_SMP */
 }
@@ -184,7 +187,7 @@ static void __init apic_intr_init(void)
 #ifdef CONFIG_X86_THERMAL_VECTOR
 	alloc_intr_gate(THERMAL_APIC_VECTOR, thermal_interrupt);
 #endif
-#ifdef CONFIG_X86_THRESHOLD
+#ifdef CONFIG_X86_MCE_THRESHOLD
 	alloc_intr_gate(THRESHOLD_APIC_VECTOR, threshold_interrupt);
 #endif
 #if defined(CONFIG_X86_NEW_MCE) && defined(CONFIG_X86_LOCAL_APIC)
