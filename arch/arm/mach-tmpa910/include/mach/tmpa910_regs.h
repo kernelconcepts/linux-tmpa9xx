@@ -29,10 +29,14 @@
 #define PORTB    0x1000
 #define PORTC    0x2000
 #define PORTD    0x3000
+#ifndef CONFIG_CPU_TMPA900
 #define PORTE    0x4000
+#endif
 #define PORTF    0x5000
 #define PORTG    0x6000
+#ifndef CONFIG_CPU_TMPA900
 #define PORTH    0x7000
+#endif
 #define PORTJ    0x8000
 #define PORTK    0x9000
 #define PORTL    0xA000
@@ -41,6 +45,13 @@
 #define PORTP    0xD000
 #define PORTR    0xE000
 #define PORTT    0xF000
+
+/* TMPA900 */
+#ifdef CONFIG_CPU_TMPA900
+#define PORTU    0x4000
+#define PORTV    0x7000
+#endif
+
 
 #define PORT_OFS_DATA      0x03FC  /* 0x000 - 0x3FC, data register masked from 0x00 to 0xFF << 2 */
 #define PORT_OFS_DIR       0x0400  /* direction register */
@@ -106,10 +117,14 @@
 #define	GPIO_B_BASE		(IO_1_GPIO_BASE + PORTB)
 #define	GPIO_C_BASE		(IO_1_GPIO_BASE + PORTC)
 #define	GPIO_D_BASE		(IO_1_GPIO_BASE + PORTD)
+#ifndef CONFIG_CPU_TMPA900
 #define	GPIO_E_BASE		(IO_1_GPIO_BASE + PORTE)
+#endif
 #define	GPIO_F_BASE		(IO_1_GPIO_BASE + PORTF)
 #define	GPIO_G_BASE		(IO_1_GPIO_BASE + PORTG)
+#ifndef CONFIG_CPU_TMPA900
 #define	GPIO_H_BASE		(IO_1_GPIO_BASE + PORTH)
+#endif
 #define	GPIO_J_BASE		(IO_1_GPIO_BASE + PORTJ)
 #define	GPIO_K_BASE		(IO_1_GPIO_BASE + PORTK)
 #define	GPIO_L_BASE		(IO_1_GPIO_BASE + PORTL)
@@ -118,6 +133,11 @@
 #define	GPIO_P_BASE		(IO_1_GPIO_BASE + PORTP)
 #define	GPIO_R_BASE		(IO_1_GPIO_BASE + PORTR)
 #define	GPIO_T_BASE		(IO_1_GPIO_BASE + PORTT)
+
+#ifdef CONFIG_CPU_TMPA900
+#define	GPIO_U_BASE		(IO_1_GPIO_BASE + PORTU)
+#define	GPIO_V_BASE		(IO_1_GPIO_BASE + PORTV)
+#endif
 
 #define	GPIOADATA		__REG(GPIO_A_BASE + 0x3FC)
 #define	GPIOADIR		__REG(GPIO_A_BASE + 0x400)
@@ -162,10 +182,13 @@
 #define	GPIODMIS		__REG(GPIO_D_BASE + 0x818)
 #define	GPIODIC			__REG(GPIO_D_BASE + 0x81C)
 
+#ifndef CONFIG_CPU_TMPA900
 #define	GPIOEDATA		__REG(GPIO_E_BASE + 0x3FC)
 #define GPIOEDIR		__REG(GPIO_E_BASE + 0x400)
 #define GPIOEFR1		__REG(GPIO_E_BASE + 0x424)
 #define GPIOEFR2		__REG(GPIO_E_BASE + 0x428)
+#endif
+
 #define GPIOFDATA		__REG(GPIO_F_BASE + 0x000)
 #define GPIOFDIR		__REG(GPIO_F_BASE + 0x400)
 #define GPIOFFR1		__REG(GPIO_F_BASE + 0x424)
@@ -184,10 +207,12 @@
 #define GPIOGFR1		__REG(GPIO_G_BASE + 0x424) 
 #define GPIOGFR2		__REG(GPIO_G_BASE + 0x428) 
 
+#ifndef CONFIG_CPU_TMPA900
 #define GPIOHDATA		__REG(GPIO_H_BASE + 0x3FC) 
 #define GPIOHDIR		__REG(GPIO_H_BASE + 0x400)    
 #define GPIOHFR1		__REG(GPIO_H_BASE + 0x424)    
 #define GPIOHFR2		__REG(GPIO_H_BASE + 0x428)    
+#endif
 
 #define GPIOJDATA		__REG(GPIO_J_BASE + 0x3FC)  
 #define GPIOJDIR		__REG(GPIO_J_BASE + 0x400)  
@@ -250,7 +275,14 @@
 #define GPIOTFR1		__REG(GPIO_T_BASE + 0x424)
 #define GPIOTFR2		__REG(GPIO_T_BASE + 0x428)
 
+/* Port U and V TMPA900 only */
+#ifdef CONFIG_CPU_TMPA900
+#define GPIOUFR1		__REG(GPIO_U_BASE + 0x424)
+#define GPIOUFR2		__REG(GPIO_U_BASE + 0x428)
 
+#define GPIOVFR1		__REG(GPIO_V_BASE + 0x424)
+#define GPIOVFR2		__REG(GPIO_V_BASE + 0x428)
+#endif
 
 /* Timer */
 #define TMPA910_TIMER0 0xf0040000

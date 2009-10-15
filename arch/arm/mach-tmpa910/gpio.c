@@ -479,10 +479,14 @@ static struct tmpa910_gpio_chip tmpa910_gpio_banks[] = {
 	TMPA910_GPIO_BANK("B", PORTB, 8,  0x00, 0xFF, 0x00), 
 	TMPA910_GPIO_BANK("C", PORTC, 16, 0xE0, 0xFF, 0xA0), /* 2 interrupts */
 	TMPA910_GPIO_BANK("D", PORTD, 24, 0xFF, 0x00, 0xC0), /* 2 interrupts */
+#ifndef CONFIG_CPU_TMPA900
 	TMPA910_GPIO_BANK("E", PORTE, 32, 0xFF, 0x00, 0x00),
+#endif
 	TMPA910_GPIO_BANK("F", PORTF, 40, 0xCF, 0xC0, 0x80), /* 1 interrupt  */
 	TMPA910_GPIO_BANK("G", PORTG, 48, 0xFF, 0xFF, 0x00),
+#ifndef CONFIG_CPU_TMPA900
 	TMPA910_GPIO_BANK("H", PORTH, 56, 0xFF, 0xFF, 0x00),
+#endif
 	TMPA910_GPIO_BANK("J", PORTJ, 72, 0x00, 0xFF, 0x00),
 	TMPA910_GPIO_BANK("K", PORTK, 80, 0x00, 0xFF, 0x00),
 	TMPA910_GPIO_BANK("L", PORTL, 88, 0x1F, 0x1F, 0x00),
