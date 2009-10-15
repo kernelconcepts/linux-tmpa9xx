@@ -456,14 +456,12 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 
 	// Ok, first, retrieve some info
 	tmpa910_ts_platforminfo = (struct tmpa910_ts_platforminfo *) dev->platform_data;
-	if (tmpa910_ts_platforminfo)
-	{
+	if (tmpa910_ts_platforminfo {
 		fuzz       = tmpa910_ts_platforminfo->fuzz;
 		rate       = tmpa910_ts_platforminfo->rate;
 		skip_count = tmpa910_ts_platforminfo->skip_count;
 	}
-	else
-	{
+	else {
 		fuzz       = TMPA910_TS_DEFAULT_FUZZ;
 		rate       = TMPA910_TS_DEFAULT_RATE;
 		skip_count = TMPA910_TS_DEFAULT_SKIP_COUNT;
