@@ -190,5 +190,5 @@ module_init(topas_led_init);
 module_exit(topas_led_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Florian Boor");
+MODULE_AUTHOR("Florian Boor <florian.boor@kernelconcepts.de>");
 MODULE_DESCRIPTION("LED driver for TOPAS 910");

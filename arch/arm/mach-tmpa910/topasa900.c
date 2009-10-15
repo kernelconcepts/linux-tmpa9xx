@@ -1,5 +1,5 @@
 /*
- *  arch/arm/mach-tmpa910/topas910.c 
+ *  arch/arm/mach-tmpa910/topasa900.c 
  *
  * Copyright (C) 2008 bplan GmbH. All rights reserved.
  * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
@@ -18,7 +18,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  * 
- * Toshiba Topas 910 machine, reference design for the TMPA910CRAXBG SoC 
+ * Toshiba Topas A900 machine, reference design for the TMPA900 SoC 
  *
  * TODO: MMC, ADC, power manager
  * TODO: separate SoC and board code
@@ -74,7 +74,7 @@
 
 /* I/O Mapping related, might want to be moved to a CPU specific file */
 
-static struct map_desc tmpa910_io_desc[] __initdata = {
+static struct map_desc tmpa900_io_desc[] __initdata = {
 	{
 		.virtual = TMPA910_IO_VIRT_BASE,
 		.pfn = __phys_to_pfn(TMPA910_IO_PHYS_BASE),
@@ -84,9 +84,9 @@ static struct map_desc tmpa910_io_desc[] __initdata = {
 };
 
 
-void __init topas910_map_io(void)
+void __init topasa900_map_io(void)
 {
-	iotable_init(tmpa910_io_desc, ARRAY_SIZE(tmpa910_io_desc));
+	iotable_init(tmpa900_io_desc, ARRAY_SIZE(tmpa900_io_desc));
 }
 
 
@@ -96,56 +96,6 @@ static void dummy_release(struct device *dev)
 }
 
 static u64  topas910_dmamask = 0xffffffffUL;
-
-
-/* USB Controller device */
-#ifdef CONFIG_USB_ISP1362_HCD
-static struct isp1362_platform_data isp1362_priv = {
-        .sel15Kres = 1,
-        .is_otg = 1,
-        .clknotstop = 0,
-        .oc_enable =1,
-        .int_act_high = 0,
-        .int_edge_triggered = 0,
-        .remote_wakeup_connected = 0,
-        .no_power_switching = 0,
-        .power_switching_mode = 1,
-        .reset = NULL,
-        .clock = NULL,
-};
-
-static struct resource tmpa910_resource_isp1362[] = {
-        [0] = {
-                .start  = 0xa0000008,
-                .end    = 0xa0000009,
-                .flags  = IORESOURCE_MEM,
-        },
-        [1] = {
-                .start  = 0xa0000000,
-                .end    = 0xa0000001,
-                .flags  = IORESOURCE_MEM,
-        },
-        [2] = {
-                .start  = INTR_VECT_GPIOP,
-                .end    = INTR_VECT_GPIOP,
-                .flags  = IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-        },
-};
-
-static struct platform_device topas910_isp1362_device = {
-	.name           = "isp1362-hcd",
-	.id             = 0,
-	.num_resources  = ARRAY_SIZE(tmpa910_resource_isp1362),
-	.resource       = tmpa910_resource_isp1362,
-	.dev = {
-		.platform_data = &isp1362_priv,
-		.release = dummy_release,
-		.coherent_dma_mask = 0xffffffff,		
-	},
-};
-
-#endif
-
 
 /* Ethernet */
  
@@ -265,10 +215,6 @@ struct platform_device tmpa910_device_i2c = {
 	.resource	= tmpa910_resource_i2c,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
 };
-
-
-
-
 
 
 #ifdef CONFIG_SPI_CHANNEL0
@@ -595,10 +541,6 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_SPI_CHANNEL1
 	&tmpa910_device_spi1,
 #endif
-
-#ifdef CONFIG_USB_ISP1362_HCD
-	&topas910_isp1362_device,
-#endif
 	&tmpa910_device_rtc
 };
 
@@ -632,28 +574,21 @@ static void __init _setup_lcdc_device(void)
 }
 
 
-void __init topas910_init_irq(void) {
+void __init topasa900_init_irq(void) {
 	tmpa910_init_irq();
 }
 
 
-/* Topas910 device initialisation */
+/* TopasA900 device initialisation */
 
-static void __init topas910_init(void)
+static void __init topasa900_init(void)
 {
+        
 	/* Memory controller - for DM9000 */
 	SMC_SET_CYCLES_3 = 0x0004AFAA;
 	SMC_SET_OPMODE_3 = 0x00000002;
 	SMC_DIRECT_CMD_3 = 0x00C00000;
-#ifndef CONFIG_CPU_TMPA900
-#error wrong cpu
-#endif
-#ifdef CONFIG_CPU_TMPA910
-#error wrong cpu add
-#endif
-#ifndef CONFIG_MACH_TOPASA900
-#error wrong board
-#endif
+    
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = 0xffffffff;
 	platform_bus.dma_mask=&topas910_dmamask;
@@ -694,9 +629,9 @@ MACHINE_START(TOPAS910, "Toshiba TopasA900")
         .phys_io        = TMPA910_IO_PHYS_BASE,
         .boot_params    = 0,
         .io_pg_offst    = (io_p2v(TMPA910_IO_PHYS_BASE) >> 18) & 0xfffc,
-        .map_io         = topas910_map_io,
-        .init_irq       = topas910_init_irq,
+        .map_io         = topasa900_map_io,
+        .init_irq       = topasa900_init_irq,
         .timer          = &topas910_timer,
-        .init_machine   = topas910_init,
+        .init_machine   = topasa900_init,
 MACHINE_END
 
