@@ -1,13 +1,34 @@
 if ARCH_TMPA910
 
+
+menu "Supported Toshiba TX09 Processor Variants"
+
+choice
+
+	prompt "Select TX09 Variant"
+
+config CPU_TMPA910
+	bool "TMPA910 SoC"
+
+config CPU_TMPA900
+	bool "TMPA900 SoC"
+
+endchoice
+
 menu "Toshiba TX09 series TMPA9xx based devices"
 
 config MACH_TOPAS910
         bool "Toshiba Topas910 TMPA910 development board"
         select TMPA910
+	depends on CPU_TMPA910
 
 config MACH_TOPASA900
         bool "Toshiba TopasA900 TMPA900 development board"
         select TMPA910
+	depends on CPU_TMPA900
+
 endmenu
+
+endmenu
+
 endif
