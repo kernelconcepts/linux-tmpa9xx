@@ -14,9 +14,9 @@
 #define SNDRV_GET_ID
 #include <sound/initval.h>
 
-#include <asm/arch/dma.h>
-#include <asm/arch/irqs.h>
-#include <asm/arch/tmpa910_regs.h>
+#include <mach/dma.h>
+#include <mach/irqs.h>
+#include <mach/tmpa910_regs.h>
 
 #include "tmpa910_i2s.h"
 #include "wm8976.h"
@@ -26,18 +26,11 @@
 #define I2S_IRQ_ERR  I2S_INT
 
 
-
-/***********/
-/***********/
-// Useful debug
-//#define __DEBUG__
-#include <linux/debug.h>
-
-#define snd_printk_marker() NPRINTK("->\n");
-#define i2s_printd(level, format, arg...) NPRINTK(format, arg)
+#define snd_printk_marker() printk(KERN_DEBUG "->\n");
+#define i2s_printd(level, format, arg...) printk(level format, arg)
 
 #undef snd_printd
-#define snd_printd NPRINTK
+#define snd_printd printk
 #undef CONFIG_SND_DEBUG_CURRPTR  /* causes output every frame! */
 //#define CONFIG_SND_DEBUG_CURRPTR
 
@@ -370,7 +363,8 @@ static int snd_wm8976_playback_prepare(snd_pcm_substream_t *substream)
 	snd_wm8976_set_samplerate(runtime->rate);
 
 
-	snd_assert((substream == chip->tx_substream), return -EINVAL);
+	if (substream != chip->tx_substream)
+		return -EINVAL;
 
 	snd_printd(KERN_INFO "%s channels:%d, period_bytes:0x%lx, periods:%d\n",
 			__FUNCTION__, runtime->channels,
@@ -398,7 +392,8 @@ static int snd_wm8976_capture_prepare(snd_pcm_substream_t *substream)
 	/* set requested samplerate */
 	snd_wm8976_set_samplerate(runtime->rate);	
 
-	snd_assert((substream == chip->tx_substream), return -EINVAL);
+	if (substream != chip->tx_substream)
+		return -EINVAL;
 
 	snd_printd(KERN_INFO "%s channels:%d, period_bytes:0x%lx, periods:%d\n",
 			__FUNCTION__, runtime->channels,
@@ -448,7 +443,10 @@ static int snd_wm8976_capture_trigger(snd_pcm_substream_t *substream, int cmd)
 	snd_printk_marker();
 
 	spin_lock(&chip->wm8976_lock);
-	snd_assert(substream == chip->rx_substream, return -EINVAL);
+
+	if (substream != chip->rx_substream)
+		return -EINVAL;
+
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 		//printk("  SNDRV_PCM_TRIGGER_START\n");
@@ -658,17 +656,17 @@ static int __devinit snd_wm8976_pcm(struct snd_wm8976 *wm8976)
 static int __devinit snd_wm8976_probe(struct platform_device *pdev)
 {
 	int err = 0;
-	struct snd_card *card;
+	struct snd_card *card = NULL;
 	struct snd_wm8976 *wm8976;
 	struct tmpa910_i2s *i2s;
-	char * id = "ID string for TMPA910 + WM8976 soundcard.";
+	char *id = "ID string for TMPA910 + WM8976 soundcard.";
 	
 	snd_printk_marker();
 	
 	if (g_device != NULL)
 		return -ENOENT;
 
-	card = snd_card_new(-1, id, THIS_MODULE, sizeof(struct snd_wm8976));
+	snd_card_create(-1, id, THIS_MODULE, sizeof(struct snd_wm8976), &card);
 	if (card == NULL) {
 		snd_printdd(KERN_DEBUG "%s: snd_card_new() failed\n", __FUNCTION__);
 		return -ENOMEM;
@@ -765,9 +763,8 @@ static int __init snd_wm8976_init(void)
 	init_wm8976_i2c();
 	enable_audio_sysclk();
 
-	if ((err = platform_driver_register(&snd_wm8976_driver)) < 0)
-	{
-		NPRINTK("platform_driver_register failed. ret=%d\n", platform_driver_register);
+	if ((err = platform_driver_register(&snd_wm8976_driver)) < 0) {
+		printk("platform_driver_register failed. ret=%d\n", err);
 		return err;
 	}
 
