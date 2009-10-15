@@ -337,14 +337,14 @@ config ARCH_IMX
 	  Support for Motorola's i.MX family of processors (MX1, MXL).
 
 config ARCH_TMPA910
-	bool "Toshiba TMPA910-based"
+	bool "Toshiba TX09 / TMPA9xx based"
 	select CPU_ARM926T
 	select GENERIC_GPIO
 	select ARCH_REQUIRE_GPIOLIB
 	select GENERIC_CLOCKEVENTS
 	select GENERIC_CLOCKEVENTS_BUILD
 	help
-		This enables support for Toshiba TMPA910 / TMPA910CR based
+		This enables support for Toshiba TX09 series TMPA9xx / TMPA9xxCR based
 		devices.
 
 config ARCH_IOP13XX
@@ -749,6 +749,8 @@ source "arch/arm/mach-msm/Kconfig"
 source "arch/arm/mach-u300/Kconfig"
 
 source "arch/arm/mach-w90x900/Kconfig"
+
+source "arch/arm/mach-tmpa910/Kconfig"
 
 # Definitions to make life easier
 config ARCH_ACORN

@@ -691,4 +691,3 @@ MACHINE_START(TOPAS910, "Toshiba Topas910")
         .timer          = &topas910_timer,
         .init_machine   = topas910_init,
 MACHINE_END
-

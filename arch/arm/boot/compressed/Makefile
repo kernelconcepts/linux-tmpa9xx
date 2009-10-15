@@ -36,7 +36,7 @@ ifeq ($(CONFIG_CPU_XSCALE),y)
 OBJS		+= head-xscale.o
 endif
 
-ifeq ($(CONFIG_ARCH_TMPA910), y)
+ifeq ($(CONFIG_ARCH_TMPA910),y)
 OBJS		+= head-tmpa910.o
 endif
 
