@@ -610,11 +610,6 @@ static void __init topasa900_init(void)
               	             // NDREn L = 4clks,H = 3clks
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
-#ifdef CONFIG_USB_ISP1362_HCD
-	// Force configuration on the ISP expansion port interrupt line
-#warning	_configure_isp1362_expansion_irq();
-#endif
-
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
   

@@ -23,7 +23,6 @@
  */
 
 
-
 static void flush(void) 
 {
 
@@ -49,36 +48,22 @@ static void flush(void)
 #define  _UART0ICR   0x044
 #define _UART0DMACR 0x048
 
+#define __reg(x) (*((volatile u32 *)(x)))
+#define UART0FR __reg(0xf2000000+_UART0FR)
+#define UART0DR __reg(0xf2000000+_UART0DR)
 
-#define UART0FR 0xf2000000+_UART0FR 
-#define UART0DR 0xf2000000+_UART0DR 
-
+#define	UART_FR_TXFE		(1 << 7)
 
 static void putc(int c)
 {
-	unsigned int reg;
-	
-	reg = _in32(0xf08013FC);
-	reg ++;
-	_out32(0xf08013FC, reg);
+	while ((UART0FR & UART_FR_TXFE) == 0);
+	UART0DR = (unsigned long)(c & 0xff);
 }
 
-#if 0
-static void puthex(unsigned long x) {
-        int i;
-        char c[10];
-        for(i=0;i<8;i++) {
-                c[i]=(x>>(28-i*4))&0xf;
-                if(c[i]>9) {
-                        c[i]+='a'-10;
-                } else {
-                        c[i]+='0';
-                }
-        }
-        c[i]=0;
-        putstr(c);
+static void puthex(unsigned long x)
+{
+//	_out32(0xf08013FC, x);
 }
-#endif
 
 /*
  * nothing to setup and wdog currently not used

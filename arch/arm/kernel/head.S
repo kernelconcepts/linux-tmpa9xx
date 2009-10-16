@@ -74,14 +74,21 @@
  * crap here - that's what the boot loader (or in extreme, well justified
  * circumstances, zImage) is for.
  */
+
 	.section ".text.head", "ax"
 ENTRY(stext)
 	msr	cpsr_c, #PSR_F_BIT | PSR_I_BIT | SVC_MODE @ ensure svc mode
 						@ and irqs disabled
+
 	mrc	p15, 0, r9, c0, c0		@ get processor id
 	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
 	movs	r10, r5				@ invalid processor (r5=0)?
 	beq	__error_p			@ yes, error 'p'
+
+	ldr r10,PB_ADDR
+	mov r13,#0xFF
+	str r13,[r10]
+
 	bl	__lookup_machine_type		@ r5=machinfo
 	movs	r8, r5				@ invalid machine (r5=0)?
 	beq	__error_a			@ yes, error 'a'
@@ -100,6 +107,7 @@ ENTRY(stext)
 	adr	lr, __enable_mmu		@ return (PIC) address
 	add	pc, r10, #PROCINFO_INITFUNC
 ENDPROC(stext)
+PB_ADDR: .word (0xf08013FC)
 
 #if defined(CONFIG_SMP)
 ENTRY(secondary_startup)
