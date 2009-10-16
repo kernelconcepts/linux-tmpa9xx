@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.31
-# Wed Sep 23 12:00:42 2009
+# Fri Oct 16 11:52:37 2009
 #
 CONFIG_ARM=y
 CONFIG_SYS_SUPPORTS_APM_EMULATION=y
@@ -119,7 +119,7 @@ CONFIG_MODULE_UNLOAD=y
 # CONFIG_MODVERSIONS is not set
 # CONFIG_MODULE_SRCVERSION_ALL is not set
 CONFIG_BLOCK=y
-# CONFIG_LBDAF is not set
+CONFIG_LBDAF=y
 # CONFIG_BLK_DEV_BSG is not set
 # CONFIG_BLK_DEV_INTEGRITY is not set
 
@@ -183,6 +183,17 @@ CONFIG_ARCH_TMPA910=y
 # CONFIG_ARCH_U300 is not set
 # CONFIG_ARCH_DAVINCI is not set
 # CONFIG_ARCH_OMAP is not set
+
+#
+# Supported Toshiba TX09 Processor Variants
+#
+CONFIG_CPU_TMPA910=y
+# CONFIG_CPU_TMPA900 is not set
+
+#
+# Toshiba TX09 series TMPA9xx based devices
+#
+CONFIG_MACH_TOPAS910=y
 
 #
 # Processor Type
@@ -907,11 +918,7 @@ CONFIG_SND_VERBOSE_PROCFS=y
 # CONFIG_SND_OPL4_LIB_SEQ is not set
 # CONFIG_SND_SBAWE_SEQ is not set
 # CONFIG_SND_EMU10K1_SEQ is not set
-CONFIG_SND_DRIVERS=y
-# CONFIG_SND_DUMMY is not set
-# CONFIG_SND_MTPAV is not set
-# CONFIG_SND_SERIAL_U16550 is not set
-# CONFIG_SND_MPU401 is not set
+# CONFIG_SND_DRIVERS is not set
 CONFIG_SND_ARM=y
 # CONFIG_SND_TMPA910_WM8976 is not set
 CONFIG_SND_TMPA910_PCM1773=y
@@ -963,7 +970,7 @@ CONFIG_USB_TMPA910=y
 # CONFIG_USB_GADGET_DUMMY_HCD is not set
 # CONFIG_USB_GADGET_DUALSPEED is not set
 # CONFIG_USB_ZERO is not set
-CONFIG_USB_AUDIO=m
+# CONFIG_USB_AUDIO is not set
 CONFIG_USB_ETH=m
 CONFIG_USB_ETH_RNDIS=y
 CONFIG_USB_GADGETFS=m
@@ -1009,6 +1016,7 @@ CONFIG_FS_MBCACHE=y
 # CONFIG_JFS_FS is not set
 CONFIG_FS_POSIX_ACL=y
 # CONFIG_XFS_FS is not set
+# CONFIG_GFS2_FS is not set
 # CONFIG_OCFS2_FS is not set
 # CONFIG_BTRFS_FS is not set
 CONFIG_FILE_LOCKING=y
