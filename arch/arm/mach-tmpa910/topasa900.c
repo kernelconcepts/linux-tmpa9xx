@@ -619,7 +619,7 @@ static void __init topasa900_init(void)
 }
 
 
-MACHINE_START(TOPAS910, "Toshiba TopasA900")
+MACHINE_START(TOPASA900, "Toshiba TopasA900")
         /* Maintainer:  Florian Boor <florian.boor@kernelconcepts.de> */
         .phys_io        = TMPA910_IO_PHYS_BASE,
         .boot_params    = 0,
