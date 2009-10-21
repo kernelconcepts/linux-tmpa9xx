@@ -9,8 +9,12 @@
  * published by the Free Software Foundation.
  *
 */
-/*
+
 #include "hardware.h"
+#define UART0DR 0x00
+#define UART0FR 0x18
+#define FR_TXFE 0x40
+#define FR_BUSY 0x08
 
 		.macro	addruart,rx
 		mrc	p15, 0, \rx, c1, c0
@@ -19,9 +23,25 @@
 		movne	\rx, #io_p2v(0xf2000000)	@ virtual
 		.endm
 
-#define UART_SHIFT	2
-#include <asm/hardware/debug-8250.S>
-*/
+		.macro	senduart,rd,rx
+		strb	\rd, [\rx, #UART0DR]
+		.endm
+
+		.macro	busyuart,rd,rx
+1002:		ldrb	\rd, [\rx, #UART0FR]
+		and	\rd, \rd, #FR_TXFE
+		teq	\rd, #FR_TXFE
+		bne	1002b
+		.endm
+
+		.macro	waituart,rd,rx
+1001:		ldrb	\rd, [\rx, #UART0FR]
+		and	\rd, \rd, #FR_BUSY
+		teq	\rd, #0
+		bne	1001b
+		.endm
+
+/*
 		.macro	addruart,rx
 		.endm
 
@@ -33,4 +53,4 @@
 
 		.macro	busyuart,rd,rx
 		.endm
-
+*/
