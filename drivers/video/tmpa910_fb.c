@@ -80,10 +80,8 @@ static struct fb_ops tmpa910_lcdc_ops = {
 /******************/
 static void _init_it(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t *LCDReg, int  width, int height)
 {
-printk("TOSH FB init_fb\n");    
-    LCDDA_LDACR0 = 0x00; /* LCDDA functions off */
-    LCDDA_LDACR1 = (1<<31); /* reset LCDDA */
-
+	LCDDA_LDACR0 = 0x00; /* LCDDA functions off */
+	LCDDA_LDACR1 = (1<<31); /* reset LCDDA */
     
 	hw_tmpa910_lcdc->LCDControl= 0;
 
@@ -102,9 +100,9 @@ printk("TOSH FB init_fb\n");
 
 static void _setup_fb(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t fb_addr)
 {
-printk("TOSH FB setup_fb\n");    
 	hw_tmpa910_lcdc->LCDUPBASE	= fb_addr;
 	hw_tmpa910_lcdc->LCDLPBASE	= 0x00;
+	udelay(200);
 	hw_tmpa910_lcdc->LCDControl |= 0x1;
 	barrier();
 }
@@ -167,8 +165,8 @@ static int tmpa910_lcdc_blank(int blank, struct fb_info *info)
 static int __init tmpa910_lcdc_init_fb(
 	struct platform_device *pdev,	
 	const char *name, const char *full_name,
-				int width, int height, int depth, 
-				int pitch, uint32_t *LCDReg, unsigned long address, void *lcdc_base)
+	int width, int height, int depth, 
+	int pitch, uint32_t *LCDReg, unsigned long address, void *lcdc_base)
 {
 	struct tmpa910_lcdc_par *par = &default_par;
 	struct fb_fix_screeninfo *fix;
@@ -279,7 +277,7 @@ static int __init tmpa910_lcdc_init_fb(
 	}
 
 	// Success :-)
-	printk(KERN_INFO "fb%d: Toshiba TMPA910 Frame buffer device at 0x%lx (mapped 0x%p)\n",
+	printk(KERN_INFO "fb%d: Toshiba TMPA9x0 Frame buffer device at 0x%lx (mapped 0x%p)\n",
 	       info->node, address,  info->screen_base);
 
 	return 0;
