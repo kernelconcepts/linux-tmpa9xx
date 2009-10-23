@@ -80,7 +80,11 @@ static struct fb_ops tmpa910_lcdc_ops = {
 /******************/
 static void _init_it(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t *LCDReg, int  width, int height)
 {
+printk("TOSH FB init_fb\n");    
+    LCDDA_LDACR0 = 0x00; /* LCDDA functions off */
+    LCDDA_LDACR1 = (1<<31); /* reset LCDDA */
 
+    
 	hw_tmpa910_lcdc->LCDControl= 0;
 
 	hw_tmpa910_lcdc->LCDTiming0	= LCDReg[0];
@@ -98,8 +102,9 @@ static void _init_it(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t *LCDReg, 
 
 static void _setup_fb(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t fb_addr)
 {
+printk("TOSH FB setup_fb\n");    
 	hw_tmpa910_lcdc->LCDUPBASE	= fb_addr;
-	hw_tmpa910_lcdc->LCDLPBASE	= fb_addr;
+	hw_tmpa910_lcdc->LCDLPBASE	= 0x00;
 	hw_tmpa910_lcdc->LCDControl |= 0x1;
 	barrier();
 }

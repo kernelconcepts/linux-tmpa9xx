@@ -22,7 +22,12 @@
 #ifndef __TMPA910_LCDC_H__
 #define __TMPA910_LCDC_H__
 
-
+/* register set indices */
+#define LCDREG_TIMING0_H   0
+#define LCDREG_TIMING1_V   1
+#define LCDREG_TIMING2_CLK 2
+#define LCDREG_TIMING3_LEC 3
+#define LCDREG_LCDCONTROL  4
 
 struct tmpa910_lcdc_platforminfo {
 	uint32_t LCDReg[5];

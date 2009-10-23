@@ -423,6 +423,9 @@
 
 /* LCDDA (LCD Data Process Accelerator) */
 #define LCDDA_BASE  0xF2050000
+#define	LCDDA_LDACR0  __REG(LCDDA_BASE + 0x00)
+#define	LCDDA_LDACR1  __REG(LCDDA_BASE + 0x34)
+
 
 /* Interrupt Controller */
 #define INTR_BASE  0xF4000000

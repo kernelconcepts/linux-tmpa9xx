@@ -757,7 +757,7 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 	nand->ecc.calculate = tmpa910_nand_calculate_ecc;
 	nand->ecc.correct   = tmpa910_nand_correct_data;
 	nand->ecc.hwctl  = tmpa910_nand_enable_hwecc;
-	nand->ecc.mode	    = NAND_ECC_HW;
+	nand->ecc.mode	    = NAND_ECC_HW;   
 	nand->ecc.size	    = 512;
 	nand->ecc.bytes	    = 6;
 

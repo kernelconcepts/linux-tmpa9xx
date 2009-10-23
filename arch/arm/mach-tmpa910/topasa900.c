@@ -545,31 +545,31 @@ static struct platform_device *devices[] __initdata = {
 };
 
 
-static void __init _setup_lcdc_device(void)
+static void __init setup_lcdc_device(void)
 {
 	uint32_t *LCDReg;
 	int width  = 320;
 	int height = 240;
-	
+
 	topas910_v1_lcdc_platforminfo.width  = width;
 	topas910_v1_lcdc_platforminfo.height = height;
 	topas910_v1_lcdc_platforminfo.depth  = 32;
 	topas910_v1_lcdc_platforminfo.pitch  = width*4;
 	
 	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
-	LCDReg[0] =	( ((height/16)-1) << 2)	// pixel per line
+	LCDReg[LCDREG_TIMING0_H] =	( ((height/16)-1) << 2)	// pixel per line
 			| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
 			| ( (8-1) << 16 ) 			// tHFP, Horizontal front porch
 			| ( (8-1) << 24 ); 			// tHBP, Horizontal back porch
 
-	LCDReg[1] =     (2 << 24) 		// tVBP		
+	LCDReg[LCDREG_TIMING1_V] =     (2 << 24) 		// tVBP		
 			| (2 << 16) 		// tVFP
 			| ((2-1) << 10) 		// tVSP
 			| (width-1);
 
-	LCDReg[2] = ((width-1)<<16) | 0x0000e | 1<<13 | 0<<12 | 0<<11;
-	LCDReg[3] = 0;
-	LCDReg[4]	= (0x5<<1)  | (1<<5) | (1<<11);
+	LCDReg[LCDREG_TIMING2_CLK] = ((width-1)<<16) | 0x0000e | 1<<13 | 0<<12 | 0<<11;
+	LCDReg[LCDREG_TIMING3_LEC] = 0;
+	LCDReg[LCDREG_LCDCONTROL]	= (0x5<<1)  | (1<<5) | (1<<11);
 	tmpa910_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
 }
 
@@ -600,9 +600,9 @@ static void __init topasa900_init(void)
 	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
 	TMPA910_PORT_T_FR1 = 0x00F0; /* Enable USB function pin */
 
-        /* Configure LCD interface */
-	_setup_lcdc_device();
-
+    /* Configure LCD interface */
+	setup_lcdc_device();
+    
 	/* NAND Controller */
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
 	NDFMCR1 = 0x00000000; // ECC = Hamming
