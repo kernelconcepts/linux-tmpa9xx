@@ -75,14 +75,14 @@ struct tmpa910_nand_private tmpa910_nand = {
 	},
 };
 
+
 #ifdef CONFIG_MTD_PARTITIONS
-
-#define NUM_PARTITIONS 3
-
 /*
  * Define static partitions for flash device
  */
-static struct mtd_partition mtd_parts[] = {
+static int num_partitions = 3;
+
+static struct mtd_partition mtd_parts_builtin[] = {
 	{
 		.name		= "bootloader",
 		.offset		= 0x00000000,
@@ -97,6 +97,9 @@ static struct mtd_partition mtd_parts[] = {
 		.size		= 0x08000000 - 0x00280000,
 	}, 
 };
+
+static const char *part_probes[] = { "cmdlinepart", NULL };
+
 #endif
 
 void tmpa910_nand_dma_read(struct tmpa910_nand_private *priv, unsigned int phy_addr, unsigned short size)
@@ -122,10 +125,9 @@ static int tmpa910_nand_dev_ready(struct mtd_info *mtd)
 {
        return !(NDFMCR0 & NDFMCR0_BUSY);
 }
+
 static int tmpa910_nand_als_ready(struct mtd_info *mtd)
 {
-       int i;
-       for (i=0;i<0x800;i++);
        return !(NDFMCR1 & 0x100);
 }
 
@@ -713,7 +715,7 @@ static int tmpa910_nand_init_priv(struct tmpa910_nand_private *priv)
 	priv->dma = 0;
 	priv->softecc = 1;
 #endif
-	//__REG(0xF080E008) = 0x02;
+	__REG(0xF080E008) = 0x02;
 	//NDFMCR0 =0x95;
 	NDFMCR0 =0x0;
 	NDFMCR1 = 0;
@@ -728,6 +730,10 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 	struct mtd_info *mtd;
 	struct nand_chip *nand;
 	int ret;
+#ifdef CONFIG_MTD_PARTITIONS
+	struct mtd_partition *partitions = NULL;
+	int num_cmdline_parts;
+#endif
 
 	/* We only get one Nand Controller, so we do not modify CFG_NAND_BASE_LIST 
 	     to get the multiple IO address for the controllers */
@@ -757,7 +763,7 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 	nand->ecc.calculate = tmpa910_nand_calculate_ecc;
 	nand->ecc.correct   = tmpa910_nand_correct_data;
 	nand->ecc.hwctl  = tmpa910_nand_enable_hwecc;
-	nand->ecc.mode	    = NAND_ECC_HW;   
+	nand->ecc.mode	    = NAND_ECC_HW;
 	nand->ecc.size	    = 512;
 	nand->ecc.bytes	    = 6;
 
@@ -791,7 +797,7 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 	if (ret) {
 		goto free_dma_ch;
 	}
-		
+
 	if (mtd->writesize == 2048)
 		nand->ecc.layout    = &nand_lp_hw_eccoob;
 	else
@@ -801,8 +807,26 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 		goto free_dma_ch;
 	}
 
+/* Partitions:
+ * If there is support for partitions then use commandline partitions if
+ * available, the defauts otherwise.
+ * If there is no support for partitions then add the whole device.
+ */
+    
 #ifdef CONFIG_MTD_PARTITIONS
-	add_mtd_partitions(mtd, mtd_parts, NUM_PARTITIONS);
+
+#ifdef CONFIG_MTD_CMDLINE_PARTS
+	num_cmdline_parts = parse_mtd_partitions(mtd, part_probes,
+					      &partitions, 0);
+	if (num_cmdline_parts)
+		add_mtd_partitions(mtd, partitions, num_cmdline_parts);
+    	else
+		add_mtd_partitions(mtd, mtd_parts_builtin, num_partitions);
+#else
+	add_mtd_partitions(mtd, mtd_parts_builtin, num_partitions);
+    
+#endif
+    
 #else
 	add_mtd_device(mtd);
 #endif
