@@ -715,7 +715,7 @@ static int tmpa910_nand_init_priv(struct tmpa910_nand_private *priv)
 	priv->dma = 0;
 	priv->softecc = 1;
 #endif
-	__REG(0xF080E008) = 0x02;
+//	__REG(0xF080E008) = 0x02;
 	//NDFMCR0 =0x95;
 	NDFMCR0 =0x0;
 	NDFMCR1 = 0;
@@ -816,6 +816,7 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 #ifdef CONFIG_MTD_PARTITIONS
 
 #ifdef CONFIG_MTD_CMDLINE_PARTS
+	mtd->name = "tmpa910-nand",
 	num_cmdline_parts = parse_mtd_partitions(mtd, part_probes,
 					      &partitions, 0);
 	if (num_cmdline_parts)
