@@ -1,5 +1,5 @@
 /*
- *  arch/arm/mach-tmpa910/topas910.c 
+ * arch/arm/mach-tmpa910/topas910.c -- Topas 910 machine 
  *
  * Copyright (C) 2008 bplan GmbH. All rights reserved.
  * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
@@ -97,54 +97,6 @@ static void dummy_release(struct device *dev)
 
 static u64  topas910_dmamask = 0xffffffffUL;
 
-
-/* USB Controller device */
-#ifdef CONFIG_USB_ISP1362_HCD
-static struct isp1362_platform_data isp1362_priv = {
-        .sel15Kres = 1,
-        .is_otg = 1,
-        .clknotstop = 0,
-        .oc_enable =1,
-        .int_act_high = 0,
-        .int_edge_triggered = 0,
-        .remote_wakeup_connected = 0,
-        .no_power_switching = 0,
-        .power_switching_mode = 1,
-        .reset = NULL,
-        .clock = NULL,
-};
-
-static struct resource tmpa910_resource_isp1362[] = {
-        [0] = {
-                .start  = 0xa0000008,
-                .end    = 0xa0000009,
-                .flags  = IORESOURCE_MEM,
-        },
-        [1] = {
-                .start  = 0xa0000000,
-                .end    = 0xa0000001,
-                .flags  = IORESOURCE_MEM,
-        },
-        [2] = {
-                .start  = INTR_VECT_GPIOP,
-                .end    = INTR_VECT_GPIOP,
-                .flags  = IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-        },
-};
-
-static struct platform_device topas910_isp1362_device = {
-	.name           = "isp1362-hcd",
-	.id             = 0,
-	.num_resources  = ARRAY_SIZE(tmpa910_resource_isp1362),
-	.resource       = tmpa910_resource_isp1362,
-	.dev = {
-		.platform_data = &isp1362_priv,
-		.release = dummy_release,
-		.coherent_dma_mask = 0xffffffff,		
-	},
-};
-
-#endif
 
 
 /* Ethernet */
@@ -469,7 +421,7 @@ static struct platform_device topas910_keys_device = {
 static struct resource tmpa910_nand_resources[] = {
 	[0] = {
 		.start	=  NANDF_BASE ,
-		.end	=  NANDF_BASE +0x200,
+		.end	=  NANDF_BASE + 0xFFF,
 		.flags	= IORESOURCE_MEM,
 	},
 };
@@ -574,6 +526,32 @@ static struct platform_device tmpa910_device_rtc = {
 	}
 ;
 
+#ifdef CONFIG_USB_GADGET_TMPA910
+/* USB Device Controller */
+static struct resource tmpa910_udc_resource[] = {
+        [0] = {
+                .start = 0xf4400000,
+                .end   = 0xf44003ff,
+                .flags = IORESOURCE_MEM
+        },
+        [1] = {
+                .start = USB_INT,
+                .end   = USB_INT,
+                .flags = IORESOURCE_IRQ
+        }
+};
+
+static struct platform_device tmpa910_udc_device = {
+        .name           = "tmpa910-usb",
+        .id             = 0,
+        .num_resources  = ARRAY_SIZE(tmpa910_udc_resource),
+        .resource       = tmpa910_udc_resource,
+        .dev            = {
+        .platform_data  = NULL,
+        }
+};
+
+#endif
 
 
 static struct platform_device *devices[] __initdata = {
@@ -585,6 +563,9 @@ static struct platform_device *devices[] __initdata = {
 	&topas910_keys_device,
 	&tmpa910_device_lcdc,
 	&tmpa910_device_i2c,
+#ifdef CONFIG_USB_GADGET_TMPA910
+	&tmpa910_udc_device,
+#endif
 #ifdef CONFIG_MTD_NAND_TMPA910
  	&tmpa910_nand_device,
 #endif
@@ -596,9 +577,6 @@ static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_spi1,
 #endif
 
-#ifdef CONFIG_USB_ISP1362_HCD
-	&topas910_isp1362_device,
-#endif
 	&tmpa910_device_rtc
 };
 
@@ -615,19 +593,41 @@ static void __init _setup_lcdc_device(void)
 	topas910_v1_lcdc_platforminfo.pitch  = width*4;
 	
 	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
-	LCDReg[0] =	( ((height/16)-1) << 2)	// pixel per line
-			| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
-			| ( (8-1) << 16 ) 			// tHFP, Horizontal front porch
-			| ( (8-1) << 24 ); 			// tHBP, Horizontal back porch
+#if 0 /* w/h was swapped */
+	LCDReg[0] = 
+				  ( ((height/16)-1) << 2)	// pixel per line
+				| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
+				| ( (8-1) << 16 ) 			// tHFP, Horizontal front porch
+				| ( (8-1) << 24 ) 			// tHBP, Horizontal back porch
+				;
 
-	LCDReg[1] =     (2 << 24) 		// tVBP		
-			| (2 << 16) 		// tVFP
-			| ((2-1) << 10) 		// tVSP
-			| (width-1);
+	LCDReg[1] = 
+				(2 << 24) 		// tVBP		
+				| (2 << 16) 		// tVFP
+				| ((2-1) << 10) 		// tVSP
+				| (width-1);
 
 	LCDReg[2] = ((width-1)<<16) | 0x0000e | 1<<13 | 0<<12 | 0<<11;
 	LCDReg[3] = 0;
 	LCDReg[4]	= (0x5<<1)  | (1<<5) | (1<<11);
+#else
+	LCDReg[0] = 
+				  ( ((width/16)-1) << 2)	// pixel per line
+				| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
+				| ( (8-1) << 16 ) 			// tHFP, Horizontal front porch
+				| ( (8-1) << 24 ) 			// tHBP, Horizontal back porch
+				;
+
+	LCDReg[1] = 
+				(2 << 24) 		// tVBP		
+				| (2 << 16) 		// tVFP
+				| ((2-1) << 10) 		// tVSP
+				| (height-1);
+
+	LCDReg[2] = ((width-1)<<16) | 0x0000e | 1<<13 | 0<<12 | 0<<11;
+	LCDReg[3] = 0;
+	LCDReg[4]	= (0x5<<1)  | (1<<5) | (1<<11);
+#endif
 	tmpa910_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
 }
 

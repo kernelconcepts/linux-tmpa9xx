@@ -82,9 +82,10 @@
 #define MAXIRQNUM             31 
 #define MAXFIQNUM             31
 
-#define     DMA_ERR_INT             INTR_VECT_DMA_ERROR
-#define     DMA_END_INT             INTR_VECT_DMA_END
-#define I2S_INT INTR_VECT_I2S
+#define DMA_ERR_INT           INTR_VECT_DMA_ERROR
+#define DMA_END_INT           INTR_VECT_DMA_END
+#define I2S_INT               INTR_VECT_I2S
+#define USB_INT               INTR_VECT_USB
 
 /* 
  * GPIO Interrupts

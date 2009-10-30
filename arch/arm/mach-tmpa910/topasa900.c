@@ -520,6 +520,31 @@ static struct platform_device tmpa910_device_rtc = {
 	}
 ;
 
+#ifdef CONFIG_USB_GADGET_TMPA910
+/* USB Device Controller */
+static struct resource tmpa910_udc_resource[] = {
+        [0] = {
+                .start = 0xf4400000,
+                .end   = 0xf44003ff,
+                .flags = IORESOURCE_MEM
+        },
+        [1] = {
+                .start = USB_INT,
+                .end   = USB_INT,
+                .flags = IORESOURCE_IRQ
+        }
+};
+
+static struct platform_device tmpa910_udc_device = {
+        .name           = "tmpa910-usb",
+        .id             = 0,
+        .num_resources  = ARRAY_SIZE(tmpa910_udc_resource),
+        .resource       = tmpa910_udc_resource,
+        .dev            = {
+        .platform_data  = NULL,
+        }
+};
+#endif
 
 
 static struct platform_device *devices[] __initdata = {
@@ -531,6 +556,9 @@ static struct platform_device *devices[] __initdata = {
 	&topas910_keys_device,
 	&tmpa910_device_lcdc,
 	&tmpa910_device_i2c,
+#ifdef CONFIG_USB_GADGET_TMPA910
+	&tmpa910_udc_device,
+#endif
 #ifdef CONFIG_MTD_NAND_TMPA910
  	&tmpa910_nand_device,
 #endif

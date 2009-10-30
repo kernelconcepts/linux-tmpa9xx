@@ -196,25 +196,99 @@ static const char ep0name[] = "ep0";
 #define tmpa910_udp_write(dev, reg, val) \
         __raw_writel((val), (dev)->udp_baseaddr + (reg))
 
+static int tmpa910_ep_enable (struct usb_ep *ep,
+                const struct usb_endpoint_descriptor *desc)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return -1;
+}
+
+static int tmpa910_ep_disable (struct usb_ep *ep)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return -1;
+}
+
+struct usb_request *tmpa910_ep_alloc_request (struct usb_ep *ep,
+                gfp_t gfp_flags)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return NULL;
+}
+
+static void tmpa910_ep_free_request (struct usb_ep *ep, struct usb_request *req)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+}
+
+
+
+static int tmpa910_ep_queue (struct usb_ep *ep, struct usb_request *req,
+                gfp_t gfp_flags)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return -1;
+}
+
+static int tmpa910_ep_dequeue (struct usb_ep *ep, struct usb_request *req)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return -1;
+}
+
+static int tmpa910_ep_set_halt (struct usb_ep *ep, int value)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return -1;
+}
+
+static int tmpa910_get_frame (struct usb_gadget *usb_gadget)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return -1;
+}
+
+static int tmpa910_wakeup (struct usb_gadget *usb_gadget)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return 0;
+}
+
+static int tmpa910_set_selfpowered (struct usb_gadget *usb_gadget, int is_selfpowered)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return 0;
+}
+
+static int tmpa910_vbus_session (struct usb_gadget *usb_gadget, int is_active)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return 0;
+}
+
+static int tmpa910_pullup (struct usb_gadget *usb_gadget, int is_on)
+{
+printk("tmpa910_udc: %s, Line: %d\n", __FUNCTION__, __LINE__);
+return 0;
+}
+
 static const struct usb_ep_ops tmpa910_ep_ops = {
-        .enable         = NULL,		//tmpa910_ep_enable,
-        .disable        = NULL,         //tmpa910_ep_disable,
-        .alloc_request  = NULL,         //tmpa910_ep_alloc_request, 
-        .free_request   = NULL,         //tmpa910_ep_free_request,
-        //.alloc_buffer   = NULL,         //tmpa910_ep_alloc_buffer,
-        //.free_buffer    = NULL,         //tmpa910_ep_free_buffer,
-        .queue          = NULL,         //tmpa910_ep_queue,
-        .dequeue        = NULL,         //tmpa910_ep_dequeue,
-        .set_halt       = NULL,         //tmpa910_ep_set_halt,
+        .enable         = tmpa910_ep_enable,
+        .disable        = tmpa910_ep_disable,
+        .alloc_request  = tmpa910_ep_alloc_request, 
+        .free_request   = tmpa910_ep_free_request,
+        .queue          = tmpa910_ep_queue,
+        .dequeue        = tmpa910_ep_dequeue,
+        .set_halt       = tmpa910_ep_set_halt,
         // there's only imprecise fifo status reporting
 };              
 
 static const struct usb_gadget_ops tmpa910_udc_ops = {
-        .get_frame              = NULL,         //tmpa910_get_frame,
-        .wakeup                 = NULL,         //tmpa910_wakeup,
-        .set_selfpowered        = NULL,         //tmpa910_set_selfpowered,
-        .vbus_session           = NULL,         //tmpa910_vbus_session,
-        .pullup                 = NULL,         //tmpa910_pullup,
+        .get_frame              = tmpa910_get_frame,
+        .wakeup                 = tmpa910_wakeup,
+        .set_selfpowered        = tmpa910_set_selfpowered,
+        .vbus_session           = tmpa910_vbus_session,
+        .pullup                 = tmpa910_pullup,
 };
 
 static void nop_release(struct device *dev){}
