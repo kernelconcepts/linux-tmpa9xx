@@ -302,7 +302,7 @@ static void serial_tmpa910_stop_rx(struct uart_port *port)
 static void transmit_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
-	struct circ_buf *xmit = &uart_tmpa910_handle->port.info->xmit;
+	struct circ_buf *xmit = &uart_tmpa910_handle->port.state->xmit;
 	int count;
 
 	if (uart_tmpa910_handle->port.x_char) {
@@ -340,7 +340,7 @@ static inline void
 receive_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
-	struct tty_struct *tty = uart_tmpa910_handle->port.info->port.tty;
+	struct tty_struct *tty = uart_tmpa910_handle->port.state->port.tty;
 	unsigned int ch, flag;
 	uint32_t fr_reg;
 	uint32_t dr_reg;
@@ -415,7 +415,7 @@ static void serial_tmpa910_start_tx(struct uart_port *port)
 {
 	struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)port;
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
-	struct circ_buf *xmit = &uart_tmpa910_handle->port.info->xmit;
+	struct circ_buf *xmit = &uart_tmpa910_handle->port.state->xmit;
 	
 	regs->imsc |= INT_TX;
 	
@@ -444,7 +444,7 @@ static inline void check_modem_status(struct uart_tmpa910_handle *uart_tmpa910_h
 	if (fr_reg & FR_CTS)
 		uart_tmpa910_handle->port.icount.cts++;
 
-	wake_up_interruptible(&uart_tmpa910_handle->port.info->delta_msr_wait);
+	wake_up_interruptible(&uart_tmpa910_handle->port.state->port.delta_msr_wait);
 
 }
 
