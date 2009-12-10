@@ -520,6 +520,40 @@ static struct platform_device tmpa910_device_rtc = {
 	}
 ;
 
+
+#ifdef CONFIG_USB_OHCI_HCD_TMPA900
+static struct resource tmpa900_ohci_resources[] = {
+        [0] = {
+                .start  = 0xf4500000,
+                .end    = 0xf4500000 + 0x100,
+                .flags  = IORESOURCE_MEM,
+        },
+        [1] = {
+                .start  = 0xF8008000,
+                .end    = 0xF8009fff,
+                .flags  = IORESOURCE_MEM,
+        },
+        [2] = {
+                .start  = 27,
+                .end    = 27,
+                .flags  = IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+        },
+};
+
+static struct platform_device tmpa900_ohci_device = {
+        .name           = "tmpa900-usb",
+        .id             = 0,
+        .num_resources  = ARRAY_SIZE(tmpa900_ohci_resources),
+        .resource       = tmpa900_ohci_resources,
+        .dev = {
+		.release        = dummy_release, // not needed
+		.coherent_dma_mask = 0xffffffff,		
+        },
+};
+
+#endif /* CONFIG_USB_OHCI_HCD_TMPA900 */
+
+
 #ifdef CONFIG_USB_GADGET_TMPA910
 /* USB Device Controller */
 static struct resource tmpa910_udc_resource[] = {
@@ -553,14 +587,17 @@ static struct platform_device *devices[] __initdata = {
 	&topas910_led_device,
 	&topas910_dm9000_device,
 	&tmpa910_device_uart0,
+#ifdef CONFIG_MTD_NAND_TMPA910
+ 	&tmpa910_nand_device,
+#endif
 	&topas910_keys_device,
 	&tmpa910_device_lcdc,
 	&tmpa910_device_i2c,
 #ifdef CONFIG_USB_GADGET_TMPA910
 	&tmpa910_udc_device,
 #endif
-#ifdef CONFIG_MTD_NAND_TMPA910
- 	&tmpa910_nand_device,
+#ifdef CONFIG_USB_OHCI_HCD_TMPA900
+	&tmpa900_ohci_device,
 #endif
  	&tmpa910_i2s_device,	
 #ifdef CONFIG_SPI_CHANNEL0

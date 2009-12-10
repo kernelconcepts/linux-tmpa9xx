@@ -50,7 +50,8 @@
 
 /*-------------------------------------------------------------------------*/
 
-#undef OHCI_VERBOSE_DEBUG	/* not always helpful */
+//#define OHCI_VERBOSE_DEBUG	/* not always helpful */
+//#define VERBOSE_DEBUG 	/* not always helpful */
 
 /* For initializing controller (mask in an HCFS mode too) */
 #define	OHCI_CONTROL_INIT	OHCI_CTRL_CBSR
@@ -80,9 +81,11 @@ static void ohci_dump (struct ohci_hcd *ohci, int verbose);
 static int ohci_init (struct ohci_hcd *ohci);
 static void ohci_stop (struct usb_hcd *hcd);
 
-#if defined(CONFIG_PM) || defined(CONFIG_PCI)
+#if defined(CONFIG_PM) || defined(CONFIG_PCI) || defined(CONFIG_USB_OHCI_HCD_TMPA900)
 static int ohci_restart (struct ohci_hcd *ohci);
 #endif
+
+void (*ohci_usb_hcd_giveback_urb)(struct usb_hcd *hcd, struct urb *urb, int status) = usb_hcd_giveback_urb;
 
 #ifdef CONFIG_PCI
 static void quirk_amd_pll(int state);
@@ -133,6 +136,7 @@ module_param (no_handshake, bool, 0);
 MODULE_PARM_DESC (no_handshake, "true (not default) disables BIOS handshake");
 
 /*-------------------------------------------------------------------------*/
+
 
 /*
  * queue up an urb for anything except the root hub
@@ -251,6 +255,7 @@ static int ohci_urb_enqueue (
 	 * enable that part of the schedule, if needed
 	 * and update count of queued periodic urbs
 	 */
+
 	urb->hcpriv = urb_priv;
 	td_submit_urb (ohci, urb);
 
@@ -920,7 +925,7 @@ static void ohci_stop (struct usb_hcd *hcd)
 
 /*-------------------------------------------------------------------------*/
 
-#if defined(CONFIG_PM) || defined(CONFIG_PCI)
+#if defined(CONFIG_PM) || defined(CONFIG_PCI) || defined(CONFIG_USB_OHCI_HCD_TMPA900)
 
 /* must not be called from interrupt context */
 static int ohci_restart (struct ohci_hcd *ohci)
@@ -979,6 +984,7 @@ static int ohci_restart (struct ohci_hcd *ohci)
 		ohci_err (ohci, "can't restart, %d\n", temp);
 		return temp;
 	}
+
 	ohci_dbg(ohci, "restart complete\n");
 	return 0;
 }
@@ -1085,6 +1091,11 @@ MODULE_LICENSE ("GPL");
 #define TMIO_OHCI_DRIVER	ohci_hcd_tmio_driver
 #endif
 
+#ifdef CONFIG_USB_OHCI_HCD_TMPA900
+#include "ohci-tmpa900.c"
+#define TMPA900_OHCI_DRIVER	ohci_hcd_tmpa900_driver
+#endif
+
 #if	!defined(PCI_DRIVER) &&		\
 	!defined(PLATFORM_DRIVER) &&	\
 	!defined(OF_PLATFORM_DRIVER) &&	\
@@ -1092,6 +1103,7 @@ MODULE_LICENSE ("GPL");
 	!defined(PS3_SYSTEM_BUS_DRIVER) && \
 	!defined(SM501_OHCI_DRIVER) && \
 	!defined(TMIO_OHCI_DRIVER) && \
+	!defined(CONFIG_USB_OHCI_HCD_TMPA900) && \
 	!defined(SSB_OHCI_DRIVER)
 #error "missing bus glue for ohci-hcd"
 #endif
@@ -1164,6 +1176,12 @@ static int __init ohci_hcd_mod_init(void)
 		goto error_tmio;
 #endif
 
+#ifdef TMPA900_OHCI_DRIVER
+	retval = platform_driver_register(&TMPA900_OHCI_DRIVER);
+	if (retval < 0)
+		goto error_tmpa900;
+#endif
+
 	return retval;
 
 	/* Error path */
@@ -1174,6 +1192,10 @@ static int __init ohci_hcd_mod_init(void)
 #ifdef SM501_OHCI_DRIVER
 	platform_driver_unregister(&SM501_OHCI_DRIVER);
  error_sm501:
+#endif
+#ifdef TMPA900_OHCI_DRIVER
+	platform_driver_unregister(&TMPA900_OHCI_DRIVER);
+ error_tmpa900:
 #endif
 #ifdef SSB_OHCI_DRIVER
 	ssb_driver_unregister(&SSB_OHCI_DRIVER);
@@ -1218,6 +1240,11 @@ static void __exit ohci_hcd_mod_exit(void)
 #ifdef SM501_OHCI_DRIVER
 	platform_driver_unregister(&SM501_OHCI_DRIVER);
 #endif
+
+#ifdef TMPA900_OHCI_DRIVER
+	platform_driver_unregister(&TMPA900_OHCI_DRIVER);
+#endif
+
 #ifdef SSB_OHCI_DRIVER
 	ssb_driver_unregister(&SSB_OHCI_DRIVER);
 #endif

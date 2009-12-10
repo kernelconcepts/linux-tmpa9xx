@@ -68,7 +68,7 @@ __acquires(ohci->lock)
 	/* urb->complete() can reenter this HCD */
 	usb_hcd_unlink_urb_from_ep(ohci_to_hcd(ohci), urb);
 	spin_unlock (&ohci->lock);
-	usb_hcd_giveback_urb(ohci_to_hcd(ohci), urb, status);
+	ohci_usb_hcd_giveback_urb(ohci_to_hcd(ohci), urb, status);
 	spin_lock (&ohci->lock);
 
 	/* stop periodic dma if it's not needed */
@@ -628,6 +628,7 @@ static void td_submit_urb (
 			data_len -= 4096;
 			cnt++;
 		}
+
 		/* maybe avoid ED halt on final TD short read */
 		if (!(urb->transfer_flags & URB_SHORT_NOT_OK))
 			info |= TD_R;
@@ -661,9 +662,12 @@ static void td_submit_urb (
 			? TD_CC | TD_DP_IN | TD_T_DATA1
 			: TD_CC | TD_DP_OUT | TD_T_DATA1;
 		td_fill (ohci, info, data, 0, urb, cnt++);
+
+#if 0
 		/* maybe kickstart control list */
 		wmb ();
 		ohci_writel (ohci, OHCI_CLF, &ohci->regs->cmdstatus);
+#endif
 		break;
 
 	/* ISO has no retransmit, so no toggle; and it uses special TDs.

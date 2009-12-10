@@ -537,12 +537,17 @@ struct scsi_host_template usb_stor_host_template = {
 	.slave_alloc =			slave_alloc,
 	.slave_configure =		slave_configure,
 
+#ifdef CONFIG_USB_OHCI_HCD_TMPA900
+// Limit the tranfer as far as we can to workaround hardware issue
+	.sg_tablesize =			1,
+	.max_sectors =      1,
+#else
 	/* lots of sg segments can be handled */
 	.sg_tablesize =			SG_ALL,
 
 	/* limit the total size of a transfer to 120 KB */
 	.max_sectors =                  240,
-
+#endif
 	/* merge commands... this seems to help performance, but
 	 * periodically someone should test to see which setting is more
 	 * optimal.
