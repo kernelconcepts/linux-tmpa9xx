@@ -534,9 +534,10 @@ static void _free_urb_priv_sram(struct urb *urb)
 
 	if (urb_priv->urb_setup)
 	{
+		tmpa9x0_sram_free( (a32) urb->setup_packet);
+
 		urb->setup_packet = urb_priv->urb_setup;
 		urb->setup_dma    = urb_priv->urb_setup_dma;
-		tmpa9x0_sram_free( (a32) urb->setup_packet);
 	}
 }
 
@@ -730,7 +731,7 @@ static int ohci_hcd_tmpa900_drv_probe(struct platform_device *pdev)
 
 	//ohci_quirk_nec(hcd);
 
-	hcd_to_ohci(hcd)->flags |= OHCI_QUIRK_SUPERIO;
+	//hcd_to_ohci(hcd)->flags |= OHCI_QUIRK_SUPERIO;
 	//hcd_to_ohci(hcd)->flags |= OHCI_QUIRK_NEC;
 
 	retval = usb_add_hcd(hcd, irq, IRQF_DISABLED | IRQF_SHARED);
