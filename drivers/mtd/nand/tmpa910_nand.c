@@ -440,13 +440,13 @@ static struct nand_ecclayout nand_lp_hw_eccoob = {
 	.eccpos = {8, 9, 10, 13, 14, 15, 24, 25,
 			   26, 29, 30, 31, 40, 41, 42, 45,
 			   46, 47, 56, 57, 58, 61, 62, 63},
-	.oobfree = { {2, 6}, {16, 8}, {32, 8}, {48,8}, {11,2}, {27,2}, {43,2}, {59,2}}
+	.oobfree = { {0, 8}, {16, 8}, {32, 8}, {48,8}, {11,2}, {27,2}, {43,2}, {59,2}}
 };
 
 static struct nand_ecclayout nand_sp_hw_eccoob = {
 	.eccbytes = 6,
 	.eccpos = {8, 9, 10, 13, 14, 15},
-	.oobfree = { {2, 6} }
+	.oobfree = { {0, 8},{0,0}}
 };
 
 static void tmpa910_nand_read_buf(struct mtd_info *mtd, u_char *buf, int len)
