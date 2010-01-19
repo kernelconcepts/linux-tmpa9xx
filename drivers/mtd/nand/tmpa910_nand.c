@@ -708,13 +708,9 @@ static void tmpa910_nand_dma_error_handler(int dma_ch, void *data)
 
 static int tmpa910_nand_init_priv(struct tmpa910_nand_private *priv)
 {
-#if 1	//wym
-	priv->dma = 1;
-	priv->softecc = 0;
-#else
 	priv->dma = 0;
-	priv->softecc = 1;
-#endif
+	priv->softecc = 0;
+	
 //	__REG(0xF080E008) = 0x02;
 	//NDFMCR0 =0x95;
 	NDFMCR0 =0x0;
