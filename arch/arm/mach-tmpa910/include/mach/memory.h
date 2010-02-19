@@ -23,7 +23,7 @@
 #ifndef __ASM_ARCH_MEMORY_H
 #define __ASM_ARCH_MEMORY_H
 
-#define FB_SIZE   UL(1024*1024)
+#define FB_SIZE   UL(2048*1024)
 #define FB_OFFSET PHYS_OFFSET + MEM_SIZE 
 
 #define PHYS_OFFSET     UL(0x40000000)

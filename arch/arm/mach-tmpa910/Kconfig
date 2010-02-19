@@ -19,6 +19,10 @@ config MACH_TOPAS910
         bool "Toshiba Topas910 TMPA910 development board"
 	depends on CPU_TMPA910
 
+config DISPLAY_GLYN_640_480
+        bool "Use Glyn VGA display instead of the regular QVGA."
+	depends on ARCH_TMPA910
+
 config MACH_TOPASA900
         bool "Toshiba TopasA900 TMPA900 development board"
 	depends on CPU_TMPA900

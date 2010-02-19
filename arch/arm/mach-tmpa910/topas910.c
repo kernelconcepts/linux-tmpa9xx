@@ -584,6 +584,33 @@ static struct platform_device *devices[] __initdata = {
 static void __init _setup_lcdc_device(void)
 {
 	uint32_t *LCDReg;
+	
+	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
+#ifdef CONFIG_DISPLAY_GLYN_640_480
+	int width  = 640;
+	int height = 480;
+	
+	topas910_v1_lcdc_platforminfo.width  = width;
+	topas910_v1_lcdc_platforminfo.height = height;
+	topas910_v1_lcdc_platforminfo.depth  = 32;
+	topas910_v1_lcdc_platforminfo.pitch  = width * 4; /* line length */
+	LCDReg[0] = 
+				  ( ((width/16)-1) << 2)	// pixel per line
+				| ( (48) << 8 ) 				// tHSW. Horizontal sync pulse
+				| ( (53) << 16 ) 			// tHFP, Horizontal front porch
+				| ( (155) << 24 ) 			// tHBP, Horizontal back porch
+				;
+
+	LCDReg[1] = 
+				(35 << 24) 		// tVBP		
+				| (8 << 16) 		// tVFP
+				| (2 << 10)		// tVSP
+				| (height-1);
+
+	LCDReg[2] = ((width-1)<<16) | (4 & 0x1f) | (((16-2)>>5) << 27) | 1<<13 | 1<<12 | 0<<11;
+	LCDReg[3] = 0;
+	LCDReg[4] = (0x5<<1)  | (1<<5) | (1<<11);
+#else
 	int width  = 320;
 	int height = 240;
 	
@@ -591,26 +618,7 @@ static void __init _setup_lcdc_device(void)
 	topas910_v1_lcdc_platforminfo.height = height;
 	topas910_v1_lcdc_platforminfo.depth  = 32;
 	topas910_v1_lcdc_platforminfo.pitch  = width*4;
-	
-	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
-#if 0 /* w/h was swapped */
-	LCDReg[0] = 
-				  ( ((height/16)-1) << 2)	// pixel per line
-				| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
-				| ( (8-1) << 16 ) 			// tHFP, Horizontal front porch
-				| ( (8-1) << 24 ) 			// tHBP, Horizontal back porch
-				;
 
-	LCDReg[1] = 
-				(2 << 24) 		// tVBP		
-				| (2 << 16) 		// tVFP
-				| ((2-1) << 10) 		// tVSP
-				| (width-1);
-
-	LCDReg[2] = ((width-1)<<16) | 0x0000e | 1<<13 | 0<<12 | 0<<11;
-	LCDReg[3] = 0;
-	LCDReg[4]	= (0x5<<1)  | (1<<5) | (1<<11);
-#else
 	LCDReg[0] = 
 				  ( ((width/16)-1) << 2)	// pixel per line
 				| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
@@ -645,6 +653,7 @@ static void __init topas910_init(void)
 	SMC_SET_CYCLES_3 = 0x0004AFAA;
 	SMC_SET_OPMODE_3 = 0x00000002;
 	SMC_DIRECT_CMD_3 = 0x00C00000;
+        __REG(0xf00a0050) = 0x01;
 
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = 0xffffffff;
