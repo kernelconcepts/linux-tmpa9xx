@@ -2,7 +2,7 @@
  *  arch/arm/mach-tmpa910/tonga.c 
  *
  * Copyright (C) 2010 Florian Boor <florian.boor@kernelconcepts.de>
- * Based on topasa900.c
+ * Based on tonga.c
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -75,7 +75,7 @@ static struct map_desc tmpa900_io_desc[] __initdata = {
 };
 
 
-void __init topasa900_map_io(void)
+void __init tonga_map_io(void)
 {
 	iotable_init(tmpa900_io_desc, ARRAY_SIZE(tmpa900_io_desc));
 }
@@ -532,14 +532,14 @@ static void __init setup_lcdc_device(void)
 }
 
 
-void __init topasa900_init_irq(void) {
+void __init tonga_init_irq(void) {
 	tmpa910_init_irq();
 }
 
 
-/* TopasA900 device initialisation */
+/* tonga device initialisation */
 
-static void __init topasa900_init(void)
+static void __init tonga_init(void)
 {
         
 	/* Memory controller - for DM9000 */
@@ -582,9 +582,9 @@ MACHINE_START(TONGA, "Tonga")
         .phys_io        = TMPA910_IO_PHYS_BASE,
         .boot_params    = 0,
         .io_pg_offst    = (io_p2v(TMPA910_IO_PHYS_BASE) >> 18) & 0xfffc,
-        .map_io         = topasa900_map_io,
-        .init_irq       = topasa900_init_irq,
+        .map_io         = tonga_map_io,
+        .init_irq       = tonga_init_irq,
         .timer          = &topas910_timer,
-        .init_machine   = topasa900_init,
+        .init_machine   = tonga_init,
 MACHINE_END
 
