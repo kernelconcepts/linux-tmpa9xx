@@ -10,3 +10,4 @@
 obj-y                   += irq.o time.o gpio.o led-topas910.o dma.o
 obj-$(CONFIG_MACH_TOPAS910)    += topas910.o
 obj-$(CONFIG_MACH_TOPASA900)   += topasa900.o
+obj-$(CONFIG_MACH_TONGA)   += tonga.o

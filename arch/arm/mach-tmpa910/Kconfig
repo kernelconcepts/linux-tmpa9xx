@@ -27,4 +27,8 @@ config MACH_TOPASA900
         bool "Toshiba TopasA900 TMPA900 development board"
 	depends on CPU_TMPA900
 
+config MACH_TONGA
+        bool "Glyn ARM9 / Tonga board"
+	depends on CPU_TMPA900
+
 endif
