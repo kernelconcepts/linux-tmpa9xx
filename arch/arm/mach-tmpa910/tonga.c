@@ -90,7 +90,7 @@ static u64  topas910_dmamask = 0xffffffffUL;
 
 /* Ethernet */
  
-static struct resource dm9000_resources[] = {
+static struct resource smsc911x_resources[] = {
         [0] = {
                 .start  = 0x60000002,
                 .end    = 0x60000003,
@@ -109,11 +109,11 @@ static struct resource dm9000_resources[] = {
 };
 
 
-static struct platform_device topas910_dm9000_device = {
-        .name           = "dm9000",
+static struct platform_device topas910_smsc911x_device = {
+        .name           = "smsc911x",
         .id             = 0,
-        .num_resources  = ARRAY_SIZE(dm9000_resources),
-        .resource       = dm9000_resources,
+        .num_resources  = ARRAY_SIZE(smsc911x_resources),
+        .resource       = smsc911x_resources,
         .dev = {
 		.release        = dummy_release,
 		.coherent_dma_mask = 0xffffffff,		
@@ -479,7 +479,7 @@ static struct platform_device tmpa910_udc_device = {
 static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_dmac,
 	&tmpa910_device_ts,
-	&topas910_dm9000_device,
+	&topas910_smsc911x_device,
 	&tmpa910_device_uart0,
 #ifdef CONFIG_MTD_NAND_TMPA910
  	&tmpa910_nand_device,
