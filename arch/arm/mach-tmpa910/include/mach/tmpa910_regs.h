@@ -290,6 +290,8 @@
 /* LCD Controller */
 #define LCDC_BASE 0xf4200000
 
+/* RTC */
+#define RTC_BASE		0xF0030000
 
 /* I2C Ports */
 #define I2C0_BASE   0xF0070000
