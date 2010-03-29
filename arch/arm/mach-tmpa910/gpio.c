@@ -116,6 +116,9 @@ static void tmpa910_gpio_set(struct gpio_chip *chip, unsigned offset, int val)
 	unsigned long flags;
 	u8 v;
 
+    	if (!chip)
+		BUG();
+
 	/* TODO: We could use the clever address based writing function here. */
 	local_irq_save(flags);
 	v = __raw_readb(tmpa910_chip->data_reg);
