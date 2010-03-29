@@ -42,7 +42,7 @@
 #define TOPAS910_INT_DM9000  INT_GPIO_INTH
 
 
-#define TMPA910_NUM_IRQS	32
+#define TMPA9xx_NUM_IRQS	32
 
 /*
  * Chip internal -> not of the board
@@ -98,6 +98,8 @@
 #define INT_GPIO_KI1	       33
 #define INT_GPIO_KI2	       34
 #define INT_GPIO_KI3	       35
+
+#ifdef CONFIG_CPU_TMPA910
 #define INT_GPIO_KI4	       36
 #define INT_GPIO_KI5	       37
 #define INT_GPIO_KI6	       38
@@ -132,5 +134,33 @@
 
 /* Port R */
 #define INT_GPIO_INTH	       57
+
+#endif /* CONFIG_CPU_TMPA910 */
+
+
+#ifdef CONFIG_CPU_TMPA900
+
+/* Port C */
+#define INT_GPIO_INT8	       36
+#define INT_GPIO_INT9	       37
+
+/* Port D */
+#define INT_GPIO_INTA          38
+#define INT_GPIO_INTB          39
+
+/* Port F */
+#define INT_GPIO_INTC	       40
+
+/* Port N */
+#define INT_GPIO_INTD	       41
+#define INT_GPIO_INTE	       42
+#define INT_GPIO_INTF	       43
+#define INT_GPIO_INTG	       44
+
+/* Port R */
+#define INT_GPIO_INTH	       45
+
+#endif /* CONFIG_CPU_TMPA900 */
+
 
 #endif

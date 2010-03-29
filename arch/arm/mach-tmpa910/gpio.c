@@ -194,14 +194,14 @@ inline int __tmpa910_gpio_to_irq(unsigned gpio) {
 
 	for (i = 0; i < TMPA910_NUM_GPIO_IRQS; i++)
 		if (irq_gpio_desc[i].gpio == gpio)
-			return (i + TMPA910_NUM_IRQS);
+			return (i + TMPA9xx_NUM_IRQS);
 
 	BUG(); /* not found */
 	return -1;		
 }
 
 inline int __tmpa910_irq_to_gpio(unsigned irq) {
-	return GPIO_NUM_FOR_GPIO_IRQ(irq - TMPA910_NUM_IRQS);
+	return GPIO_NUM_FOR_GPIO_IRQ(irq - TMPA9xx_NUM_IRQS);
 }
 
 /* 
@@ -324,10 +324,10 @@ static void tmpa910_gpior_irq_handler(unsigned int irq, struct irq_desc *desc)
 
 static void tmpa910_gpio_irq_ack(unsigned int irq)
 {
-	unsigned int gpio_irq = irq - TMPA910_NUM_IRQS; 
+	unsigned int gpio_irq = irq - TMPA9xx_NUM_IRQS; 
 	struct tmpa910_gpio_irq girq;
 	
-	BUG_ON((irq < TMPA910_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
+	BUG_ON((irq < TMPA9xx_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
     
 	girq = irq_gpio_desc[gpio_irq];
     
@@ -336,11 +336,11 @@ static void tmpa910_gpio_irq_ack(unsigned int irq)
 
 static void tmpa910_gpio_irq_mask(unsigned int irq)
 {
-	unsigned int gpio_irq = irq - TMPA910_NUM_IRQS; 
+	unsigned int gpio_irq = irq - TMPA9xx_NUM_IRQS; 
 	struct tmpa910_gpio_irq girq;
 	unsigned char reg;
 	
-	BUG_ON((irq < TMPA910_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
+	BUG_ON((irq < TMPA9xx_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
 
 	girq = irq_gpio_desc[gpio_irq];
         reg = __raw_readb(TMPA910_GPIO_REG_IE(girq.port));
@@ -350,11 +350,11 @@ static void tmpa910_gpio_irq_mask(unsigned int irq)
 
 static void tmpa910_gpio_irq_unmask(unsigned int irq)
 {
-	unsigned int gpio_irq = irq - TMPA910_NUM_IRQS; 
+	unsigned int gpio_irq = irq - TMPA9xx_NUM_IRQS; 
 	struct tmpa910_gpio_irq girq;
 	unsigned char reg;
 	
-	BUG_ON((irq < TMPA910_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
+	BUG_ON((irq < TMPA9xx_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
 
 	girq = irq_gpio_desc[gpio_irq];
         reg = __raw_readb(TMPA910_GPIO_REG_IE(girq.port));
@@ -368,7 +368,7 @@ static int tmpa910_gpio_irq_type(unsigned int irq, unsigned int type)
 	struct irq_desc *desc = irq_desc + irq;
 	const int gpio = irq_to_gpio(irq);
 	struct tmpa910_gpio_irq girq;
-	unsigned int gpio_irq = irq - TMPA910_NUM_IRQS; 
+	unsigned int gpio_irq = irq - TMPA9xx_NUM_IRQS; 
 	unsigned char reg_level_sel;
 	unsigned char reg_dir_sel;
 	unsigned char reg_edge_both;
@@ -377,7 +377,7 @@ static int tmpa910_gpio_irq_type(unsigned int irq, unsigned int type)
 	unsigned char port_mask;
 	unsigned long flags;
 
-	BUG_ON((irq < TMPA910_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
+	BUG_ON((irq < TMPA9xx_NUM_IRQS) || (gpio_irq >= TMPA910_NUM_GPIO_IRQS));
 
 	girq = irq_gpio_desc[gpio_irq];
         reg_level_sel = __raw_readb(TMPA910_GPIO_REG_IS(girq.port));
