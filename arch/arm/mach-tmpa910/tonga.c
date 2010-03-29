@@ -2,7 +2,7 @@
  *  arch/arm/mach-tmpa910/tonga.c 
  *
  * Copyright (C) 2010 Florian Boor <florian.boor@kernelconcepts.de>
- * Based on tonga.c
+ * Based on topasa900.c
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,6 +52,7 @@
 #include <mach/tmpa910_regs.h>
 #include <asm/serial.h>
 #include <asm/dma.h>
+#include <linux/smsc911x.h>
 
 
 #ifdef CONFIG_SPI_TMPA910
@@ -108,16 +109,22 @@ static struct resource smsc911x_resources[] = {
         },
 };
 
+static struct smsc911x_platform_config tonga_smsc911x_pdata = {
+	.irq_polarity  = SMSC911X_IRQ_POLARITY_ACTIVE_LOW,
+	.irq_type      = SMSC911X_IRQ_TYPE_OPEN_DRAIN,
+	.flags         = SMSC911X_USE_32BIT | SMSC911X_FORCE_INTERNAL_PHY,
+	.phy_interface = PHY_INTERFACE_MODE_MII,
+};
 
-static struct platform_device topas910_smsc911x_device = {
+
+static struct platform_device tonga_smsc911x_device = {
         .name           = "smsc911x",
-        .id             = 0,
+        .id             = -1,
         .num_resources  = ARRAY_SIZE(smsc911x_resources),
         .resource       = smsc911x_resources,
-        .dev = {
-		.release        = dummy_release,
-		.coherent_dma_mask = 0xffffffff,		
-        },
+	.dev = {
+		.platform_data = &tonga_smsc911x_pdata,
+	},
 };
 
 
@@ -335,7 +342,7 @@ struct platform_device tmpa910_device_lcdc= {
 #ifdef CONFIG_MTD_NAND_TMPA910
 static struct resource tmpa910_nand_resources[] = {
 	[0] = {
-		.start	=  NANDF_BASE ,
+		.start	=  NANDF_BASE,
 		.end	=  NANDF_BASE + 0x200,
 		.flags	= IORESOURCE_MEM,
 	},
@@ -392,8 +399,6 @@ static struct spi_board_info spi_board_info[] = {
 
 #endif
 
-
-#define RTC_BASE		0xF0030000
 
 static struct resource tmpa910_resource_rtc[] = {
 	{
@@ -479,7 +484,7 @@ static struct platform_device tmpa910_udc_device = {
 static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_dmac,
 	&tmpa910_device_ts,
-	&topas910_smsc911x_device,
+	&tonga_smsc911x_device,
 	&tmpa910_device_uart0,
 #ifdef CONFIG_MTD_NAND_TMPA910
  	&tmpa910_nand_device,
@@ -506,28 +511,61 @@ static struct platform_device *devices[] __initdata = {
 static void __init setup_lcdc_device(void)
 {
 	uint32_t *LCDReg;
-	int width  = 320;
-	int height = 240;
-
-	topas910_v1_lcdc_platforminfo.width  = width;
-	topas910_v1_lcdc_platforminfo.height = height;
-	topas910_v1_lcdc_platforminfo.depth  = 32;
-	topas910_v1_lcdc_platforminfo.pitch  = width*4;
-	
+//DispTiming(408, 353, 30, 320, 263, 244, 3, 240); // QVGA (3.5" & 5.7")
+//DispClock 0x3400 à ca. 7.5 MHz
 	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
-	LCDReg[LCDREG_TIMING0_H] =	( ((height/16)-1) << 2)	// pixel per line
-			| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
-			| ( (8-1) << 16 ) 			// tHFP, Horizontal front porch
-			| ( (8-1) << 24 ); 			// tHBP, Horizontal back porch
+	
+ // ET0350G0DH6 Display
 
-	LCDReg[LCDREG_TIMING1_V] =     (2 << 24) 		// tVBP		
-			| (2 << 16) 		// tVFP
-			| ((2-1) << 10) 		// tVSP
-			| (width-1);
+#define XSIZE_PHYS 320
+#define YSIZE_PHYS 240
+	topas910_v1_lcdc_platforminfo.width  = XSIZE_PHYS;
+	topas910_v1_lcdc_platforminfo.height = YSIZE_PHYS;
+	topas910_v1_lcdc_platforminfo.depth  = 16;
+	topas910_v1_lcdc_platforminfo.pitch  = XSIZE_PHYS * 4;
 
-	LCDReg[LCDREG_TIMING2_CLK] = ((width-1)<<16) | 0x0000e | 1<<13 | 0<<12 | 0<<11;
-	LCDReg[LCDREG_TIMING3_LEC] = 0;
-	LCDReg[LCDREG_LCDCONTROL]	= (0x5<<1)  | (1<<5) | (1<<11);
+
+//      Horizontal timing, LCDTiming0
+#define HBP                       (30) //114                      // Horizontal back porch  0..255
+#define HFP                       (12) //16                      // Horizontal front porch 0..255
+#define HSW                       (10) //30                      // Horizontal sync pulse width 0..255
+#define PPL                       ((XSIZE_PHYS / 16) - 1)     // Pixel per line value 0..255
+
+//      Vertical timing, LCDTiming1
+#define VBP                       (8)//40                      // Vertical back porch  0..255
+#define VFP                       (8)//40                      // Vertical front porch 0..255
+#define VSW                       (3)//3                      // Vertical sync pulse lines value 0..63
+#define LPP                       (YSIZE_PHYS - 1)            // Lines per panel value 0..1023
+
+//      Clock timing, LCDTiming2
+#define PCD_HI                    (0)            // PCD value, upper 5 bits
+#define PCD_LO                    ((13) & 0x1F)          // PCD value, lower 5 bits
+#define IPC                       1//0 ok: 1
+#define IHC			  1//0 ok: 1
+#define IVS			  1//1
+#define CPL                       ((XSIZE_PHYS-1) & 0x3FF)
+
+	LCDReg[0] = 
+				  ( (PPL << 2)	// pixel per line
+				| ( (HSW) << 8 ) 			// tHSW. Horizontal sync pulse
+				| ( (HFP) << 16 ) 			// tHFP, Horizontal front porch
+				| ( (HBP) << 24 )); 			// tHBP, Horizontal back porch
+
+
+	LCDReg[1] =  		  (( VBP << 24) 		// tVBP		
+				| ( VFP << 16) 		// tVFP
+				| ( VSW << 10) 		// tVSP
+				| ( LPP));
+
+	LCDReg[2] =               ((PCD_HI << 27)
+	                        | (CPL << 16)
+			        | (IPC<<13)
+				| (IHC<<12)
+				| (IVS<<11)
+				| (PCD_LO << 0));
+				
+	LCDReg[3] = 0;
+	LCDReg[4] = (0x4<<1)  | (1<<5)  | (1<<11) | (1<<16); /* LCDControl */
 	tmpa910_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
 }
 
@@ -542,7 +580,7 @@ void __init tonga_init_irq(void) {
 static void __init tonga_init(void)
 {
         
-	/* Memory controller - for DM9000 */
+	/* Memory controller - for SMSC Ethernet */
 	SMC_SET_CYCLES_3 = 0x0004AFAA;
 	SMC_SET_OPMODE_3 = 0x00000002;
 	SMC_DIRECT_CMD_3 = 0x00C00000;
@@ -554,14 +592,16 @@ static void __init tonga_init(void)
 	/* Pin configuration */
 	TMPA910_CFG_PORT_GPIO(PORTA); /* Keypad */
 	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
+	TMPA910_CFG_PORT_GPIO(PORTC); /* TEST display */
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
 	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
 	TMPA910_PORT_T_FR1 = 0x00F0; /* Enable USB function pin */
 
-    /* Configure LCD interface */
+	/* Configure LCD interface */
 	setup_lcdc_device();
     
 	/* NAND Controller */
+
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
 	NDFMCR1 = 0x00000000; // ECC = Hamming
 	NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
