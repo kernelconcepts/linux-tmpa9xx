@@ -605,7 +605,6 @@ static void tmpa910_nand_select_chip(struct mtd_info *mtd, int chip)
 
 
 static struct nand_ecclayout nand_mlc_2kp_eccoob = {		
-	//.useecc = MTD_NANDECC_AUTOPLACE,
 	.eccbytes = 40,
 	.eccpos = {6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 			   22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
@@ -615,12 +614,11 @@ static struct nand_ecclayout nand_mlc_2kp_eccoob = {
 };
 
 static struct nand_ecclayout nand_lp_hw_eccoob = {
-	//.useecc = MTD_NANDECC_AUTOPLACE,
 	.eccbytes = 24,
 	.eccpos = {8, 9, 10, 13, 14, 15, 24, 25,
 			   26, 29, 30, 31, 40, 41, 42, 45,
 			   46, 47, 56, 57, 58, 61, 62, 63},
-	.oobfree = { {2, 6}, {16, 8}, {32, 8}, {48,8}, {11,2}, {27,2}, {43,2}, {59,2}}
+	.oobfree = { {0, 8}, {16, 8}, {32, 8}, {48,8}, {11,2}, {27,2}, {43,2}, {59,2}}
 };
 
 static struct nand_ecclayout nand_sp_hw_eccoob = {
@@ -646,6 +644,7 @@ static void tmpa910_nand_read_buf(struct mtd_info *mtd, u_char *buf, int len)
 	}
 	priv->column += len;
 }
+
 static void tmpa910_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int len)
 {
 	struct nand_chip *this = mtd->priv;
@@ -896,8 +895,6 @@ static int tmpa910_nand_init_priv(struct tmpa910_nand_private *priv)
 	priv->dma = 0;
 	priv->softecc = 1;
 	
-//	__REG(0xF080E008) = 0x02;
-	//NDFMCR0 =0x95;
 	NDFMCR0 =0x0;
 	NDFMCR1 = 0;
 	tmpa910_nand_set_timing(priv);
@@ -982,15 +979,15 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 	// modified for mlc
 	if(mtd->writesize == 2048)
 	{
-		if(nand->cellinfo & 0x0C)
+/*		if(nand->cellinfo & 0x0C)
 		{
 			priv->mlc = 1;
 			nand->ecc.bytes  = 10;	//+=7;
 			nand->ecc.layout = &nand_mlc_2kp_eccoob;
 			nand->options |= NAND_HWECC_ON;
-			//tmpa910_nand_set_ecctype(priv->mlc);
 		}
 		else
+	     */
 		{
 			priv->mlc = 0;
 			nand->ecc.layout    = &nand_lp_hw_eccoob;
