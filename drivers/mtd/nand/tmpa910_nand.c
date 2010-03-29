@@ -1,7 +1,7 @@
 /*
  *  drivers/mtd/nand/tmpa910_nand.c 
  *
- * Copyright (C) 2008 bplan GmbH. All rights reserved. (?)
+ * Copyright (C) 2008 ?. All rights reserved. (?)
  * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -34,10 +34,13 @@
 #include <asm/io.h>
 #include <mach/dma.h>
 #include <mach/tmpa910_regs.h>
+#include "tmpa910_nand.h"
 
 #define ECCBUF_SIZE 256
 #define WAIT_TIMEOUT  0xFFFF
 #define DMA_TIMEOUT  0xFFFF
+#define COLUMN_1CYL_CMD	0x05
+#define COLUMN_2CYL_CMD	0xE0
 
 struct tmpa910_nand_timing {
 	unsigned int splw;
@@ -58,6 +61,7 @@ struct tmpa910_nand_private {
 	unsigned char eccbuf[64];
 	unsigned char *buf;
 	unsigned int phy_buf;
+	unsigned char oob_buf[64];
 	unsigned int dma_ch;
 	struct completion dma_completion;
 	struct tmpa910_nand_timing timing;
@@ -242,12 +246,15 @@ static void tmpa910_nand_start_autoload(unsigned int read)
 	NDFMCR1 = val;
 }
 
-static void tmpa910_nand_start_ecc(unsigned int read)
+static void tmpa910_nand_start_ecc(unsigned int read,unsigned int mlc)
 {
+	if (mlc && read==0) {
+		NDFMCR0 |= NDFMCR0_RSEDN;
+	}
 	if (read)
 		NDFMCR0 |= NDFMCR0_ECCE |  NDFMCR0_ECCRST;
 	else
-		NDFMCR0 |= NDFMCR0_ECCE |  NDFMCR0_ECCRST | NDFMCR0_RSEDN;
+		NDFMCR0 |= NDFMCR0_ECCE |  NDFMCR0_ECCRST | NDFMCR0_WE;
 }
 
 static void tmpa910_nand_set_rw_mode(unsigned int read)
@@ -262,6 +269,127 @@ static void tmpa910_nand_calculate_softecc(const unsigned char * dat, unsigned c
 {
 }
 
+
+/************************************************************/
+/*			COLUMN ADDRESS CHANGE							*/
+/************************************************************/
+/* INPUT    :unsigned shor data									*/
+/* RETURN   :zero bit count										*/
+/* Chg data :													*/
+/************************************************************/
+static int tmpa910_nand_columnchg(unsigned short column_addr )
+{
+
+	tmpa910_nand_set_cmd(COLUMN_1CYL_CMD);
+	tmpa910_nand_set_addr(column_addr,-1,0,0);
+	tmpa910_nand_set_cmd(COLUMN_2CYL_CMD);
+
+	return 0;	
+}
+
+/************************************************************/
+/*			Wait ready NAND flash status					*/
+/************************************************************/
+/* INPUT    :												*/
+/* RETURN   :												*/
+/* Chg data :												*/
+/************************************************************/
+static int tmpa910_nand_waitreedsolomon(void)
+{
+	unsigned int reg;
+	unsigned short nCnt;
+	
+	for(nCnt=0;nCnt<0xffff;nCnt++)
+	{
+		reg = NDFINTC;
+		
+		if((reg & NDFINTC_RSERIS) == NDFINTC_RSERIS)
+		{
+			NDFINTC = NDFINTC_RSEIC;	// latch clear
+			return 0;
+		}
+	}	
+	return -1;	
+}
+
+
+/************************************************************/
+/*			ECC ERROR CHECK								*/
+/************************************************************/
+/* INPUT    :													*/
+/* RETURN   :													*/
+/* Chg data :													*/
+/************************************************************/
+static int tmpa910_nand_chkreedsolomon(unsigned char * databuf)
+{
+	unsigned short  sts_work;							/* STATUS �Z�o�p WORK */ 
+	unsigned short  err_count;							/* �G���[���J�E���g�p WORK */
+	unsigned short  chkaddr;							/* �G���[�A�h���X */
+	unsigned char   chkbit;								/* �G���[�r�b�g */
+	unsigned char   i;
+
+	NDFINTC = NDFINTC_LATCH_CLEAR;	// latch clear
+	NDFMCR0 = NDFMCR0_ECC_RSM_ON;	/* Error bit calculation circuit start */
+	
+	if(tmpa910_nand_waitreedsolomon() == -1){
+		return -1;
+	}
+
+	sts_work = (( NDFMCR1 & 0xf000 ) >> 12 );		/* NDFMCR STATE[3:0]��\u0178 */
+
+	if(sts_work == 0){									/* 0:NO ERROR */
+		return 0;
+	}
+	if(sts_work == 1){									/* 1:OVER 5 ERRORS */
+		return -2;
+	}
+	if( (sts_work == 2) || (sts_work == 3) ){			
+		err_count = (( NDFMCR1 & 0x0c00 ) >> 10 );   /* �G���[����\u0178 */
+
+		for( i=0 ; i<err_count+1; i++ ){					/* �G���[�A�h���X�\u20ac�r�b�g��\u0178 */
+			switch(i){
+				case 0:
+					chkaddr = NDRSCA0;
+					chkbit = NDRSCD0;
+					break;
+				case 1:
+					chkaddr = NDRSCA1;
+					chkbit = NDRSCD1;
+					break;
+				case 2:
+					chkaddr = NDRSCA2;
+					chkbit = NDRSCD2;
+					break;
+				case 3:
+					chkaddr = NDRSCA3;
+					chkbit = NDRSCD3;
+					break;
+				default:
+					return -3;
+			}
+
+			if( 0x0007 < chkaddr ){
+				chkaddr = 0x207 - chkaddr;
+				databuf[chkaddr] = databuf[chkaddr] ^ chkbit;  	/* �G���[�A�h���X�\u20ac�r�b�g�C�³ */
+			}
+		}
+	}
+	else{
+		return -4;										/* OTHER: ERROR */
+	}
+	return 0;
+}
+
+static void tmpa910_nand_rson(void)
+{
+    NDFMCR0 = NDFMCR0_ECC_RSECGW_ON;
+}
+
+static void tmpa910_nand_rsoff(void)
+{
+    NDFMCR0 = NDFMCR0_ECC_RSECGW_OFF;
+}
+
 static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int column, int page_addr)
 {
 	register struct nand_chip *this = mtd->priv;
@@ -269,8 +397,13 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 	struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
 	unsigned char * buf, *eccbuf;
 	unsigned int buswidth_16 = 0, third_addr = 0;
-
-	/* printk("Send command;%x, at column;%x, page;%x\n", command, column, page_addr); */
+	unsigned char * oob_buf;
+	int ret=0;
+	unsigned long flags;
+	unsigned char retry=0;
+	
+	/*printk("Send command;%x, at column;%x, page;%x\n", command, column, page_addr);*/
+	local_irq_save(flags);
 	if (mtd->writesize > 512) {
 		/* Emulate NAND_CMD_READOOB */
 		if (command == NAND_CMD_READOOB) {
@@ -294,6 +427,8 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 			priv->ecc_pos = (column / eccsize) * 6;
 	}
 	
+	oob_buf = &(priv->oob_buf[0]);
+	
 	if (command == NAND_CMD_READ0) {
 		column = column & ~(eccsize -1);
 
@@ -313,25 +448,52 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 					/* Large page NAND */
 					if (mtd->writesize > 512)
 						tmpa910_nand_set_cmd(NAND_CMD_READSTART);
-					tmpa910_nand_start_ecc(1);
+					tmpa910_nand_start_ecc(1, priv->mlc);
 					tmpa910_nand_set_rw_mode(1);
 					if (tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
 						printk("ERROR: read page :0x%x, column:0x%x time out\n", page_addr, column);
+						local_irq_restore(flags);
 						return;
 					}
 				
 					while(!tmpa910_nand_als_ready(mtd));
 
 					tmpa910_nand_get_hwecc(eccbuf, priv->mlc);
-					if (priv->mlc)
-						eccbuf += 6;
-					else
-						eccbuf += 10;
-					column += eccsize;
+					
+					if(priv->mlc && (this->options & NAND_HWECC_ON))
+					{
+						tmpa910_nand_columnchg(0x800+(column/0x20)+6);
+						tmpa910_nand_rson();						
+						{
+							unsigned char i;
+						    for(i=0;i<6;i++)
+						    	*oob_buf++ = 0xff;	
+						    for(;i<16;i++)
+						    	*oob_buf++ = NDFDTR;
+						}						
+//						udelay(10); 
+						ret=tmpa910_nand_chkreedsolomon(buf);
+    						tmpa910_nand_rsoff();
+						if(ret<0)
+						{
+							oob_buf -= 16;
+							retry ++;
+//							retry_bak=retry;
+						}
+        
+					}
+					if(ret==0 || retry >1){
+						retry = 0;
+						column += eccsize;	
+					}				
 				}
 				//buf += this->eccsize;	
 				/*Should not be > this->oobblock */
 				if (column >= mtd->writesize) {
+					if(priv->mlc)
+					{
+						tmpa910_nand_columnchg(0x800);
+					}
 					buf = priv->buf + column;
 					while (column < (mtd->writesize + mtd->oobsize)) {
 						*buf = NDFDTR;
@@ -367,6 +529,7 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 
 			if (priv->dma && tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
 				printk("ERROR: read page :0x%x, column:0x%x time out\n", page_addr, column);
+				local_irq_restore(flags);
 				return;
 			}
 			/*HWECC  start will be set at enable_ecc function */
@@ -380,6 +543,8 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 		/*if (!priv->softecc) 
 			tmpa910_nand_set_ecctype(priv->mlc);			*/
 
+		//tmpa910_nand_set_ecctype(this->mlc);
+		tmpa910_nand_set_ecctype(priv->mlc);
 		tmpa910_nand_set_cmd(command);
 		tmpa910_nand_set_addr(column, page_addr, buswidth_16, third_addr);
 	}
@@ -389,10 +554,12 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 			tmpa910_nand_dma_write(priv, priv->phy_buf + priv->orig_column, mtd->writesize + mtd->oobsize -  priv->orig_column);
 			if (tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
 				printk("ERROR: Write page :, column:0x%x time out\n", priv->column);
+				local_irq_restore(flags);
 				return;
 			}
 			
-			while(!tmpa910_nand_als_ready(mtd));
+			//while(!tmpa910_nand_als_ready(mtd));
+			while(!tmpa910_nand_dev_ready(mtd));
 		}
 		tmpa910_nand_set_cmd(command);
 		tmpa910_nand_set_addr(column, page_addr, buswidth_16, third_addr);
@@ -403,6 +570,8 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 		if (command == NAND_CMD_RESET)
 			while(!tmpa910_nand_dev_ready(mtd));
 	}
+	local_irq_restore(flags);
+
 }
 
 
@@ -434,19 +603,30 @@ static void tmpa910_nand_select_chip(struct mtd_info *mtd, int chip)
 		
 }
 
+
+static struct nand_ecclayout nand_mlc_2kp_eccoob = {		
+	//.useecc = MTD_NANDECC_AUTOPLACE,
+	.eccbytes = 40,
+	.eccpos = {6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+			   22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+               38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+			   54, 55, 56, 57, 58, 59, 60, 61, 62, 63},
+	.oobfree = { {2, 4}, {16, 6}, {32, 6}, {48,6}}
+};
+
 static struct nand_ecclayout nand_lp_hw_eccoob = {
 	//.useecc = MTD_NANDECC_AUTOPLACE,
 	.eccbytes = 24,
 	.eccpos = {8, 9, 10, 13, 14, 15, 24, 25,
 			   26, 29, 30, 31, 40, 41, 42, 45,
 			   46, 47, 56, 57, 58, 61, 62, 63},
-	.oobfree = { {0, 8}, {16, 8}, {32, 8}, {48,8}, {11,2}, {27,2}, {43,2}, {59,2}}
+	.oobfree = { {2, 6}, {16, 8}, {32, 8}, {48,8}, {11,2}, {27,2}, {43,2}, {59,2}}
 };
 
 static struct nand_ecclayout nand_sp_hw_eccoob = {
 	.eccbytes = 6,
 	.eccpos = {8, 9, 10, 13, 14, 15},
-	.oobfree = { {0, 8},{0,0}}
+	.oobfree = { {2, 6} }
 };
 
 static void tmpa910_nand_read_buf(struct mtd_info *mtd, u_char *buf, int len)
@@ -471,7 +651,8 @@ static void tmpa910_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int 
 	struct nand_chip *this = mtd->priv;
 	int i, eccsize = this->ecc.size;
 	struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
-
+	unsigned long flags;
+	local_irq_save(flags);
 	if (len > (mtd->writesize + mtd->oobsize - priv->column))
 		len = mtd->writesize + mtd->oobsize - priv->column;
 	
@@ -487,15 +668,25 @@ static void tmpa910_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int 
 
 			if (priv->column < mtd->writesize) {
 				/* we can be sure that len = ecc_step and priv->column is aligned by ecc_step(512 byte) */
+				tmpa910_nand_start_ecc(0, priv->mlc); //added for mlc
 				tmpa910_nand_dma_write(priv, priv->phy_buf + priv->column, len);
 				tmpa910_nand_start_autoload(0);
 				if (tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
 					printk("ERROR: Write page :, column:0x%x time out\n", priv->column);
+					local_irq_restore(flags);
 					return;
 				}
 
 				while(!tmpa910_nand_als_ready(mtd));
-
+//				while(!tmpa910_nand_dev_ready(mtd));
+				//for mlc
+				if(priv->mlc)
+						NDFMCR0 = 0x0090;
+				else
+				{
+					// NDFMCR0 = 0x10;
+				}
+//				udelay(10); 
 				//tmpa910_nand_set_rw_mode(1);
 				tmpa910_nand_get_hwecc(eccbuf, priv->mlc);
 			}
@@ -509,6 +700,7 @@ static void tmpa910_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int 
 		for (i = 0; i < len; i++)
 			NDFDTR = buf[i];
 	}
+	local_irq_restore(flags);
 	priv->column += len;
 }
 
@@ -525,7 +717,7 @@ static void tmpa910_nand_enable_hwecc(struct mtd_info *mtd, int mode)
 		
 			if (!priv->softecc) {
 				tmpa910_nand_set_ecctype(priv->mlc);
-				tmpa910_nand_start_ecc(mode == NAND_ECC_READ);
+				tmpa910_nand_start_ecc(mode == NAND_ECC_READ, priv->mlc);
 			}
 		}
 	}
@@ -533,7 +725,7 @@ static void tmpa910_nand_enable_hwecc(struct mtd_info *mtd, int mode)
 		tmpa910_nand_set_rw_mode(0);
 		if (!priv->softecc) {
 			tmpa910_nand_set_ecctype(priv->mlc);
-			tmpa910_nand_start_ecc(mode == NAND_ECC_READ);
+			tmpa910_nand_start_ecc(mode == NAND_ECC_READ, priv->mlc);
 		}
 	}
 	//printf("Enable HWECCL %x, %x\n ", NDFMCR0, NDFMCR1);
@@ -561,8 +753,8 @@ static int  tmpa910_nand_calculate_ecc(struct mtd_info *mtd, const unsigned char
 		}
 	}
 	else {
-		memcpy(ecc_code, priv->eccbuf + priv->ecc_pos, 6);
-		priv->ecc_pos += 6;
+		memcpy(ecc_code, priv->eccbuf + priv->ecc_pos, this->ecc.bytes);
+		priv->ecc_pos += this->ecc.bytes;
 	}
 	return 0;
 }
@@ -604,6 +796,7 @@ static int  tmpa910_nand_part_correctdata(unsigned char *data, unsigned char *ec
 	 * to see if we have an 0xff,0xff,0xff read ECC and then ignore
 	 * the error, on the assumption that this is an un-eccd page.
 	 */
+
 	if (eccdata[0] == 0xff && eccdata[1] == 0xff && eccdata[2] == 0xff)
 		return 0;
 
@@ -673,17 +866,9 @@ static int tmpa910_nand_correct_data(struct mtd_info *mtd, u_char *data, u_char 
 
 static void tmpa910_nand_set_timing(struct tmpa910_nand_private *priv)
 {
-#if 1
-	NDFMCR2 = 0x2222;
-#else
-	unsigned timing;
-	timing = 	(priv->timing.splw << 12) |
-			(priv->timing.sphw << 8) |
-			(priv->timing.splr << 4) |
-			priv->timing.sphr;
-	printk("NAND: setiing NDFMCR2: 0x%04x\n", timing);
-	NDFMCR2 = timing;
-#endif
+//	memcpy(&priv->timing, timing, sizeof(*timing));
+	//NDFMCR2 = 0x2222;
+	NDFMCR2 = 0x3333;
 }
 
 static void tmpa910_nand_dma_handler(int dma_ch, void *data)
@@ -709,7 +894,7 @@ static void tmpa910_nand_dma_error_handler(int dma_ch, void *data)
 static int tmpa910_nand_init_priv(struct tmpa910_nand_private *priv)
 {
 	priv->dma = 0;
-	priv->softecc = 0;
+	priv->softecc = 1;
 	
 //	__REG(0xF080E008) = 0x02;
 	//NDFMCR0 =0x95;
@@ -793,9 +978,24 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 	if (ret) {
 		goto free_dma_ch;
 	}
-
-	if (mtd->writesize == 2048)
-		nand->ecc.layout    = &nand_lp_hw_eccoob;
+	
+	// modified for mlc
+	if(mtd->writesize == 2048)
+	{
+		if(nand->cellinfo & 0x0C)
+		{
+			priv->mlc = 1;
+			nand->ecc.bytes  = 10;	//+=7;
+			nand->ecc.layout = &nand_mlc_2kp_eccoob;
+			nand->options |= NAND_HWECC_ON;
+			//tmpa910_nand_set_ecctype(priv->mlc);
+		}
+		else
+		{
+			priv->mlc = 0;
+			nand->ecc.layout    = &nand_lp_hw_eccoob;
+		}
+	}
 	else
 		nand->ecc.layout    = &nand_sp_hw_eccoob;
 	ret = nand_scan_tail(mtd);
