@@ -23,5 +23,5 @@
 #define irq_to_gpio __tmpa910_irq_to_gpio
 extern int __tmpa910_irq_to_gpio(unsigned irq);
 extern int __tmpa910_gpio_to_irq(unsigned gpio);
-
+extern int tmpa910_gpio_init(void);
 #endif

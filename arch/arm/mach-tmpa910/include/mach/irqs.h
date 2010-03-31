@@ -32,7 +32,7 @@
  * ------------------------------------------------------------
  */
 
-#define NR_IRQS		(MAXIRQNUM + 1 + TMPA910_NUM_GPIO_IRQS)
+#define NR_IRQS		(MAXIRQNUM + 1 + TMPA9xx_NUM_GPIO_IRQS)
 #define NR_FIQS		(MAXFIQNUM + 1)
 
 /*
@@ -91,8 +91,6 @@
  * GPIO Interrupts
  */
 
-#define TMPA910_NUM_GPIO_IRQS  26
-
 /* Port A */
 #define INT_GPIO_KI0	       32
 #define INT_GPIO_KI1	       33
@@ -135,30 +133,33 @@
 /* Port R */
 #define INT_GPIO_INTH	       57
 
+#define TMPA9xx_NUM_GPIO_IRQS  26
+
 #endif /* CONFIG_CPU_TMPA910 */
 
 
 #ifdef CONFIG_CPU_TMPA900
 
 /* Port C */
-#define INT_GPIO_INT8	       36
-#define INT_GPIO_INT9	       37
+#define INT_GPIO_INT9	       36
 
 /* Port D */
-#define INT_GPIO_INTA          38
-#define INT_GPIO_INTB          39
+#define INT_GPIO_INTA          37
+#define INT_GPIO_INTB          38
 
 /* Port F */
-#define INT_GPIO_INTC	       40
+#define INT_GPIO_INTC	       39
 
 /* Port N */
-#define INT_GPIO_INTD	       41
-#define INT_GPIO_INTE	       42
-#define INT_GPIO_INTF	       43
-#define INT_GPIO_INTG	       44
+#define INT_GPIO_INTD	       40
+#define INT_GPIO_INTE	       41
+#define INT_GPIO_INTF	       42
+#define INT_GPIO_INTG	       43
 
 /* Port R */
-#define INT_GPIO_INTH	       45
+#define INT_GPIO_INTH	       44
+
+#define TMPA9xx_NUM_GPIO_IRQS  13
 
 #endif /* CONFIG_CPU_TMPA900 */
 
