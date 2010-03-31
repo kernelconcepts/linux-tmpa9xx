@@ -45,8 +45,8 @@
 #define GPIO_LED_SEG_G      14
 #define GPIO_LED_SEG_DP     15
 
-/* Pattern for digits from 0 to 9, "L.", clear, all on */
-static const unsigned char pattern[] = {0x3F, 0x06/*1*/, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F, 0xB8, 0x00, 0xFF};
+/* Pattern for digits from 0 to 9, "L.", clear, all on, dp on */
+static const unsigned char pattern[] = {0x3F, 0x06/*1*/, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F/*9*/, 0xB8, 0x00, 0xFF, 0x08};
 static unsigned int num_pattern = ARRAY_SIZE(pattern);
 static int saved_state;
 
@@ -104,7 +104,7 @@ static int __init topas_led_probe(struct platform_device *pdev)
     
 	platform_set_drvdata(pdev, NULL);
     
-	/* Yes we could have this easier, but I need a customer for the GPIO implementation */
+	/* Yes we could have this easier, but I need a 'customer' for the GPIO implementation */
 	ret += gpio_request(GPIO_LED_SEG_A, "LED_SEG_A");
 	ret += gpio_request(GPIO_LED_SEG_B, "LED_SEG_B");
 	ret += gpio_request(GPIO_LED_SEG_C, "LED_SEG_C");
@@ -167,12 +167,11 @@ static int topas_led_resume(struct platform_device *pdev)
 
 static struct platform_driver topas_led_driver = {
 	.probe		= topas_led_probe,
-	.remove		= __devexit_p(topas_led_remove),
+	.remove		= __exit_p(topas_led_remove),
 	.suspend	= topas_led_suspend,
 	.resume		= topas_led_resume,
 	.driver		= {
 		.name	= "led-topas",
-		.owner	= THIS_MODULE,
 	},
 };
 
