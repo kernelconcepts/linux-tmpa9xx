@@ -2,7 +2,7 @@
  *  arch/arm/mach-tmpa910/irq.c
  *
  *  Copyright (C) 2008 bplan GmbH
- *  Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
+ *  Copyright (C) 2009, 2010 Florian Boor <florian.boor@kernelconcepts.de>
  *
  *  Based on mach-mx1ads/irq.c, which is:
  *    Copyright (C) 1999 ARM Limited
@@ -118,10 +118,12 @@ void __init tmpa910_init_irq(void)
 	for(i=0; i < 32; i++)
 		hw_ictl->vicvectaddr[i] = i;
 
-	for (i = 0; i < TMPA910_NUM_IRQS; i++) {
+	for (i = 0; i < TMPA9xx_NUM_IRQS; i++) {
 		set_irq_chip(i, &tmpa910_chip);
 		set_irq_handler(i, handle_level_irq);
 		set_irq_flags(i, IRQF_VALID );
 	}
-}
 
+    	/* Now register GPIO Pins and IRQs */
+	tmpa910_gpio_init();
+}
