@@ -23,6 +23,7 @@
  */
 
 #include <linux/device.h>
+#include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
@@ -82,15 +83,11 @@ void __init tonga_map_io(void)
 }
 
 
-static void dummy_release(struct device *dev)
-{
-        /* normally not freed */
-}
+static u64 topas910_dmamask = 0xffffffffUL;
 
-static u64  topas910_dmamask = 0xffffffffUL;
-
-/* Ethernet */
- 
+/* 
+ * Ethernet 
+ */ 
 static struct resource smsc911x_resources[] = {
         [0] = {
                 .start  = 0x60000002,
@@ -112,7 +109,7 @@ static struct resource smsc911x_resources[] = {
 static struct smsc911x_platform_config tonga_smsc911x_pdata = {
 	.irq_polarity  = SMSC911X_IRQ_POLARITY_ACTIVE_LOW,
 	.irq_type      = SMSC911X_IRQ_TYPE_OPEN_DRAIN,
-	.flags         = SMSC911X_USE_32BIT | SMSC911X_FORCE_INTERNAL_PHY,
+	.flags         = SMSC911X_USE_16BIT | SMSC911X_FORCE_INTERNAL_PHY,
 	.phy_interface = PHY_INTERFACE_MODE_MII,
 };
 
@@ -131,7 +128,6 @@ static struct platform_device tonga_smsc911x_device = {
 /*
  * Serial UART
  */ 
-
 static struct resource tmpa910_resource_uart0[] = {
 	{
 		.start	= 0xf2000000,
@@ -155,7 +151,7 @@ struct platform_device tmpa910_device_uart0 = {
 
 /*
  * DMA
-*/
+ */
 static struct resource tmpa910_resource_dmac[] = {
 	{
 		.start	= DMAC_BASE,
@@ -268,11 +264,9 @@ struct platform_device tmpa910_device_spi1 = {
 #endif
 
 
-
 /*
  * Touchscreen
  */
-
 static struct resource tmpa910_resource_ts[] = {
 	{
 		.start	= TS_BASE,
@@ -304,8 +298,9 @@ struct platform_device tmpa910_device_ts = {
 };
 
 
-/* LCD controller device */
-
+/* 
+ * LCD controller device 
+ */
 static struct resource tmpa910_resource_lcdc[] = {
 	{
 		.start	= LCDC_BASE,
@@ -338,7 +333,6 @@ struct platform_device tmpa910_device_lcdc= {
 /*
  * NAND Flash Controller
  */
-
 #ifdef CONFIG_MTD_NAND_TMPA910
 static struct resource tmpa910_nand_resources[] = {
 	[0] = {
@@ -354,7 +348,6 @@ static struct platform_device tmpa910_nand_device = {
 	.num_resources	= ARRAY_SIZE(tmpa910_nand_resources),
 	.resource	= tmpa910_nand_resources,
 };
-
 #endif
 
 
@@ -454,8 +447,10 @@ static struct platform_device tmpa900_ohci_device = {
 #endif /* CONFIG_USB_OHCI_HCD_TMPA900 */
 
 
+/*
+ * USB Device Controller
+ */
 #ifdef CONFIG_USB_GADGET_TMPA910
-/* USB Device Controller */
 static struct resource tmpa910_udc_resource[] = {
         [0] = {
                 .start = 0xf4400000,
@@ -511,62 +506,81 @@ static struct platform_device *devices[] __initdata = {
 static void __init setup_lcdc_device(void)
 {
 	uint32_t *LCDReg;
-//DispTiming(408, 353, 30, 320, 263, 244, 3, 240); // QVGA (3.5" & 5.7")
-//DispClock 0x3400 à ca. 7.5 MHz
 	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
 	
- // ET0350G0DH6 Display
-
-#define XSIZE_PHYS 320
-#define YSIZE_PHYS 240
+ 	/* ET0350G0DH6 Display */
+	#define XSIZE_PHYS 320
+	#define YSIZE_PHYS 240
 	topas910_v1_lcdc_platforminfo.width  = XSIZE_PHYS;
 	topas910_v1_lcdc_platforminfo.height = YSIZE_PHYS;
 	topas910_v1_lcdc_platforminfo.depth  = 16;
-	topas910_v1_lcdc_platforminfo.pitch  = XSIZE_PHYS * 4;
+	topas910_v1_lcdc_platforminfo.pitch  = XSIZE_PHYS * 2;
 
 
-//      Horizontal timing, LCDTiming0
-#define HBP                       (30) //114                      // Horizontal back porch  0..255
-#define HFP                       (12) //16                      // Horizontal front porch 0..255
-#define HSW                       (10) //30                      // Horizontal sync pulse width 0..255
-#define PPL                       ((XSIZE_PHYS / 16) - 1)     // Pixel per line value 0..255
+	/* Horizontal timing, LCDTiming0 */
+	#define HBP                       (68)                    /* Horizontal back porch  0..255 */
+	#define HFP                       (20)                    /* Horizontal front porch 0..255 */
+	#define HSW                       (30)                    /* Horizontal sync pulse width 0..255 */
+	#define PPL                       ((XSIZE_PHYS / 16) - 1) /* Pixel per line value 0..255 */
 
-//      Vertical timing, LCDTiming1
-#define VBP                       (8)//40                      // Vertical back porch  0..255
-#define VFP                       (8)//40                      // Vertical front porch 0..255
-#define VSW                       (3)//3                      // Vertical sync pulse lines value 0..63
-#define LPP                       (YSIZE_PHYS - 1)            // Lines per panel value 0..1023
+	/* Vertical timing, LCDTiming1 */
+	#define VBP                       (28)             /* Vertical back porch  0..255 */
+	#define VFP                       (4)              /* Vertical front porch 0..255 */
+	#define VSW                       (3)              /* Vertical sync pulse lines value 0..63 */
+	#define LPP                       (YSIZE_PHYS - 1) /* Lines per panel value 0..1023 */
 
-//      Clock timing, LCDTiming2
-#define PCD_HI                    (0)            // PCD value, upper 5 bits
-#define PCD_LO                    ((13) & 0x1F)          // PCD value, lower 5 bits
-#define IPC                       1//0 ok: 1
-#define IHC			  1//0 ok: 1
-#define IVS			  1//1
-#define CPL                       ((XSIZE_PHYS-1) & 0x3FF)
+	/* Clock timing, LCDTiming2 */
+	#define PCD_HI                    (0)            /* PCD value, upper 5 bits */
+	#define PCD_LO                    ((13) & 0x1F)  /* PCD value, lower 5 bits */
+	#define IPC                       1
+	#define IHC			  1
+	#define IVS			  1
+	#define IOE			  0
+	#define CPL                       ((XSIZE_PHYS-1) & 0x3FF)
 
 	LCDReg[0] = 
-				  ( (PPL << 2)	// pixel per line
-				| ( (HSW) << 8 ) 			// tHSW. Horizontal sync pulse
-				| ( (HFP) << 16 ) 			// tHFP, Horizontal front porch
-				| ( (HBP) << 24 )); 			// tHBP, Horizontal back porch
+				  ( (PPL << 2)	    /* pixel per line */
+				| ( (HSW) << 8 )    /* tHSW. Horizontal sync pulse */
+				| ( (HFP) << 16 )   /* tHFP, Horizontal front porch */
+				| ( (HBP) << 24 )); /* tHBP, Horizontal back porch */
 
-
-	LCDReg[1] =  		  (( VBP << 24) 		// tVBP		
-				| ( VFP << 16) 		// tVFP
-				| ( VSW << 10) 		// tVSP
+	LCDReg[1] =  		  (( VBP << 24) /* tVBP */
+				| ( VFP << 16) 	/* tVFP */
+				| ( VSW << 10)  /* tVSP */
 				| ( LPP));
 
 	LCDReg[2] =               ((PCD_HI << 27)
 	                        | (CPL << 16)
+			        | (IOE<<14)
 			        | (IPC<<13)
 				| (IHC<<12)
 				| (IVS<<11)
 				| (PCD_LO << 0));
 				
 	LCDReg[3] = 0;
-	LCDReg[4] = (0x4<<1)  | (1<<5)  | (1<<11) | (1<<16); /* LCDControl */
+    
+	/* LCDControl */
+	LCDReg[4] = (0x4<<1)  | (1<<5) | (1<<11) | (1<<16);
 	tmpa910_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
+
+	/* Configure Pins and reset LCD */
+	gpio_request(96, "LCD Reset");
+	gpio_request(97, "LCD Enable");
+	gpio_request(20, "Light");
+	gpio_direction_output(96, 1);
+	gpio_direction_output(97, 1);
+	gpio_direction_output(20, 1);
+    
+	/* Reset  */
+  	gpio_set_value(96, 0);
+    	udelay(1000);
+	gpio_set_value(96, 1);
+    
+	/* Enable */
+	gpio_set_value(97, 1);
+    
+	/* Light */
+	gpio_set_value(20, 0);
 }
 
 
@@ -575,16 +589,16 @@ void __init tonga_init_irq(void) {
 }
 
 
-/* tonga device initialisation */
-
+/* 
+ * Tonga2 device initialisation
+ */
 static void __init tonga_init(void)
 {
-        
 	/* Memory controller - for SMSC Ethernet */
 	SMC_SET_CYCLES_3 = 0x0004AFAA;
 	SMC_SET_OPMODE_3 = 0x00000002;
 	SMC_DIRECT_CMD_3 = 0x00C00000;
-    
+  
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = 0xffffffff;
 	platform_bus.dma_mask=&topas910_dmamask;
@@ -595,17 +609,33 @@ static void __init tonga_init(void)
 	TMPA910_CFG_PORT_GPIO(PORTC); /* TEST display */
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
 	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
-	TMPA910_PORT_T_FR1 = 0x00F0; /* Enable USB function pin */
+	TMPA910_CFG_PORT_GPIO(PORTR); /*  */
+	GPIOBODE = 0x00; /* Disable Open Drain */
+	GPIOCODE = 0x00; /* Disable Open Drain */
 
+	TMPA910_PORT_T_FR1 = 0x00F0; /* Enable USB function pin */
+    
+	GPIOMDIR |= 0x03; /* M0, MI GPIO OUT */
+	GPIOMFR1 &= ~0x03;
+	GPIOMFR2 &= ~0x03;
+
+	PMCCTL &= ~PMCCTL_PMCPWE;
+	PMCWV1 |= PMCWV1_PMCCTLV;
+    	udelay(200);
+	LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
+	GPIOJFR2 = 0x00;
+	GPIOJFR1 = 0xFF;
+	GPIOKFR2 = 0x00;
+	GPIOKFR1 = 0xFF;
+    
 	/* Configure LCD interface */
 	setup_lcdc_device();
     
 	/* NAND Controller */
-
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
 	NDFMCR1 = 0x00000000; // ECC = Hamming
 	NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
-              	             // NDREn L = 4clks,H = 3clks
+              	              // NDREn L = 4clks,H = 3clks
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
 	/* Add devices */
@@ -617,7 +647,7 @@ static void __init tonga_init(void)
 }
 
 
-MACHINE_START(TONGA, "Tonga")
+MACHINE_START(TONGA, "Tonga 2")
         /* Maintainer:  Florian Boor <florian.boor@kernelconcepts.de> */
         .phys_io        = TMPA910_IO_PHYS_BASE,
         .boot_params    = 0,
@@ -627,4 +657,3 @@ MACHINE_START(TONGA, "Tonga")
         .timer          = &topas910_timer,
         .init_machine   = tonga_init,
 MACHINE_END
-
