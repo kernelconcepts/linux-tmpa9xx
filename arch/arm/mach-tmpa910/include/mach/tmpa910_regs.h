@@ -56,7 +56,7 @@
 #define PORT_OFS_DATA      0x03FC  /* 0x000 - 0x3FC, data register masked from 0x00 to 0xFF << 2 */
 #define PORT_OFS_DIR       0x0400  /* direction register */
 #define PORT_OFS_FR1       0x0424  /* function register 1 */
-#define PORT_OFS_FF2       0x0428  /* function register 2 */
+#define PORT_OFS_FR2       0x0428  /* function register 2 */
 #define PORT_OFS_IS        0x0804  /* interrupt sensitivity */
 #define PORT_OFS_IBE       0x0808  /* interrupt both edge register */
 #define PORT_OFS_IEV       0x080C  /* interrupt event register */
@@ -76,11 +76,12 @@
 #define TMPA910_GPIO_REG_IE(x)   (PORT_BASE | PORT_OFS_IE | (x))
 #define TMPA910_GPIO_REG_MIS(x)  (PORT_BASE | PORT_OFS_MIS | (x))
 #define TMPA910_GPIO_REG_IC(x)   (PORT_BASE | PORT_OFS_IC | (x))
+#define TMPA910_GPIO_REG_ODE(x)  (PORT_BASE | PORT_OFS_ODE | (x))
 
-#define TMPA910_CFG_PORT_GPIO(x) (__REG(PORT_BASE | (x) | PORT_OFS_FR1) = 0)
+#define TMPA910_CFG_PORT_GPIO(x) {(__REG(PORT_BASE | (x) | PORT_OFS_FR1) = 0); (__REG(PORT_BASE | (x) | PORT_OFS_FR2) = 0);}
 #define TMPA910_PORT_FR1(x) __REG(PORT_BASE | (x) | PORT_OFS_FR1)
 #define TMPA910_PORT_T_FR1  TMPA910_PORT_FR1(PORTT)
-
+#define TMPA910_PORT_B_ODE  
 
 /******* redundent stuff */
 #define PORTB_BASE       (PORT_BASE + 0x1000)
@@ -169,6 +170,8 @@
 #define	GPIOCMIS		__REG(GPIO_C_BASE + 0x818)
 #define	GPIOCIC			__REG(GPIO_C_BASE + 0x81C)
 #define	GPIOCODE		__REG(GPIO_C_BASE + 0xC00)
+
+#define GPIOC_FR2_PWM2OUT (1 << 4)
 
 #define	GPIODDATA		__REG(GPIO_D_BASE + 0x3FC)
 #define	GPIODDIR		__REG(GPIO_D_BASE + 0x400)
@@ -290,6 +293,12 @@
 /* LCD Controller */
 #define LCDC_BASE 0xf4200000
 
+/* LCD Controller Option Function */
+#define LCDCOP_BASE 0xf00b0000
+#define LCDCOP_STN64CR             __REG(LCDCOP_BASE + 0x000)
+#define LCDCOP_STN64CR_G64_8bit    (1 << 1)
+
+
 /* RTC */
 #define RTC_BASE		0xF0030000
 
@@ -369,6 +378,17 @@
 #define I2SRDAT_ADR            (I2S_BASE + 0x2000)
 
 
+/* Power Management Controller */
+#define	PMC_BASE_ADDRESS	(0xF0020000)
+#define PMCDRV			__REG(PMC_BASE_ADDRESS + 0x0260)
+#define PMCCTL			__REG(PMC_BASE_ADDRESS + 0x0300)
+#define PMCWV1			__REG(PMC_BASE_ADDRESS + 0x0400)
+#define PMCRES			__REG(PMC_BASE_ADDRESS + 0x041C)
+
+#define PMCCTL_PMCPWE  (1 << 6)
+
+#define PMCWV1_PMCCTLV (1 << 5)
+
 /* System Control / PLL */
 #define	PLL_BASE_ADDRESS	0xF0050000
 #define	SYSCR0			__REG(PLL_BASE_ADDRESS + 0x000)
@@ -420,7 +440,7 @@
 #define	TIMER2_RIS			__REG(TIME2_BASE_ADDRESS + 0x0010)
 #define	TIMER2_MIS			__REG(TIME2_BASE_ADDRESS + 0x0014)
 #define	TIMER2_BGLOAD		__REG(TIME2_BASE_ADDRESS + 0x0018)
-#define	TIME2_MODE		    __REG(TIME2_BASE_ADDRESS + 0x001C)
+#define	TIMER2_MODE		    __REG(TIME2_BASE_ADDRESS + 0x001C)
 #define	TIMER2_COMPARE_1	__REG(TIME2_BASE_ADDRESS + 0x00A0)
 #define	TIMER2_CMPINTCLR_1	__REG(TIME2_BASE_ADDRESS + 0x00C0)
 #define	TIMER2_CMPEN		__REG(TIME2_BASE_ADDRESS + 0x00E0)
@@ -450,6 +470,8 @@
 #define	TIMER4_RIS			__REG(TIME4_BASE_ADDRESS + 0x0010)
 #define	TIMER4_MIS			__REG(TIME4_BASE_ADDRESS + 0x0014)
 #define	TIMER4_BGLOAD		__REG(TIME4_BASE_ADDRESS + 0x0018)
+#define	TIMER4_MODE		__REG(TIME4_BASE_ADDRESS + 0x001C)
+#define TIMER4_CAPEN             __REG(TIME4_BASE_ADDRESS + 0x0060) /* wtf - marked as reserved */
 #define	TIMER4_COMPARE_1	__REG(TIME4_BASE_ADDRESS + 0x00A0)
 #define	TIMER4_CMPINTCLR_1	__REG(TIME4_BASE_ADDRESS + 0x00C0)
 #define	TIMER4_CMPEN		__REG(TIME4_BASE_ADDRESS + 0x00E0)
@@ -480,22 +502,23 @@
 #define NDFDTR_PHY NANDF_BASE + 0x10
 
 
-#define	NDFMCR0_ECCRST	(0x1 << 0)
-#define	NDFMCR0_BUSY	(0x1 << 1)
-#define	NDFMCR0_ECCE	(0x1 << 2)
-#define	NDFMCR0_CE1	(0x1 << 3)
-#define	NDFMCR0_CE0	(0x1 << 4)
-#define	NDFMCR0_CLE	(0x1 << 5)
-#define	NDFMCR0_ALE	(0x1 << 6)
-#define	NDFMCR0_WE	(0x1 << 7)
-#define	NDFMCR0_RSEDN	(0x1 << 10)
+#define	NDFMCR0_ECCRST	(1 << 0)
+#define	NDFMCR0_BUSY	(1 << 1)
+#define	NDFMCR0_ECCE	(1 << 2)#define GPIOVFR2		__REG(GPIO_V_BASE + 0x428)
 
-#define	NDFMCR1_ECCS	(0x1 << 1)
-#define	NDFMCR1_SELAL	(0x1 << 9)
-#define	NDFMCR1_ALS	(0x1 << 8)
+#define	NDFMCR0_CE1	(1 << 3)
+#define	NDFMCR0_CE0	(1 << 4)
+#define	NDFMCR0_CLE	(1 << 5)
+#define	NDFMCR0_ALE	(1 << 6)
+#define	NDFMCR0_WE	(1 << 7)
+#define	NDFMCR0_RSEDN	(1 << 10)
 
-#define	NAND_DMAC_STATUS	(0x1 << 5)
-#define	NAND_DMAC_CLEAR		(0x1 << 5)
+#define	NDFMCR1_ECCS	(1 << 1)
+#define	NDFMCR1_SELAL	(1 << 9)
+#define	NDFMCR1_ALS	(1 << 8)
+
+#define	NAND_DMAC_STATUS	(1 << 5)
+#define	NAND_DMAC_CLEAR		(1 << 5)
 
 
 
