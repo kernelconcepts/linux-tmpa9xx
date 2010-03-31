@@ -210,12 +210,12 @@ static int __init tmpa910_lcdc_init_fb(
 
 	case 16:		/* RGB 565 */
 		var->bits_per_pixel = 16;
-		var->red.offset = 11;
-		var->red.length = 5;
+		var->blue.offset = 11;
+		var->blue.length = 5;
 		var->green.offset = 5;
 		var->green.length = 6;
-		var->blue.offset = 0;
-		var->blue.length = 5;
+		var->red.offset = 0;
+		var->red.length = 5;
 		var->transp.offset = 0;
 		var->transp.length = 0;
 		break;
