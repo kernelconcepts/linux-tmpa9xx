@@ -238,6 +238,7 @@ static void tmpa910_gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
 
 	desc->chip->mask(irq);
 	desc->chip->ack(irq);
+
 	status = __raw_readb(irq_chip->status_reg);
 	for (i = 0; i < 8; i++) {
 		if (status & (1 << i)) {
@@ -282,7 +283,14 @@ static void tmpa910_gpio_irq_unmask(unsigned int irq)
 	
 	BUG_ON((irq < TMPA9xx_NUM_IRQS) || (gpio_irq >= TMPA9xx_NUM_GPIO_IRQS));
 
+   
 	girq = irq_gpio_desc[gpio_irq];
+
+	/* Make sure pin is input */
+        reg = __raw_readb(TMPA910_GPIO_REG_DIR(girq.port));
+        reg &= ~(1 << girq.bit);
+	__raw_writeb(reg, TMPA910_GPIO_REG_DIR(girq.port));
+	/* Enable interrupt function */
         reg = __raw_readb(TMPA910_GPIO_REG_IE(girq.port));
         reg |= (1 << girq.bit);
 	__raw_writeb(reg, TMPA910_GPIO_REG_IE(girq.port));
@@ -423,6 +431,24 @@ static struct tmpa910_gpio_chip tmpa910_gpio_banks[] = {
 	TMPA910_GPIO_BANK("R", PORTR, 120, 0x04, 0x07, 0x04), /* 1 interrupt  */
 	TMPA910_GPIO_BANK("T", PORTT, 128, 0xFF, 0xFF, 0x00),
 };
+enum gpio_bankidx {
+    BANK_NR_PORTA = 0,
+    BANK_NR_PORTB,
+    BANK_NR_PORTC,
+    BANK_NR_PORTD,
+    BANK_NR_PORTE,
+    BANK_NR_PORTF,
+    BANK_NR_PORTG,
+    BANK_NR_PORTH,
+    BANK_NR_PORTJ,
+    BANK_NR_PORTK,
+    BANK_NR_PORTL,
+    BANK_NR_PORTM,
+    BANK_NR_PORTN,
+    BANK_NR_PORTP,
+    BANK_NR_PORTR,
+    BANK_NR_PORTT,
+};
 #endif
 #ifdef CONFIG_CPU_TMPA900
 static struct tmpa910_gpio_chip tmpa910_gpio_banks[] = {
@@ -439,6 +465,21 @@ static struct tmpa910_gpio_chip tmpa910_gpio_banks[] = {
 	TMPA910_GPIO_BANK("N", PORTN, 104, 0xFF, 0xFF, 0xF0), /* 4 interrupts */
 	TMPA910_GPIO_BANK("R", PORTR, 112, 0x04, 0x07, 0x04), /* 1 interrupt  */
 	TMPA910_GPIO_BANK("T", PORTT, 120, 0xFF, 0xFF, 0x00),
+};
+enum gpio_bankidx {
+    BANK_NR_PORTA = 0,
+    BANK_NR_PORTB,
+    BANK_NR_PORTC,
+    BANK_NR_PORTD,
+    BANK_NR_PORTF,
+    BANK_NR_PORTG,
+    BANK_NR_PORTJ,
+    BANK_NR_PORTK,
+    BANK_NR_PORTL,
+    BANK_NR_PORTM,
+    BANK_NR_PORTN,
+    BANK_NR_PORTR,
+    BANK_NR_PORTT,
 };
 #endif
 
@@ -461,6 +502,16 @@ int __init tmpa910_gpio_init(void)
 		set_irq_data(gpio_irq, (void *)&tmpa910_gpio_banks[i]);
 	}
 
+    	set_irq_data(INTR_VECT_GPIOA,(void *)&tmpa910_gpio_banks[BANK_NR_PORTA]); 
+    	set_irq_data(INTR_VECT_GPIOC,(void *)&tmpa910_gpio_banks[BANK_NR_PORTC]); 
+    	set_irq_data(INTR_VECT_GPIOD,(void *)&tmpa910_gpio_banks[BANK_NR_PORTD]); 
+    	set_irq_data(INTR_VECT_GPIOF,(void *)&tmpa910_gpio_banks[BANK_NR_PORTF]); 
+    	set_irq_data(INTR_VECT_GPION,(void *)&tmpa910_gpio_banks[BANK_NR_PORTN]); 
+#ifdef CONFIG_CPU_TMPA910
+    	set_irq_data(INTR_VECT_GPIOP,(void *)&tmpa910_gpio_banks[BANK_NR_PORTP]); 
+#endif
+    	set_irq_data(INTR_VECT_GPIOR,(void *)&tmpa910_gpio_banks[BANK_NR_PORTR]);
+    
 	/* Finally install the interrrupt handlers we need for the GPIOs */
 	set_irq_chained_handler(INTR_VECT_GPIOA, tmpa910_gpio_irq_handler);
 	set_irq_chained_handler(INTR_VECT_GPIOC, tmpa910_gpio_irq_handler);
@@ -473,6 +524,6 @@ int __init tmpa910_gpio_init(void)
 	set_irq_chained_handler(INTR_VECT_GPIOP, tmpa910_gpio_irq_handler);
 #endif
 	set_irq_chained_handler(INTR_VECT_GPIOR, tmpa910_gpio_irq_handler);
-
+    
 	return 0;
 }

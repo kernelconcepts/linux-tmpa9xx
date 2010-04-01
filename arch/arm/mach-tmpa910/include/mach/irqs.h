@@ -39,7 +39,8 @@
  *  Topas910 IRQ Vectors
  *  TODO: Move to a board specific file.
  */
-#define TOPAS910_INT_DM9000  INT_GPIO_INTH
+#define TOPAS910_INT_DM9000    INT_GPIO_INTH
+#define TONGA_INT_SMSC911X     INT_GPIO_INTH
 
 
 #define TMPA9xx_NUM_IRQS	32

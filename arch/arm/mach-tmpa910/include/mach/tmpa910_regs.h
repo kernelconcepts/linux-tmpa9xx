@@ -335,6 +335,8 @@
 #define	SMC_OPMODE0_2_3         __REG(SMC_MPMC0_BASE + 0x144)
 #define	SMC_OPMODE0_3_3         __REG(SMC_MPMC0_BASE + 0x164)
 
+#define SMC_TIMEOUT		__REG(0xf00a0000 + 0x050)
+
 /*  Memory controller MPMC1 */
 #define SMC_MPMC1_BASE          0xf4311000
 #define	SMC_MEMC_STATUS_5       __REG(SMC_MPMC1_BASE + 0x000)

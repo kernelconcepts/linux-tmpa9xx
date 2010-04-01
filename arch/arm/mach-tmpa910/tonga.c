@@ -90,26 +90,26 @@ static u64 topas910_dmamask = 0xffffffffUL;
  */ 
 static struct resource smsc911x_resources[] = {
         [0] = {
-                .start  = 0x60000002,
+                .start  = 0x60000000,
                 .end    = 0x60000003,
                 .flags  = IORESOURCE_MEM,
         },
         [1] = {
-                .start  = 0x60001002,
+                .start  = 0x60001000,
                 .end    = 0x60001003,
                 .flags  = IORESOURCE_MEM,
         },
         [2] = {
-                .start  = TOPAS910_INT_DM9000,
-                .end    = TOPAS910_INT_DM9000,
+                .start  = TONGA_INT_SMSC911X,
+                .end    = TONGA_INT_SMSC911X,
                 .flags  = IORESOURCE_IRQ | IRQF_TRIGGER_LOW,
         },
 };
 
 static struct smsc911x_platform_config tonga_smsc911x_pdata = {
 	.irq_polarity  = SMSC911X_IRQ_POLARITY_ACTIVE_LOW,
-	.irq_type      = SMSC911X_IRQ_TYPE_OPEN_DRAIN,
-	.flags         = SMSC911X_USE_16BIT | SMSC911X_FORCE_INTERNAL_PHY,
+	.irq_type      = SMSC911X_IRQ_TYPE_PUSH_PULL,
+	.flags         = SMSC911X_USE_32BIT | SMSC911X_FORCE_INTERNAL_PHY,
 	.phy_interface = PHY_INTERFACE_MODE_MII,
 };
 
@@ -570,15 +570,15 @@ static void __init setup_lcdc_device(void)
 	gpio_direction_output(96, 1);
 	gpio_direction_output(97, 1);
 	gpio_direction_output(20, 1);
-    
+
 	/* Reset  */
   	gpio_set_value(96, 0);
     	udelay(1000);
 	gpio_set_value(96, 1);
-    
+
 	/* Enable */
 	gpio_set_value(97, 1);
-    
+
 	/* Light */
 	gpio_set_value(20, 0);
 }
@@ -595,10 +595,12 @@ void __init tonga_init_irq(void) {
 static void __init tonga_init(void)
 {
 	/* Memory controller - for SMSC Ethernet */
-	SMC_SET_CYCLES_3 = 0x0004AFAA;
+/*	SMC_SET_CYCLES_3 = 0x0004AFAA;
 	SMC_SET_OPMODE_3 = 0x00000002;
 	SMC_DIRECT_CMD_3 = 0x00C00000;
-  
+*/
+    	SMC_TIMEOUT = 0x01;
+    
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = 0xffffffff;
 	platform_bus.dma_mask=&topas910_dmamask;
@@ -614,6 +616,8 @@ static void __init tonga_init(void)
 	GPIOCODE = 0x00; /* Disable Open Drain */
 
 	TMPA910_PORT_T_FR1 = 0x00F0; /* Enable USB function pin */
+    
+	GPIORDIR &= ~(1 << 2); /* Eth IRQ */
     
 	GPIOMDIR |= 0x03; /* M0, MI GPIO OUT */
 	GPIOMFR1 &= ~0x03;
