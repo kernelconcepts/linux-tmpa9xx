@@ -520,8 +520,10 @@ int __init tmpa910_gpio_init(void)
 #endif
 	set_irq_chained_handler(INTR_VECT_GPIOF, tmpa910_gpio_irq_handler);
 	set_irq_chained_handler(INTR_VECT_GPION, tmpa910_gpio_irq_handler);
-#if !defined(CONFIG_USB_ISP1362_HCD) && !defined(CONFIG_USB_ISP1362_HCD_MODULE) 
+#if !defined(CONFIG_USB_ISP1362_HCD) && !defined(CONFIG_USB_ISP1362_HCD_MODULE)
+#if !defined(CONFIG_USB_OHCI_HCD_TMPA900) && !defined(CONFIG_USB_OHCI_HCD_TMPA900_MODULE)
 	set_irq_chained_handler(INTR_VECT_GPIOP, tmpa910_gpio_irq_handler);
+#endif
 #endif
 	set_irq_chained_handler(INTR_VECT_GPIOR, tmpa910_gpio_irq_handler);
     

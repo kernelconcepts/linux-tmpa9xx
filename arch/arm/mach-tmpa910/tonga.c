@@ -594,10 +594,6 @@ void __init tonga_init_irq(void) {
 static void __init tonga_init(void)
 {
 	/* Memory controller - for SMSC Ethernet */
-/*	SMC_SET_CYCLES_3 = 0x0004AFAA;
-	SMC_SET_OPMODE_3 = 0x00000002;
-	SMC_DIRECT_CMD_3 = 0x00C00000;
-*/
     	SMC_TIMEOUT = 0x01;
     
 	/* DMA setup */
@@ -609,7 +605,6 @@ static void __init tonga_init(void)
 	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
 	TMPA910_CFG_PORT_GPIO(PORTC); /* TEST display */
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
-	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
 	TMPA910_CFG_PORT_GPIO(PORTR); /*  */
 	GPIOBODE = 0x00; /* Disable Open Drain */
 	GPIOCODE = 0x00; /* Disable Open Drain */
@@ -617,6 +612,10 @@ static void __init tonga_init(void)
 	TMPA910_PORT_T_FR1 = 0x00F0; /* Enable USB function pin */
     
 	GPIORDIR &= ~(1 << 2); /* Eth IRQ */
+    
+	GPIOCIE &= ~0xC0; /* USB Host */
+	GPIOCFR1 &= ~0xC0;
+	GPIOCFR2 |=  0xC0;
     
 	GPIOMDIR |= 0x03; /* M0, MI GPIO OUT */
 	GPIOMFR1 &= ~0x03;
