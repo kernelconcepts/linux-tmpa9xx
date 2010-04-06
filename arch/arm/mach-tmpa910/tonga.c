@@ -439,7 +439,6 @@ static struct platform_device tmpa900_ohci_device = {
         .num_resources  = ARRAY_SIZE(tmpa900_ohci_resources),
         .resource       = tmpa900_ohci_resources,
         .dev = {
-		.release        = dummy_release, // not needed
 		.coherent_dma_mask = 0xffffffff,		
         },
 };
