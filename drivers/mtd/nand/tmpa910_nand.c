@@ -2,7 +2,7 @@
  *  drivers/mtd/nand/tmpa910_nand.c 
  *
  * Copyright (C) 2008 ?. All rights reserved. (?)
- * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
+ * Copyright (C) 2009, 2010 Florian Boor <florian.boor@kernelconcepts.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -108,7 +108,6 @@ static const char *part_probes[] = { "cmdlinepart", NULL };
 
 void tmpa910_nand_dma_read(struct tmpa910_nand_private *priv, unsigned int phy_addr, unsigned short size)
 {
-	//tmpa910_dma_enable(priv->dma_ch);
 	DMA_SRC_ADDR(priv->dma_ch) = NDFDTR_PHY;
 	DMA_DEST_ADDR(priv->dma_ch) = phy_addr;
 	DMA_CONTROL(priv->dma_ch) = 0x88489000 + (size/4);
@@ -118,7 +117,6 @@ void tmpa910_nand_dma_read(struct tmpa910_nand_private *priv, unsigned int phy_a
 void tmpa910_nand_dma_write(struct tmpa910_nand_private *priv, unsigned int phy_addr, unsigned short size)
 {
 
-	//tmpa910_dma_enable(priv->dma_ch);
 	DMA_SRC_ADDR(priv->dma_ch) = phy_addr;		// Source address
 	DMA_DEST_ADDR(priv->dma_ch) = NDFDTR_PHY;	// Destination address
 	DMA_CONTROL(priv->dma_ch) = 0x84489000 + (size/4);
@@ -188,7 +186,6 @@ static void  tmpa910_nand_get_hwecc(unsigned char *ecc_code, unsigned int mlc)
 	unsigned int ecc_val = 0;
 	unsigned char *buf = ecc_code;
 	
-	//printf("----Enable HWECCL %x, %x, %x\n ", NDFMCR0, val, NDFMCR1);
 	if (!mlc) {
 		ecc_val = NDECCRD1;
 		*buf++ = (unsigned char)(ecc_val&0xff);
@@ -322,10 +319,10 @@ static int tmpa910_nand_waitreedsolomon(void)
 /************************************************************/
 static int tmpa910_nand_chkreedsolomon(unsigned char * databuf)
 {
-	unsigned short  sts_work;							/* STATUS �Z�o�p WORK */ 
-	unsigned short  err_count;							/* �G���[���J�E���g�p WORK */
-	unsigned short  chkaddr;							/* �G���[�A�h���X */
-	unsigned char   chkbit;								/* �G���[�r�b�g */
+	unsigned short  sts_work;
+	unsigned short  err_count;
+	unsigned short  chkaddr;
+	unsigned char   chkbit;
 	unsigned char   i;
 
 	NDFINTC = NDFINTC_LATCH_CLEAR;	// latch clear
@@ -335,7 +332,7 @@ static int tmpa910_nand_chkreedsolomon(unsigned char * databuf)
 		return -1;
 	}
 
-	sts_work = (( NDFMCR1 & 0xf000 ) >> 12 );		/* NDFMCR STATE[3:0]��\u0178 */
+	sts_work = (( NDFMCR1 & 0xf000 ) >> 12 );
 
 	if(sts_work == 0){									/* 0:NO ERROR */
 		return 0;
@@ -344,9 +341,9 @@ static int tmpa910_nand_chkreedsolomon(unsigned char * databuf)
 		return -2;
 	}
 	if( (sts_work == 2) || (sts_work == 3) ){			
-		err_count = (( NDFMCR1 & 0x0c00 ) >> 10 );   /* �G���[����\u0178 */
+		err_count = (( NDFMCR1 & 0x0c00 ) >> 10 );
 
-		for( i=0 ; i<err_count+1; i++ ){					/* �G���[�A�h���X�\u20ac�r�b�g��\u0178 */
+		for( i=0 ; i<err_count+1; i++ ){
 			switch(i){
 				case 0:
 					chkaddr = NDRSCA0;
@@ -370,7 +367,7 @@ static int tmpa910_nand_chkreedsolomon(unsigned char * databuf)
 
 			if( 0x0007 < chkaddr ){
 				chkaddr = 0x207 - chkaddr;
-				databuf[chkaddr] = databuf[chkaddr] ^ chkbit;  	/* �G���[�A�h���X�\u20ac�r�b�g�C�³ */
+				databuf[chkaddr] = databuf[chkaddr] ^ chkbit;
 			}
 		}
 	}
@@ -399,11 +396,8 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 	unsigned int buswidth_16 = 0, third_addr = 0;
 	unsigned char * oob_buf;
 	int ret=0;
-	unsigned long flags;
 	unsigned char retry=0;
 	
-	/*printk("Send command;%x, at column;%x, page;%x\n", command, column, page_addr);*/
-	local_irq_save(flags);
 	if (mtd->writesize > 512) {
 		/* Emulate NAND_CMD_READOOB */
 		if (command == NAND_CMD_READOOB) {
@@ -452,7 +446,6 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 					tmpa910_nand_set_rw_mode(1);
 					if (tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
 						printk("ERROR: read page :0x%x, column:0x%x time out\n", page_addr, column);
-						local_irq_restore(flags);
 						return;
 					}
 				
@@ -471,14 +464,12 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 						    for(;i<16;i++)
 						    	*oob_buf++ = NDFDTR;
 						}						
-//						udelay(10); 
 						ret=tmpa910_nand_chkreedsolomon(buf);
     						tmpa910_nand_rsoff();
 						if(ret<0)
 						{
 							oob_buf -= 16;
 							retry ++;
-//							retry_bak=retry;
 						}
         
 					}
@@ -487,7 +478,6 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 						column += eccsize;	
 					}				
 				}
-				//buf += this->eccsize;	
 				/*Should not be > this->oobblock */
 				if (column >= mtd->writesize) {
 					if(priv->mlc)
@@ -529,7 +519,6 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 
 			if (priv->dma && tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
 				printk("ERROR: read page :0x%x, column:0x%x time out\n", page_addr, column);
-				local_irq_restore(flags);
 				return;
 			}
 			/*HWECC  start will be set at enable_ecc function */
@@ -554,7 +543,6 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 			tmpa910_nand_dma_write(priv, priv->phy_buf + priv->orig_column, mtd->writesize + mtd->oobsize -  priv->orig_column);
 			if (tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
 				printk("ERROR: Write page :, column:0x%x time out\n", priv->column);
-				local_irq_restore(flags);
 				return;
 			}
 			
@@ -570,8 +558,6 @@ static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int co
 		if (command == NAND_CMD_RESET)
 			while(!tmpa910_nand_dev_ready(mtd));
 	}
-	local_irq_restore(flags);
-
 }
 
 
@@ -650,8 +636,7 @@ static void tmpa910_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int 
 	struct nand_chip *this = mtd->priv;
 	int i, eccsize = this->ecc.size;
 	struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
-	unsigned long flags;
-	local_irq_save(flags);
+    
 	if (len > (mtd->writesize + mtd->oobsize - priv->column))
 		len = mtd->writesize + mtd->oobsize - priv->column;
 	
@@ -672,7 +657,6 @@ static void tmpa910_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int 
 				tmpa910_nand_start_autoload(0);
 				if (tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
 					printk("ERROR: Write page :, column:0x%x time out\n", priv->column);
-					local_irq_restore(flags);
 					return;
 				}
 
@@ -699,7 +683,6 @@ static void tmpa910_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int 
 		for (i = 0; i < len; i++)
 			NDFDTR = buf[i];
 	}
-	local_irq_restore(flags);
 	priv->column += len;
 }
 
@@ -727,7 +710,6 @@ static void tmpa910_nand_enable_hwecc(struct mtd_info *mtd, int mode)
 			tmpa910_nand_start_ecc(mode == NAND_ECC_READ, priv->mlc);
 		}
 	}
-	//printf("Enable HWECCL %x, %x\n ", NDFMCR0, NDFMCR1);
 }
 
 static int  tmpa910_nand_calculate_ecc(struct mtd_info *mtd, const unsigned char *dat, unsigned char *ecc_code)
@@ -865,9 +847,7 @@ static int tmpa910_nand_correct_data(struct mtd_info *mtd, u_char *data, u_char 
 
 static void tmpa910_nand_set_timing(struct tmpa910_nand_private *priv)
 {
-//	memcpy(&priv->timing, timing, sizeof(*timing));
-	//NDFMCR2 = 0x2222;
-	NDFMCR2 = 0x3333;
+	NDFMCR2 = 0x2222;
 }
 
 static void tmpa910_nand_dma_handler(int dma_ch, void *data)
@@ -892,17 +872,16 @@ static void tmpa910_nand_dma_error_handler(int dma_ch, void *data)
 
 static int tmpa910_nand_init_priv(struct tmpa910_nand_private *priv)
 {
-	priv->dma = 0;
-	priv->softecc = 1;
-	
-	NDFMCR0 =0x0;
+	priv->dma = 1;
+	priv->softecc = 0;
+	NDFMCR0 = 0;
 	NDFMCR1 = 0;
 	tmpa910_nand_set_timing(priv);
 	
 	return 0;
 }
 
-static int tmpa910_nand_probe(struct platform_device *pdev)
+static int __init tmpa910_nand_probe(struct platform_device *pdev)
 {	
 	struct tmpa910_nand_private * priv;
 	struct mtd_info *mtd;
@@ -920,7 +899,7 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 
 	mtd = (struct mtd_info *)kzalloc(sizeof(struct mtd_info) + sizeof(struct tmpa910_nand_private), GFP_KERNEL);
 	if (mtd == NULL) {
-		printk(KERN_ERR "TMPA910_NAND: not enough mempry");
+		printk(KERN_ERR "TMPA910_NAND: not enough memory");
 		ret = -ENOMEM;
 		goto error;
 	}
@@ -962,7 +941,7 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 	nand->priv = priv;
 
 	init_completion(&priv->dma_completion);	
-	priv->dma_ch = tmpa910_dma_request("TMPA910 NAND", 5, tmpa910_nand_dma_handler, 
+	priv->dma_ch = tmpa910_dma_request("TMPA9xx NAND", 5, tmpa910_nand_dma_handler, 
 					tmpa910_nand_dma_error_handler, priv);
 	if (priv->dma_ch < 0) {
 		ret = -ENODEV;
@@ -979,7 +958,7 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 	// modified for mlc
 	if(mtd->writesize == 2048)
 	{
-/*		if(nand->cellinfo & 0x0C)
+		if(nand->cellinfo & 0x0C)
 		{
 			priv->mlc = 1;
 			nand->ecc.bytes  = 10;	//+=7;
@@ -987,7 +966,6 @@ static int tmpa910_nand_probe(struct platform_device *pdev)
 			nand->options |= NAND_HWECC_ON;
 		}
 		else
-	     */
 		{
 			priv->mlc = 0;
 			nand->ecc.layout    = &nand_lp_hw_eccoob;
@@ -1037,7 +1015,7 @@ error:
 }
 
 
-static int tmpa910_nand_remove(struct platform_device *pdev)
+static int __exit tmpa910_nand_remove(struct platform_device *pdev)
 {
 	struct mtd_info *mtd;
 	struct tmpa910_nand_private * priv;
@@ -1062,21 +1040,20 @@ static int tmpa910_nand_resume(struct platform_device *dev)
 
 static struct platform_driver tmpa910_nand_driver = {
 	.probe = tmpa910_nand_probe,
-	.remove = __devexit_p(tmpa910_nand_remove),
+	.remove = __exit_p(tmpa910_nand_remove),
 	.suspend = tmpa910_nand_suspend,
 	.resume = tmpa910_nand_resume,
 	.driver	= {
 		.name = "tmpa910-nand",
-		.owner	= THIS_MODULE,
 	},
 };
 
-static int tmpa910_nand_init(void)
+static int __init tmpa910_nand_init(void)
 {
 	return platform_driver_register(&tmpa910_nand_driver);
 }
 
-static void tmpa910_nand_exit(void)
+static void __exit tmpa910_nand_exit(void)
 {
 	platform_driver_unregister(&tmpa910_nand_driver);
 }
@@ -1084,4 +1061,5 @@ module_init(tmpa910_nand_init);
 module_exit(tmpa910_nand_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("NAND flash driver for TMPA910");
+MODULE_DESCRIPTION("NAND flash driver for TMPA9x0");
+MODULE_ALIAS("platform:tmpa910-nand");
