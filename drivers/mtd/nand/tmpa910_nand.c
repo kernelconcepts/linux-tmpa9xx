@@ -960,6 +960,7 @@ static int __init tmpa910_nand_probe(struct platform_device *pdev)
 	{
 		if(nand->cellinfo & 0x0C)
 		{
+printk("NAND: turning on mlc\n");
 			priv->mlc = 1;
 			nand->ecc.bytes  = 10;	//+=7;
 			nand->ecc.layout = &nand_mlc_2kp_eccoob;
