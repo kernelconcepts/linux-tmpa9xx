@@ -242,9 +242,9 @@ static int __init tmpa910_lcdc_init_fb(
 	info->fbops = &tmpa910_lcdc_ops;
 	
 	// Here real LCD hw init
-	par->hw_tmpa910_lcdc = (void *) (lcdc_base);
+	par->hw_tmpa910_lcdc = (void *)(lcdc_base);
 	_init_it( par->hw_tmpa910_lcdc, LCDReg, width, height);
-	_setup_fb( par->hw_tmpa910_lcdc, (uint32_t) dma);
+	_setup_fb( par->hw_tmpa910_lcdc, (uint32_t)dma);
 	
 	// ok
 	info->par = par;
@@ -272,6 +272,24 @@ static int __init tmpa910_lcdc_init_fb(
 	return 0;
 }
 
+/* parse options in form video=tmpa9xxfb:%08x:%08x:%08x */
+void tmpa9xx_lcdc_parse_params(uint32_t *LCDReg, char *options)
+{
+    	uint32_t *r0, r1, r2;
+    
+	if (sscanf(options, "%08lx:%08lx:%08lx", &r0, &r1, &r2) != 3) {
+		printk(KERN_WARNING "tmpa9xxfb: Unable to parse options %s\n", options);
+		return;
+	}
+	
+	printk(KERN_INFO "tmpa9xxfb: Options from cmdline: \n" \
+	                 "LCDTiming0: 0x%08lx\nLCDTiming1: 0x%08lx\nLCDTiming2: 0x%08lx\n", r0, r1, r2);
+	
+	LCDReg[0] = r0;
+	LCDReg[1] = r1;
+	LCDReg[2] = r2;
+}
+
 #ifdef CONFIG_PM
 static int tmpa910_lcdc_suspend(struct platform_device *pdev, pm_message_t mesg)
 {
@@ -293,8 +311,9 @@ static int __init tmpa910_lcdc_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct resource *regs = NULL;
 	struct resource *fb = NULL;
-	int ret;
 	struct tmpa910_lcdc_platforminfo *platforminfo;
+	int ret;
+    	char *options = NULL;
 
 	ret = -ENOMEM;
 
@@ -313,11 +332,17 @@ static int __init tmpa910_lcdc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	/* Get command line options */
+	fb_get_options("tmpa9xxfb", &options);
+	if (options)
+		tmpa9xx_lcdc_parse_params(platforminfo->LCDReg, options);
+
+	/* initialise */
 	ret = tmpa910_lcdc_init_fb(pdev,
 		"TMPA910 FB" , "Toshiba TMPA910 Frame Buffer",
 		platforminfo->width, platforminfo->height,
 		platforminfo->depth, platforminfo->pitch,
-		platforminfo->LCDReg, (void *) regs->start);
+		platforminfo->LCDReg, (void *)regs->start);
 
 	return ret;
 }
@@ -355,7 +380,7 @@ static struct platform_driver tmpa910_lcdc_driver = {
 	.resume		= tmpa910_lcdc_resume,
 
 	.driver		= {
-		.name	 = "tmpa910_lcdc",
+		.name	 = "tmpa9xxfb",
 		.owner = THIS_MODULE,
 	},
 };
