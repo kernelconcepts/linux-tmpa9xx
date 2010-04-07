@@ -28,7 +28,6 @@
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
 #include <linux/input.h>
-#include <linux/gpio_keys.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/mmc_spi.h>
 #include <linux/mtd/mtd.h>
@@ -38,8 +37,6 @@
 #include <asm/system.h>
 #include <mach/hardware.h>
 #include <asm/irq.h>
-#include <asm/pgtable.h>
-#include <asm/page.h>
 
 #include <asm/mach/map.h>
 #include <asm/mach-types.h>
@@ -51,7 +48,6 @@
 #include <mach/hardware.h>
 #include <mach/ts.h>
 #include <mach/tmpa910_regs.h>
-#include <asm/serial.h>
 #include <asm/dma.h>
 #include <linux/smsc911x.h>
 
@@ -306,11 +302,7 @@ static struct resource tmpa910_resource_lcdc[] = {
 		.start	= LCDC_BASE,
 		.end	= LCDC_BASE + 0x400,
 		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= FB_OFFSET,
-		.end	= FB_OFFSET+FB_SIZE,
-		.flags	= IORESOURCE_MEM,
-	}, {
+	},{
 		.start	= INTR_VECT_LCDC,
 		.end	= INTR_VECT_LCDC,
 		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
@@ -326,6 +318,9 @@ struct platform_device tmpa910_device_lcdc= {
 	.id		= 0,
 	.resource	= tmpa910_resource_lcdc,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_lcdc),
+        .dev = {
+		.coherent_dma_mask = 0xffffffff,		
+        },
 };
 
 
@@ -570,7 +565,7 @@ static void __init setup_lcdc_device(void)
 	gpio_direction_output(97, 1);
 	gpio_direction_output(20, 1);
 
-	/* Reset  */
+	/* Reset */
   	gpio_set_value(96, 0);
     	udelay(1000);
 	gpio_set_value(96, 1);
@@ -646,6 +641,10 @@ static void __init tonga_init(void)
 #if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
+	GPIOCDIR = 0xFF;
+	GPIOCFR1 = 0;
+	GPIOCFR2 = 0;
+	GPIOCDATA = 0x00;
 }
 
 

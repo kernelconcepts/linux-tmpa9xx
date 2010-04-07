@@ -1,7 +1,8 @@
 /*
- *  linux/drivers/video/tmpa910_lcdc.c -- TMPA910 frame buffer device
+ *  linux/drivers/video/tmpa910_fb.c -- TMPA9xx frame buffer driver
  *
  *	Copyright (C) 2008 bplan GmbH
+ *      Copyright (C) 2010 Florian Boor <florian@kernelconcepts.de>
  *
  *  This file is subject to the terms and conditions of the GNU General Public
  *  License. See the file COPYING in the main directory of this archive for
@@ -19,6 +20,7 @@
 #include <linux/delay.h>
 #include <linux/fb.h>
 #include <linux/init.h>
+#include <linux/dma-mapping.h>
 #include <mach/tmpa910_regs.h>
 
 #include <asm/byteorder.h>
@@ -26,11 +28,13 @@
 
 #include <video/tmpa910_fb.h>
 
-/********/
+
+
 /* Supported palette hacks */
 enum {
 	cmap_unknown,
 };
+
 struct hw_tmpa910_lcdc
 {
 	uint32_t LCDTiming0;	//			(LCDC_Base+0x00
@@ -59,25 +63,8 @@ struct tmpa910_lcdc_par {
 };
 
 struct tmpa910_lcdc_par default_par;
-/********/
-/********/
 
-static int tmpa910_lcdc_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			  u_int transp, struct fb_info *info);
-static int tmpa910_lcdc_blank(int blank, struct fb_info *info);
 
-/********/
-/********/
-static struct fb_ops tmpa910_lcdc_ops = {
-	.owner = THIS_MODULE,
-	.fb_setcolreg = tmpa910_lcdc_setcolreg,
-	.fb_blank = tmpa910_lcdc_blank,
-	.fb_fillrect = cfb_fillrect,
-	.fb_copyarea = cfb_copyarea,
-	.fb_imageblit = cfb_imageblit,
-};
-
-/******************/
 static void _init_it(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t *LCDReg, int  width, int height)
 {
 	LCDDA_LDACR0 = 0x00; /* LCDDA functions off */
@@ -147,38 +134,31 @@ static int tmpa910_lcdc_setcolreg(unsigned regno, unsigned red, unsigned green,
 	return 0;
 }
 
-    /*
-     *  Blank the display.
-     */
 
-static int tmpa910_lcdc_blank(int blank, struct fb_info *info)
-{
-	return 0;
-}
-
-//static void __iomem *tmpa910_lcdc_map_reg(struct device_node *np, int index,
-//                                unsigned long offset, unsigned long size)
-// SNIP 
-
+static struct fb_ops tmpa910_lcdc_ops = {
+	.owner = THIS_MODULE,
+	.fb_setcolreg = tmpa910_lcdc_setcolreg,
+	.fb_fillrect = cfb_fillrect,
+	.fb_copyarea = cfb_copyarea,
+	.fb_imageblit = cfb_imageblit,
+};
 
 
 static int __init tmpa910_lcdc_init_fb(
 	struct platform_device *pdev,	
 	const char *name, const char *full_name,
 	int width, int height, int depth, 
-	int pitch, uint32_t *LCDReg, unsigned long address, void *lcdc_base)
+	int pitch, uint32_t *LCDReg, void *lcdc_base)
 {
 	struct tmpa910_lcdc_par *par = &default_par;
 	struct fb_fix_screeninfo *fix;
 	struct fb_var_screeninfo *var;
 	struct fb_info *info;
-
+	dma_addr_t dma;
+	u32 len;
 	int ret;
 
-	//printk(KERN_INFO "Using %dx%d %s at %lx, depth=%d, pitch=%d\n",
-	//       width, height, name, address, depth, pitch);
-
-
+    
 	info = framebuffer_alloc(0, &pdev->dev);
 	if (info == NULL) {
 		return -ENOMEM;
@@ -194,13 +174,23 @@ static int __init tmpa910_lcdc_init_fb(
 
 	var->xres = var->xres_virtual = width;
 	var->yres = var->yres_virtual = height;
-	fix->line_length = pitch;
 
-	fix->smem_start = address;
-	fix->smem_len = pitch * height;
+	len = pitch * height;
+	info->screen_base
+		= dma_alloc_writecombine (&pdev->dev, len,
+					  &dma, GFP_KERNEL);
+	if (!info->screen_base) {
+		printk(KERN_ERR "tmpa910_fb: unable to map framebuffer\n");
+		return -ENOMEM;
+	}
+
+	fix->smem_start = dma;
+	fix->smem_len = len;
+    
+	fix->line_length = pitch;
 	fix->type = FB_TYPE_PACKED_PIXELS;
 	fix->type_aux = 0;
-
+    
 	par->cmap_type = cmap_unknown;
 
 	fix->visual = FB_VISUAL_TRUECOLOR;
@@ -250,12 +240,11 @@ static int __init tmpa910_lcdc_init_fb(
 	var->vmode = FB_VMODE_NONINTERLACED;
 
 	info->fbops = &tmpa910_lcdc_ops;
-	info->screen_base = ioremap(address, fix->smem_len);
 	
 	// Here real LCD hw init
 	par->hw_tmpa910_lcdc = (void *) (lcdc_base);
 	_init_it( par->hw_tmpa910_lcdc, LCDReg, width, height);
-	_setup_fb( par->hw_tmpa910_lcdc, (uint32_t) address);
+	_setup_fb( par->hw_tmpa910_lcdc, (uint32_t) dma);
 	
 	// ok
 	info->par = par;
@@ -278,13 +267,12 @@ static int __init tmpa910_lcdc_init_fb(
 
 	// Success :-)
 	printk(KERN_INFO "fb%d: Toshiba TMPA9x0 Frame buffer device at 0x%lx (mapped 0x%p)\n",
-	       info->node, address,  info->screen_base);
+	       info->node, dma,  info->screen_base);
 
 	return 0;
 }
 
 #ifdef CONFIG_PM
-
 static int tmpa910_lcdc_suspend(struct platform_device *pdev, pm_message_t mesg)
 {
 	return 0;
@@ -294,7 +282,6 @@ static int tmpa910_lcdc_resume(struct platform_device *pdev)
 {
 	return 0;
 }
-
 #else
 #define tmpa910_lcdc_suspend	NULL
 #define tmpa910_lcdc_resume	NULL
@@ -326,19 +313,11 @@ static int __init tmpa910_lcdc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	fb = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	if (!fb) {
-		printk(KERN_ERR "resources unusable\n");
-		ret = -ENXIO;
-		return ret;
-	}
-	
 	ret = tmpa910_lcdc_init_fb(pdev,
 		"TMPA910 FB" , "Toshiba TMPA910 Frame Buffer",
 		platforminfo->width, platforminfo->height,
 		platforminfo->depth, platforminfo->pitch,
-		platforminfo->LCDReg,
-		fb->start, (void *) regs->start);
+		platforminfo->LCDReg, (void *) regs->start);
 
 	return ret;
 }

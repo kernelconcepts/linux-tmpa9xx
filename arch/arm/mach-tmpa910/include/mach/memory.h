@@ -5,6 +5,7 @@
  *  Copyright (C) 2002 Shane Nay (shane@minirl.com)
  *  Copyright (C) 2006 Jochen Karrer (jk06@jkarrer.de)
  *  Copyright (C) 2008 bplan GmbH
+ *  Copyright (C) 2010 Florian Boor <florian@kernelconcepts.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,11 +24,8 @@
 #ifndef __ASM_ARCH_MEMORY_H
 #define __ASM_ARCH_MEMORY_H
 
-#define FB_SIZE   UL(2048*1024)
-#define FB_OFFSET PHYS_OFFSET + MEM_SIZE 
-
 #define PHYS_OFFSET     UL(0x40000000)
-#define MEM_SIZE        ( UL(0x04000000) - FB_SIZE)
+#define MEM_SIZE        UL(0x04000000)
 /*
  * Virtual view <-> DMA view memory address translations
  * virt_to_bus: Used to translate the virtual address to an
