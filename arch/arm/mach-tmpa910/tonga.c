@@ -297,7 +297,7 @@ struct platform_device tmpa910_device_ts = {
 /* 
  * LCD controller device 
  */
-static struct resource tmpa910_resource_lcdc[] = {
+static struct resource tmpa9xx_resource_lcdc[] = {
 	{
 		.start	= LCDC_BASE,
 		.end	= LCDC_BASE + 0x400,
@@ -313,11 +313,11 @@ static struct resource tmpa910_resource_lcdc[] = {
 static struct tmpa910_lcdc_platforminfo topas910_v1_lcdc_platforminfo;
 
 
-struct platform_device tmpa910_device_lcdc= {
-	.name		= "tmpa910_lcdc",
+struct platform_device tmpa9xx_device_lcdc= {
+	.name		= "tmpa9xxfb",
 	.id		= 0,
-	.resource	= tmpa910_resource_lcdc,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_lcdc),
+	.resource	= tmpa9xx_resource_lcdc,
+	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_lcdc),
         .dev = {
 		.coherent_dma_mask = 0xffffffff,		
         },
@@ -478,7 +478,7 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_MTD_NAND_TMPA910
  	&tmpa910_nand_device,
 #endif
-	&tmpa910_device_lcdc,
+	&tmpa9xx_device_lcdc,
 	&tmpa910_device_i2c,
 #ifdef CONFIG_USB_GADGET_TMPA910
 	&tmpa910_udc_device,
@@ -532,30 +532,30 @@ static void __init setup_lcdc_device(void)
 	#define IOE			  0
 	#define CPL                       ((XSIZE_PHYS-1) & 0x3FF)
 
-	LCDReg[0] = 
-				  ( (PPL << 2)	    /* pixel per line */
+	LCDReg[0] = 		  ( (PPL << 2)	    /* pixel per line */
 				| ( (HSW) << 8 )    /* tHSW. Horizontal sync pulse */
 				| ( (HFP) << 16 )   /* tHFP, Horizontal front porch */
 				| ( (HBP) << 24 )); /* tHBP, Horizontal back porch */
 
-	LCDReg[1] =  		  (( VBP << 24) /* tVBP */
+	LCDReg[1] =  		 (( VBP << 24)  /* tVBP */
 				| ( VFP << 16) 	/* tVFP */
 				| ( VSW << 10)  /* tVSP */
-				| ( LPP));
+				|   LPP);
 
 	LCDReg[2] =               ((PCD_HI << 27)
 	                        | (CPL << 16)
-			        | (IOE<<14)
-			        | (IPC<<13)
-				| (IHC<<12)
-				| (IVS<<11)
+			        | (IOE << 14)
+			        | (IPC << 13)
+				| (IHC << 12)
+				| (IVS << 11)
 				| (PCD_LO << 0));
 				
 	LCDReg[3] = 0;
     
 	/* LCDControl */
-	LCDReg[4] = (0x4<<1)  | (1<<5) | (1<<11) | (1<<16);
-	tmpa910_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
+	LCDReg[4] = (0x4 << 1) | (1 << 5) | (1 << 11) | (1 << 16);
+    
+	tmpa9xx_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
 
 	/* Configure Pins and reset LCD */
 	gpio_request(96, "LCD Reset");
@@ -608,6 +608,11 @@ static void __init tonga_init(void)
     
 	GPIORDIR &= ~(1 << 2); /* Eth IRQ */
     
+	GPIOCDIR = 0xFF;
+	GPIOCFR1 = 0;
+	GPIOCFR2 = 0;
+	GPIOCDATA = 0x00;
+    
 	GPIOCIE &= ~0xC0; /* USB Host */
 	GPIOCFR1 &= ~0xC0;
 	GPIOCFR2 |=  0xC0;
@@ -641,10 +646,6 @@ static void __init tonga_init(void)
 #if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
-	GPIOCDIR = 0xFF;
-	GPIOCFR1 = 0;
-	GPIOCFR2 = 0;
-	GPIOCDATA = 0x00;
 }
 
 
