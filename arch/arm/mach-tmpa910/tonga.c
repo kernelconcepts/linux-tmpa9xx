@@ -527,7 +527,7 @@ static void __init setup_lcdc_device(void)
 	#define PCD_HI                    (0)            /* PCD value, upper 5 bits */
 	#define PCD_LO                    ((13) & 0x1F)  /* PCD value, lower 5 bits */
 	#define IPC                       1
-	#define IHC			  1
+	#define IHS			  1
 	#define IVS			  1
 	#define IOE			  0
 	#define CPL                       ((XSIZE_PHYS-1) & 0x3FF)
@@ -546,7 +546,7 @@ static void __init setup_lcdc_device(void)
 	                        | (CPL << 16)
 			        | (IOE << 14)
 			        | (IPC << 13)
-				| (IHC << 12)
+				| (IHS << 12)
 				| (IVS << 11)
 				| (PCD_LO << 0));
 				
