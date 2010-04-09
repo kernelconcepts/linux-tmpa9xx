@@ -219,10 +219,6 @@ struct platform_device tmpa910_device_i2c = {
 };
 
 
-
-
-
-
 #ifdef CONFIG_SPI_CHANNEL0
 static struct resource tmpa910_resource_spi0[] = {
 	{
@@ -331,10 +327,13 @@ static struct tmpa910_lcdc_platforminfo topas910_v1_lcdc_platforminfo;
 
 
 struct platform_device tmpa910_device_lcdc= {
-	.name		= "tmpa910_lcdc",
+	.name		= "tmpa9xxfb",
 	.id		= 0,
 	.resource	= tmpa910_resource_lcdc,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_lcdc),
+        .dev = {
+		.coherent_dma_mask = 0xffffffff,		
+        },
 };
 
 
