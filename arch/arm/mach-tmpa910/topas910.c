@@ -2,7 +2,7 @@
  * arch/arm/mach-tmpa910/topas910.c -- Topas 910 machine 
  *
  * Copyright (C) 2008 bplan GmbH. All rights reserved.
- * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
+ * Copyright (C) 2009, 2010 Florian Boor <florian.boor@kernelconcepts.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -320,10 +320,6 @@ static struct resource tmpa910_resource_lcdc[] = {
 		.end	= LCDC_BASE + 0x400,
 		.flags	= IORESOURCE_MEM,
 	}, {
-		.start	= FB_OFFSET,
-		.end	= FB_OFFSET+FB_SIZE,
-		.flags	= IORESOURCE_MEM,
-	}, {
 		.start	= INTR_VECT_LCDC,
 		.end	= INTR_VECT_LCDC,
 		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
@@ -345,7 +341,6 @@ struct platform_device tmpa910_device_lcdc= {
 /* 
  * 7 segment LED display
  */
-
 static struct platform_device topas910_led_device = {
 	.name = "led-topas",
 	.id = -1,
@@ -355,7 +350,6 @@ static struct platform_device topas910_led_device = {
 /*
  * Joystick 
  */
-
 static struct gpio_keys_button topas910_buttons[] = {
 	{
 		.code	= KEY_LEFT,
@@ -587,29 +581,57 @@ static void __init _setup_lcdc_device(void)
 	
 	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
 #ifdef CONFIG_DISPLAY_GLYN_640_480
-	int width  = 640;
-	int height = 480;
-	
-	topas910_v1_lcdc_platforminfo.width  = width;
-	topas910_v1_lcdc_platforminfo.height = height;
+ // ET057007DHU Display
+
+#define XSIZE_PHYS 640
+#define YSIZE_PHYS 480
+	topas910_v1_lcdc_platforminfo.width  = XSIZE_PHYS;
+	topas910_v1_lcdc_platforminfo.height = YSIZE_PHYS;
 	topas910_v1_lcdc_platforminfo.depth  = 32;
-	topas910_v1_lcdc_platforminfo.pitch  = width * 4; /* line length */
+	topas910_v1_lcdc_platforminfo.pitch  = XSIZE_PHYS * 4;
+
+
+//      Horizontal timing, LCDTiming0
+#define HBP                       (90)                      // Horizontal back porch  0..255
+#define HFP                       (6)                      // Horizontal front porch 0..255
+#define HSW                       (10)                      // Horizontal sync pulse width 0..255
+#define PPL                       ((XSIZE_PHYS / 16) - 1)     // Pixel per line value 0..255
+
+//      Vertical timing, LCDTiming1
+#define VBP                       (8)                      // Vertical back porch  0..255
+#define VFP                       (8)                      // Vertical front porch 0..255
+#define VSW                       (2)                      // Vertical sync pulse lines value 0..63
+#define LPP                       (YSIZE_PHYS - 1)            // Lines per panel value 0..1023
+
+//      Clock timing, LCDTiming2
+#define PCD_HI                    (0)            // PCD value, upper 5 bits
+#define PCD_LO                    ((2) & 0x1F)          // PCD value, lower 5 bits
+#define IPC                       1
+#define IHS			  1
+#define IVS			  1
+#define CPL                       ((XSIZE_PHYS-1)&0x3FF)
+
 	LCDReg[0] = 
-				  ( ((width/16)-1) << 2)	// pixel per line
-				| ( (48) << 8 ) 				// tHSW. Horizontal sync pulse
-				| ( (53) << 16 ) 			// tHFP, Horizontal front porch
-				| ( (155) << 24 ) 			// tHBP, Horizontal back porch
-				;
+				  ( (PPL << 2)	// pixel per line
+				| ( (HSW) << 8 ) 			// tHSW. Horizontal sync pulse
+				| ( (HFP) << 16 ) 			// tHFP, Horizontal front porch
+				| ( (HBP) << 24 )); 			// tHBP, Horizontal back porch
 
-	LCDReg[1] = 
-				(35 << 24) 		// tVBP		
-				| (8 << 16) 		// tVFP
-				| (2 << 10)		// tVSP
-				| (height-1);
 
-	LCDReg[2] = ((width-1)<<16) | (4 & 0x1f) | (((16-2)>>5) << 27) | 1<<13 | 1<<12 | 0<<11;
+	LCDReg[1] =  		  (( VBP << 24) 		// tVBP		
+				| ( VFP << 16) 		// tVFP
+				| ( VSW << 10) 		// tVSP
+				| ( LPP));
+
+	LCDReg[2] =               ((PCD_HI << 27)
+	                        | (CPL << 16)
+			        | (IPC<<13)
+				| (IHS<<12)
+				| (IVS<<11)
+				| (PCD_LO << 0));
+				
 	LCDReg[3] = 0;
-	LCDReg[4] = (0x5<<1)  | (1<<5) | (1<<11);
+	LCDReg[4] = (0x5<<1)  | (1<<5)  | (1<<11) | (1<<16); /* LCDControl */
 #else
 	int width  = 320;
 	int height = 240;
@@ -653,7 +675,7 @@ static void __init topas910_init(void)
 	SMC_SET_CYCLES_3 = 0x0004AFAA;
 	SMC_SET_OPMODE_3 = 0x00000002;
 	SMC_DIRECT_CMD_3 = 0x00C00000;
-        __REG(0xf00a0050) = 0x01;
+    	SMC_TIMEOUT = 0x01;
 
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = 0xffffffff;
@@ -675,11 +697,6 @@ static void __init topas910_init(void)
 	NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
               	             // NDREn L = 4clks,H = 3clks
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
-
-#ifdef CONFIG_USB_ISP1362_HCD
-	// Force configuration on the ISP expansion port interrupt line
-#warning	_configure_isp1362_expansion_irq();
-#endif
 
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
