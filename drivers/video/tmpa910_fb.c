@@ -273,13 +273,13 @@ static int __init tmpa910_lcdc_init_fb(
 }
 
 /* parse options in form video=tmpa9xxfb:%08x:%08x:%08x */
-void tmpa9xx_lcdc_parse_params(uint32_t *LCDReg, char *options)
+int tmpa9xx_lcdc_parse_params(uint32_t *LCDReg, char *options)
 {
     	uint32_t *r0, r1, r2;
     
 	if (sscanf(options, "%08lx:%08lx:%08lx", &r0, &r1, &r2) != 3) {
 		printk(KERN_WARNING "tmpa9xxfb: Unable to parse options %s\n", options);
-		return;
+		return 0;
 	}
 	
 	printk(KERN_INFO "tmpa9xxfb: Options from cmdline: \n" \
@@ -288,6 +288,8 @@ void tmpa9xx_lcdc_parse_params(uint32_t *LCDReg, char *options)
 	LCDReg[0] = r0;
 	LCDReg[1] = r1;
 	LCDReg[2] = r2;
+    
+	return 1;
 }
 
 #ifdef CONFIG_PM
@@ -334,8 +336,18 @@ static int __init tmpa910_lcdc_probe(struct platform_device *pdev)
 
 	/* Get command line options */
 	fb_get_options("tmpa9xxfb", &options);
-	if (options)
-		tmpa9xx_lcdc_parse_params(platforminfo->LCDReg, options);
+	if (options) {
+		int ret;
+	    
+		ret = tmpa9xx_lcdc_parse_params(platforminfo->LCDReg, options);
+	    	if (ret) {
+			platforminfo->width = (((platforminfo->LCDReg[0] & 0xFF) >> 2) + 1) * 16;
+			platforminfo->height = (platforminfo->LCDReg[1] & 0x3FF) + 1; 
+			platforminfo->pitch = platforminfo->width * platforminfo->depth / 8; 
+			printk(KERN_INFO "tmpa9xxfb: set framebuffer size to: %ix%i \n", 
+			       platforminfo->width, platforminfo->height);
+		}
+	}
 
 	/* initialise */
 	ret = tmpa910_lcdc_init_fb(pdev,
