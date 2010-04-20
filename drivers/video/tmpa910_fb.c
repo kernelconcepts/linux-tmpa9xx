@@ -41,15 +41,15 @@ struct hw_tmpa910_lcdc
 	uint32_t LCDTiming1;	//			(LCDC_Base+0x04
 	uint32_t LCDTiming2;	//			(LCDC_Base+0x08
 	uint32_t LCDTiming3;	//			(LCDC_Base+0x0C
-	uint32_t LCDUPBASE;		//			(LCDC_Base+0x10
-	uint32_t LCDLPBASE;		//			(LCDC_Base+0x14
-	uint32_t LCDIMSC;			//			(LCDC_Base+0x18
+	uint32_t LCDUPBASE;	//			(LCDC_Base+0x10
+	uint32_t LCDLPBASE;	//			(LCDC_Base+0x14
+	uint32_t LCDIMSC;	//			(LCDC_Base+0x18
 	uint32_t LCDControl;	//			(LCDC_Base+0x1C
-	uint32_t LCDRIS;			//			(LCDC_Base+0x20
-	uint32_t LCDMIS;			//			(LCDC_Base+0x24
-	uint32_t LCDICR;			//			(LCDC_Base+0x28
-	uint32_t LCDUPCURR;		//			(LCDC_Base+0x2C
-	uint32_t LCDLPCURR;		//			(LCDC_Base+0x30
+	uint32_t LCDRIS;	//			(LCDC_Base+0x20
+	uint32_t LCDMIS;	//			(LCDC_Base+0x24
+	uint32_t LCDICR;	//			(LCDC_Base+0x28
+	uint32_t LCDUPCURR;	//			(LCDC_Base+0x2C
+	uint32_t LCDLPCURR;	//			(LCDC_Base+0x30
 	uint32_t Rsd[0x1c0];	//			Reserved
 	uint32_t LCDPalette;	//			(LCDC_Base+0x200
 };
