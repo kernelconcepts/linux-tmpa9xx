@@ -314,10 +314,6 @@ static struct resource tmpa910_resource_lcdc[] = {
 		.end	= LCDC_BASE + 0x400,
 		.flags	= IORESOURCE_MEM,
 	}, {
-		.start	= FB_OFFSET,
-		.end	= FB_OFFSET+FB_SIZE,
-		.flags	= IORESOURCE_MEM,
-	}, {
 		.start	= INTR_VECT_LCDC,
 		.end	= INTR_VECT_LCDC,
 		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
