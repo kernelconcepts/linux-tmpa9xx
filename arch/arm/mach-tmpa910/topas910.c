@@ -634,7 +634,7 @@ static void __init _setup_lcdc_device(void)
 #else
 	int width  = 320;
 	int height = 240;
-	
+
 	topas910_v1_lcdc_platforminfo.width  = width;
 	topas910_v1_lcdc_platforminfo.height = height;
 	topas910_v1_lcdc_platforminfo.depth  = 32;

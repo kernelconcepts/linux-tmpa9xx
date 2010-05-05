@@ -2,7 +2,7 @@
  *  arch/arm/mach-tmpa910/topasa900.c 
  *
  * Copyright (C) 2008 bplan GmbH. All rights reserved.
- * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
+ * Copyright (C) 2009, 2010 Florian Boor <florian.boor@kernelconcepts.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -325,10 +325,13 @@ static struct tmpa910_lcdc_platforminfo topas910_v1_lcdc_platforminfo;
 
 
 struct platform_device tmpa910_device_lcdc= {
-	.name		= "tmpa910_lcdc",
+	.name		= "tmpa9xxfb",
 	.id		= 0,
 	.resource	= tmpa910_resource_lcdc,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_lcdc),
+        .dev = {
+		.coherent_dma_mask = 0xffffffff,		
+        },
 };
 
 
@@ -609,6 +612,61 @@ static struct platform_device *devices[] __initdata = {
 static void __init setup_lcdc_device(void)
 {
 	uint32_t *LCDReg;
+	
+	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
+#ifdef CONFIG_DISPLAY_GLYN_640_480
+ // ET057007DHU Display
+
+#define XSIZE_PHYS 640
+#define YSIZE_PHYS 480
+	topas910_v1_lcdc_platforminfo.width  = XSIZE_PHYS;
+	topas910_v1_lcdc_platforminfo.height = YSIZE_PHYS;
+	topas910_v1_lcdc_platforminfo.depth  = 32;
+	topas910_v1_lcdc_platforminfo.pitch  = XSIZE_PHYS * 4;
+
+
+//      Horizontal timing, LCDTiming0
+#define HBP                       (90)                      // Horizontal back porch  0..255
+#define HFP                       (6)                      // Horizontal front porch 0..255
+#define HSW                       (10)                      // Horizontal sync pulse width 0..255
+#define PPL                       ((XSIZE_PHYS / 16) - 1)     // Pixel per line value 0..255
+
+//      Vertical timing, LCDTiming1
+#define VBP                       (8)                      // Vertical back porch  0..255
+#define VFP                       (8)                      // Vertical front porch 0..255
+#define VSW                       (2)                      // Vertical sync pulse lines value 0..63
+#define LPP                       (YSIZE_PHYS - 1)            // Lines per panel value 0..1023
+
+//      Clock timing, LCDTiming2
+#define PCD_HI                    (0)            // PCD value, upper 5 bits
+#define PCD_LO                    ((2) & 0x1F)          // PCD value, lower 5 bits
+#define IPC                       1
+#define IHS			  1
+#define IVS			  1
+#define CPL                       ((XSIZE_PHYS-1)&0x3FF)
+
+	LCDReg[0] = 
+				  ( (PPL << 2)	// pixel per line
+				| ( (HSW) << 8 ) 			// tHSW. Horizontal sync pulse
+				| ( (HFP) << 16 ) 			// tHFP, Horizontal front porch
+				| ( (HBP) << 24 )); 			// tHBP, Horizontal back porch
+
+
+	LCDReg[1] =  		  (( VBP << 24) 		// tVBP		
+				| ( VFP << 16) 		// tVFP
+				| ( VSW << 10) 		// tVSP
+				| ( LPP));
+
+	LCDReg[2] =               ((PCD_HI << 27)
+	                        | (CPL << 16)
+			        | (IPC<<13)
+				| (IHS<<12)
+				| (IVS<<11)
+				| (PCD_LO << 0));
+				
+	LCDReg[3] = 0;
+	LCDReg[4] = (0x5<<1)  | (1<<5)  | (1<<11) | (1<<16); /* LCDControl */
+#else
 	int width  = 320;
 	int height = 240;
 
@@ -616,21 +674,24 @@ static void __init setup_lcdc_device(void)
 	topas910_v1_lcdc_platforminfo.height = height;
 	topas910_v1_lcdc_platforminfo.depth  = 32;
 	topas910_v1_lcdc_platforminfo.pitch  = width*4;
-	
-	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
-	LCDReg[LCDREG_TIMING0_H] =	( ((height/16)-1) << 2)	// pixel per line
-			| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
-			| ( (8-1) << 16 ) 			// tHFP, Horizontal front porch
-			| ( (8-1) << 24 ); 			// tHBP, Horizontal back porch
 
-	LCDReg[LCDREG_TIMING1_V] =     (2 << 24) 		// tVBP		
-			| (2 << 16) 		// tVFP
-			| ((2-1) << 10) 		// tVSP
-			| (width-1);
+	LCDReg[0] = 
+				  ( ((width/16)-1) << 2)	// pixel per line
+				| ( (8-1) << 8 ) 				// tHSW. Horizontal sync pulse
+				| ( (8-1) << 16 ) 			// tHFP, Horizontal front porch
+				| ( (8-1) << 24 ) 			// tHBP, Horizontal back porch
+				;
 
-	LCDReg[LCDREG_TIMING2_CLK] = ((width-1)<<16) | 0x0000e | 1<<13 | 0<<12 | 0<<11;
-	LCDReg[LCDREG_TIMING3_LEC] = 0;
-	LCDReg[LCDREG_LCDCONTROL]	= (0x5<<1)  | (1<<5) | (1<<11);
+	LCDReg[1] = 
+				(2 << 24) 		// tVBP		
+				| (2 << 16) 		// tVFP
+				| ((2-1) << 10) 		// tVSP
+				| (height-1);
+
+	LCDReg[2] = ((width-1)<<16) | 0x0000e | 1<<13 | 0<<12 | 0<<11;
+	LCDReg[3] = 0;
+	LCDReg[4]	= (0x5<<1)  | (1<<5) | (1<<11);
+#endif
 	tmpa910_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
 }
 
@@ -649,7 +710,8 @@ static void __init topasa900_init(void)
 	SMC_SET_CYCLES_3 = 0x0004AFAA;
 	SMC_SET_OPMODE_3 = 0x00000002;
 	SMC_DIRECT_CMD_3 = 0x00C00000;
-    
+    	SMC_TIMEOUT = 0x01;
+
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = 0xffffffff;
 	platform_bus.dma_mask=&topas910_dmamask;
