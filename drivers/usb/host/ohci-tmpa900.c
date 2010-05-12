@@ -28,6 +28,8 @@ static int _ohci_init (struct ohci_hcd *ohci)
 	int ret;
 	struct usb_hcd *hcd = ohci_to_hcd(ohci);
 
+	ohci->flags |= OHCI_QUIRK_HUB_POWER;
+
 	disable (ohci);
 	ohci->regs = hcd->regs;
 
@@ -606,8 +608,6 @@ static const struct hc_driver ohci_tmpa900_hc_driver = {
 	 */
 	.hub_status_data =	ohci_hub_status_data,
 	.hub_control =		ohci_hub_control,
-#warning check this, renamed?
-//	.hub_irq_enable =	ohci_rhsc_enable,
 #ifdef	CONFIG_PM
 	.bus_suspend =		ohci_bus_suspend,
 	.bus_resume =		ohci_bus_resume,
@@ -728,11 +728,6 @@ static int ohci_hcd_tmpa900_drv_probe(struct platform_device *pdev)
 	}
 
 	ohci_hcd_init(hcd_to_ohci(hcd));
-
-	//ohci_quirk_nec(hcd);
-
-	//hcd_to_ohci(hcd)->flags |= OHCI_QUIRK_SUPERIO;
-	//hcd_to_ohci(hcd)->flags |= OHCI_QUIRK_NEC;
 
 	retval = usb_add_hcd(hcd, irq, IRQF_DISABLED | IRQF_SHARED);
 	if (retval)
