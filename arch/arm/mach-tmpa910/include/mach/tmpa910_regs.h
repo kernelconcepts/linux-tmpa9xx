@@ -506,7 +506,8 @@
 
 #define	NDFMCR0_ECCRST	(1 << 0)
 #define	NDFMCR0_BUSY	(1 << 1)
-#define	NDFMCR0_ECCE	(1 << 2)#define GPIOVFR2		__REG(GPIO_V_BASE + 0x428)
+#define	NDFMCR0_ECCE	(1 << 2)
+#define GPIOVFR2		__REG(GPIO_V_BASE + 0x428)
 
 #define	NDFMCR0_CE1	(1 << 3)
 #define	NDFMCR0_CE0	(1 << 4)
@@ -522,6 +523,15 @@
 #define	NAND_DMAC_STATUS	(1 << 5)
 #define	NAND_DMAC_CLEAR		(1 << 5)
 
+// added for MLC
+#define NDFMCR0_ECC_RSM_ON		0x394
+#define NDFMCR0_ECC_RSECGW_ON	0x0194
+#define NDFMCR0_ECC_RSECGW_OFF	0x094
+#define NDFINTC_LATCH_CLEAR		0x99
+#define NDFINTC_RSERIS			0x20
+#define NDFINTC_RSEIC			0x80
+#define INTC_EN					1
+#define INTC_DIS				0
 
 
 /* LCDDA (LCD Data Process Accelerator) */
