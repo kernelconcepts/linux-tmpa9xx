@@ -1,5 +1,5 @@
 /*
- *  drivers/mtd/nand/tmpa910_nand.c 
+ *  drivers/mtd/nand/tmpa9x0_nand.c 
  *
  * Copyright (C) 2008 ?. All rights reserved. (?)
  * Copyright (C) 2009, 2010 Florian Boor <florian.boor@kernelconcepts.de>
@@ -18,7 +18,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  * 
- * TMPA 910 NAND controller driver, unclear origin (BPlan or Toshiba likely)
+ * TMPA 9x0 NAND controller driver
  */
  
 #include <linux/slab.h>
@@ -34,51 +34,89 @@
 #include <asm/io.h>
 #include <mach/dma.h>
 #include <mach/tmpa910_regs.h>
-#include "tmpa910_nand.h"
 
-#define ECCBUF_SIZE 256
-#define WAIT_TIMEOUT  0xFFFF
-#define DMA_TIMEOUT  0xFFFF
-#define COLUMN_1CYL_CMD	0x05
-#define COLUMN_2CYL_CMD	0xE0
+#define ECCBUF_SIZE 		 256
+#define DMA_TIMEOUT   		0xFFFF
+#define ECC_BYTES		 512
+#define NAND_DMA_TRANSFER_SIZE 	 512
+#define INTERNAL_BUFFER_SIZE 	 512
+#define NORMALPAGE_SIZE		 512
+#define LAGEPAGE_SIZE 		 (4*NORMALPAGE_SIZE)
+#define NORMALPAGE_SPARE	  16
+#define LARGEPAGE_SPARE		 (4*NORMALPAGE_SPARE)
+#define ECC_BYTES_HAMMING	   6
+#define ECC_BYTES_RS		  10
+#define NAND_DMA_CHANNEL	   5
 
-struct tmpa910_nand_timing {
+struct tmpa9x0_nand_timing {
 	unsigned int splw;
 	unsigned int sphw;
 	unsigned int splr;
 	unsigned int sphr;
 };
 
-struct tmpa910_nand_private {
-	struct nand_chip chip;
-	unsigned int chip_select;
-	unsigned int mlc;
-	unsigned int dma;
-	unsigned int softecc;
-	unsigned int column;
-	unsigned int orig_column;
-	unsigned int ecc_pos;
-	unsigned char eccbuf[64];
-	unsigned char *buf;
-	unsigned int phy_buf;
-	unsigned char oob_buf[64];
-	unsigned int dma_ch;
-	struct completion dma_completion;
-	struct tmpa910_nand_timing timing;
+struct tmpa9x0_nand_private {
+	unsigned int dma;			/* use DMA */
+        struct tmpa9x0_nand_timing timing;	/* Timing for NAND access */
+        
+	unsigned int mlc;			/* Flash is mlc (autodetection) */
+        unsigned int page_size;			/* Page size of flash (autodetection) */
+        unsigned int spare_size;		/* Spare size of flash (autodetection) */
+	unsigned int column;			/* internal column position (internal) */
+	unsigned int page_addr;			/* internal page position (internal) */
+        unsigned int dma_ch;			/* used DMA channel (internal) */
+        unsigned int chip_select;		/* Chips selected (internal) */
+	unsigned char *buf;			/* Buffer pointer (internal) */
+	unsigned int phy_buf;			/* internal Buffer (internal) */
+        struct completion dma_completion;       /* copletion of DMA (internal) */ 
+        struct nand_chip chip;			/* nand chip structure (internal) */
 };
 
-struct tmpa910_nand_private tmpa910_nand = {
-	.chip_select = 0,
-	.mlc = 0,
+/* Nand Control */
+struct tmpa9x0_nand_private tmpa9x0_nand = {
+	.dma	= 1,				/* Use driver with DMA */
 	.timing =
 	{
-		.splw = 0x2,
-		.sphw = 0x2,
-		.splr = 0x2,
-		.sphr = 0x2,
+		.splw = 0x2,			/* NDWEn Low pulse width setting  */		
+		.sphw = 0x2,			/* NDWEn High pulse width setting */
+		.splr = 0x2,			/* NDREn Low pulse width setting  */
+		.sphr = 0x2,			/* NDREn High pulse width setting */
 	},
 };
 
+/* NAND OOB layout for different chip types */
+static struct nand_ecclayout nand_oob_hamming_512 = {
+	.eccbytes = 6,
+	.eccpos = {0, 1, 2, 3, 6, 7},
+	.oobfree = {
+		{.offset = 8,
+		 . length = 8}}
+};
+
+static struct nand_ecclayout nand_oob_hamming_2048 = {
+	.eccbytes = 24,
+	.eccpos = {
+		   40, 41, 42, 43, 44, 45, 46, 47,
+		   48, 49, 50, 51, 52, 53, 54, 55,
+		   56, 57, 58, 59, 60, 61, 62, 63},
+	.oobfree = {
+		{.offset = 2,
+		 .length = 38}}
+};
+
+static struct nand_ecclayout nand_oob_rs_2048 = {
+	.eccbytes = 40,
+	.eccpos = {
+		24, 25, 26, 27, 28,
+		29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+		39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+		49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+		59, 60, 61, 62, 63,
+		},
+	.oobfree = {
+		{.offset = 2, .length = 22, },
+	},
+};
 
 #ifdef CONFIG_MTD_PARTITIONS
 /*
@@ -106,72 +144,43 @@ static const char *part_probes[] = { "cmdlinepart", NULL };
 
 #endif
 
-void tmpa910_nand_dma_read(struct tmpa910_nand_private *priv, unsigned int phy_addr, unsigned short size)
+void tmpa9x0_nand_dma_read(struct tmpa9x0_nand_private *priv, unsigned int buf, unsigned short size)
 {
-	DMA_SRC_ADDR(priv->dma_ch) = NDFDTR_PHY;
-	DMA_DEST_ADDR(priv->dma_ch) = phy_addr;
-	DMA_CONTROL(priv->dma_ch) = 0x88489000 + (size/4);
-	DMA_CONFIG(priv->dma_ch) = 0x9009; 
+	DMA_SRC_ADDR(priv->dma_ch) = NDFDTR_PHY;	// Source address
+	DMA_DEST_ADDR(priv->dma_ch)= buf;		// Destination address
+	DMA_CONTROL(priv->dma_ch)  =((0x1<<12) |	// SBSize[2:0] - 0y001: 4 beats
+        			     (0x1<<15) |	// DBSize[2:0] - 0y001: 4 beats
+                                     (0x1<<19) |	// Swidth[2:0] - 0y010: Word (32 bits)
+                                     (0x1<<22) |	// Dwidth[2:0] - 0y010: Word (32 bits)
+                                     (0x1<<27) |	// DI          - 0y1  : Auto Increment Destination
+                                     (0x1<<31) +	// I           - 0y1  : Enable Terminal count interrupt
+                                     (size/4)); 	// TransferSize[11:0
+
+	DMA_CONFIG(priv->dma_ch)   =((0x1<<0)  |	// E             - Channel Enable
+        			     (0x1<<3)  |	// SrcPeripheral - Peripheral
+                                     (0x1<<12) |	// FlowCntrl	 - Peripheral to Memory
+                                     (0x1<<15));	// ITC           - Terminal count interrupt enable
 }
 
-void tmpa910_nand_dma_write(struct tmpa910_nand_private *priv, unsigned int phy_addr, unsigned short size)
+void tmpa9x0_nand_dma_write(struct tmpa9x0_nand_private *priv, const unsigned int buf, unsigned short size)
 {
-
-	DMA_SRC_ADDR(priv->dma_ch) = phy_addr;		// Source address
-	DMA_DEST_ADDR(priv->dma_ch) = NDFDTR_PHY;	// Destination address
-	DMA_CONTROL(priv->dma_ch) = 0x84489000 + (size/4);
-	DMA_CONFIG(priv->dma_ch)= 0x00008901;//FlowCntrl:Memory to peripheral,ITC=1;DMA=EN
+	DMA_SRC_ADDR(priv->dma_ch) = buf;		// Source address
+	DMA_DEST_ADDR(priv->dma_ch)= NDFDTR_PHY;	// Destination address
+	DMA_CONTROL(priv->dma_ch)  =((0x1<<12) |	// SBSize[2:0] - 0y001: 4 beats
+        			     (0x1<<15) |	// DBSize[2:0] - 0y001: 4 beats
+                                     (0x1<<19) |	// Swidth[2:0] - 0y010: Word (32 bits)
+                                     (0x1<<22) |	// Dwidth[2:0] - 0y010: Word (32 bits)
+                                     (0x1<<26) |	// SI          - 0y1  : Auto Increment Source
+                                     (0x1<<31) +	// I           - 0y1  : Enable Terminal count interrupt
+                                     (size/4)); 	// TransferSize[11:0]
+        
+	DMA_CONFIG(priv->dma_ch)   =((0x1<<0)  |	// E             - Channel Enable
+                                     (0x1<<8)  |	// DestPeripheral- Peripheral 
+                                     (0x1<<11) |	// FlowCntrl     - Memory to Peripheral
+                                     (0x1<<15));	// ITC           - Terminal count interrupt enable
 }
 
-static int tmpa910_nand_dev_ready(struct mtd_info *mtd)
-{
-       return !(NDFMCR0 & NDFMCR0_BUSY);
-}
-
-static int tmpa910_nand_als_ready(struct mtd_info *mtd)
-{
-       return !(NDFMCR1 & 0x100);
-}
-
-static void tmpa910_nand_set_cmd(unsigned int cmd)
-{
-	/* Begin command latch cycle */
-	NDFMCR0 |= NDFMCR0_CLE |NDFMCR0_WE;
-	/* Write out the command to the device. */
-	NDFDTR = cmd;
-	/* End command latch cycle */
-	NDFMCR0 &= ~(NDFMCR0_CLE |NDFMCR0_WE);
-}
-
-
-static void tmpa910_nand_set_addr(unsigned int column, unsigned int page_addr,
-				unsigned int buswidth_16, unsigned int third_addr)
-{
-	if (column != -1 || page_addr != -1) {
-		NDFMCR0 |= NDFMCR0_ALE |NDFMCR0_WE;
-
-		/* Serially input address */
-		if (column != -1) {
-			/* Adjust columns for 16 bit buswidth */
-			if (buswidth_16)
-				column >>= 1;
-			NDFDTR = column & 0xff;
-			NDFDTR = column >> 8;
-		}
-		if (page_addr != -1) {
-			NDFDTR = (unsigned char) (page_addr & 0xff);
-			NDFDTR = (unsigned char) ((page_addr >> 8) & 0xff);
-			/* One more address cycle for devices > 128MiB */
-			if (third_addr)
-				NDFDTR = (unsigned char) ((page_addr >> 16) & 0xff);
-		}
-		/* Latch in address */
-		NDFMCR0 &= ~(NDFMCR0_ALE |NDFMCR0_WE);
-	}
-}
-
-static int tmpa910_nand_wait_dma_complete(struct tmpa910_nand_private *priv, 
-						unsigned int timeout)
+static int tmpa9x0_nand_wait_dma_complete(struct tmpa9x0_nand_private *priv,unsigned int timeout)
 {
 	int ret;
 
@@ -181,69 +190,30 @@ static int tmpa910_nand_wait_dma_complete(struct tmpa910_nand_private *priv,
 	return !ret;
 }
 
-static void  tmpa910_nand_get_hwecc(unsigned char *ecc_code, unsigned int mlc)
+static void tmpa9x0_nand_set_ecctype(unsigned int mlc)
 {
-	unsigned int ecc_val = 0;
-	unsigned char *buf = ecc_code;
-	
-	if (!mlc) {
-		ecc_val = NDECCRD1;
-		*buf++ = (unsigned char)(ecc_val&0xff);
-		*buf++ = (unsigned char)(ecc_val>>8);	
-		*buf++ = (unsigned char)(ecc_val>>16);	
-		ecc_val =  NDECCRD0;
-		*buf++ = (unsigned char)(ecc_val&0xff);
-		*buf++ = (unsigned char)(ecc_val>>8);		
-		*buf++ = (unsigned char)(ecc_val>>16);	
-		}
+	if (mlc)
+		NDFMCR1 |= NDFMCR1_ECCS;	/* RS ECC */
 	else
-	{
-	//MLC, Reed solomn ECC data
-		ecc_val = NDECCRD0;
-		*buf++ = (unsigned char)(ecc_val>>8);	
-		*buf++ = (unsigned char)(ecc_val&0xff);
-		*buf++ = (unsigned char)(ecc_val>>24);	
-		*buf++ = (unsigned char)(ecc_val>>16);	
-
-		ecc_val = NDECCRD1;
-		*buf++ = (unsigned char)(ecc_val>>8);
-		*buf++ = (unsigned char)(ecc_val&0xff);
-		*buf++ = (unsigned char)(ecc_val>>24);
-		*buf++ = (unsigned char)(ecc_val>>16);	
-
-		ecc_val = NDECCRD2;
-		*buf++ = (unsigned char)(ecc_val>>8);
-		*buf++ = (unsigned char)(ecc_val&0xff);
-	}
+		NDFMCR1 &= ~NDFMCR1_ECCS;	/* Hamming ECC */
 }
 
-static void tmpa910_nand_set_ecctype(unsigned int mlc)
-{
-	if (mlc) {
-		NDFMCR1 |= NDFMCR1_ECCS;
-	}
-	else {
-		NDFMCR1 &= ~NDFMCR1_ECCS;
-	}
-}
-
-static void tmpa910_nand_start_autoload(unsigned int read)
+static void tmpa9x0_nand_start_autoload(unsigned int read)
 {
 	unsigned int val;
-	
+
 	val = NDFMCR1;
-	if (read) {
-		/*Set it to be read */
-		val &= ~NDFMCR1_SELAL;
-	}
+	if (read)
+		val &= ~NDFMCR1_SELAL;	/*Set it to be read */
 	else
-		val |= NDFMCR1_SELAL;
+		val |= NDFMCR1_SELAL;	/*Set it to be written */
+
 	/* start autoload */
 	val |= NDFMCR1_ALS;
 	NDFMCR1 = val;
 }
 
-static void tmpa910_nand_start_ecc(unsigned int read,unsigned int mlc)
+static void tmpa9x0_nand_start_ecc(unsigned int read,unsigned int mlc)
 {
 	if (mlc && read==0) {
 		NDFMCR0 |= NDFMCR0_RSEDN;
@@ -254,44 +224,15 @@ static void tmpa910_nand_start_ecc(unsigned int read,unsigned int mlc)
 		NDFMCR0 |= NDFMCR0_ECCE |  NDFMCR0_ECCRST | NDFMCR0_WE;
 }
 
-static void tmpa910_nand_set_rw_mode(unsigned int read)
+static void tmpa9x0_nand_set_rw_mode(unsigned int read)
 {
 	if (read)
-		NDFMCR0 &= ~NDFMCR0_WE;
+		NDFMCR0 &= ~NDFMCR0_WE;	/* Set read mode */
 	else
-		NDFMCR0 |= NDFMCR0_WE;
+		NDFMCR0 |= NDFMCR0_WE;	/* Set write mode */
 }
 
-static void tmpa910_nand_calculate_softecc(const unsigned char * dat, unsigned char *ecc_code)
-{
-}
-
-
-/************************************************************/
-/*			COLUMN ADDRESS CHANGE							*/
-/************************************************************/
-/* INPUT    :unsigned shor data									*/
-/* RETURN   :zero bit count										*/
-/* Chg data :													*/
-/************************************************************/
-static int tmpa910_nand_columnchg(unsigned short column_addr )
-{
-
-	tmpa910_nand_set_cmd(COLUMN_1CYL_CMD);
-	tmpa910_nand_set_addr(column_addr,-1,0,0);
-	tmpa910_nand_set_cmd(COLUMN_2CYL_CMD);
-
-	return 0;	
-}
-
-/************************************************************/
-/*			Wait ready NAND flash status					*/
-/************************************************************/
-/* INPUT    :												*/
-/* RETURN   :												*/
-/* Chg data :												*/
-/************************************************************/
-static int tmpa910_nand_waitreedsolomon(void)
+static int tmpa9x0_nand_waitreedsolomon(void)
 {
 	unsigned int reg;
 	unsigned short nCnt;
@@ -309,15 +250,7 @@ static int tmpa910_nand_waitreedsolomon(void)
 	return -1;	
 }
 
-
-/************************************************************/
-/*			ECC ERROR CHECK								*/
-/************************************************************/
-/* INPUT    :													*/
-/* RETURN   :													*/
-/* Chg data :													*/
-/************************************************************/
-static int tmpa910_nand_chkreedsolomon(unsigned char * databuf)
+static int tmpa9x0_nand_chkreedsolomon(unsigned char * databuf)
 {
 	unsigned short  sts_work;
 	unsigned short  err_count;
@@ -328,16 +261,16 @@ static int tmpa910_nand_chkreedsolomon(unsigned char * databuf)
 	NDFINTC = NDFINTC_LATCH_CLEAR;	// latch clear
 	NDFMCR0 = NDFMCR0_ECC_RSM_ON;	/* Error bit calculation circuit start */
 	
-	if(tmpa910_nand_waitreedsolomon() == -1){
+	if(tmpa9x0_nand_waitreedsolomon() == -1){
 		return -1;
 	}
 
 	sts_work = (( NDFMCR1 & 0xf000 ) >> 12 );
 
-	if(sts_work == 0){									/* 0:NO ERROR */
+	if(sts_work == 0){			/* 0:NO ERROR */
 		return 0;
 	}
-	if(sts_work == 1){									/* 1:OVER 5 ERRORS */
+	if(sts_work == 1){			/* 1:OVER 5 ERRORS */
 		return -2;
 	}
 	if( (sts_work == 2) || (sts_work == 3) ){			
@@ -372,371 +305,250 @@ static int tmpa910_nand_chkreedsolomon(unsigned char * databuf)
 		}
 	}
 	else{
-		return -4;										/* OTHER: ERROR */
+		return -4;			/* OTHER: ERROR */
 	}
 	return 0;
 }
 
-static void tmpa910_nand_rson(void)
+static void tmpa9x0_nand_rson(void)
 {
     NDFMCR0 = NDFMCR0_ECC_RSECGW_ON;
 }
 
-static void tmpa910_nand_rsoff(void)
+static void tmpa9x0_nand_rsoff(void)
 {
     NDFMCR0 = NDFMCR0_ECC_RSECGW_OFF;
 }
 
-static void tmpa910_nand_command (struct mtd_info *mtd, unsigned command, int column, int page_addr)
+static int tmpa9x0_nand_dev_ready(struct mtd_info *mtd)
 {
-	register struct nand_chip *this = mtd->priv;
-	int eccsize = this->ecc.size;
-	struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
-	unsigned char * buf, *eccbuf;
-	unsigned int buswidth_16 = 0, third_addr = 0;
-	unsigned char * oob_buf;
-	int ret=0;
-	unsigned char retry=0;
-	
-	if (mtd->writesize > 512) {
-		/* Emulate NAND_CMD_READOOB */
-		if (command == NAND_CMD_READOOB) {
-			column += mtd->writesize;
-			command = NAND_CMD_READ0;
-		}
-		if (this->chipsize > (128 << 20))
-			third_addr = 1;
-	}
-	else {
-		if (this->chipsize > (32 << 20))
-			third_addr = 1;
-	}
-	if (this->options & NAND_BUSWIDTH_16)
-		buswidth_16 = 1;
-	priv->column = priv->orig_column = column;
-	if (eccsize) {
-		if (priv->mlc)
-			priv->ecc_pos = (column / eccsize) * 10;
-		else
-			priv->ecc_pos = (column / eccsize) * 6;
-	}
-	
-	oob_buf = &(priv->oob_buf[0]);
-	
-	if (command == NAND_CMD_READ0) {
-		column = column & ~(eccsize -1);
-
-		if (priv->dma && !priv->softecc) {
-			if (column < mtd->writesize) {
-				while (column < mtd->writesize) {
-					tmpa910_nand_set_ecctype(priv->mlc);
-					buf = priv->buf + column;
-					if (priv->mlc)
-						eccbuf = priv->eccbuf + (column / eccsize) * 10;
-					else
-						eccbuf = priv->eccbuf + (column / eccsize) * 6;
-					tmpa910_nand_set_cmd(command);
-					tmpa910_nand_dma_read(priv, priv->phy_buf + column, eccsize);
-					tmpa910_nand_start_autoload(1);
-					tmpa910_nand_set_addr(column, page_addr, buswidth_16, third_addr);
-					/* Large page NAND */
-					if (mtd->writesize > 512)
-						tmpa910_nand_set_cmd(NAND_CMD_READSTART);
-					tmpa910_nand_start_ecc(1, priv->mlc);
-					tmpa910_nand_set_rw_mode(1);
-					if (tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
-						printk("ERROR: read page :0x%x, column:0x%x time out\n", page_addr, column);
-						return;
-					}
-				
-					while(!tmpa910_nand_als_ready(mtd));
-
-					tmpa910_nand_get_hwecc(eccbuf, priv->mlc);
-					
-					if(priv->mlc && (this->options & NAND_HWECC_ON))
-					{
-						tmpa910_nand_columnchg(0x800+(column/0x20)+6);
-						tmpa910_nand_rson();						
-						{
-							unsigned char i;
-						    for(i=0;i<6;i++)
-						    	*oob_buf++ = 0xff;	
-						    for(;i<16;i++)
-						    	*oob_buf++ = NDFDTR;
-						}						
-						ret=tmpa910_nand_chkreedsolomon(buf);
-    						tmpa910_nand_rsoff();
-						if(ret<0)
-						{
-							oob_buf -= 16;
-							retry ++;
-						}
-        
-					}
-					if(ret==0 || retry >1){
-						retry = 0;
-						column += eccsize;	
-					}				
-				}
-				/*Should not be > this->oobblock */
-				if (column >= mtd->writesize) {
-					if(priv->mlc)
-					{
-						tmpa910_nand_columnchg(0x800);
-					}
-					buf = priv->buf + column;
-					while (column < (mtd->writesize + mtd->oobsize)) {
-						*buf = NDFDTR;
-						buf++;
-						column++;
-					}
-				}
-			}
-			else {
-				tmpa910_nand_set_cmd(command);
-				tmpa910_nand_set_addr(column, page_addr, buswidth_16, third_addr);
-				if (mtd->writesize > 512)
-					tmpa910_nand_set_cmd(NAND_CMD_READSTART);
-				tmpa910_nand_set_rw_mode(1);
-				while(!tmpa910_nand_dev_ready(mtd));	
-				/*buf = priv->buf + column;
-				while (column < (mtd->oobblock + mtd->oobsize)) {
-					*buf = NDFDTR;
-					printf("0x%x,,\t ", *buf);
-					buf++;
-					column++;
-				}*/
-			}
-		}
-		else {	/* NO DMA || soft ECC*/
-			tmpa910_nand_set_cmd(command);
-			if (priv->dma)
-				tmpa910_nand_dma_read(priv, priv->phy_buf + column, mtd->writesize + mtd->oobsize - column);
-			tmpa910_nand_set_addr(column, page_addr, buswidth_16, third_addr);
-			/* Large page NAND */
-			if (mtd->writesize > 512)
-				tmpa910_nand_set_cmd(NAND_CMD_READSTART);
-
-			if (priv->dma && tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
-				printk("ERROR: read page :0x%x, column:0x%x time out\n", page_addr, column);
-				return;
-			}
-			/*HWECC  start will be set at enable_ecc function */
-			
-			while(!tmpa910_nand_dev_ready(mtd));
-		}
-	}
-	else if (command == NAND_CMD_SEQIN) {	/* For Write */
-		column = column & ~(eccsize -1);
-		//if (priv->dma && column < this->oobblock) {
-		/*if (!priv->softecc) 
-			tmpa910_nand_set_ecctype(priv->mlc);			*/
-
-		//tmpa910_nand_set_ecctype(this->mlc);
-		tmpa910_nand_set_ecctype(priv->mlc);
-		tmpa910_nand_set_cmd(command);
-		tmpa910_nand_set_addr(column, page_addr, buswidth_16, third_addr);
-	}
-	else if (command == NAND_CMD_PAGEPROG || command == NAND_CMD_CACHEDPROG) {
-		if (priv->dma && priv->softecc) {
-			/*nand_base.c can make sure that priv->column is aligned with ecc_step */
-			tmpa910_nand_dma_write(priv, priv->phy_buf + priv->orig_column, mtd->writesize + mtd->oobsize -  priv->orig_column);
-			if (tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
-				printk("ERROR: Write page :, column:0x%x time out\n", priv->column);
-				return;
-			}
-			
-			//while(!tmpa910_nand_als_ready(mtd));
-			while(!tmpa910_nand_dev_ready(mtd));
-		}
-		tmpa910_nand_set_cmd(command);
-		tmpa910_nand_set_addr(column, page_addr, buswidth_16, third_addr);
-	}
-	else {
-		tmpa910_nand_set_cmd(command);
-		tmpa910_nand_set_addr(column, page_addr, buswidth_16, third_addr);
-		if (command == NAND_CMD_RESET)
-			while(!tmpa910_nand_dev_ready(mtd));
-	}
+       return !(NDFMCR0 & NDFMCR0_BUSY);/* Wait for NAND device ready */
 }
 
+static int tmpa9x0_nand_als_ready(struct mtd_info *mtd)
+{
+       return !(NDFMCR1 & NDFMCR1_ALS);	/* Wait for autoload finished */
+}
 
 /* Set WP on deselect, write enable on select */
-static void tmpa910_nand_select_chip(struct mtd_info *mtd, int chip)
+static void tmpa9x0_nand_select_chip(struct mtd_info *mtd, int chip)
 {
-	struct nand_chip *this = mtd->priv;
-	struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
 	unsigned int val;
 
-	priv->chip_select = chip;
-	if (chip == 0) {
+	switch (chip)
+	{
+	case 0:
 		val =  NDFMCR0;
-		val |= NDFMCR0_CE0;	/*Enable chip0 */
-		val &= ~NDFMCR0_CE1;  /* Disable chip1 */
-		 NDFMCR0 = val;
-	}
-	else if (chip == 1) {
-		val = NDFMCR0;
-		val |= NDFMCR0_CE1;	/*Enable chip0 */
-		val &= ~NDFMCR0_CE0;  /* Disable chip1 */
+		val |= NDFMCR0_CE0;	/*Enable  chip0 */
+		val &= ~NDFMCR0_CE1;    /*Disable chip1 */
 		NDFMCR0 = val;
-	}
-	else {
+		break;
+		
+	case 1:
 		val = NDFMCR0;
+		val |= NDFMCR0_CE1;	/*Enable  chip0 */
+		val &= ~NDFMCR0_CE0;    /*Disable chip1 */
+		NDFMCR0 = val;
+		break;
+		
+	case -1:
+		val = NDFMCR0;		/* Disable both */
 		val &= ~(NDFMCR0_CE1 | NDFMCR0_CE0); 
 		NDFMCR0 = val;
-	}
-		
-}
-
-
-static struct nand_ecclayout nand_mlc_2kp_eccoob = {		
-	.eccbytes = 40,
-	.eccpos = {6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-			   22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
-               38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
-			   54, 55, 56, 57, 58, 59, 60, 61, 62, 63},
-	.oobfree = { {2, 4}, {16, 6}, {32, 6}, {48,6}}
-};
-
-static struct nand_ecclayout nand_lp_hw_eccoob = {
-	.eccbytes = 24,
-	.eccpos = {8, 9, 10, 13, 14, 15, 24, 25,
-			   26, 29, 30, 31, 40, 41, 42, 45,
-			   46, 47, 56, 57, 58, 61, 62, 63},
-	.oobfree = { {0, 8}, {16, 8}, {32, 8}, {48,8}, {11,2}, {27,2}, {43,2}, {59,2}}
-};
-
-static struct nand_ecclayout nand_sp_hw_eccoob = {
-	.eccbytes = 6,
-	.eccpos = {8, 9, 10, 13, 14, 15},
-	.oobfree = { {2, 6} }
-};
-
-static void tmpa910_nand_read_buf(struct mtd_info *mtd, u_char *buf, int len)
-{
-	unsigned i = 0;
-	struct nand_chip *this = mtd->priv;
-	struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
-
-	if (len > (mtd->writesize + mtd->oobsize - priv->column))
-		len = mtd->writesize + mtd->oobsize- priv->column;
-	if (priv->dma && priv->orig_column <  mtd->writesize) {
-		memcpy(buf, priv->buf + priv->column, len);
-	}
-	else {
-		while (i < len)
-			buf[i++] = NDFDTR;
-	}
-	priv->column += len;
-}
-
-static void tmpa910_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int len)
-{
-	struct nand_chip *this = mtd->priv;
-	int i, eccsize = this->ecc.size;
-	struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
-    
-	if (len > (mtd->writesize + mtd->oobsize - priv->column))
-		len = mtd->writesize + mtd->oobsize - priv->column;
+		break;
 	
-	if (priv->dma && priv->orig_column < mtd->writesize) {
-		memcpy(priv->buf + priv->column, buf, len);
-		if (!priv->softecc) {
-			unsigned char *eccbuf;
-
-			if (priv->mlc)
-				eccbuf = priv->eccbuf + (priv->column / eccsize) * 10;
-			else
-				eccbuf = priv->eccbuf + (priv->column / eccsize) * 6;
-
-			if (priv->column < mtd->writesize) {
-				/* we can be sure that len = ecc_step and priv->column is aligned by ecc_step(512 byte) */
-				tmpa910_nand_start_ecc(0, priv->mlc); //added for mlc
-				tmpa910_nand_dma_write(priv, priv->phy_buf + priv->column, len);
-				tmpa910_nand_start_autoload(0);
-				if (tmpa910_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
-					printk("ERROR: Write page :, column:0x%x time out\n", priv->column);
-					return;
-				}
-
-				while(!tmpa910_nand_als_ready(mtd));
-//				while(!tmpa910_nand_dev_ready(mtd));
-				//for mlc
-				if(priv->mlc)
-						NDFMCR0 = 0x0090;
-				else
-				{
-					// NDFMCR0 = 0x10;
-				}
-//				udelay(10); 
-				//tmpa910_nand_set_rw_mode(1);
-				tmpa910_nand_get_hwecc(eccbuf, priv->mlc);
-			}
-			else {
-				for (i = 0; i < len; i++)
-					NDFDTR = buf[i];
-			}
-		}
-	}
-	else {
-		for (i = 0; i < len; i++)
-			NDFDTR = buf[i];
-	}
-	priv->column += len;
+	default:
+		printk(KERN_ERR "tmpa9x0_nand_select_chip - trying to enable chip %d - that is not possible\n",chip);
+		break;
+	}					
 }
 
-static void tmpa910_nand_enable_hwecc(struct mtd_info *mtd, int mode)
+static u_char tmpa9x0_nand_read_byte(struct mtd_info *mtd)
+{
+	tmpa9x0_nand_set_rw_mode(1);	/* Set direction to read */
+	return NDFDTR;			/* Poll out data */
+}
+
+static void tmpa9x0_nand_set_cmd(unsigned int cmd)
+{
+	/* Begin command latch cycle */
+	NDFMCR0 |= NDFMCR0_CLE |NDFMCR0_WE;
+	/* Write out the command to the device. */
+	NDFDTR = cmd;
+	/* End command latch cycle */
+	NDFMCR0 &= ~(NDFMCR0_CLE |NDFMCR0_WE);
+}
+
+static void tmpa9x0_nand_set_addr(unsigned int column, unsigned int page_addr)
+{
+	NDFMCR0 |= NDFMCR0_ALE |NDFMCR0_WE;
+
+	/* Serially input address */
+	if (column != -1) {
+		/* Adjust columns for 16 bit buswidth */
+		NDFDTR = column & 0xff;
+		NDFDTR = column >> 8;
+	}
+	if (page_addr != -1) {
+		NDFDTR = (unsigned char) (page_addr & 0xff);
+		NDFDTR = (unsigned char) ((page_addr >> 8) & 0xff);
+		NDFDTR = (unsigned char) ((page_addr >> 16) & 0xff);
+	}
+	/* Latch in address */
+	NDFMCR0 &= ~(NDFMCR0_ALE |NDFMCR0_WE);
+}
+
+static void tmpa9x0_nand_read_buf(struct mtd_info *mtd, u_char *buf, int len)
 {
 	struct nand_chip *this = mtd->priv;
-       struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
+	struct tmpa9x0_nand_private * priv= (struct tmpa9x0_nand_private *)this->priv;
+	const uint8_t test_pattern[]={0x30,0x30,0x30,0x30};
 
-	if (mode == NAND_ECC_READ) {
-		/* No DMA || soft ECC*/
-		if (!priv->dma || priv->softecc) {
-			/* Disable WE */
-			tmpa910_nand_set_rw_mode(1);
-		
-			if (!priv->softecc) {
-				tmpa910_nand_set_ecctype(priv->mlc);
-				tmpa910_nand_start_ecc(mode == NAND_ECC_READ, priv->mlc);
+	/* The DMA Transfer could only bes started for an exact size of 512 bytes to read */
+        /* Therefore do the 512 pagesize reads with DMA (if enabled) and the 64/16 bytes for OOB with polling */
+	/* Otherwise than in the u-boot case we could not directly use the provided buffer for the DMA transfer */
+        /* Therefore we have to use our own buffer created with dma_alloc_coherent */
+        /* The startup of the DMA transfer is a little bit silly: */
+        /* First send the command, then set up the DMA and autoload functions, then the address */
+        /* The autoload waits then till the rising edge of the busy signal from the NAND and starts the transfer to the FIFO */
+
+	if ((len==NAND_DMA_TRANSFER_SIZE) && (priv->dma==1))
+        {
+		int i;        
+        	for (i=0;i<10;i++)
+                {
+			tmpa9x0_nand_set_cmd(NAND_CMD_READ0);			/* Set readpage */
+			tmpa9x0_nand_dma_read(priv,priv->phy_buf,len);		/* Set up the DMA transfer */
+			tmpa9x0_nand_start_autoload(1);				/* Set up autoload for reading */
+			tmpa9x0_nand_set_addr(priv->column,priv->page_addr);	/* Set adress to start reading */
+			tmpa9x0_nand_set_cmd(NAND_CMD_READSTART);		/* Set readstart for large page devices */
+			tmpa9x0_nand_set_rw_mode(1);				/* Set controller to read mode */
+			if ( tmpa9x0_nand_wait_dma_complete(priv,DMA_TIMEOUT)) {
+				printk(KERN_ERR "read page :0x%x, column:0x%x time out\n", priv->page_addr, priv->column);
+				return;
 			}
-		}
+			while(!tmpa9x0_nand_als_ready(mtd));
+                        
+                        /* Sometimes (for at the moment unknown reason) the DMA fills up the buffer with 0x30 */
+                        /* Check for this error an re-read the page in that case */
+                        
+                        if (memcmp(priv->buf, test_pattern, sizeof(test_pattern)/sizeof(uint8_t))!=0)
+                        	break;						/* Quit loop if read data is correct */
+
+                        printk(KERN_DEBUG "TMPA9x0 - 0x30 error for NAND read\n");  
+                        tmpa9x0_nand_start_ecc(1,priv->mlc);			/* Restart the ECC calculation in case of the error */
+                }
+                
+                memcpy(buf,priv->buf,len);					/* Have to use our own dma_coherend created buffer */
+                priv->column+=len;						/* Remember internal position */
 	}
-	else if (mode == NAND_ECC_WRITE) {
-		tmpa910_nand_set_rw_mode(0);
-		if (!priv->softecc) {
-			tmpa910_nand_set_ecctype(priv->mlc);
-			tmpa910_nand_start_ecc(mode == NAND_ECC_READ, priv->mlc);
-		}
-	}
+        else
+        {
+	       	int i;
+ 		tmpa9x0_nand_set_cmd(NAND_CMD_READ0);
+		tmpa9x0_nand_set_addr(priv->column,priv->page_addr);
+		tmpa9x0_nand_set_cmd(NAND_CMD_READSTART);
+		tmpa9x0_nand_set_rw_mode(1);
+		while(!tmpa9x0_nand_dev_ready(mtd));
+		for (i=0;i < len;i++)
+			*(buf+i)=tmpa9x0_nand_read_byte(mtd);
+                priv->column+=len;
+	}       
 }
 
-static int  tmpa910_nand_calculate_ecc(struct mtd_info *mtd, const unsigned char *dat, unsigned char *ecc_code)
+static void tmpa9x0_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int len)
+{
+	struct nand_chip *this = mtd->priv;
+	struct tmpa9x0_nand_private * priv= (struct tmpa9x0_nand_private *)this->priv;
+
+	/* The DMA Transfer could only bes started for an exact size of 512 bytes to write */
+        /* Therefore do the 512 pagesize writes with DMA (if enabled) and the 64/16 bytes for OOB with polling */
+	/* Otherwise than in the u-boot case we could not directly use the provided buffer for the DMA transfer */
+        /* Therefore we have to use our own buffer created with dma_alloc_coherent */
+        /* The startup of the DMA transfer is a little bit silly: */
+        /* First send the command, then set up the DMA and autoload functions, then the address */
+        /* The autoload waits then till the rising edge of the busy signal from the NAND and starts the transfer to the FIFO */
+        
+	if ((len==NAND_DMA_TRANSFER_SIZE) && (priv->dma==1))
+        {
+		if (priv->column==0)						/* Send command only for the first transfer */
+                {
+			tmpa9x0_nand_set_cmd(NAND_CMD_SEQIN);			/* Set sqeuential data in */
+			tmpa9x0_nand_set_addr(priv->column,priv->page_addr);	/* Set adress to start writing */
+			tmpa9x0_nand_set_rw_mode(0);				/* Set controller to write mode */
+                }       
+                memcpy(priv->buf,buf,len);					/* Have to use our own dma_coherend created buffer */
+		tmpa9x0_nand_dma_write(priv,priv->phy_buf, len);		/* Set up the DMA transfer */
+		tmpa9x0_nand_start_autoload(0);					/* Set up autoload for writing */
+		if ( tmpa9x0_nand_wait_dma_complete(priv,DMA_TIMEOUT)) {
+			printk(KERN_ERR "write page :0x%x, column:0x%x time out\n", priv->page_addr, priv->column);
+			return;
+		}
+		while(!tmpa9x0_nand_als_ready(mtd));				/* Wait till autoload has finished */
+                priv->column+=len;						/* Remember internal position */
+	}
+        else
+        {
+        	int i;
+		if (priv->column==0)
+                {
+			tmpa9x0_nand_set_cmd(NAND_CMD_SEQIN);			/* Set sqeuential data in */
+			tmpa9x0_nand_set_addr(priv->column,priv->page_addr);	/* Set adress to start writing */
+			tmpa9x0_nand_set_rw_mode(0);				/* Set controller to write mode */
+                }
+		for (i=0;i < len;i++)
+			NDFDTR=buf[i];						/* Poll in the data */
+		while(!tmpa9x0_nand_dev_ready(mtd));
+                priv->column+=len;						/* Remember internal position */
+	}       
+}
+
+static void tmpa9x0_nand_enable_hwecc(struct mtd_info *mtd, int mode)
 {
 	struct nand_chip *this = mtd->priv;	
-	int eccsize = this->ecc.size;
-	struct tmpa910_nand_private * priv= (struct tmpa910_nand_private *)this->priv;
-	int steps;
+	struct tmpa9x0_nand_private * priv= (struct tmpa9x0_nand_private *)this->priv;
+        
+	tmpa9x0_nand_start_ecc(mode == NAND_ECC_READ,priv->mlc);
+}
 
-	/* No DMA && No read OOB */
-	if (!priv->dma || priv->softecc) {
-		if (priv->softecc) {
-			steps = eccsize / ECCBUF_SIZE;
-			while (steps--) {
-				tmpa910_nand_calculate_softecc(dat, ecc_code);
-				dat += ECCBUF_SIZE;
-				ecc_code += 3;
-			}
-		}
-		else {
-			tmpa910_nand_get_hwecc(ecc_code, priv->mlc);
-		}
+static int  tmpa9x0_nand_calculate_ecc(struct mtd_info *mtd, const unsigned char *dat, unsigned char *ecc_code)
+{
+	struct nand_chip *this = mtd->priv;	
+	struct tmpa9x0_nand_private * priv= (struct tmpa9x0_nand_private *)this->priv;
+	unsigned int ecc_val = 0;
+	unsigned char *buf = ecc_code;
+
+	if (!priv->mlc) {
+	//SLC, Hamming ECC data
+		ecc_val = NDECCRD1;
+		*buf++ = (unsigned char)(ecc_val&0xff);
+		*buf++ = (unsigned char)(ecc_val>>8);	
+		*buf++ = (unsigned char)(ecc_val>>16);	
+		ecc_val =  NDECCRD0;
+		*buf++ = (unsigned char)(ecc_val&0xff);
+		*buf++ = (unsigned char)(ecc_val>>8);		
+		*buf++ = (unsigned char)(ecc_val>>16);
 	}
-	else {
-		memcpy(ecc_code, priv->eccbuf + priv->ecc_pos, this->ecc.bytes);
-		priv->ecc_pos += this->ecc.bytes;
+	else
+	{
+	//MLC, Reed solomn ECC data
+		ecc_val = NDECCRD0;
+		*buf++ = (unsigned char)(ecc_val>>8);	
+		*buf++ = (unsigned char)(ecc_val&0xff);
+		*buf++ = (unsigned char)(ecc_val>>24);	
+		*buf++ = (unsigned char)(ecc_val>>16);	
+
+		ecc_val = NDECCRD1;
+		*buf++ = (unsigned char)(ecc_val>>8);
+		*buf++ = (unsigned char)(ecc_val&0xff);
+		*buf++ = (unsigned char)(ecc_val>>24);
+		*buf++ = (unsigned char)(ecc_val>>16);	
+
+		ecc_val = NDECCRD2;
+		*buf++ = (unsigned char)(ecc_val>>8);
+		*buf++ = (unsigned char)(ecc_val&0xff);
 	}
+	
 	return 0;
 }
 
@@ -753,17 +565,17 @@ static int  tmpa910_nand_calculate_ecc(struct mtd_info *mtd, const unsigned char
 #define MASK_CPS    0x3f
 #define CORRECTABLE 0x00555554L
 
-static int  tmpa910_nand_part_correctdata(unsigned char *data, unsigned char *eccdata, unsigned char ecc1, unsigned char ecc2, unsigned char ecc3)
+static int  tmpa9x0_nand_part_correctdata_rs(unsigned char *data, unsigned char *eccdata, unsigned char ecc1, unsigned char ecc2, unsigned char ecc3)
 {
 	/*FIXME should be U31, U16 and U8 */
-	unsigned int l; /* Working to check d */
-	unsigned int d; /* Result of comparison */
-	unsigned short i; /* For counting */
+	unsigned int l; 	/* Working to check d */
+	unsigned int d; 	/* Result of comparison */
+	unsigned short i; 	/* For counting */
 	unsigned char d1,d2,d3; /* Result of comparison */
-	unsigned char a; /* Working for add */
-	unsigned char add; /* Byte address of cor. DATA */
-	unsigned char b; /* Working for bit */
-	unsigned char bit; /* Bit address of cor. DATA */
+	unsigned char a; 	/* Working for add */
+	unsigned char add; 	/* Byte address of cor. DATA */
+	unsigned char b; 	/* Working for bit */
+	unsigned char bit; 	/* Bit address of cor. DATA */
 
 	d1=ecc1^eccdata[1]; d2=ecc2^eccdata[0]; /* Compare LP's */
 	d3=ecc3^eccdata[2]; /* Comapre CP's */
@@ -817,73 +629,227 @@ static int  tmpa910_nand_part_correctdata(unsigned char *data, unsigned char *ec
 	return(3); /* Uncorrectable error */
 }
 
-static int tmpa910_nand_correct_data(struct mtd_info *mtd, u_char *data, u_char *read_ecc, u_char *calc_ecc)
+static int tmpa9x0_nand_part_correctdata_hamming(struct mtd_info *mtd, u_char *dat, u_char *read_ecc, u_char *calc_ecc)
 {
 	struct nand_chip *this = mtd->priv;
-	int eccsize = this->ecc.size;
-	unsigned int size;
-	unsigned char ecc1, ecc2, ecc3; /* FIXME should define as U8 */
-	unsigned int ret, ret_tmp;
-
-	size = eccsize;
-
-	ret_tmp = 0;
-	while (size > 0)
-	{
-		ecc2 = *calc_ecc++;
-		ecc1 = *calc_ecc++;
-		ecc3 = *calc_ecc++;
-		ret = tmpa910_nand_part_correctdata(data, read_ecc, ecc1, ecc2, ecc3);
-		if(ret > ret_tmp) {
-			ret_tmp = ret;
-		}
-			
-		size -= ECCBUF_SIZE;
-		data += ECCBUF_SIZE;
-		read_ecc += 3;	
-	}
-	return (ret_tmp != 0 && ret_tmp != 1)? -1 : 0;
-}
-
-static void tmpa910_nand_set_timing(struct tmpa910_nand_private *priv)
-{
-	NDFMCR2 = 0x2222;
-}
-
-static void tmpa910_nand_dma_handler(int dma_ch, void *data)
-{
-	struct tmpa910_nand_private * priv;
-
-	priv = (struct tmpa910_nand_private *)data;
-	complete(&priv->dma_completion);	
-
-	return;
-}
-
-static void tmpa910_nand_dma_error_handler(int dma_ch, void *data)
-{
-	struct tmpa910_nand_private * priv;
-
-	priv = (struct tmpa910_nand_private *)data;
-	complete(&priv->dma_completion);	
-	printk("DMA Error happens at DMA channel %d\n", dma_ch);
-	return;
-}
-
-static int tmpa910_nand_init_priv(struct tmpa910_nand_private *priv)
-{
-	priv->dma = 1;
-	priv->softecc = 0;
-	NDFMCR0 = 0;
-	NDFMCR1 = 0;
-	tmpa910_nand_set_timing(priv);
+	u_int32_t ecc_nand = read_ecc[0] | (read_ecc[1] << 8) | (read_ecc[2] << 16);
+	u_int32_t ecc_calc = calc_ecc[0] | (calc_ecc[1] << 8) | (calc_ecc[2] << 16);
+	u_int32_t diff     = ecc_calc ^ ecc_nand;
 	
-	return 0;
+	if (diff) {
+		if ((((diff >> 12) ^ diff) & 0xfff) == 0xfff) {
+			/* Correctable error */
+			if ((diff >> (12 + 3)) < this->ecc.size) {
+				uint8_t find_bit = 1 << ((diff >> 12) & 7);
+				uint32_t find_byte = diff >> (12 + 3);
+
+				dat[find_byte] ^= find_bit;
+				printk(KERN_DEBUG "Correcting single bit ECC error at offset: %d, bit: %d\n", find_byte, find_bit);
+				return 1;
+			} else {
+				printk(KERN_DEBUG "ECC UNCORRECTED_ERROR 1\n");
+				return -1;
+			}
+		} else if (!(diff & (diff - 1))) {
+			/* Single bit ECC error in the ECC itself,
+			   nothing to fix */
+			printk(KERN_DEBUG "Single bit ECC error in ECC.\n");
+			return 1;
+		} else {
+			/* Uncorrectable error */
+			printk(KERN_DEBUG "ECC UNCORRECTED_ERROR 2\n");
+			return -1;
+		}
+	}
+	return(0);
 }
 
-static int __init tmpa910_nand_probe(struct platform_device *pdev)
+static int tmpa9x0_nand_correct_data(struct mtd_info *mtd, u_char *data, u_char *read_ecc, u_char *calc_ecc)
+{
+	struct nand_chip *this = mtd->priv;
+        struct tmpa9x0_nand_private * priv= (struct tmpa9x0_nand_private *)this->priv;
+	
+	
+	if (priv->mlc)
+	{
+		unsigned int size;
+		unsigned char ecc1, ecc2, ecc3;
+		unsigned int ret, ret_tmp;
+
+		size = 10;
+
+		ret_tmp = 0;
+		while (size > 0)
+		{
+			ecc2 = *calc_ecc++;
+			ecc1 = *calc_ecc++;
+			ecc3 = *calc_ecc++;
+			ret = tmpa9x0_nand_part_correctdata_rs(data, read_ecc, ecc1, ecc2, ecc3);
+			if(ret > ret_tmp)
+				ret_tmp = ret;
+			
+			size -= ECCBUF_SIZE;
+			data += ECCBUF_SIZE;
+			read_ecc += 3;	
+		}
+		return (ret_tmp != 0 && ret_tmp != 1)? -1 : 0;
+	}	
+	else
+		return tmpa9x0_nand_part_correctdata_hamming(mtd,data,read_ecc,calc_ecc);
+	
+	return 0; /* Fix compiler warning */
+}
+
+static void tmpa9x0_nand_set_timing(struct tmpa9x0_nand_private *priv)
+{
+	NDFMCR2 = ((priv->timing.splw<<12)|(priv->timing.sphw<<8)|(priv->timing.splr<<4)|(priv->timing.sphr<<0));
+}
+
+static void tmpa9x0_nand_dma_handler(int dma_ch, void *data)
+{
+	struct tmpa9x0_nand_private * priv;
+
+	priv = (struct tmpa9x0_nand_private *)data;
+	complete(&priv->dma_completion);	
+
+	return;
+}
+
+static void tmpa9x0_nand_dma_error_handler(int dma_ch, void *data)
+{
+	struct tmpa9x0_nand_private * priv;
+
+	priv = (struct tmpa9x0_nand_private *)data;
+	complete(&priv->dma_completion);	
+	printk(KERN_ERR "DMA Error happens at DMA channel %d\n", dma_ch);
+	return;
+}
+
+static void tmpa9x0_nand_command (struct mtd_info *mtd, unsigned command, int column, int page_addr)
+{
+	register struct nand_chip *this = mtd->priv;
+	struct tmpa9x0_nand_private * priv= (struct tmpa9x0_nand_private *)this->priv;
+
+	switch (command)
+	{
+	case NAND_CMD_READ0:
+                priv->column=column;
+                priv->page_addr=page_addr;
+		break;
+	
+	case NAND_CMD_PAGEPROG:
+		tmpa9x0_nand_set_cmd(NAND_CMD_PAGEPROG);
+		break;
+
+	case NAND_CMD_READOOB:
+		priv->column=priv->page_size;
+                priv->page_addr=page_addr;
+		break;
+
+	case NAND_CMD_ERASE1:
+		tmpa9x0_nand_set_cmd(NAND_CMD_ERASE1);
+		tmpa9x0_nand_set_addr(-1,page_addr);
+		break;
+
+	case NAND_CMD_STATUS:
+		tmpa9x0_nand_set_cmd(NAND_CMD_STATUS);
+		break;
+
+	case NAND_CMD_SEQIN:
+                priv->column=column;
+                priv->page_addr=page_addr;
+		break;
+
+	case NAND_CMD_READID:
+		tmpa9x0_nand_set_cmd(NAND_CMD_READID);
+		NDFMCR0 |= NDFMCR0_ALE |NDFMCR0_WE;
+		NDFDTR = 0x00;
+		/* Latch in address */
+		NDFMCR0 &= ~(NDFMCR0_ALE |NDFMCR0_WE);
+		break;
+
+	case NAND_CMD_ERASE2:
+		tmpa9x0_nand_set_cmd(NAND_CMD_ERASE2);
+		break;
+
+	case NAND_CMD_RESET:
+		tmpa9x0_nand_set_cmd(NAND_CMD_RESET);
+		break;
+
+	case NAND_CMD_READSTART:
+		tmpa9x0_nand_set_cmd(NAND_CMD_READSTART);
+		break;
+                
+	case NAND_CMD_RNDOUTSTART:
+		printk(KERN_DEBUG "NAND_CMD_RNDOUTSTART unsupported\n");
+		break;
+
+	case NAND_CMD_CACHEDPROG:
+		printk(KERN_DEBUG "NAND_CMD_CACHEDPROG unsupported\n");
+		break;
+
+	case NAND_CMD_READ1:
+		printk(KERN_DEBUG "NAND_CMD_READ1 unsupported\n");
+		break;
+
+	case NAND_CMD_RNDOUT:
+		printk(KERN_DEBUG "NAND_CMD_RNDOUT unsupported\n");
+		break;
+
+	case NAND_CMD_RNDIN:
+		printk(KERN_DEBUG "NAND_CMD_RNDIN unsupported\n");
+		break;
+
+	case NAND_CMD_STATUS_MULTI:
+		printk(KERN_DEBUG "NAND_CMD_STATUS_MULTI unsupported\n");
+		break;
+
+	default:
+		printk(KERN_DEBUG "Unknown command code:%x\n",command);
+		break;	
+	}
+
+	while(!tmpa9x0_nand_dev_ready(mtd));
+}
+
+static void tmpa9x0_nand_get_internal_structure(struct tmpa9x0_nand_private *priv)
+{
+	int i;
+	unsigned char id_code[4];
+
+	tmpa9x0_nand_set_cmd(NAND_CMD_RESET);
+	while(!tmpa9x0_nand_dev_ready(NULL));
+	tmpa9x0_nand_set_cmd(NAND_CMD_READID);
+	while(!tmpa9x0_nand_dev_ready(NULL));
+	NDFMCR0 |= NDFMCR0_ALE |NDFMCR0_WE;
+	NDFDTR = 0x00;
+	/* Latch in address */
+	NDFMCR0 &= ~(NDFMCR0_ALE |NDFMCR0_WE);
+	while(!tmpa9x0_nand_dev_ready(NULL));
+
+	NDFMCR0 &= ~NDFMCR0_WE;
+
+	for (i=0;i<4;i++)
+		id_code[i]=NDFDTR;
+	
+        if (id_code[1]==0x0c)
+        	priv->mlc=1;
+                
+        if ( (id_code[3]&0x03) == 0x1)
+        {
+        	priv->page_size = LAGEPAGE_SIZE;
+                priv->spare_size= LARGEPAGE_SPARE;
+        }
+        else
+        {
+        	priv->page_size = NORMALPAGE_SIZE;
+                priv->spare_size= NORMALPAGE_SPARE;
+        }
+}	
+
+static int __init tmpa9x0_nand_probe(struct platform_device *pdev)
 {	
-	struct tmpa910_nand_private * priv;
+	struct tmpa9x0_nand_private * priv;
 	struct mtd_info *mtd;
 	struct nand_chip *nand;
 	int ret;
@@ -897,55 +863,91 @@ static int __init tmpa910_nand_probe(struct platform_device *pdev)
 	/* Remeber to set CFG_MAX_NAND_DEVICE in the board config file to be the 
 	    controller number. Now we only have one controller, so set it to be 1 */
 
-	mtd = (struct mtd_info *)kzalloc(sizeof(struct mtd_info) + sizeof(struct tmpa910_nand_private), GFP_KERNEL);
+	mtd = (struct mtd_info *)kzalloc(sizeof(struct mtd_info) + sizeof(struct tmpa9x0_nand_private), GFP_KERNEL);
 	if (mtd == NULL) {
-		printk(KERN_ERR "TMPA910_NAND: not enough memory");
+		printk(KERN_ERR "tmpa9x0_NAND: not enough memory");
 		ret = -ENOMEM;
 		goto error;
 	}
-	priv = (struct tmpa910_nand_private *)(mtd + 1);
-	priv->buf = (unsigned char *)dma_alloc_coherent(NULL,2112, &priv->phy_buf, GFP_KERNEL);
-	if (priv->buf == NULL) {
-		ret = -ENOMEM;
-		goto free_mtd;
+
+	priv = (struct tmpa9x0_nand_private *)(mtd + 1);
+
+        nand = &priv->chip;
+	priv = &tmpa9x0_nand;
+       	nand->priv = priv;
+	
+	nand->IO_ADDR_R     = (void  __iomem *)(&NDFDTR);
+	nand->IO_ADDR_W     = (void  __iomem *)(&NDFDTR);
+	
+	nand->chip_delay    = 0;
+
+	/* Control Functions */
+	nand->select_chip   = tmpa9x0_nand_select_chip;
+	nand->cmdfunc       = tmpa9x0_nand_command;
+	nand->dev_ready     = tmpa9x0_nand_dev_ready;
+		
+	/* Data access functions */
+	nand->read_byte     = tmpa9x0_nand_read_byte;
+	nand->read_buf      = tmpa9x0_nand_read_buf;
+	nand->write_buf     = tmpa9x0_nand_write_buf;
+	
+	/* ECC Mode */
+	nand->ecc.mode      = NAND_ECC_HW;
+
+ 	tmpa9x0_nand_select_chip(NULL,0);
+ 	tmpa9x0_nand_set_timing(priv);
+	tmpa9x0_nand_get_internal_structure(priv);
+        
+	if (priv->dma==1)
+	{
+		nand->ecc.mode      = NAND_ECC_HW;
+		nand->ecc.calculate = tmpa9x0_nand_calculate_ecc;
+		nand->ecc.hwctl     = tmpa9x0_nand_enable_hwecc;
+		nand->ecc.correct   = tmpa9x0_nand_correct_data;
+		nand->ecc.size      = ECC_BYTES;
+	
+		if (priv->mlc) /* MLC identifier */
+		{
+			tmpa9x0_nand_set_ecctype(1);			/* Set for RS ECC */
+			nand->ecc.layout	= &nand_oob_rs_2048;	/* MLC is alvawy largepage device */
+			nand->ecc.bytes 	= ECC_BYTES_RS;		/* RS produces 10 bytes of ECC code */
+		}
+		else
+		{
+			tmpa9x0_nand_set_ecctype(0);			/* Set for Hamming ECC */
+			nand->ecc.bytes = ECC_BYTES_HAMMING;		/* Hamming produces 6 bytes of ECC */
+			if (priv->page_size==LAGEPAGE_SIZE)		/* Select OOB Layout depending of pagesize */
+			{
+				nand->ecc.layout    = &nand_oob_hamming_2048;
+			}
+			else
+			{
+				nand->ecc.layout    = &nand_oob_hamming_512;
+			}
+		}
 	}
-
-	nand = &priv->chip;
-	nand->IO_ADDR_R   = (void  __iomem *)(&NDFDTR);
-	nand->IO_ADDR_W   = (void  __iomem *)(&NDFDTR);
-	nand->chip_delay  = 0;
-	nand->select_chip = tmpa910_nand_select_chip;
-
-	/* The controller will generate 6 bytes ecc for 512 bytes data*/
-	nand->ecc.calculate = tmpa910_nand_calculate_ecc;
-	nand->ecc.correct   = tmpa910_nand_correct_data;
-	nand->ecc.hwctl  = tmpa910_nand_enable_hwecc;
-	nand->ecc.mode	    = NAND_ECC_HW;
-	nand->ecc.size	    = 512;
-	nand->ecc.bytes	    = 6;
-
-
-	/* Set address of hardware control function */
-	nand->cmdfunc = tmpa910_nand_command;
-	nand->dev_ready = tmpa910_nand_dev_ready;
-	nand->read_buf = tmpa910_nand_read_buf;
-	nand->write_buf = tmpa910_nand_write_buf;
+	else
+	{
+		nand->ecc.mode      = NAND_ECC_SOFT;
+	}
+        
+        /* Reinitialize with reset values */
+	NDFMCR0 =0x0;
+	NDFMCR1 =0x0;
 
 	mtd->priv = nand;
 	platform_set_drvdata(pdev, mtd);
-
-	ret = tmpa910_nand_init_priv(priv);
-	if (ret) {
-		goto free_dma_buf;
-	}
-	nand->priv = priv;
-
 	init_completion(&priv->dma_completion);	
-	priv->dma_ch = tmpa910_dma_request("TMPA9xx NAND", 5, tmpa910_nand_dma_handler, 
-					tmpa910_nand_dma_error_handler, priv);
+	priv->dma_ch = tmpa910_dma_request("TMPA9xx NAND", NAND_DMA_CHANNEL, tmpa9x0_nand_dma_handler,tmpa9x0_nand_dma_error_handler, priv);
 	if (priv->dma_ch < 0) {
 		ret = -ENODEV;
-		goto free_dma_buf;	
+		goto free_mtd;	
+	}
+
+	priv->buf = (unsigned char *)dma_alloc_coherent(NULL,INTERNAL_BUFFER_SIZE, &priv->phy_buf, GFP_KERNEL);
+	if (priv->buf == NULL) {
+		ret = -ENOMEM;
+		goto free_mtd;
 	}
 	
 	mtd->owner    = THIS_MODULE;
@@ -955,40 +957,20 @@ static int __init tmpa910_nand_probe(struct platform_device *pdev)
 		goto free_dma_ch;
 	}
 	
-	// modified for mlc
-	if(mtd->writesize == 2048)
-	{
-		if(nand->cellinfo & 0x0C)
-		{
-printk("NAND: turning on mlc\n");
-			priv->mlc = 1;
-			nand->ecc.bytes  = 10;	//+=7;
-			nand->ecc.layout = &nand_mlc_2kp_eccoob;
-			nand->options |= NAND_HWECC_ON;
-		}
-		else
-		{
-			priv->mlc = 0;
-			nand->ecc.layout    = &nand_lp_hw_eccoob;
-		}
-	}
-	else
-		nand->ecc.layout    = &nand_sp_hw_eccoob;
 	ret = nand_scan_tail(mtd);
 	if (ret) {
 		goto free_dma_ch;
 	}
-
+        
 /* Partitions:
  * If there is support for partitions then use commandline partitions if
  * available, the defauts otherwise.
  * If there is no support for partitions then add the whole device.
  */
-    
-#ifdef CONFIG_MTD_PARTITIONS
 
+#ifdef CONFIG_MTD_PARTITIONS
 #ifdef CONFIG_MTD_CMDLINE_PARTS
-	mtd->name = "tmpa910-nand",
+	mtd->name = "tmpa9x0-nand",
 	num_cmdline_parts = parse_mtd_partitions(mtd, part_probes,
 					      &partitions, 0);
 	if (num_cmdline_parts)
@@ -997,18 +979,17 @@ printk("NAND: turning on mlc\n");
 		add_mtd_partitions(mtd, mtd_parts_builtin, num_partitions);
 #else
 	add_mtd_partitions(mtd, mtd_parts_builtin, num_partitions);
-    
-#endif
-    
+#endif //CONFIG_MTD_CMDLINE_PARTS
 #else
 	add_mtd_device(mtd);
-#endif
+#endif // CONFIG_MTD_PARTITIONS
+
 	return(0);
 
 free_dma_ch:
 	tmpa910_dma_free(priv->dma_ch);
 free_dma_buf:
-	dma_free_coherent(&pdev->dev, 2112, priv->buf, priv->phy_buf);
+	dma_free_coherent(&pdev->dev, INTERNAL_BUFFER_SIZE, priv->buf, priv->phy_buf);
 free_mtd:
 	kfree(mtd);
 error:
@@ -1016,51 +997,51 @@ error:
 }
 
 
-static int __exit tmpa910_nand_remove(struct platform_device *pdev)
+static int __exit tmpa9x0_nand_remove(struct platform_device *pdev)
 {
 	struct mtd_info *mtd;
-	struct tmpa910_nand_private * priv;
+	struct tmpa9x0_nand_private * priv;
 
 	mtd = platform_get_drvdata(pdev);
-	priv = (struct tmpa910_nand_private *)(mtd->priv);
-	dma_free_coherent(&pdev->dev, 2112, priv->buf, priv->phy_buf);
+	priv = (struct tmpa9x0_nand_private *)(mtd->priv);
+	dma_free_coherent(&pdev->dev, INTERNAL_BUFFER_SIZE, priv->buf, priv->phy_buf);
 
 	kfree(mtd);
 	return 0;
 }
 
-static int tmpa910_nand_suspend(struct platform_device *dev, pm_message_t pm)
+static int tmpa9x0_nand_suspend(struct platform_device *dev, pm_message_t pm)
 {
 	return 0;
 }
 
-static int tmpa910_nand_resume(struct platform_device *dev)
+static int tmpa9x0_nand_resume(struct platform_device *dev)
 {
 	return 0;
 }
 
-static struct platform_driver tmpa910_nand_driver = {
-	.probe = tmpa910_nand_probe,
-	.remove = __exit_p(tmpa910_nand_remove),
-	.suspend = tmpa910_nand_suspend,
-	.resume = tmpa910_nand_resume,
+static struct platform_driver tmpa9x0_nand_driver = {
+	.probe = tmpa9x0_nand_probe,
+	.remove = __exit_p(tmpa9x0_nand_remove),
+	.suspend = tmpa9x0_nand_suspend,
+	.resume = tmpa9x0_nand_resume,
 	.driver	= {
-		.name = "tmpa910-nand",
+		.name = "tmpa9x0-nand",
 	},
 };
 
-static int __init tmpa910_nand_init(void)
+static int __init tmpa9x0_nand_init(void)
 {
-	return platform_driver_register(&tmpa910_nand_driver);
+	return platform_driver_register(&tmpa9x0_nand_driver);
 }
 
-static void __exit tmpa910_nand_exit(void)
+static void __exit tmpa9x0_nand_exit(void)
 {
-	platform_driver_unregister(&tmpa910_nand_driver);
+	platform_driver_unregister(&tmpa9x0_nand_driver);
 }
-module_init(tmpa910_nand_init);
-module_exit(tmpa910_nand_exit);
+module_init(tmpa9x0_nand_init);
+module_exit(tmpa9x0_nand_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("NAND flash driver for TMPA9x0");
-MODULE_ALIAS("platform:tmpa910-nand");
+MODULE_ALIAS("platform:tmpa9x0-nand");

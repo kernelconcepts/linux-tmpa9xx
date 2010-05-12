@@ -1288,9 +1288,7 @@ static int nand_read(struct mtd_info *mtd, loff_t from, size_t len,
 		     size_t *retlen, uint8_t *buf)
 {
 	struct nand_chip *chip = mtd->priv;
-	int ret, ret2, i;
-
-	uint8_t *sanity_buffer;
+	int ret;
 
 	/* Do not allow reads past end of device */
 	if ((from + len) > mtd->size)
@@ -1298,42 +1296,17 @@ static int nand_read(struct mtd_info *mtd, loff_t from, size_t len,
 	if (!len)
 		return 0;
 
-	sanity_buffer = kmalloc(len, GFP_ATOMIC);
-	if (!sanity_buffer)
-		return -ENOMEM;
-
 	nand_get_device(chip, mtd, FL_READING);
 
 	chip->ops.len = len;
 	chip->ops.datbuf = buf;
 	chip->ops.oobbuf = NULL;
-#warning FIXME: Stupid workaround for TPMA900 NAND access issues
-	i = 10;
-	do
-	{
-		chip->ops.len = len;
-		chip->ops.datbuf = sanity_buffer;
-		chip->ops.oobbuf = NULL;
 
-		ret2= nand_do_read_ops(mtd, from, &chip->ops);
+	ret = nand_do_read_ops(mtd, from, &chip->ops);
 
-		chip->ops.len = len;
-		chip->ops.datbuf = buf;
-		chip->ops.oobbuf = NULL;
-
-		ret = nand_do_read_ops(mtd, from, &chip->ops);
-
-		*retlen = chip->ops.retlen;
-
-		if (!memcmp(buf, sanity_buffer, chip->ops.retlen))
-			break;
-
-		printk(KERN_DEBUG "NAND access error has occured\n");
-	}
-	while(i--);
+	*retlen = chip->ops.retlen;
 
 	nand_release_device(mtd);
-	kfree(sanity_buffer);
 
 	return ret;
 }
@@ -2862,6 +2835,7 @@ int nand_scan_tail(struct mtd_info *mtd)
 	 * mode
 	 */
 	chip->ecc.steps = mtd->writesize / chip->ecc.size;
+        
 	if(chip->ecc.steps * chip->ecc.size != mtd->writesize) {
 		printk(KERN_WARNING "Invalid ecc parameters\n");
 		BUG();
