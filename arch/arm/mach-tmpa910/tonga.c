@@ -338,7 +338,7 @@ static struct resource tmpa910_nand_resources[] = {
 };
 
 static struct platform_device tmpa910_nand_device = {
-	.name		= "tmpa910-nand",
+	.name		= "tmpa9x0-nand",
 	.id		= 0,
 	.num_resources	= ARRAY_SIZE(tmpa910_nand_resources),
 	.resource	= tmpa910_nand_resources,
