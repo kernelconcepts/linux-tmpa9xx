@@ -179,9 +179,11 @@
 /* BCM63xx family SoCs */
 #define PORT_BCM63XX	89
 
-/* Toshiba TMPA9x0 SoC */
-#define PORT_TMPA910	90
+/* Aeroflex Gaisler GRLIB APBUART */
+#define PORT_APBUART    90
 
+/* Toshiba TMPA9x0 SoC */
+#define PORT_TMPA910	91
 
 #ifdef __KERNEL__
 
@@ -492,9 +494,13 @@ uart_handle_dcd_change(struct uart_port *uport, unsigned int status)
 {
 	struct uart_state *state = uport->state;
 	struct tty_port *port = &state->port;
+	struct tty_ldisc *ld = tty_ldisc_ref(port->tty);
+	struct timespec ts;
+
+	if (ld && ld->ops->dcd_change)
+		getnstimeofday(&ts);
 
 	uport->icount.dcd++;
-
 #ifdef CONFIG_HARD_PPS
 	if ((uport->flags & UPF_HARDPPS_CD) && status)
 		hardpps();
@@ -506,6 +512,11 @@ uart_handle_dcd_change(struct uart_port *uport, unsigned int status)
 		else if (port->tty)
 			tty_hangup(port->tty);
 	}
+
+	if (ld && ld->ops->dcd_change)
+		ld->ops->dcd_change(port->tty, status, &ts);
+	if (ld)
+		tty_ldisc_deref(ld);
 }
 
 /**

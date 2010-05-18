@@ -546,7 +546,7 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&tmpa910_ts_priv->scheduled_restart, _scheduled_restart);
 	
 	// Our irqs...
-	ret = request_irq(ts_irq, topas910_ts_interrupt, IRQF_SHARED, "ts / ts", tmpa910_ts_priv);
+	ret = request_irq(ts_irq, topas910_ts_interrupt, IRQF_SHARED, "ts_ts", tmpa910_ts_priv);
 	if (ret) {
 		printk(KERN_ERR "Fail allocate the interrupt (vector=%d), %i\n", ts_irq, ret );
 		err = -ENOMEM;
@@ -554,7 +554,7 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 	}
 	tmpa910_ts_priv->ts_irq = ts_irq;
 
-	ret = request_irq(adc_irq, topas910_adc_interrupt, IRQF_SHARED, "ts / adc", tmpa910_ts_priv);
+	ret = request_irq(adc_irq, topas910_adc_interrupt, IRQF_SHARED, "ts_adc", tmpa910_ts_priv);
 	if (ret) {
 		printk(KERN_ERR "Fail allocate the interrupt (vector=%d)\n", adc_irq );
 		err = -ENOMEM;

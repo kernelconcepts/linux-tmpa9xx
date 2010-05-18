@@ -19,6 +19,7 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/irq.h>
+#include <linux/slab.h>
 
 
 struct tmpa910_i2c_regs {

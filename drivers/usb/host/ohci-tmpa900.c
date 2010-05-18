@@ -349,7 +349,8 @@ static int tmpa9x0_urb_enqueue (
 		setup_in_sram_phys = tmpa9x0_sram_to_phys(setup_in_sram);
 
 		memcpy(setup_in_sram, urb->setup_packet, 8);
-		dmac_clean_range(setup_in_sram, (uint8_t *) setup_in_sram );
+		wmb();
+//		dmac_clean_range(setup_in_sram, (uint8_t *) setup_in_sram );
 
 		urb_priv->urb_setup     = urb->setup_packet;
 		urb_priv->urb_setup_dma = urb->setup_dma;
@@ -386,7 +387,8 @@ static int tmpa9x0_urb_enqueue (
 		if (usb_pipeout(urb->pipe) )
 		{
 			memcpy(data_in_sram, urb->transfer_buffer, transfer_buffer_length);
-			dmac_clean_range(data_in_sram, (uint8_t *) data_in_sram + transfer_buffer_length );
+			wmb();
+//			dmac_clean_range(data_in_sram, (uint8_t *) data_in_sram + transfer_buffer_length );
 		}
 
 
