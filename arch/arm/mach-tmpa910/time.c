@@ -11,7 +11,6 @@
  * published by the Free Software Foundation.
  */
 
-#include <linux/autoconf.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/init.h>
