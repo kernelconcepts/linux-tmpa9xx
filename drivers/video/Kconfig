@@ -959,7 +959,7 @@ config FB_EPSON1355
 
 
 config FB_TMPA910
-	bool "Tohiba TMPA910 buffer device support"
+	bool "Toshiba TMPA9xx frame buffer device support"
 	depends on (FB = y) && (ARCH_TMPA910)
 	select FB_CFB_FILLRECT
 	select FB_CFB_COPYAREA
