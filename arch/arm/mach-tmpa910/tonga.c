@@ -122,7 +122,7 @@ static struct platform_device tonga_smsc911x_device = {
 
 
 /*
- * Serial UART
+ * Serial UARTs
  */ 
 static struct resource tmpa910_resource_uart0[] = {
 	{
@@ -135,7 +135,6 @@ static struct resource tmpa910_resource_uart0[] = {
 		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
 	}
 };
-
 
 struct platform_device tmpa910_device_uart0 = {
 	.name		= "tmpa910-uart",
@@ -604,8 +603,6 @@ static void __init tonga_init(void)
 	GPIOBODE = 0x00; /* Disable Open Drain */
 	GPIOCODE = 0x00; /* Disable Open Drain */
 
-	TMPA910_PORT_T_FR1 = 0x00F0; /* Enable USB function pin */
-    
 	GPIORDIR &= ~(1 << 2); /* Eth IRQ */
     
 	GPIOCDIR = 0xFF;
@@ -616,7 +613,12 @@ static void __init tonga_init(void)
 	GPIOCIE &= ~0xC0; /* USB Host */
 	GPIOCFR1 &= ~0xC0;
 	GPIOCFR2 |=  0xC0;
-    
+
+       	GPIOFFR1 &= ~0xC0;  /* UART 2 */
+	GPIOFFR2 |= 0xC0;
+        GPIOFIE  &= ~0xC0;
+        GPIOFODE &= ~0xC0;
+
 	GPIOMDIR |= 0x03; /* M0, MI GPIO OUT */
 	GPIOMFR1 &= ~0x03;
 	GPIOMFR2 &= ~0x03;
@@ -629,6 +631,8 @@ static void __init tonga_init(void)
 	GPIOJFR1 = 0xFF;
 	GPIOKFR2 = 0x00;
 	GPIOKFR1 = 0xFF;
+    
+       	GPIOTFR1 = 0xFF;  /* USB and UART 1 */
     
 	/* Configure LCD interface */
 	setup_lcdc_device();
