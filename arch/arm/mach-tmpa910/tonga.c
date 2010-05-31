@@ -144,6 +144,46 @@ struct platform_device tmpa910_device_uart0 = {
 };
 
 
+static struct resource tmpa910_resource_uart1[] = {
+	{
+		.start	= 0xf2001000,
+		.end	= 0xf2001000 + 0x100,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= 11,
+		.end	= 11,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+
+struct platform_device tmpa910_device_uart1 = {
+	.name		= "tmpa910-uart",
+	.id		= 1,
+	.resource	= tmpa910_resource_uart1,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart1),
+};
+
+
+static struct resource tmpa910_resource_uart2[] = {
+	{
+		.start	= 0xf2004000,
+		.end	= 0xf2004000 + 0x100,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= 9,
+		.end	= 9,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+
+struct platform_device tmpa910_device_uart2 = {
+	.name		= "tmpa910-uart",
+	.id		= 2,
+	.resource	= tmpa910_resource_uart2,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart2),
+};
+
+
 /*
  * DMA
  */
@@ -474,6 +514,8 @@ static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_ts,
 	&tonga_smsc911x_device,
 	&tmpa910_device_uart0,
+	&tmpa910_device_uart1,
+	&tmpa910_device_uart2,
 #ifdef CONFIG_MTD_NAND_TMPA910
  	&tmpa910_nand_device,
 #endif
