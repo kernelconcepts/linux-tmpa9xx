@@ -40,11 +40,14 @@
 /*********/
 /*********/
 
+#if defined(CONFIG_SERIAL_TMPA910_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
+       #define SUPPORT_SYSRQ
+#endif 
 
 #define DRIVER_NAME  	"tmpa910_uart"
 
 #define TMPA910_UART_REGSIZE 0x50
-#define TMPA910_SERIAL_MAX 2
+#define TMPA910_SERIAL_MAX 3
 #define TMPA910_NAME_PATTERN  "TMPA910 UART Channel %d"
 /*********/
 /*********/
@@ -191,8 +194,6 @@ struct uart_tmpa910_handle {
   char name[sizeof(TMPA910_NAME_PATTERN)];
 };
 
-/*********/
-/*********/
 static struct uart_tmpa910_handle serial_ports[TMPA910_SERIAL_MAX];
 
 static int _fill_uarthandle(
@@ -202,8 +203,7 @@ static int _fill_uarthandle(
 
 static inline void wait_for_xmitr(struct uart_tmpa910_handle *uart_tmpa910_handle);
 static inline void wait_for_txempty(struct uart_tmpa910_handle *uart_tmpa910_handle);
-/*********/
-/*********/
+
 
 static int _get_uartclk(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
@@ -270,10 +270,6 @@ static int _map_tmpa910(struct uart_tmpa910_handle *uart_tmpa910_handle)
 	
 	return 0;
 }
-
-
-/*********/
-/*********/
 
 
 
@@ -355,8 +351,7 @@ receive_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 		
 		uart_tmpa910_handle->port.icount.rx++;
 
-		if (unlikely(fr_reg & (UART_LSR_BI | UART_LSR_PE |
-				       UART_LSR_FE | UART_LSR_OE))) {
+                if (unlikely(dr_reg & (DR_BE | DR_PE | DR_FE | DR_OE))) {
 			/*
 			 * For statistics only
 			 */
@@ -592,7 +587,7 @@ static int serial_tmpa910_startup(struct uart_port *port)
 	 */
 	ret = request_irq(uart_tmpa910_handle->port.irq, serial_tmpa910_irq, 0, uart_tmpa910_handle->name, uart_tmpa910_handle);
 	if (ret) {
-		printk(KERN_ERR "TMPA910 UART: Fail allocate the interrupt (vector=%d)\n", uart_tmpa910_handle->port.irq );
+		printk(KERN_ERR "TMPA9xx UART: Fail allocate interrupt (%d)\n", uart_tmpa910_handle->port.irq );
 		return ret;
 	}
 
@@ -869,10 +864,14 @@ static int _fill_uarthandle(
 	const u32 *long_ptr;
 
 	unsigned int len;
-	int irq;
+	int irq = 10;
 
-	irq = 10+index;
-	mapbase = 0xf2000000 + 0x1000*index;
+	if (index == 1)
+		irq = 11;
+	if (index == 2)
+		irq = 9;
+
+	mapbase = 0xf2000000 + 0x1000 * index * index;
 
 	snprintf(uart_tmpa910_handle->name, sizeof(uart_tmpa910_handle->name), TMPA910_NAME_PATTERN, index);
 
@@ -995,16 +994,12 @@ serial_tmpa910_console_setup(struct console *co, char *options)
 	int flow = 'n';
 	int ret;
 	
-
 	if (co->index == -1 || co->index >= serial_tmpa910_reg.nr)
 		co->index = 0;
 		
-
-	//co->index = 1;
-
-	spin_lock_init(&port->lock);	
+	spin_lock_init(&port->lock);
 	
-  uart_tmpa910_handle = &serial_ports[co->index];
+	uart_tmpa910_handle = &serial_ports[co->index];
 	port = &uart_tmpa910_handle->port;
 
 
@@ -1061,7 +1056,7 @@ console_initcall(serial_tmpa910_console_init);
 
 static struct uart_driver serial_tmpa910_reg = {
 	.owner		= THIS_MODULE,
-	.driver_name	= "TMPA910 serial",
+	.driver_name	= "TMPA9xx serial",
 	.dev_name	= "ttyS",
 	.major		= TTY_MAJOR,
 	.minor		= 64,
@@ -1120,7 +1115,7 @@ static int serial_tmpa910_probe(struct platform_device *pdev)
 	}
 
 	if (irq == NO_IRQ) {
-		printk(KERN_ERR "no IRQ ressources! irq=%d\n", irq);
+		printk(KERN_ERR "no IRQ ressources!\n");
 		return -ENODEV;
 	}
 
