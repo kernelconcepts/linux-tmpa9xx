@@ -1,7 +1,7 @@
 /*
  * drivers/spi/spi_tmpa910.c
  *
- * Copyright © 2009 bplan GmbH
+ * Copyright (c) 2009 bplan GmbH
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -141,8 +141,8 @@ static int tmpa910_spi_transfer_rxtx(struct spi_device *spi,struct spi_transfer 
 {
 	struct tmpa910_spi_priv *tsp = spi_master_get_devdata(spi->master);
 	volatile struct tmpa910_spi_regs __iomem *regs = tsp->regs;
-    unsigned char *rx_buf = (unsigned char *)t->rx_buf;
-    unsigned char *tx_buf = (unsigned char *)t->tx_buf;
+	unsigned char *rx_buf = (unsigned char *)t->rx_buf;
+	unsigned char *tx_buf = (unsigned char *)t->tx_buf;
 	int tx_cnt=0,rx_cnt=0;
 	volatile int dat=0;
 	int ris,mis;
@@ -181,7 +181,6 @@ static int tmpa910_spi_transfer_rxtx(struct spi_device *spi,struct spi_transfer 
 					regs->dr = 0;	// 0x55;
 				}
 				tx_cnt++;
-				//tx_cnt++;
 			}
 			else
 			{
@@ -189,9 +188,11 @@ static int tmpa910_spi_transfer_rxtx(struct spi_device *spi,struct spi_transfer 
 			}
 		}
 
-		timeout=100000;
-		while((((sr = regs->sr) & SSPSR_RXFIFO_NOTEMPTY) == SSPSR_RXFIFO_EMPTY) && timeout--) {	// wait for data to arrive (non empty Receive FIFO)
-			ris = regs->ris; mis = regs->mis;
+		timeout = 100000;
+		/* wait for data to arrive (non empty Receive FIFO) */
+		while((((sr = regs->sr) & SSPSR_RXFIFO_NOTEMPTY) == SSPSR_RXFIFO_EMPTY) && timeout--) {
+			ris = regs->ris; 
+			mis = regs->mis;
 
 			if((tx_cnt < t->len) && ((sr = regs->sr) & SSPSR_TXFIFO_NOTFULL))
 				continue;	// send more data ....
@@ -199,7 +200,7 @@ static int tmpa910_spi_transfer_rxtx(struct spi_device *spi,struct spi_transfer 
 
 		if(timeout <= 0)
 		{
-			printk(KERN_WARNING "timeout!\n");
+			dev_dbg(&spi->dev, "SPI timeout\n");
 			break;
 		}
 		else
@@ -215,7 +216,6 @@ static int tmpa910_spi_transfer_rxtx(struct spi_device *spi,struct spi_transfer 
 					dat = regs->dr;
 				}
 				rx_cnt++;
-				//rx_cnt++;
 			}
 		}
 	}
@@ -442,14 +442,14 @@ static int tmpa910_spi_setup(struct spi_device *spi)
 	int cpsr = 96;	// default to 1MHz
 	int scr = 0;	//
 
-	// if bits_per_word is 0, default to 8bits per word
+	/* if bits_per_word is 0, default to 8bits per word */
 	if((spi->bits_per_word  != 0) && ((spi->bits_per_word < 4) || (spi->bits_per_word > 16))) {
-		dev_dbg(&spi->dev, "setup: unsupported number of bits per word (%x)\n",spi->bits_per_word);
+		dev_err(&spi->dev, "setup: unsupported number of bits per word (%x)\n",spi->bits_per_word);
 		return -EINVAL;
 	}
 
 	if(spi->mode & (~MODEBITS)) {
-		dev_dbg(&spi->dev, "setup: unsupported mode bits (%x)\n",spi->mode & (~MODEBITS));
+		dev_err(&spi->dev, "setup: unsupported mode bits (%x)\n",spi->mode & (~MODEBITS));
 		return -EINVAL;
 	}
 
@@ -470,6 +470,7 @@ static int tmpa910_spi_setup(struct spi_device *spi)
 
 		if((cs->speed_hz * 2) > ref_pclk_hz) {	// we can't go higher than half PCLK
 			kfree(cs);
+			dev_dbg(&spi->dev, "clock rate exceeds allowed maximum of %d\n", ref_pclk_hz / 2);
 			return -EINVAL;
 		}
 
@@ -497,7 +498,7 @@ static int tmpa910_spi_setup(struct spi_device *spi)
 	}
 	else
 	{
-		// default to 1MHZ
+		/* default to 1 MHz */
 		cs->cpsr = 96;
 		cs->scr = 0;
 	}
@@ -565,12 +566,6 @@ static irqreturn_t tmpa910_spi_isr(int irq, void *dev_id)
 		i++;
 	};
 
-
-//	for(i=0;i < 8;i++)
-//	{
-//		printk("%s.l%d_%ld: SR %08x RIS %08x MIS %08x IMSC %08x DR %08x\n",__FUNCTION__,__LINE__,tv.tv_usec,sr[i],ris[i],mis[i],regs->imsc,data[i]);
-//	}
-
 	ris[0] = 0;
 
 	if((ris[0] & 8) || (mis[0] & 8))
@@ -610,7 +605,7 @@ static int __init tmpa910_spi_probe(struct platform_device *pdev)
 	struct device *dev=&pdev->dev;
 	struct tmpa910_spi_priv *tsp;
 	struct spi_master *master;
-    struct resource *r;
+	struct resource *r;
 	int irq;
 	int ret;
 	

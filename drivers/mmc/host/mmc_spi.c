@@ -1107,6 +1107,7 @@ static void mmc_spi_request(struct mmc_host *mmc, struct mmc_request *mrq)
  */
 static void mmc_spi_initsequence(struct mmc_spi_host *host)
 {
+int ret;
 	/* Try to be very sure any previous command has completed;
 	 * wait till not-busy, skip debris from any old commands.
 	 */
@@ -1128,10 +1129,11 @@ static void mmc_spi_initsequence(struct mmc_spi_host *host)
 	 * with chipselect high before the card will stop driving its output.
 	 */
 	host->spi->mode |= SPI_CS_HIGH;
-	if (spi_setup(host->spi) != 0) {
+	ret = spi_setup(host->spi);
+	if (ret != 0) {
 		/* Just warn; most cards work without it. */
-		dev_warn(&host->spi->dev,
-				"can't change chip-select polarity\n");
+		dev_dbg(&host->spi->dev,
+				"can't change chip-select polarity %d\n", ret);
 		host->spi->mode &= ~SPI_CS_HIGH;
 	} else {
 		mmc_spi_readbytes(host, 18);

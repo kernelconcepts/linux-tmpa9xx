@@ -361,12 +361,12 @@ static struct platform_device tmpa910_i2s_device = {
 };
 
 
-#ifdef CONFIG_MMC_SPI
 static struct mmc_spi_platform_data mmc_spi_info = {
-	.caps = MMC_CAP_NEEDS_POLL|MMC_CAP_SPI,
+	.caps = MMC_CAP_NEEDS_POLL | MMC_CAP_SPI,
 	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3.3V only */
 };
 
+#ifdef CONFIG_MMC_SPI
 static struct spi_board_info spi_board_info[] = 
 {
 {
@@ -386,7 +386,7 @@ static struct spi_board_info spi_board_info[] = {
 	.platform_data = &mmc_spi_info,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
-	.max_speed_hz = 20000000,
+	.max_speed_hz = 10000000,
 	.bus_num = 0,
 },
 {
@@ -394,7 +394,7 @@ static struct spi_board_info spi_board_info[] = {
 	.platform_data = NULL,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
-	.max_speed_hz = 20000000,
+	.max_speed_hz = 10000000,
 	.bus_num = 1,
 }
 };

@@ -133,7 +133,7 @@ static struct mtd_partition mtd_parts_builtin[] = {
 	}, {
 		.name		= "kernel",
 		.offset		= 0x00080000,
-		.size		= 0x00308000,
+		.size		= 0x00380000,
 	}, {
 		.name		= "filesystem",
 		.offset		= 0x00380000,
@@ -1043,3 +1043,4 @@ module_exit(tmpa9x0_nand_exit);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("NAND flash driver for TMPA9x0");
 MODULE_ALIAS("platform:tmpa9x0-nand");
+
