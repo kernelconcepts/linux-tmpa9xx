@@ -18,7 +18,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  * 
- * TMPA 9x0 NAND controller driver
+ * TMPA 9xx NAND controller driver
  */
  
 #include <linux/slab.h>
@@ -70,6 +70,7 @@ struct tmpa9x0_nand_private {
 	unsigned int phy_buf;			/* internal Buffer (internal) */
         struct completion dma_completion;       /* copletion of DMA (internal) */ 
         struct nand_chip chip;			/* nand chip structure (internal) */
+        spinlock_t  lock;			/* Lock for Pageread needed due to HW implementation */
 };
 
 /* Nand Control */
@@ -86,17 +87,17 @@ struct tmpa9x0_nand_private tmpa9x0_nand = {
 
 /* NAND OOB layout for different chip types */
 static struct nand_ecclayout nand_oob_hamming_512 = {
-    .eccbytes = 6,
-    .eccpos =  {8, 9, 10, 13, 14, 15},
-    .oobfree = { {2, 6} }
+	.eccbytes = 6,
+	.eccpos =  {8, 9, 10, 13, 14, 15},
+	.oobfree = { {2, 6} }
 };
 
 static struct nand_ecclayout nand_oob_hamming_2048 = {
-    .eccbytes = 24,
-    .eccpos   =  { 8,  9, 10, 13, 14, 15, 24, 25,
+	.eccbytes = 24,
+	.eccpos   =  { 8,  9, 10, 13, 14, 15, 24, 25,
                       26, 29, 30, 31, 40, 41, 42, 45,
                       46, 47, 56, 57, 58, 61, 62, 63},
-    .oobfree  = {{ 2, 6},
+	.oobfree  = {{ 2, 6},
                      {16, 8},
                      {32, 8},
                      {48, 8},
@@ -107,12 +108,12 @@ static struct nand_ecclayout nand_oob_hamming_2048 = {
 };
 
 static struct nand_ecclayout nand_oob_rs_2048 = {
-    .eccbytes = 40,
-    .eccpos   =  { 6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+	.eccbytes = 40,
+	.eccpos   =  { 6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
                       22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
                       38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
                       54, 55, 56, 57, 58, 59, 60, 61, 62, 63},
-    .oobfree  = {{ 2, 4},
+	.oobfree  = {{ 2, 4},
                      {16, 6},
                      {32, 6},
                      {48, 6}}
@@ -132,11 +133,11 @@ static struct mtd_partition mtd_parts_builtin[] = {
 	}, {
 		.name		= "kernel",
 		.offset		= 0x00080000,
-		.size		= 0x00200000,
+		.size		= 0x00308000,
 	}, {
 		.name		= "filesystem",
-		.offset		= 0x00280000,
-		.size		= 0x08000000 - 0x00280000,
+		.offset		= 0x00380000,
+		.size		= MTDPART_SIZ_FULL,
 	}, 
 };
 
@@ -403,6 +404,7 @@ static void tmpa9x0_nand_read_buf(struct mtd_info *mtd, u_char *buf, int len)
 	struct nand_chip *this = mtd->priv;
 	struct tmpa9x0_nand_private * priv= (struct tmpa9x0_nand_private *)this->priv;
 	const uint8_t test_pattern[]={0x30,0x30,0x30,0x30};
+	unsigned long irq_flags;
 
 	/* The DMA Transfer could only bes started for an exact size of 512 bytes to read */
         /* Therefore do the 512 pagesize reads with DMA (if enabled) and the 64/16 bytes for OOB with polling */
@@ -412,35 +414,28 @@ static void tmpa9x0_nand_read_buf(struct mtd_info *mtd, u_char *buf, int len)
         /* First send the command, then set up the DMA and autoload functions, then the address */
         /* The autoload waits then till the rising edge of the busy signal from the NAND and starts the transfer to the FIFO */
 
+	/* During read, due to the design of the chip, it could happen that the NAND_CMD_READSTART is too long during */
+	/* latching this in to NAND chip due to in interrupt appearing */
+        /* Work around: Disable all interrupts at the time latching in the NAND_CMD_READSTART */
+        
 	if ((len==NAND_DMA_TRANSFER_SIZE) && (priv->dma==1))
         {
-		int i;        
-        	for (i=0;i<10;i++)
-                {
-			tmpa9x0_nand_set_cmd(NAND_CMD_READ0);			/* Set readpage */
-			tmpa9x0_nand_dma_read(priv,priv->phy_buf,len);		/* Set up the DMA transfer */
-			tmpa9x0_nand_start_autoload(1);				/* Set up autoload for reading */
-			tmpa9x0_nand_set_addr(priv->column,priv->page_addr);	/* Set adress to start reading */
-			tmpa9x0_nand_set_cmd(NAND_CMD_READSTART);		/* Set readstart for large page devices */
-			tmpa9x0_nand_set_rw_mode(1);				/* Set controller to read mode */
-			if ( tmpa9x0_nand_wait_dma_complete(priv,DMA_TIMEOUT)) {
-				printk(KERN_ERR "read page :0x%x, column:0x%x time out\n", priv->page_addr, priv->column);
-				return;
-			}
-			while(!tmpa9x0_nand_als_ready(mtd));
+		tmpa9x0_nand_set_cmd(NAND_CMD_READ0);			/* Set readpage */
+		tmpa9x0_nand_dma_read(priv,priv->phy_buf,len);		/* Set up the DMA transfer */
+		tmpa9x0_nand_start_autoload(1);				/* Set up autoload for reading */
+		tmpa9x0_nand_set_addr(priv->column,priv->page_addr);	/* Set adress to start reading */
+               	spin_lock_irqsave(&priv->lock, irq_flags);		/* Disable interrupts */
+		tmpa9x0_nand_set_cmd(NAND_CMD_READSTART);		/* Set readstart for large page devices */
+		tmpa9x0_nand_set_rw_mode(1);				/* Set controller to read mode */
+		spin_unlock_irqrestore(&priv->lock, irq_flags);		/* Enable Interrupts again */
+		if ( tmpa9x0_nand_wait_dma_complete(priv,DMA_TIMEOUT)) {
+			printk(KERN_ERR "read page :0x%x, column:0x%x time out\n", priv->page_addr, priv->column);
+			return;
+		}
+		while(!tmpa9x0_nand_als_ready(mtd));
                         
-                        /* Sometimes (for at the moment unknown reason) the DMA fills up the buffer with 0x30 */
-                        /* Check for this error an re-read the page in that case */
-                        
-                        if (memcmp(priv->buf, test_pattern, sizeof(test_pattern)/sizeof(uint8_t))!=0)
-                        	break;						/* Quit loop if read data is correct */
-
-                        printk(KERN_DEBUG "TMPA9x0 - 0x30 error for NAND read\n");  
-                        tmpa9x0_nand_start_ecc(1,priv->mlc);			/* Restart the ECC calculation in case of the error */
-                }
-                
-                memcpy(buf,priv->buf,len);					/* Have to use our own dma_coherend created buffer */
-                priv->column+=len;						/* Remember internal position */
+                memcpy(buf,priv->buf,len);				/* Have to use our own dma_coherend created buffer */
+                priv->column+=len;					/* Remember internal position */
 	}
         else
         {
@@ -937,6 +932,9 @@ static int __init tmpa9x0_nand_probe(struct platform_device *pdev)
 
 	mtd->priv = nand;
 	platform_set_drvdata(pdev, mtd);
+        
+       	spin_lock_init(&priv->lock);
+
 	init_completion(&priv->dma_completion);	
 	priv->dma_ch = tmpa910_dma_request("TMPA9xx NAND", NAND_DMA_CHANNEL, tmpa9x0_nand_dma_handler,tmpa9x0_nand_dma_error_handler, priv);
 	if (priv->dma_ch < 0) {
