@@ -1,23 +1,22 @@
 /*
- *  linux/drivers/serial/tmpa910_fw.c
+ *  linux/drivers/serial/tmpa910.c
  *
  *  Based on drivers/serial/pxa.c by Nicolas Pitre
  *
- *  Author:	Nicolas 
- *  Created:	Feb 20, 2003
- *  Copyright:	(C) 2008 bplan GmbH
+ *  Copyright 2008 bplan GmbH
+ *  Copyright 2010 Toshiba Electronics Europe GmbH
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
-
  */
 
+#if defined(CONFIG_SERIAL_TMPA910_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
+	#define SUPPORT_SYSRQ
+#endif
 
-/*********/
-/*********/
 #include <linux/module.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
@@ -33,28 +32,20 @@
 #include <linux/serial_core.h>
 #include <linux/ioport.h>
 
-
 #include <asm/io.h>
 #include <mach/hardware.h>
 #include <asm/irq.h>
-/*********/
-/*********/
-
-#if defined(CONFIG_SERIAL_TMPA910_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
-       #define SUPPORT_SYSRQ
-#endif 
 
 #define DRIVER_NAME  	"tmpa910_uart"
 
 #define TMPA910_UART_REGSIZE 0x50
 #define TMPA910_SERIAL_MAX 3
 #define TMPA910_NAME_PATTERN  "TMPA910 UART Channel %d"
-/*********/
-/*********/
+
 struct tmpa910_uart_regs
 {
   uint32_t dr;      // 0x000
-  uint32_t sr;     // 0x004
+  uint32_t sr;      // 0x004
   uint32_t ecr;     // 0x004
   uint32_t rsd1[3]; // 0x008 -> 0x014
   uint32_t fr;      // 0x018
@@ -71,86 +62,75 @@ struct tmpa910_uart_regs
   uint32_t icr;     // 0x044
   uint32_t dmacr;   // 0x048
 };
-/*********/
-/*********/
-// The data register contains 8bit for the char and 4 status bits
 
-#define DR_OE  (1<<11)  // OE RO Undefined Overrun error
-                        // 0y0: There is an empty space in the FIFO.
-                        // 0y1: Overrun error flag
-#define DR_BE  (1<<10)  // BE RO Undefined Break error
-                        // 0y0: No error detected
-                        // 0y1: Error detected
-#define DR_PE  (1<<9)   // PE RO Undefined Parity error
-                        // 0y0: No error detected
-                        // 0y1: Error detected
-#define DR_FE  (1<<8)   // FE RO Undefined Framing error
-                        // 0y0: No error detected
-                        // 0y1: Error detected
-/*********/
-/*********/
-// The data register contains 8bit for the char and 4 status bits
+/* The data register contains 8bit for the char and 4 status bits */
 
+#define DR_OE  (1<<11)  /* OE RO Undefined Overrun error
+                           0y0: There is an empty space in the FIFO.
+                           0y1: Overrun error flag */
+#define DR_BE  (1<<10)  /* BE RO Undefined Break error
+                           0y0: No error detected
+                           0y1: Error detected */
+#define DR_PE  (1<<9)   /* PE RO Undefined Parity error
+                           0y0: No error detected
+                           0y1: Error detected */
+#define DR_FE  (1<<8)   /* FE RO Undefined Framing error
+                           0y0: No error detected
+                           0y1: Error detected */
+
+/* The data register contains 8bit for the char and 4 status bits */
 #define SR_OE  (1<<3)  
 #define SR_BE  (1<<2) 
 #define SR_PE  (1<<1) 
 #define SR_FE  (1<<0)
 
-/*********/
-/*********/
+#define LCRH_SPS      (1<<7)   SPS  R/W 0y0  Stick parity select:
+#define LCRH_WLEN_5B  (0x0)
+#define LCRH_WLEN_6B  (0x1<<5)
+#define LCRH_WLEN_7B  (0x2<<5)
+#define LCRH_WLEN_8B  (0x3<<5)
+#define LCRH_FEN      (1<<4)  /* R/W 0y0  FIFO control
+                                 0y1: FIFO mode
+                                 0y0: Character mode */
+#define LCRH_STP2     (1<<3)  /* STP2 R/W 0y0  Stop bit select
+                                 0y0: 1 stop bit
+                                 0y1: 2 stop bits */
+#define LCRH_EPS      (1<<2)  /* EPS  R/W 0y0  Even parity select (Refer to Table 3.13.1 for
+                                 the truth table.)
+                                 0y1: Even
+                                 0y0: Odd */
+#define LCRH_PEN      (1<<1)  /* PEN  R/W 0y0  Parity control (Refer to Table 3.13.1 for the
+                                 truth table.)
+                                 0y0: Disable
+                                 0y1: Enable */
+#define LCRH_BRK      (1<<0)  /* BRK  R/W 0y0  Send break
+                                 0y0: No effect
+                                 0y1: Send break */
 
-#define LCRH_SPS     (1<<7)   SPS  R/W 0y0  Stick parity select:
-#define LCRH_WLEN_5B (0x0   )
-#define LCRH_WLEN_6B (0x1<<5)
-#define LCRH_WLEN_7B (0x2<<5)
-#define LCRH_WLEN_8B (0x3<<5)
-#define LCRH_FEN      (1<<4)  // R/W 0y0  FIFO control
-                              // 0y1: FIFO mode
-                              // 0y0: Character mode
-#define LCRH_STP2     (1<<3)  //   STP2 R/W 0y0  Stop bit select
-                              // 0y0: 1 stop bit
-                              // 0y1: 2 stop bits
-#define LCRH_EPS      (1<<2)  // EPS  R/W 0y0  Even parity select (Refer to Table 3.13.1 for
-                              // the truth table.)
-                              // 0y1: Even
-                              // 0y0: Odd
-#define LCRH_PEN      (1<<1)  // PEN  R/W 0y0  Parity control (Refer to Table 3.13.1 for the
-                              // truth table.)
-                              // 0y0: Disable
-                              // 0y1: Enable
-#define LCRH_BRK      (1<<0)  // BRK  R/W 0y0  Send break
-                              // 0y0: No effect
-                              // 0y1: Send break
+#define CR_CTSEn (1<<15)      /* CTSEn  R/W 0y0       CTS hardware flow control enable */
+#define CR_RTSEn (1<<14)      /* RTSEn  R/W 0y0       RTS hardware flow control enable */
 
-/*********/
-/*********/
-#define CR_CTSEn (1<<15)      // CTSEn  R/W 0y0       CTS hardware flow control enable
-#define CR_RTSEn (1<<14)      // RTSEn  R/W 0y0       RTS hardware flow control enable
+#define CR_RTS (1<<11)        /* R/W 0y0       Complement of the UART Request To Send
+                                 (nUARTRTS) modem status output
+                                 0y0: Modem status output is "1".
+                                 0y1: Modem status output is "0". */
+#define CR_DTR (1<<10)        /*  R/W 0y0       Complement of the UART Data Set Ready
+                                 (nUARTDTR) modem status output
+                                 0y0: Modem status output is "1".
+                                 0y1: Modem status output is "0". */
+#define CR_RXE (1<<9)         /* RXE    R/W 0y1       UART receive enable */
+#define CR_TXE (1<<8)         /* TXE    R/W 0y1       UART transmit enable */
 
-#define CR_RTS (1<<11)        // R/W 0y0       Complement of the UART Request To Send
-                              // (nUARTRTS) modem status output
-                              // 0y0: Modem status output is "1".
-                              // 0y1: Modem status output is "0".
-#define CR_DTR (1<<10)        //  R/W 0y0       Complement of the UART Data Set Ready
-                              // (nUARTDTR) modem status output
-                              // 0y0: Modem status output is "1".
-                              // 0y1: Modem status output is "0".
-#define CR_RXE (1<<9)         // RXE    R/W 0y1       UART receive enable
-#define CR_TXE (1<<8)         // TXE    R/W 0y1       UART transmit enable
-
-#define CR_SIRLP (1<<2)       // SIRLP  R/W 0y0       IrDA encoding mode select for transmitting "0"
-                              // 0y0: "0" bits are transmitted as an active high
-                              // pulse of 3/16th of the bit period.
-                              // 0y1:"0" bits are transmitted with a pulse width
-                              // that is 3 times the period of the IrLPBaud16
-                              // input signal.
+#define CR_SIRLP (1<<2)       /* SIRLP  R/W 0y0       IrDA encoding mode select for transmitting "0"
+                                 0y0: "0" bits are transmitted as an active high
+                                 pulse of 3/16th of the bit period.
+                                 0y1:"0" bits are transmitted with a pulse width
+                                 that is 3 times the period of the IrLPBaud16
+                                 input signal. */
 			      
-#define CR_SIREN (1<<1)       // SIREN  R/W 0y0       SIR enable
-#define CR_UARTEN (1<<0)      // UARTEN R/W 0y0       UART enable
+#define CR_SIREN (1<<1)       /* SIREN  R/W 0y0       SIR enable */
+#define CR_UARTEN (1<<0)      /* UARTEN R/W 0y0       UART enable */
 
-
-/*********/
-/*********/
 /* Flag register */
 
 #define FR_RI         (1<<8) // Ring indicator flag
@@ -163,13 +143,9 @@ struct tmpa910_uart_regs
 #define FR_DSR        (1<<1) // Data set ready flag
 #define FR_CTS        (1<<0) // Clear To Send flag
 
-
-/*********/
-/*********/
-
-// for interrupt mask and status
-// 0y0: Clear the mask
-// 0y1: Set the mask
+/* for interrupt mask and status
+   0y0: Clear the mask
+   0y1: Set the mask */
 		    
 #define INT_OE      (1<<10)  // OEIM   R/W 0y0 Overrun error 
 #define INT_BE      (1<<9)   // BEIM   R/W 0y0 Break error 
@@ -182,8 +158,6 @@ struct tmpa910_uart_regs
 #define INT_DCDM    (1<<2)   // DCDMIM R/W 0y0 U0DCDn modem interrupt
 #define INT_CTSM    (1<<1)   // CTSMIM R/W 0y0 U0CTSn modem interrupt
 #define INT_RIM     (1<<0)   // RIMIM  R/W 0y0 U0RIn modem interrupt
-
-
 
 struct uart_tmpa910_handle {
   struct uart_port        port;
@@ -200,10 +174,8 @@ static int _fill_uarthandle(
 	struct uart_tmpa910_handle *uart_tmpa910_handle,
 	int index);
 
-
 static inline void wait_for_xmitr(struct uart_tmpa910_handle *uart_tmpa910_handle);
 static inline void wait_for_txempty(struct uart_tmpa910_handle *uart_tmpa910_handle);
-
 
 static int _get_uartclk(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
@@ -220,32 +192,26 @@ static void _dump_regs(struct uart_tmpa910_handle *uart_tmpa910_handle)
 	if (regs == NULL)
 		return;
 		
-	printk("dr    at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, dr ),    regs->dr);
-	printk("sr    at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, sr ),   regs->sr);
-	printk("ecr   at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, ecr ),   regs->ecr);
-	printk("fr    at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, fr),     regs->fr);
-	printk("ilpr  at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, ilpr ),  regs->ilpr);
-	printk("ibrd  at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, ibrd ),  regs->ibrd);
-	printk("fbrd  at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, fbrd ),  regs->fbrd);
-	printk("lcr_h at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, lcr_h),  regs->lcr_h);
-	printk("cr    at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, cr ),    regs->cr);
-	printk("ifls  at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, ifls ),  regs->ifls);
-	printk("imsc  at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, imsc ),  regs->imsc);
-	printk("ris   at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, ris ),   regs->ris);
-	printk("mis   at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, mis ),   regs->mis);
-	printk("icr   at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, icr ),   regs->icr);
-	printk("dmacr at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, dmacr ), regs->dmacr);
-
+	printk("dr    at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, dr),    regs->dr);
+	printk("sr    at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, sr),    regs->sr);
+	printk("ecr   at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, ecr),   regs->ecr);
+	printk("fr    at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, fr),    regs->fr);
+	printk("ilpr  at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, ilpr),  regs->ilpr);
+	printk("ibrd  at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, ibrd),  regs->ibrd);
+	printk("fbrd  at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, fbrd),  regs->fbrd);
+	printk("lcr_h at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, lcr_h), regs->lcr_h);
+	printk("cr    at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, cr),    regs->cr);
+	printk("ifls  at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, ifls),  regs->ifls);
+	printk("imsc  at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, imsc),  regs->imsc);
+	printk("ris   at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, ris),   regs->ris);
+	printk("mis   at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, mis),   regs->mis);
+	printk("icr   at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, icr),   regs->icr);
+	printk("dmacr at 0x%2x: 0x%8x\n", offsetof(struct tmpa910_uart_regs, dmacr), regs->dmacr);
 }
-
 #endif
-/*********/
-/*********/
-
 
 static int _map_tmpa910(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
-
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	
 	if (regs) {
@@ -253,13 +219,12 @@ static int _map_tmpa910(struct uart_tmpa910_handle *uart_tmpa910_handle)
 		return 0;
 	}
 	
-	regs = uart_tmpa910_handle->port.mapbase;
+	regs = (struct tmpa910_uart_regs *)uart_tmpa910_handle->port.mapbase;
 	if (regs == NULL) {
 		printk(KERN_ERR "Fail to map UART controller (mapbase=0x%x)\n", uart_tmpa910_handle->port.mapbase);
 		return -EINVAL;
 	}
 	
-
 	uart_tmpa910_handle->port.membase = (void *) regs;
 	uart_tmpa910_handle->regs = regs;
 
@@ -270,8 +235,6 @@ static int _map_tmpa910(struct uart_tmpa910_handle *uart_tmpa910_handle)
 	
 	return 0;
 }
-
-
 
 static void serial_tmpa910_enable_ms(struct uart_port *port)
 {
@@ -292,8 +255,6 @@ static void serial_tmpa910_stop_rx(struct uart_port *port)
 	
 	regs->imsc &= ~INT_RX;
 }
-
-
 
 static void transmit_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
@@ -326,22 +287,22 @@ static void transmit_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
 		uart_write_wakeup(&uart_tmpa910_handle->port);
 
-
 	if (uart_circ_empty(xmit))
 		serial_tmpa910_stop_tx(&uart_tmpa910_handle->port);
 }
-
 
 static inline void
 receive_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
-	struct tty_struct *tty = uart_tmpa910_handle->port.state->port.tty;
+	struct uart_port *port = &uart_tmpa910_handle->port;
+	struct tty_struct *tty = port->state->port.tty;
 	unsigned int ch, flag;
 	uint32_t fr_reg;
 	uint32_t dr_reg;
 	int max_count = 256;
-
+	int ret;
+	
 	do {
 		fr_reg = regs->fr; 
 		dr_reg = regs->dr; 
@@ -349,35 +310,37 @@ receive_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 		ch     = regs->dr & 0xff;
 		flag = TTY_NORMAL;
 		
-		uart_tmpa910_handle->port.icount.rx++;
+		port->icount.rx++;
 
-                if (unlikely(dr_reg & (DR_BE | DR_PE | DR_FE | DR_OE))) {
+		if (unlikely(dr_reg & (DR_BE | DR_PE |
+				       DR_FE | DR_OE))) {
 			/*
 			 * For statistics only
 			 */
 			if (dr_reg & DR_BE) {
-				uart_tmpa910_handle->port.icount.brk++;
+				port->icount.brk++;
 				/*
 				 * We do the SysRQ and SAK checking
 				 * here because otherwise the break
 				 * may get masked by ignore_status_mask
 				 * or read_status_mask.
 				 */
-				if (uart_handle_break(&uart_tmpa910_handle->port))
+				ret = uart_handle_break(port);
+				if(ret)
 					goto ignore_char;
 			} else if (dr_reg & DR_PE)
-				uart_tmpa910_handle->port.icount.parity++;
+				port->icount.parity++;
 			else if (dr_reg &DR_FE)
-				uart_tmpa910_handle->port.icount.frame++;
+				port->icount.frame++;
 			if (dr_reg & DR_OE)
-				uart_tmpa910_handle->port.icount.overrun++;
+				port->icount.overrun++;
 
 			/*
 			 * Mask off conditions which should be ignored.
 			 */
 			// *status &= up->port.read_status_mask;
 
-#if defined(CONFIG_SERIAL_TMPA910_CONSOLE) && 0
+#if defined(CONFIG_SERIAL_TMPA910_CONSOLE) & 0
 			if (up->port.line == up->port.cons->index) {
 				/* Recover the break flag from console xmit */
 				*status |= up->lsr_break_flag;
@@ -392,18 +355,18 @@ receive_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 				flag = TTY_FRAME;
 		}
 
-		if (uart_handle_sysrq_char(&uart_tmpa910_handle->port, ch))
+		ret = uart_handle_sysrq_char(&uart_tmpa910_handle->port, ch);
+		if (ret)
 			goto ignore_char;
 
 		uart_insert_char(&uart_tmpa910_handle->port, dr_reg, DR_OE, ch, flag);
 
 	ignore_char:
 		fr_reg = regs->fr; 
-	} while ( ((fr_reg & FR_RXFE)==0) && (max_count-- > 0));
+	} while (((fr_reg & FR_RXFE)==0) && (max_count-- > 0));
 
 	tty_flip_buffer_push(tty);
 }
-
 
 static unsigned int serial_tmpa910_tx_empty(struct uart_port *port);
 static void serial_tmpa910_start_tx(struct uart_port *port)
@@ -414,7 +377,7 @@ static void serial_tmpa910_start_tx(struct uart_port *port)
 	
 	regs->imsc |= INT_TX;
 	
-	if (uart_circ_chars_pending(xmit) )
+	if (uart_circ_chars_pending(xmit))
 	{
 		wait_for_xmitr(uart_tmpa910_handle);
 		transmit_chars(uart_tmpa910_handle);
@@ -429,7 +392,7 @@ static inline void check_modem_status(struct uart_tmpa910_handle *uart_tmpa910_h
 	
 	fr_reg = regs->fr;
 
-	// rng is ring ? not documented..
+	/* rng is ring ? not documented.. */
 	if (fr_reg & FR_RI)
 		uart_tmpa910_handle->port.icount.rng++;
 	if (fr_reg & FR_DSR)
@@ -440,14 +403,11 @@ static inline void check_modem_status(struct uart_tmpa910_handle *uart_tmpa910_h
 		uart_tmpa910_handle->port.icount.cts++;
 
 	wake_up_interruptible(&uart_tmpa910_handle->port.state->port.delta_msr_wait);
-
 }
 
 /*
  * This handles the interrupt from one port.
  */
-
-
 static unsigned int serial_tmpa910_tx_empty(struct uart_port *port)
 {
 	struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)port;
@@ -541,7 +501,6 @@ static void serial_tmpa910_set_mctrl(struct uart_port *port, unsigned int mctrl)
 		cr_reg |= CR_DTR;
 
 	regs->cr |= cr_reg;
-
 }
 
 static void serial_tmpa910_break_ctl(struct uart_port *port, int break_state)
@@ -566,7 +525,6 @@ static void serial_tmpa910_break_ctl(struct uart_port *port, int break_state)
 	spin_unlock_irqrestore(&uart_tmpa910_handle->port.lock, flags);
 }
 
-
 static int serial_tmpa910_startup(struct uart_port *port)
 {
 	struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)port;
@@ -574,12 +532,12 @@ static int serial_tmpa910_startup(struct uart_port *port)
 	unsigned long flags;
 	int ret;
 
-	// Make sure the port is off and no IRQ could be generated
+	/* Make sure the port is off and no IRQ could be generated */
 	regs->cr   = 0;
 	regs->imsc   = 0;
 	regs->icr    = 0x7ff;
 	
-	// Clear errors if any
+	/* Clear errors if any */
 	regs->ecr    = 0x0;
 	
 	/*
@@ -587,7 +545,7 @@ static int serial_tmpa910_startup(struct uart_port *port)
 	 */
 	ret = request_irq(uart_tmpa910_handle->port.irq, serial_tmpa910_irq, 0, uart_tmpa910_handle->name, uart_tmpa910_handle);
 	if (ret) {
-		printk(KERN_ERR "TMPA9xx UART: Fail allocate interrupt (%d)\n", uart_tmpa910_handle->port.irq );
+		printk(KERN_ERR "TMPA910 UART: Fail allocate the interrupt (vector=%d)\n", uart_tmpa910_handle->port.irq);
 		return ret;
 	}
 
@@ -597,7 +555,6 @@ static int serial_tmpa910_startup(struct uart_port *port)
 	 * Clear the FIFO buffers and disable them.
 	 * (they will be reenabled in set_termios())
 	 */
-
 
 	/*
 	 * Clear the interrupt registers.
@@ -655,25 +612,19 @@ static void serial_tmpa910_shutdown(struct uart_port *port)
 	/*
 	 * Disable break condition and FIFOs
 	 */
-
 }
 
 static inline int _get_div_fract(int uartclk, int baud, int div_integer)
 {
 	int a;
 	
-	// Baud rate divisor = (UARTCLK)/(16 × baud)= integer part + fract part;
-	//
-	// When the required baud rate is 230400 and fUARTCLK = 4MHz:
-	// Baud rate divisor = (4 × 106)/(16 × 230400)= 1.085
-	// Therefore, fractional part is ((0.085 × 64)+ 0.5) = 5.94.
+	/* Baud rate divisor = (UARTCLK)/(16 × baud)= integer part + fract part;
+	  
+	   When the required baud rate is 230400 and fUARTCLK = 4MHz:
+	   Baud rate divisor = (4 × 106)/(16 × 230400)= 1.085
+	   Therefore, fractional part is ((0.085 × 64)+ 0.5) = 5.94. */
 
-	// a = divisor * 1000
-	a = ( (uartclk/16) *10) / (baud/100);
-
-	// a = integer part*1000 - divisor * 1000
-	// a -> fract part * 1000
-
+	a = ((uartclk/16) *10) / (baud/100);
 	a = a - div_integer*1000;
 	a = a * 64 + 500;
 	a = a / 1000;
@@ -731,7 +682,6 @@ serial_tmpa910_set_termios(struct uart_port *port, struct ktermios *termios,
 	 */
 	spin_lock_irqsave(&uart_tmpa910_handle->port.lock, flags);
 
-
 	/*
 	 * Update the per-port timeout.
 	 */
@@ -772,9 +722,7 @@ serial_tmpa910_set_termios(struct uart_port *port, struct ktermios *termios,
 	//if (UART_ENABLE_MS(&uart_tmpa910_handle->port, termios->c_cflag))
 	//	uart_tmpa910_handle->ier |= UART_IER_MSI;
 
-
 	serial_tmpa910_set_mctrl(&uart_tmpa910_handle->port, uart_tmpa910_handle->port.mctrl);
-
 
 	regs->lcr_h = lcrh_reg;
 	regs->cr   |= CR_UARTEN;
@@ -794,16 +742,12 @@ serial_tmpa910_pm(struct uart_port *port, unsigned int state,
 
 static void serial_tmpa910_release_port(struct uart_port *port)
 {
-	struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)port;
-
 	port->membase = NULL;
 }
 
-
-
 static int serial_tmpa910_request_port(struct uart_port *port)
 {
-	return _map_tmpa910( (struct uart_tmpa910_handle *) port);
+	return _map_tmpa910((struct uart_tmpa910_handle *) port);
 }
 
 static void serial_tmpa910_config_port(struct uart_port *port, int flags)
@@ -828,8 +772,6 @@ serial_tmpa910_type(struct uart_port *port)
 	return up->name;
 }
 
-
-
 struct uart_ops serial_tmpa910_pops = {
 	.tx_empty	= serial_tmpa910_tx_empty,
 	.set_mctrl	= serial_tmpa910_set_mctrl,
@@ -850,20 +792,9 @@ struct uart_ops serial_tmpa910_pops = {
 	.verify_port	= serial_tmpa910_verify_port,
 };
 
-
-
-
-static int _fill_uarthandle(
-	struct uart_tmpa910_handle *uart_tmpa910_handle,
-	int index )
+static int _fill_uarthandle(struct uart_tmpa910_handle *uart_tmpa910_handle, int index)
 {
 	unsigned long mapbase;
-	char name[256];
-	struct device_node *dp = NULL;
-	const char *onestr;
-	const u32 *long_ptr;
-
-	unsigned int len;
 	int irq = 10;
 
 	if (index == 1)
@@ -898,7 +829,7 @@ static inline void wait_for_xmitr(struct uart_tmpa910_handle *uart_tmpa910_handl
 	unsigned int tmout = 10000;
 
 	/* Wait up to 10ms for the character(s) to be sent. */
-	while( (regs->fr & FR_TXFF) )
+	while((regs->fr & FR_TXFF))
 	{
 		if (--tmout == 0)
 			break;
@@ -925,7 +856,7 @@ static inline void wait_for_txempty(struct uart_tmpa910_handle *uart_tmpa910_han
 	unsigned int tmout = 10000;
 	
 	/* Wait up to 10ms for the character(s) to be sent. */
-	while( (regs->fr & FR_TXFE) == 0 )
+	while((regs->fr & FR_TXFE) == 0)
 	{
 		if (--tmout == 0)
 			break;
@@ -934,14 +865,9 @@ static inline void wait_for_txempty(struct uart_tmpa910_handle *uart_tmpa910_han
 	}
 }
 
-
-
-
 #ifdef CONFIG_SERIAL_TMPA910_CONSOLE
 
-
 static struct uart_driver serial_tmpa910_reg;
-
 
 static void serial_tmpa910_console_putchar(struct uart_port *port, int ch)
 {
@@ -979,9 +905,7 @@ serial_tmpa910_console_write(struct console *co, const char *s, unsigned int cou
 	 *	and restore the IER
 	 */
 	regs->imsc = imsc_reg;
-
 }
-
 
 static int __init
 serial_tmpa910_console_setup(struct console *co, char *options)
@@ -1002,14 +926,13 @@ serial_tmpa910_console_setup(struct console *co, char *options)
 	uart_tmpa910_handle = &serial_ports[co->index];
 	port = &uart_tmpa910_handle->port;
 
-
 	ret = _fill_uarthandle(uart_tmpa910_handle, co->index);
 	if (ret<0) {
 		return ret;
 	}
 
 	ret = _map_tmpa910(uart_tmpa910_handle);
-	if( ret < 0) {
+	if(ret < 0) {
 		printk(KERN_ERR "Fail to map IO mem. ret=%d\n", ret);
 		return ret;
 	}
@@ -1019,7 +942,6 @@ serial_tmpa910_console_setup(struct console *co, char *options)
 		uart_parse_options(options, &baud, &parity, &bits, &flow);
 		
 	return uart_set_options(&uart_tmpa910_handle->port, co, baud, parity, bits, flow);
-
 }
 
 static struct console serial_tmpa910_console = {
@@ -1037,9 +959,9 @@ serial_tmpa910_console_init(void)
 {
 #ifdef CONFIG_SERIAL_TMPA910_CONSOLE_PREFERED
   	add_preferred_console("ttyS", 0, NULL);
-	printk(DRIVER_NAME ": Welcome. Myself as prefered console :-)\n" );
+	printk(DRIVER_NAME ": Welcome. Myself as prefered console :-)\n");
 #else
-	printk(DRIVER_NAME ": Welcome\n" );
+	printk(DRIVER_NAME ": Welcome\n");
 #endif
 	
 	register_console(&serial_tmpa910_console);
@@ -1052,7 +974,6 @@ console_initcall(serial_tmpa910_console_init);
 #else
 #define TMPA910_CONSOLE	NULL
 #endif
-
 
 static struct uart_driver serial_tmpa910_reg = {
 	.owner		= THIS_MODULE,
@@ -1085,8 +1006,8 @@ static int serial_tmpa910_resume(struct platform_device *dev)
         return 0;
 }
 
-
 static int tmpa910_uart_portsetup(struct uart_tmpa910_handle *uart_tmpa910_handle);
+
 static int serial_tmpa910_probe(struct platform_device *pdev)
 {
 	static struct uart_tmpa910_handle serial_tmpa910_ports[TMPA910_SERIAL_MAX];
@@ -1099,7 +1020,6 @@ static int serial_tmpa910_probe(struct platform_device *pdev)
 	struct resource *addr;
 
 	uart_tmpa910_handle = &serial_ports[pdev->id];
-
 
 	if (pdev->num_resources < 2) {
 		printk(KERN_ERR "not enough ressources! %d\n", pdev->num_resources);
@@ -1137,7 +1057,7 @@ static int serial_tmpa910_probe(struct platform_device *pdev)
 	port = &uart_tmpa910_handle->port;
 	spin_lock_init(&port->lock);
 	
-	// do the needed setup (ressournces, allocation, hardware config...)
+	/* do the needed setup (ressournces, allocation, hardware config...) */
 	ret = tmpa910_uart_portsetup(uart_tmpa910_handle);
 	if (ret < 0) {
 		return ret;
@@ -1183,7 +1103,6 @@ static struct platform_driver serial_tmpa910_driver = {
 static int tmpa910_uart_portsetup(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
 	return _map_tmpa910(uart_tmpa910_handle);
-
 }
 
 int __init serial_tmpa910_init(void)
@@ -1195,7 +1114,6 @@ int __init serial_tmpa910_init(void)
 		return ret;
 
 	return platform_driver_register(&serial_tmpa910_driver);
-
 }
 
 void __exit serial_tmpa910_exit(void)
@@ -1207,4 +1125,3 @@ module_init(serial_tmpa910_init);
 module_exit(serial_tmpa910_exit);
 
 MODULE_LICENSE("GPL");
-
