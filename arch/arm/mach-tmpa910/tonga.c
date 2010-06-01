@@ -43,12 +43,11 @@
 
 #include <video/tmpa910_fb.h>
 #include <mach/gpio.h>
-
+#include <linux/mmc/host.h>
 #include <asm/mach/arch.h>
 #include <mach/hardware.h>
 #include <mach/ts.h>
 #include <mach/tmpa910_regs.h>
-#include <asm/dma.h>
 #include <linux/smsc911x.h>
 
 
@@ -183,35 +182,6 @@ struct platform_device tmpa910_device_uart2 = {
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart2),
 };
 
-
-/*
- * DMA
- */
-static struct resource tmpa910_resource_dmac[] = {
-	{
-		.start	= DMAC_BASE,
-		.end	= DMAC_BASE+0x200,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= INTR_VECT_DMA_END,
-		.end	= INTR_VECT_DMA_END,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}, {
-		.start	= INTR_VECT_DMA_ERROR,
-		.end	= INTR_VECT_DMA_ERROR,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
-
-struct platform_device tmpa910_device_dmac = {
-	.name		= "tmpa910-dmac",
-	.id		= 0,
-	.dev = {
-		.platform_data = NULL
-	},
-	.resource	= tmpa910_resource_dmac,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_dmac),
-};
 
 
 static struct resource tmpa910_resource_i2c[] = {
@@ -392,11 +362,16 @@ static struct platform_device tmpa910_i2s_device = {
 
 
 #ifdef CONFIG_MMC_SPI
+static struct mmc_spi_platform_data mmc_spi_info = {
+	.caps = MMC_CAP_NEEDS_POLL|MMC_CAP_SPI,
+	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3.3V only */
+};
+
 static struct spi_board_info spi_board_info[] = 
 {
 {
 	.modalias = "mmc_spi",
-	.platform_data = NULL,
+	.platform_data = &mmc_spi_info,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
 	.max_speed_hz = 1000000,
@@ -408,7 +383,7 @@ static struct spi_board_info spi_board_info[] =
 static struct spi_board_info spi_board_info[] = {
 {
 	.modalias = "spidev",
-	.platform_data = NULL,
+	.platform_data = &mmc_spi_info,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
 	.max_speed_hz = 20000000,
@@ -510,7 +485,6 @@ static struct platform_device tmpa910_udc_device = {
 
 
 static struct platform_device *devices[] __initdata = {
-	&tmpa910_device_dmac,
 	&tmpa910_device_ts,
 	&tonga_smsc911x_device,
 	&tmpa910_device_uart0,

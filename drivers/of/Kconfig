@@ -8,7 +8,7 @@ config OF_DYNAMIC
 
 config OF_DEVICE
 	def_bool y
-	depends on OF && (SPARC || PPC_OF || MICROBLAZE)
+	depends on OF && (SPARC || PPC_OF || MICROBLAZE || ARM)
 
 config OF_GPIO
 	def_bool y

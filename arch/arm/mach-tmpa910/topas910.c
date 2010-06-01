@@ -52,8 +52,8 @@
 #include <mach/hardware.h>
 #include <mach/ts.h>
 #include <mach/tmpa910_regs.h>
+#include <linux/mmc/host.h>
 #include <asm/serial.h>
-#include <asm/dma.h>
 
 #if defined(CONFIG_USB_ISP1362_HCD)
 #include <linux/usb/isp1362.h>
@@ -154,36 +154,6 @@ struct platform_device tmpa910_device_uart0 = {
 	.id		= 0,
 	.resource	= tmpa910_resource_uart0,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart0),
-};
-
-
-/*
- * DMA
-*/
-static struct resource tmpa910_resource_dmac[] = {
-	{
-		.start	= DMAC_BASE,
-		.end	= DMAC_BASE+0x200,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= INTR_VECT_DMA_END,
-		.end	= INTR_VECT_DMA_END,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}, {
-		.start	= INTR_VECT_DMA_ERROR,
-		.end	= INTR_VECT_DMA_ERROR,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
-
-struct platform_device tmpa910_device_dmac = {
-	.name		= "tmpa910-dmac",
-	.id		= 0,
-	.dev = {
-		.platform_data = NULL
-	},
-	.resource	= tmpa910_resource_dmac,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_dmac),
 };
 
 
@@ -436,11 +406,16 @@ static struct platform_device tmpa910_i2s_device = {
 
 
 #ifdef CONFIG_MMC_SPI
+static struct mmc_spi_platform_data mmc_spi_info = {
+	.caps = MMC_CAP_NEEDS_POLL|MMC_CAP_SPI,
+	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3.3V only */
+};
+
 static struct spi_board_info spi_board_info[] = 
 {
 {
 	.modalias = "mmc_spi",
-	.platform_data = NULL,
+	.platform_data = &mmc_spi_info,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
 	.max_speed_hz = 1000000,
@@ -548,7 +523,6 @@ static struct platform_device tmpa910_udc_device = {
 
 
 static struct platform_device *devices[] __initdata = {
-	&tmpa910_device_dmac,
 	&tmpa910_device_ts,
 	&topas910_led_device,
 	&topas910_dm9000_device,
@@ -685,7 +659,6 @@ static void __init topas910_init(void)
 	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
 	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
-	TMPA910_PORT_T_FR1 = 0x00F0; /* Enable USB function pin */
 
         /* Configure LCD interface */
 	_setup_lcdc_device();

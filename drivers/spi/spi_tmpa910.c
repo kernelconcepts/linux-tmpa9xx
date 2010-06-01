@@ -148,8 +148,9 @@ static int tmpa910_spi_transfer_rxtx(struct spi_device *spi,struct spi_transfer 
 	int ris,mis;
 	volatile int	sr;
 	int timeout;
-	struct tmpa910_spi_cs *cs=(struct tmpa910_spi_cs*)spi->controller_state;
+//	struct tmpa910_spi_cs *cs=(struct tmpa910_spi_cs*)spi->controller_state;
 
+	
 #define SSPSR_RXFIFO_FULL	(1UL << 3)	// 1 fifo is full, 0 fifo is not full
 #define SSPSR_RXFIFO_NOTEMPTY	(1UL << 2)	// 1 fifo is not empty, 0 fifo is empty
 #define SSPSR_RXFIFO_EMPTY	(0UL)
@@ -198,7 +199,7 @@ static int tmpa910_spi_transfer_rxtx(struct spi_device *spi,struct spi_transfer 
 
 		if(timeout <= 0)
 		{
-			printk(KERN_ERR "timeout! rx_cnt=%d. tx_cnt=%d, regs->sr=0x%x\n", rx_cnt,tx_cnt,  regs->sr);
+			printk(KERN_WARNING "timeout!\n");
 			break;
 		}
 		else
@@ -238,6 +239,7 @@ static void tmpa910_spi_work(struct work_struct *work)
 	volatile int dat=0;
 	int cnt=0;
 	int first=1;
+	//unsigned long *GPIO=PORTL_GPIODATA;
 
 	//tmpa910_spi_dump_regs(tsp);
 
@@ -267,15 +269,15 @@ static void tmpa910_spi_work(struct work_struct *work)
 			regs->cpsr= cs->cpsr;	
 
 			regs->cr0 = (cs->scr << 8)	// set SCR to 0
-				|	(((spi->mode & SPI_CPHA) ? 1UL : 0UL) << 7)	// SPCLK phase 
-				|	(((spi->mode & SPI_CPOL) ? 1UL : 0UL) << 6)	// SPCLK polarity
-				|	(DEFAULT_FRAME_FMT << 4)	// we only support Microwire frame format
-				|	((cs->bits_per_word - 1)<< 0);	// data-width (7==8bit,15==16bit)
+				|		(((spi->mode & SPI_CPHA) ? 1UL : 0UL) << 7)	// SPCLK phase 
+				|		(((spi->mode & SPI_CPOL) ? 1UL : 0UL) << 6)	// SPCLK polarity
+				|		(DEFAULT_FRAME_FMT << 4)	// we only support Microwire frame format
+				|		((cs->bits_per_word - 1)<< 0);	// data-width (7==8bit,15==16bit)
 
 			regs->cr1 = (0UL << 3)	// Slave mode SP0D0 output disable
-				|	(0UL << 2)	// Master (0)/slave (1) mode select
-				|	(0UL << 1)	// Synchronous serial port enable
-				|	(((spi->mode & SPI_LOOP) ? 1UL : 0UL) << 0);	// Loop back mode enable
+				|		(0UL << 2)	// Master (0)/slave (1) mode select
+				|		(0UL << 1)	// Synchronous serial port enable
+				|		(((spi->mode & SPI_LOOP) ? 1UL : 0UL) << 0);	// Loop back mode enable
 	
 			#if 0
 			regs->imsc = (1UL << 3)	// Transmit FIFO interrupt enable
@@ -292,12 +294,12 @@ static void tmpa910_spi_work(struct work_struct *work)
 
 			if(cnt)
 			{
-				printk(" read %d bytes from receive FIFO\n",cnt);
+				//printk(" read %d bytes from receive FIFO\n",cnt);	
 			}
 
 			if((regs->sr & 1) == 0)
 			{
-				printk(" transmit fifo is not empty !!\n");	
+				//printk(" transmit fifo is not empty !!\n");	
 			}
 			#endif
 
@@ -328,7 +330,6 @@ static void tmpa910_spi_work(struct work_struct *work)
 
 				if(status < 0)
 					break;
-				printk("update bits_per_word or speed_hz\n");
 			}
 
 			// activate chip select
@@ -346,7 +347,6 @@ static void tmpa910_spi_work(struct work_struct *work)
 
 			if(t->delay_usecs)
 			{
-				printk("delay_usec %d\n",t->delay_usecs);
 				udelay(t->delay_usecs);
 			}
 
@@ -354,6 +354,54 @@ static void tmpa910_spi_work(struct work_struct *work)
 		}
 
 		m->status = status;
+
+#if 0
+		list_for_each_entry(t, &m->transfers, transfer_list) {
+
+			if(t->len)
+			{
+			    unsigned char *rx_buf = (unsigned char *)t->rx_buf;
+			    unsigned char *tx_buf = (unsigned char *)t->tx_buf;
+
+				if(tx_buf)
+				{
+					int i;
+
+					printk("TXbuf[%d]: ",t->len);
+					for(i=0;i < t->len;i++)
+					{
+						printk(" %02X",tx_buf[i]);
+					}
+					printk("\n");
+				}
+				else
+				{
+				}
+
+				if(t->rx_buf)
+				{
+					int i;
+
+#if 0
+					if(t->len == 1)
+					{
+						rx_buf[0] = 0xFF;
+					}
+#endif
+					printk("RXbuf[%d]: ",t->len);
+					for(i=0;i < t->len;i++)
+					{
+						printk(" %02X",rx_buf[i]);
+					}
+					printk("\n");
+				}
+				else
+				{
+				}
+
+			}
+		}
+#endif
 		m->complete(m->context);
 
 		tmpa910_spi_transfer_setup(spi, NULL);	// reset to default setup
@@ -367,6 +415,7 @@ static void tmpa910_spi_work(struct work_struct *work)
 			|		(0UL << 2)	// Master (0)/slave (1) mode select
 			|		(0UL << 1)	// Synchronous serial port disable
 			|		(0UL << 0);	// Loop back mode enable
+		//GPIO[0] = 1;
 	}
 
 	spin_unlock_irq(&tsp->lock);
@@ -393,9 +442,7 @@ static int tmpa910_spi_setup(struct spi_device *spi)
 	int cpsr = 96;	// default to 1MHz
 	int scr = 0;	//
 
-	printk(KERN_INFO "tmpa910_spi_setup spi_device %p\n",spi);
-
-		// if bits_per_word is 0, default to 8bits per word
+	// if bits_per_word is 0, default to 8bits per word
 	if((spi->bits_per_word  != 0) && ((spi->bits_per_word < 4) || (spi->bits_per_word > 16))) {
 		dev_dbg(&spi->dev, "setup: unsupported number of bits per word (%x)\n",spi->bits_per_word);
 		return -EINVAL;
@@ -454,7 +501,6 @@ static int tmpa910_spi_setup(struct spi_device *spi)
 		cs->cpsr = 96;
 		cs->scr = 0;
 	}
-
 	
 	spin_lock_irqsave(&tsp->lock, flags);
 	tmpa910_spi_deactivate_cs(spi);
@@ -487,6 +533,7 @@ static void tmpa910_spi_cleanup(struct spi_device *spi)
 
 int tmpa910_spi_port_config(int id, struct tmpa910_spi_priv *tsp)
 {
+//	struct tmpa910_spi_regs __iomem *regs=tsp->regs;
 
 	tsp->bits_per_word = 8;
 
@@ -519,12 +566,15 @@ static irqreturn_t tmpa910_spi_isr(int irq, void *dev_id)
 	};
 
 
+//	for(i=0;i < 8;i++)
+//	{
+//		printk("%s.l%d_%ld: SR %08x RIS %08x MIS %08x IMSC %08x DR %08x\n",__FUNCTION__,__LINE__,tv.tv_usec,sr[i],ris[i],mis[i],regs->imsc,data[i]);
+//	}
+
 	ris[0] = 0;
 
 	if((ris[0] & 8) || (mis[0] & 8))
 	{
-		printk("disabling Transmit FIFO interrupt\n");
-
 		regs->imsc = regs->imsc & ~8;	// disable Transmit FIFO interrupt
 
 		return IRQ_HANDLED;
@@ -532,8 +582,6 @@ static irqreturn_t tmpa910_spi_isr(int irq, void *dev_id)
 
 	if((ris[0] & 4) || (mis[0] & 4))
 	{
-		printk("disabling Receive FIFO interrupt\n");
-
 		regs->imsc = regs->imsc & ~4;	// disable related interrupt
 
 		return IRQ_HANDLED;
@@ -541,8 +589,6 @@ static irqreturn_t tmpa910_spi_isr(int irq, void *dev_id)
 
 	if((ris[0] & 2) || (mis[0] & 2))
 	{
-		printk("disabling Receive overrun interrupt\n");
-
 		regs->imsc = regs->imsc & ~2;	// disable related interrupt
 
 		return IRQ_HANDLED;
@@ -550,8 +596,6 @@ static irqreturn_t tmpa910_spi_isr(int irq, void *dev_id)
 
 	if((ris[0] & 1) || (mis[0] & 1))
 	{
-		printk("disabling Receive overrun interrupt\n");
-
 		regs->imsc = regs->imsc & ~1;	// disable related interrupt
 
 		return IRQ_HANDLED;
@@ -566,7 +610,7 @@ static int __init tmpa910_spi_probe(struct platform_device *pdev)
 	struct device *dev=&pdev->dev;
 	struct tmpa910_spi_priv *tsp;
 	struct spi_master *master;
-	struct resource *r;
+    struct resource *r;
 	int irq;
 	int ret;
 	
@@ -600,8 +644,6 @@ static int __init tmpa910_spi_probe(struct platform_device *pdev)
 	master->transfer = tmpa910_spi_transfer;
 	master->cleanup = tmpa910_spi_cleanup;
 
-	printk("spi probe master bus_num %d\n",master->bus_num);
-
     tsp->pdev = pdev;
     tsp->irq  = NO_IRQ;
 
@@ -613,8 +655,6 @@ static int __init tmpa910_spi_probe(struct platform_device *pdev)
         goto fail;
     }
 
-	printk("spi probe resource start %x end %x\n",r->start,r->end);
-
     r = request_mem_region(r->start, r->end - r->start + 1, pdev->name);
     if(r == NULL) {
         dev_err(&pdev->dev, "failed to request memory resource\n");
@@ -625,12 +665,8 @@ static int __init tmpa910_spi_probe(struct platform_device *pdev)
 	tsp->io_start  = r->start;
 		tsp->io_lenght = r->end - r->start + 1;
 
-	printk("spi probe mem region requested start %x end %x\n",r->start,r->end);
-
 
     tsp->regs = ioremap(r->start, r->end - r->start +1);
-
-	printk("spi probe spi_regs %p\n",tsp->regs);
 
     if(tsp->regs == NULL) {
         dev_err(&pdev->dev, "ioremap() failed\n");
@@ -645,14 +681,11 @@ static int __init tmpa910_spi_probe(struct platform_device *pdev)
         goto fail;
     }
 
-	printk("spi probe irq %d\n",irq);
-
 	tsp->irq = irq;
 
 	ret = request_irq(tsp->irq, tmpa910_spi_isr, 0, "tmpa910-spi", tsp);
 
 	if(ret) {
-		printk("failed to request irq!\n");
 		tsp->irq = -1;
 		goto fail;
 	}
@@ -661,21 +694,15 @@ static int __init tmpa910_spi_probe(struct platform_device *pdev)
 	init_completion(&tsp->done);
 	INIT_WORK(&tsp->work, tmpa910_spi_work);
 	INIT_LIST_HEAD(&tsp->queue);
-
 	tsp->workqueue = create_singlethread_workqueue(dev_name(master->dev.parent));
 
 	if(tsp->workqueue == NULL) {
 		ret = -EBUSY;
-		printk("spi workqueue creation failed\n");
+		printk(KERN_ERR "spi workqueue creation failed\n");
 		goto fail;
 	}
 
 	ret = spi_register_master(master);
-
-	if(ret) {
-		printk("spi_register_master returned %d\n",ret);
-	}
-	printk("tmpa910_spi_probe master 0x%p tsp 0x%p\n",master,tsp);
 
 	return 0;
 fail:
