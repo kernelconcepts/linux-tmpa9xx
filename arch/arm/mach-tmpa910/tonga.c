@@ -272,6 +272,12 @@ struct platform_device tmpa910_device_spi1 = {
 /*
  * Touchscreen
  */
+static struct tmpa910_ts_platforminfo tmpa910_info_ts = {
+		.fuzz       = 0,
+		.rate       = 36,
+		.skip_count = 4,
+};
+
 static struct resource tmpa910_resource_ts[] = {
 	{
 		.start	= TS_BASE,
@@ -296,7 +302,7 @@ struct platform_device tmpa910_device_ts = {
 	.name		= "tmpa910_ts",
 	.id		= 0,
 	.dev = {
-		.platform_data = NULL
+		.platform_data = &tmpa910_info_ts,
 	},
 	.resource	= tmpa910_resource_ts,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_ts),

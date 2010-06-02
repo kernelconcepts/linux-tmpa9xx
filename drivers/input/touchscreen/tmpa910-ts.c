@@ -67,8 +67,8 @@ enum{
 	ADC_PASS_Y,
 };
 
-#define STARTDELAY_FIRST		5
-#define STARTDELAY_OTHERS 	1
+#define STARTDELAY_FIRST	20
+#define STARTDELAY_OTHERS	7
 
 static void _start_convertion(struct tmpa910_ts_priv *tmpa910_ts_priv);
 
@@ -76,8 +76,8 @@ static void _start_convertion(struct tmpa910_ts_priv *tmpa910_ts_priv);
 /*******/
 static void ts_init(volatile struct tmpa910_ts *ts)
 {
-	ts->tsicr0 = 0x98 & ~TMPA910_TS_CR0_TWIEN ;
-	ts->tsicr1 = 0x95;
+	ts->tsicr0 = TMPA910_TS_CR0_TSI7 | TMPA910_TS_CR0_PYEN;
+	ts->tsicr1 = 0xC5;
 }
 
 
@@ -199,12 +199,6 @@ static void _update_pos(struct tmpa910_ts_priv *tmpa910_ts_priv)
 
 	tmpa910_ts_priv->conv_count++;
 
-#if 0
-	// helpful curing development
-	if (ts_pen_is_down(tmpa910_ts_priv->ts_regs) == 0)
-		printk("Warning! Pen not down!\n");
-#endif
-
 	input_dev = tmpa910_ts_priv->input_dev;
 
 	input_report_abs(input_dev, ABS_X, tmpa910_ts_priv->x); 
@@ -222,8 +216,6 @@ static void _update_pos(struct tmpa910_ts_priv *tmpa910_ts_priv)
 	}
 }
 
-/*******/
-/*******/
 static void _scheduled_restart(struct work_struct *work)
 {
 	
@@ -354,7 +346,7 @@ static irqreturn_t topas910_adc_interrupt(int irq, void *dev_id)
 	ts  = tmpa910_ts_priv->ts_regs;
 
 	onereg = adc->admod0;
-	if ( (onereg&0x80) == 0)
+	if ( (onereg & 0x80) == 0)
 	{
 		printk(KERN_WARNING "Warning! Convertion not finished\n");
 	}
@@ -379,7 +371,6 @@ static irqreturn_t topas910_adc_interrupt(int irq, void *dev_id)
 		case ADC_PASS_X:
 			// X done, retreive the pos and continue
 			tmpa910_ts_priv->x = _read_x(ts, adc);
-
 			_start_convertion(tmpa910_ts_priv);
 			
 			break;
@@ -587,16 +578,7 @@ static int __init tmpa910_ts_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, tmpa910_ts_priv);
 	ts_init(tmpa910_ts_priv->ts_regs);
 
-#if 0
-	// Hum, if I reset the ADC, it does nto work any more at all!
-	tmpa910_ts_priv->adc_regs->admod4  	= 0x2;
-	udelay(100);
-	tmpa910_ts_priv->adc_regs->admod4  	= 0x1;
-	udelay(100);
-#endif
-
-	// clock un VREF
-	adc->adclk  = 0x2;
+	adc->adclk  = 0x82;
 	adc->admod1 |= 0x80;
 
 	_enable_interrupt(tmpa910_ts_priv);
