@@ -495,7 +495,7 @@ static struct platform_device *devices[] __initdata = {
 	&tonga_smsc911x_device,
 	&tmpa910_device_uart0,
 	&tmpa910_device_uart1,
-	&tmpa910_device_uart2,
+//	&tmpa910_device_uart2,
 #ifdef CONFIG_MTD_NAND_TMPA910
  	&tmpa910_nand_device,
 #endif

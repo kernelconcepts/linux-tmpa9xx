@@ -155,6 +155,47 @@ struct platform_device tmpa910_device_uart0 = {
 };
 
 
+static struct resource tmpa910_resource_uart1[] = {
+	{
+		.start	= 0xf2001000,
+		.end	= 0xf2001000 + 0x100,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= 11,
+		.end	= 11,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+
+struct platform_device tmpa910_device_uart1 = {
+	.name		= "tmpa910-uart",
+	.id		= 1,
+	.resource	= tmpa910_resource_uart1,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart1),
+};
+
+
+static struct resource tmpa910_resource_uart2[] = {
+	{
+		.start	= 0xf2004000,
+		.end	= 0xf2004000 + 0x100,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= 9,
+		.end	= 9,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+
+struct platform_device tmpa910_device_uart2 = {
+	.name		= "tmpa910-uart",
+	.id		= 2,
+	.resource	= tmpa910_resource_uart2,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart2),
+};
+
+
+
 static struct resource tmpa910_resource_i2c[] = {
 	{
 		.start	= I2C0_BASE,
@@ -244,6 +285,11 @@ struct platform_device tmpa910_device_spi1 = {
 /*
  * Touchscreen
  */
+static struct tmpa910_ts_platforminfo tmpa910_info_ts = {
+		.fuzz       = 0,
+		.rate       = 36,
+		.skip_count = 4,
+};
 
 static struct resource tmpa910_resource_ts[] = {
 	{
@@ -269,7 +315,7 @@ struct platform_device tmpa910_device_ts = {
 	.name		= "tmpa910_ts",
 	.id		= 0,
 	.dev = {
-		.platform_data = NULL
+		.platform_data = &tmpa910_info_ts,
 	},
 	.resource	= tmpa910_resource_ts,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_ts),
@@ -383,7 +429,7 @@ static struct platform_device topas910_keys_device = {
 #ifdef CONFIG_MTD_NAND_TMPA910
 static struct resource tmpa910_nand_resources[] = {
 	[0] = {
-		.start	=  NANDF_BASE ,
+		.start	=  NANDF_BASE,
 		.end	=  NANDF_BASE + 0x200,
 		.flags	= IORESOURCE_MEM,
 	},
@@ -405,12 +451,12 @@ static struct platform_device tmpa910_i2s_device = {
 };
 
 
-#ifdef CONFIG_MMC_SPI
 static struct mmc_spi_platform_data mmc_spi_info = {
 	.caps = MMC_CAP_NEEDS_POLL|MMC_CAP_SPI,
 	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3.3V only */
 };
 
+#ifdef CONFIG_MMC_SPI
 static struct spi_board_info spi_board_info[] = 
 {
 {
@@ -453,10 +499,10 @@ static struct spi_board_info spi_board_info[] = {
 static struct spi_board_info spi_board_info[] = {
 {
 	.modalias = "spidev",
-	.platform_data = NULL,
+	.platform_data = &mmc_spi_info,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
-	.max_speed_hz = 20000000,
+	.max_speed_hz = 10000000,
 	.bus_num = 0,
 },
 {
@@ -464,7 +510,7 @@ static struct spi_board_info spi_board_info[] = {
 	.platform_data = NULL,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
-	.max_speed_hz = 20000000,
+	.max_speed_hz = 10000000,
 	.bus_num = 1,
 }
 };
@@ -560,6 +606,8 @@ static struct platform_device *devices[] __initdata = {
 	&topas910_led_device,
 	&topas910_dm9000_device,
 	&tmpa910_device_uart0,
+	&tmpa910_device_uart1,
+	&tmpa910_device_uart2,
 #ifdef CONFIG_MTD_NAND_TMPA910
  	&tmpa910_nand_device,
 #endif
@@ -586,6 +634,8 @@ static struct platform_device *devices[] __initdata = {
 static void __init setup_lcdc_device(void)
 {
 	uint32_t *LCDReg;
+	int width  = 320;
+	int height = 240;
 	
 	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
 #ifdef CONFIG_DISPLAY_GLYN_640_480
@@ -641,9 +691,6 @@ static void __init setup_lcdc_device(void)
 	LCDReg[3] = 0;
 	LCDReg[4] = (0x5<<1)  | (1<<5)  | (1<<11) | (1<<16); /* LCDControl */
 #else
-	int width  = 320;
-	int height = 240;
-
 	topas910_v1_lcdc_platforminfo.width  = width;
 	topas910_v1_lcdc_platforminfo.height = height;
 	topas910_v1_lcdc_platforminfo.depth  = 32;

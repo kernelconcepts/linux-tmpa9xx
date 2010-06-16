@@ -3,7 +3,8 @@
  *
  *  Based on drivers/serial/pxa.c by Nicolas Pitre
  *
- *  Copyright 2008 bplan GmbH
+ *  Copyright:	(C) 2009 bplan GmbH
+ *              (c) 2010 Florian Boor <florian@kernelconcepts.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,7 +55,7 @@ struct tmpa910_uart_regs
   uint32_t fbrd;    // 0x028
   uint32_t lcr_h;   // 0x02c
   uint32_t cr;      // 0x030
-  uint32_t ifls;    // 0x034
+  uint32_t fls;    // 0x034
   uint32_t imsc;    // 0x038
   uint32_t ris;     // 0x03c
   uint32_t mis;     // 0x040
@@ -211,22 +212,32 @@ static void _dump_regs(struct uart_tmpa910_handle *uart_tmpa910_handle)
 
 static int _map_tmpa910(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
-	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
-	
-	if (regs) {
-		printk(KERN_ERR "port already requested or mapped (regs=0x%p)\n", regs);
-		return 0;
-	}
-	
-	regs = (struct tmpa910_uart_regs *)uart_tmpa910_handle->port.mapbase;
-	if (regs == NULL) {
-		printk(KERN_ERR "Fail to map UART controller (mapbase=0x%x)\n", uart_tmpa910_handle->port.mapbase);
+
+	void *membase;
+
+	// Consider 0 a bad value
+	if (uart_tmpa910_handle->port.mapbase == 0)
+	{
+		printk(KERN_ERR "Failed to map UART controller (mapbase=0x%x)\n", uart_tmpa910_handle->port.mapbase);
 		return -EINVAL;
 	}
 	
-	uart_tmpa910_handle->port.membase = (void *) regs;
-	uart_tmpa910_handle->regs = regs;
+	
+	if (uart_tmpa910_handle->port.membase != NULL)
+	{
+		printk(KERN_INFO "skip already mapped at 0x%p\n", uart_tmpa910_handle->port.mapbase);
+		return 0;
+	}
 
+	membase = ioremap(uart_tmpa910_handle->port.mapbase, 0x100);
+	if ( membase == NULL)
+	{
+		printk(KERN_ERR "Can not map! %p\n", uart_tmpa910_handle->port.mapbase);
+		return 1;
+	}
+
+	uart_tmpa910_handle->port.membase = membase;
+	uart_tmpa910_handle->regs = membase;
 	
 #ifdef __DEBUG__
 	_dump_regs(uart_tmpa910_handle);
@@ -290,7 +301,7 @@ static void transmit_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 		serial_tmpa910_stop_tx(&uart_tmpa910_handle->port);
 }
 
-static inline void
+static void
 receive_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 {
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
@@ -302,11 +313,12 @@ receive_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 	int max_count = 256;
 	int ret;
 	
+	fr_reg = regs->fr;
+
 	do {
-		fr_reg = regs->fr; 
 		dr_reg = regs->dr; 
 		
-		ch     = regs->dr & 0xff;
+		ch     = dr_reg & 0xff;
 		flag = TTY_NORMAL;
 		
 		port->icount.rx++;
@@ -318,6 +330,7 @@ receive_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 			 */
 			if (dr_reg & DR_BE) {
 				port->icount.brk++;
+				dr_reg &= ~(DR_FE | DR_PE);
 				/*
 				 * We do the SysRQ and SAK checking
 				 * here because otherwise the break
@@ -358,7 +371,7 @@ receive_chars(struct uart_tmpa910_handle *uart_tmpa910_handle)
 		if (ret)
 			goto ignore_char;
 
-		uart_insert_char(&uart_tmpa910_handle->port, dr_reg, DR_OE, ch, flag);
+		uart_insert_char(&uart_tmpa910_handle->port, dr_reg & 0xF00, DR_OE, ch, flag);
 
 	ignore_char:
 		fr_reg = regs->fr; 
@@ -418,7 +431,7 @@ static unsigned int serial_tmpa910_tx_empty(struct uart_port *port)
 
 	spin_lock_irqsave(&uart_tmpa910_handle->port.lock, flags);
 
-	ret = regs->fr & FR_TXFE;
+	ret = regs->fr & FR_TXFE ? TIOCSER_TEMT : 0;
 
 	spin_unlock_irqrestore(&uart_tmpa910_handle->port.lock, flags);
 	
@@ -429,21 +442,27 @@ static inline irqreturn_t
 serial_tmpa910_irq(int irq, void *dev_id)
 {
 	struct uart_tmpa910_handle *uart_tmpa910_handle = (struct uart_tmpa910_handle *)dev_id;
+	unsigned long flags;
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	
 	uint32_t mis_reg;
-	uint32_t icr_reg;
-	
-	icr_reg = 0;
-	mis_reg = regs->mis;
-	
-	if (mis_reg==0)
-		return IRQ_NONE;
+	uint32_t ris_reg;	
 
-	if (mis_reg & INT_RX)
+	spin_lock_irqsave(&uart_tmpa910_handle->port.lock, flags);
+
+	mis_reg = regs->mis;
+	ris_reg = regs->ris & 0x3ff;
+	
+	// cleare any (our not masked) interrupt
+	regs->icr = ris_reg;
+
+	if (mis_reg==0) {
+		spin_unlock_irqrestore(&uart_tmpa910_handle->port.lock, flags);
+		return IRQ_NONE;
+	}
+	if (mis_reg & (INT_RX | INT_RTIM))
 	{
 		receive_chars(uart_tmpa910_handle);
-		icr_reg |= INT_RX;
 	}
 		
 	check_modem_status(uart_tmpa910_handle);
@@ -451,11 +470,9 @@ serial_tmpa910_irq(int irq, void *dev_id)
 	if (mis_reg & INT_TX)
 	{
 		transmit_chars(uart_tmpa910_handle);
-		icr_reg |= INT_TX;
 	}
 	
-	if (icr_reg)
-		regs->icr = icr_reg;
+	spin_unlock_irqrestore(&uart_tmpa910_handle->port.lock, flags);
 
 	return IRQ_HANDLED;
 }
@@ -492,14 +509,14 @@ static void serial_tmpa910_set_mctrl(struct uart_port *port, unsigned int mctrl)
 	volatile struct tmpa910_uart_regs *regs = uart_tmpa910_handle->regs;
 	uint32_t cr_reg;
 	
-	cr_reg = 0;
+	cr_reg = regs->cr & ~(CR_RTS | CR_DTR);
 	
 	if (mctrl & TIOCM_RTS)
 		cr_reg |= CR_RTS;
 	if (mctrl & TIOCM_DTR)
 		cr_reg |= CR_DTR;
 
-	regs->cr |= cr_reg;
+	regs->cr = cr_reg;
 }
 
 static void serial_tmpa910_break_ctl(struct uart_port *port, int break_state)
@@ -573,10 +590,11 @@ static int serial_tmpa910_startup(struct uart_port *port)
 	 * are set via set_termios(), which will be occurring imminently
 	 * anyway, so we don't enable them here.
 	 */
-	regs->imsc   = INT_TX | INT_RX;
+	regs->imsc   = INT_TX | INT_RX | INT_RTIM;
 	regs->lcr_h |= LCRH_FEN;
 	regs->cr    |= CR_RXE | CR_TXE | CR_UARTEN;
 
+	regs->icr    = 0x7ff;
 #ifdef __DEBUG__
 	_dump_regs(uart_tmpa910_handle);
 #endif
@@ -642,6 +660,8 @@ serial_tmpa910_set_termios(struct uart_port *port, struct ktermios *termios,
 	unsigned int baud;
 	int div_integer;
 	int div_fract;
+
+	regs->cr   &= ~CR_UARTEN;
 
 	switch (termios->c_cflag & CSIZE) {
 	case CS5:
@@ -717,11 +737,20 @@ serial_tmpa910_set_termios(struct uart_port *port, struct ktermios *termios,
 	/*
 	 * CTS flow control flag and modem status interrupts
 	 */
-	//uart_tmpa910_handle->ier &= ~UART_IER_MSI;
-	//if (UART_ENABLE_MS(&uart_tmpa910_handle->port, termios->c_cflag))
-	//	uart_tmpa910_handle->ier |= UART_IER_MSI;
+	regs->imsc &= ~(INT_DSRM | INT_DCDM |
+		INT_CTSM | INT_RIM);
+
+	if (UART_ENABLE_MS(&uart_tmpa910_handle->port, termios->c_cflag))
+		regs->imsc |= (INT_DSRM | INT_DCDM |
+			INT_CTSM | INT_RIM);
 
 	serial_tmpa910_set_mctrl(&uart_tmpa910_handle->port, uart_tmpa910_handle->port.mctrl);
+
+	/* 
+         * Configure and enable FIFOs
+	 */
+	regs->fls = (0 << 3) | (0x02);	
+	lcrh_reg |= (1 << 4);
 
 	regs->lcr_h = lcrh_reg;
 	regs->cr   |= CR_UARTEN;
