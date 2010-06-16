@@ -28,8 +28,6 @@
 
 #include <video/tmpa910_fb.h>
 
-
-
 /* Supported palette hacks */
 enum {
 	cmap_unknown,
@@ -63,7 +61,6 @@ struct tmpa910_lcdc_par {
 };
 
 struct tmpa910_lcdc_par default_par;
-
 
 static void _init_it(struct hw_tmpa910_lcdc *hw_tmpa910_lcdc, uint32_t *LCDReg, int  width, int height)
 {
@@ -134,7 +131,6 @@ static int tmpa910_lcdc_setcolreg(unsigned regno, unsigned red, unsigned green,
 	return 0;
 }
 
-
 static struct fb_ops tmpa910_lcdc_ops = {
 	.owner = THIS_MODULE,
 	.fb_setcolreg = tmpa910_lcdc_setcolreg,
@@ -142,7 +138,6 @@ static struct fb_ops tmpa910_lcdc_ops = {
 	.fb_copyarea = cfb_copyarea,
 	.fb_imageblit = cfb_imageblit,
 };
-
 
 static int __init tmpa910_lcdc_init_fb(
 	struct platform_device *pdev,	
@@ -163,7 +158,6 @@ static int __init tmpa910_lcdc_init_fb(
 	if (info == NULL) {
 		return -ENOMEM;
 	}
-
 
 	fix = &info->fix;
 	var = &info->var;
@@ -221,7 +215,6 @@ static int __init tmpa910_lcdc_init_fb(
 		var->transp.offset = 24;
 		var->transp.length = 8;
 
-
 		break;
 	}
 
@@ -266,8 +259,8 @@ static int __init tmpa910_lcdc_init_fb(
 	}
 
 	// Success :-)
-	printk(KERN_INFO "fb%d: Toshiba TMPA9x0 Frame buffer device at 0x%lx (mapped 0x%p)\n",
-	       info->node, dma,  info->screen_base);
+	printk(KERN_INFO "fb%d: Toshiba TMPA9x0 Frame buffer device at 0x%08x (mapped @ %p)\n",
+	       info->node, (unsigned int)dma,  info->screen_base);
 
 	return 0;
 }
@@ -275,15 +268,15 @@ static int __init tmpa910_lcdc_init_fb(
 /* parse options in form video=tmpa9xxfb:%08x:%08x:%08x */
 int tmpa9xx_lcdc_parse_params(uint32_t *LCDReg, char *options)
 {
-    	uint32_t *r0, r1, r2;
+    	unsigned int r0, r1, r2;
     
-	if (sscanf(options, "%08lx:%08lx:%08lx", &r0, &r1, &r2) != 3) {
+	if (sscanf(options, "%08x:%08x:%08x", &r0, &r1, &r2) != 3) {
 		printk(KERN_WARNING "tmpa9xxfb: Unable to parse options %s\n", options);
 		return 0;
 	}
 	
 	printk(KERN_INFO "tmpa9xxfb: Options from cmdline: \n" \
-	                 "LCDTiming0: 0x%08lx\nLCDTiming1: 0x%08lx\nLCDTiming2: 0x%08lx\n", r0, r1, r2);
+	                 "LCDTiming0: 0x%08x\nLCDTiming1: 0x%08x\nLCDTiming2: 0x%08x\n", r0, r1, r2);
 	
 	LCDReg[0] = r0;
 	LCDReg[1] = r1;
@@ -307,12 +300,10 @@ static int tmpa910_lcdc_resume(struct platform_device *pdev)
 #define tmpa910_lcdc_resume	NULL
 #endif
 
-
 static int __init tmpa910_lcdc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct resource *regs = NULL;
-	struct resource *fb = NULL;
 	struct tmpa910_lcdc_platforminfo *platforminfo;
 	int ret;
     	char *options = NULL;

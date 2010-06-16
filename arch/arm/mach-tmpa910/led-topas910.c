@@ -48,8 +48,10 @@
 /* Pattern for digits from 0 to 9, "L.", clear, all on, dp on */
 static const unsigned char pattern[] = {0x3F, 0x06/*1*/, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F/*9*/, 0xB8, 0x00, 0xFF, 0x08};
 static unsigned int num_pattern = ARRAY_SIZE(pattern);
-static int saved_state;
 
+#ifdef CONFIG_PM
+static int saved_state;
+#endif
 
 static void segments_set(int value)
 {
@@ -84,7 +86,6 @@ ssize_t led_segment_show(struct device *pdev, struct device_attribute *attr, cha
 	return snprintf(buf, PAGE_SIZE, "%i\n", segments_get());
 }
 
-
 ssize_t led_segment_store(struct device *pdev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	if (count) {
@@ -96,7 +97,6 @@ ssize_t led_segment_store(struct device *pdev, struct device_attribute *attr, co
 }
 
 DEVICE_ATTR(led_segment, 0644, led_segment_show, led_segment_store);
-
 
 static int __init topas_led_probe(struct platform_device *pdev)
 {
@@ -143,7 +143,6 @@ static int __devexit topas_led_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM
-
 static int topas_led_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	saved_state = segments_get();

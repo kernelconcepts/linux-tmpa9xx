@@ -134,7 +134,6 @@ tmpa910_set_mode(enum clock_event_mode mode, struct clock_event_device *dev)
 
 	raw_local_irq_save(irqflags);
 
-
 	switch (mode) {
 
 	case CLOCK_EVT_MODE_UNUSED:
@@ -166,7 +165,6 @@ tmpa910_set_mode(enum clock_event_mode mode, struct clock_event_device *dev)
 	hw_timer->TimerControl = TimerControl;
 
 	raw_local_irq_restore(irqflags);
-
 }
 
 /*********/
@@ -203,7 +201,7 @@ tmpa910_set_next_event(unsigned long delta, struct clock_event_device *dev)
 
 /*********/
 /*********/
-static cycle_t tmpa910_readcycle(void)
+static cycle_t tmpa910_readcycle(struct clocksource *cs)
 {
 	volatile struct hw_timer *hw_timer =
 	    (volatile struct hw_timer *)TMPA910_TIMER0;
@@ -281,4 +279,3 @@ static void topas910_timer_init(void)
 struct sys_timer topas910_timer = {
 	.init = topas910_timer_init,
 };
-

@@ -154,7 +154,7 @@ void tmpa9x0_nand_dma_read(struct tmpa9x0_nand_private *priv, unsigned int buf, 
                                      (0x1<<19) |	// Swidth[2:0] - 0y010: Word (32 bits)
                                      (0x1<<22) |	// Dwidth[2:0] - 0y010: Word (32 bits)
                                      (0x1<<27) |	// DI          - 0y1  : Auto Increment Destination
-                                     (0x1<<31) +	// I           - 0y1  : Enable Terminal count interrupt
+                                     (0x1<<31) |	// I           - 0y1  : Enable Terminal count interrupt
                                      (size/4)); 	// TransferSize[11:0
 
 	DMA_CONFIG(priv->dma_ch)   =((0x1<<0)  |	// E             - Channel Enable
@@ -172,7 +172,7 @@ void tmpa9x0_nand_dma_write(struct tmpa9x0_nand_private *priv, const unsigned in
                                      (0x1<<19) |	// Swidth[2:0] - 0y010: Word (32 bits)
                                      (0x1<<22) |	// Dwidth[2:0] - 0y010: Word (32 bits)
                                      (0x1<<26) |	// SI          - 0y1  : Auto Increment Source
-                                     (0x1<<31) +	// I           - 0y1  : Enable Terminal count interrupt
+                                     (0x1<<31) |	// I           - 0y1  : Enable Terminal count interrupt
                                      (size/4)); 	// TransferSize[11:0]
         
 	DMA_CONFIG(priv->dma_ch)   =((0x1<<0)  |	// E             - Channel Enable
@@ -233,6 +233,7 @@ static void tmpa9x0_nand_set_rw_mode(unsigned int read)
 		NDFMCR0 |= NDFMCR0_WE;	/* Set write mode */
 }
 
+#if 0
 static int tmpa9x0_nand_waitreedsolomon(void)
 {
 	unsigned int reg;
@@ -320,6 +321,7 @@ static void tmpa9x0_nand_rsoff(void)
 {
     NDFMCR0 = NDFMCR0_ECC_RSECGW_OFF;
 }
+#endif
 
 static int tmpa9x0_nand_dev_ready(struct mtd_info *mtd)
 {
@@ -403,19 +405,18 @@ static void tmpa9x0_nand_read_buf(struct mtd_info *mtd, u_char *buf, int len)
 {
 	struct nand_chip *this = mtd->priv;
 	struct tmpa9x0_nand_private * priv= (struct tmpa9x0_nand_private *)this->priv;
-	const uint8_t test_pattern[]={0x30,0x30,0x30,0x30};
 	unsigned long irq_flags;
 
-	/* The DMA Transfer could only bes started for an exact size of 512 bytes to read */
+	/* The DMA Transfer can only be started for an exact size of 512 bytes to read */
         /* Therefore do the 512 pagesize reads with DMA (if enabled) and the 64/16 bytes for OOB with polling */
-	/* Otherwise than in the u-boot case we could not directly use the provided buffer for the DMA transfer */
-        /* Therefore we have to use our own buffer created with dma_alloc_coherent */
+	/* In contrast to the u-boot case we can not directly use the provided buffer for the DMA transfer */
+        /* Therefore we have to use our own buffer created with dma_alloc_coherent() */
         /* The startup of the DMA transfer is a little bit silly: */
         /* First send the command, then set up the DMA and autoload functions, then the address */
-        /* The autoload waits then till the rising edge of the busy signal from the NAND and starts the transfer to the FIFO */
+        /* The autoload waits then until the rising edge of the busy signal from the NAND and starts the transfer to the FIFO */
 
-	/* During read, due to the design of the chip, it could happen that the NAND_CMD_READSTART is too long during */
-	/* latching this in to NAND chip due to in interrupt appearing */
+	/* During read, due to the design of the chip, it can happen that the NAND_CMD_READSTART is too long during */
+	/* latching this in to NAND chip due to an interrupt appearing */
         /* Work around: Disable all interrupts at the time latching in the NAND_CMD_READSTART */
         
 	if ((len==NAND_DMA_TRANSFER_SIZE) && (priv->dma==1))
@@ -456,13 +457,13 @@ static void tmpa9x0_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int 
 	struct nand_chip *this = mtd->priv;
 	struct tmpa9x0_nand_private * priv= (struct tmpa9x0_nand_private *)this->priv;
 
-	/* The DMA Transfer could only bes started for an exact size of 512 bytes to write */
-        /* Therefore do the 512 pagesize writes with DMA (if enabled) and the 64/16 bytes for OOB with polling */
-	/* Otherwise than in the u-boot case we could not directly use the provided buffer for the DMA transfer */
-        /* Therefore we have to use our own buffer created with dma_alloc_coherent */
+	/* The DMA Transfer can only be started for an exact size of 512 bytes to read */
+        /* Therefore do the 512 pagesize reads with DMA (if enabled) and the 64/16 bytes for OOB with polling */
+	/* In contrast to the u-boot case we can not directly use the provided buffer for the DMA transfer */
+        /* Therefore we have to use our own buffer created with dma_alloc_coherent() */
         /* The startup of the DMA transfer is a little bit silly: */
         /* First send the command, then set up the DMA and autoload functions, then the address */
-        /* The autoload waits then till the rising edge of the busy signal from the NAND and starts the transfer to the FIFO */
+        /* The autoload waits then until the rising edge of the busy signal from the NAND and starts the transfer to the FIFO */
         
 	if ((len==NAND_DMA_TRANSFER_SIZE) && (priv->dma==1))
         {
@@ -945,19 +946,19 @@ static int __init tmpa9x0_nand_probe(struct platform_device *pdev)
 	priv->buf = (unsigned char *)dma_alloc_coherent(NULL,INTERNAL_BUFFER_SIZE, &priv->phy_buf, GFP_KERNEL);
 	if (priv->buf == NULL) {
 		ret = -ENOMEM;
-		goto free_mtd;
+		goto free_dma_ch;
 	}
 	
 	mtd->owner    = THIS_MODULE;
 	/* Many callers got this wrong, so check for it for a while... */
 	ret = nand_scan_ident(mtd, 1);
 	if (ret) {
-		goto free_dma_ch;
+		goto free_dma_buf;
 	}
 	
 	ret = nand_scan_tail(mtd);
 	if (ret) {
-		goto free_dma_ch;
+		goto free_dma_buf;
 	}
         
 /* Partitions:
@@ -984,10 +985,10 @@ static int __init tmpa9x0_nand_probe(struct platform_device *pdev)
 
 	return(0);
 
-free_dma_ch:
-	tmpa910_dma_free(priv->dma_ch);
 free_dma_buf:
 	dma_free_coherent(&pdev->dev, INTERNAL_BUFFER_SIZE, priv->buf, priv->phy_buf);
+free_dma_ch:
+	tmpa910_dma_free(priv->dma_ch);
 free_mtd:
 	kfree(mtd);
 error:
