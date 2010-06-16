@@ -328,12 +328,6 @@ typedef struct urb_priv {
 	u16			length;		// # tds in this request
 	u16			td_cnt;		// tds already serviced
 	struct list_head	pending;
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-	void *urb_data;
-	dma_addr_t urb_data_dma;
-	void *urb_setup;
-	dma_addr_t urb_setup_dma;
-#endif
 	struct td		*td [0];	// all TDs in this request
 
 } urb_priv_t;
@@ -427,7 +421,7 @@ struct ohci_hcd {
 #endif
 };
 
-#if 1
+#ifdef CONFIG_PCI
 static inline int quirk_nec(struct ohci_hcd *ohci)
 {
 	return ohci->flags & OHCI_QUIRK_NEC;

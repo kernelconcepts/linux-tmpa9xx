@@ -50,8 +50,7 @@
 
 /*-------------------------------------------------------------------------*/
 
-//#define OHCI_VERBOSE_DEBUG	/* not always helpful */
-//#define VERBOSE_DEBUG 	/* not always helpful */
+#undef OHCI_VERBOSE_DEBUG	/* not always helpful */
 
 /* For initializing controller (mask in an HCFS mode too) */
 #define	OHCI_CONTROL_INIT	OHCI_CTRL_CBSR
@@ -81,11 +80,9 @@ static void ohci_dump (struct ohci_hcd *ohci, int verbose);
 static int ohci_init (struct ohci_hcd *ohci);
 static void ohci_stop (struct usb_hcd *hcd);
 
-#if defined(CONFIG_PM) || defined(CONFIG_PCI) || defined(CONFIG_USB_OHCI_HCD_TMPA900)
+#if defined(CONFIG_PM) || defined(CONFIG_PCI)
 static int ohci_restart (struct ohci_hcd *ohci);
 #endif
-
-void (*ohci_usb_hcd_giveback_urb)(struct usb_hcd *hcd, struct urb *urb, int status) = usb_hcd_giveback_urb;
 
 #ifdef CONFIG_PCI
 static void quirk_amd_pll(int state);
@@ -136,7 +133,6 @@ module_param (no_handshake, bool, 0);
 MODULE_PARM_DESC (no_handshake, "true (not default) disables BIOS handshake");
 
 /*-------------------------------------------------------------------------*/
-
 
 /*
  * queue up an urb for anything except the root hub
@@ -255,7 +251,6 @@ static int ohci_urb_enqueue (
 	 * enable that part of the schedule, if needed
 	 * and update count of queued periodic urbs
 	 */
-
 	urb->hcpriv = urb_priv;
 	td_submit_urb (ohci, urb);
 
@@ -558,8 +553,13 @@ static int ohci_init (struct ohci_hcd *ohci)
 	if (ohci->hcca)
 		return 0;
 
+#ifdef CONFIG_USB_OHCI_HCD_TMPA900
+	ohci->hcca = (struct ohci_hcca*)tmpa9x0_sram_alloc(sizeof *ohci->hcca);
+	ohci->hcca_dma = tmpa9x0_sram_to_phys(ohci->hcca);
+#else
 	ohci->hcca = dma_alloc_coherent (hcd->self.controller,
 			sizeof *ohci->hcca, &ohci->hcca_dma, 0);
+#endif
 	if (!ohci->hcca)
 		return -ENOMEM;
 
@@ -915,9 +915,13 @@ static void ohci_stop (struct usb_hcd *hcd)
 	remove_debug_files (ohci);
 	ohci_mem_cleanup (ohci);
 	if (ohci->hcca) {
+#ifdef CONFIG_USB_OHCI_HCD_TMPA900
+	tmpa9x0_sram_free (ohci->hcca);
+#else
 		dma_free_coherent (hcd->self.controller,
 				sizeof *ohci->hcca,
 				ohci->hcca, ohci->hcca_dma);
+#endif
 		ohci->hcca = NULL;
 		ohci->hcca_dma = 0;
 	}
@@ -925,7 +929,7 @@ static void ohci_stop (struct usb_hcd *hcd)
 
 /*-------------------------------------------------------------------------*/
 
-#if defined(CONFIG_PM) || defined(CONFIG_PCI) || defined(CONFIG_USB_OHCI_HCD_TMPA900)
+#if defined(CONFIG_PM) || defined(CONFIG_PCI)
 
 /* must not be called from interrupt context */
 static int ohci_restart (struct ohci_hcd *ohci)
@@ -984,7 +988,6 @@ static int ohci_restart (struct ohci_hcd *ohci)
 		ohci_err (ohci, "can't restart, %d\n", temp);
 		return temp;
 	}
-
 	ohci_dbg(ohci, "restart complete\n");
 	return 0;
 }
@@ -1108,7 +1111,7 @@ MODULE_LICENSE ("GPL");
 	!defined(PS3_SYSTEM_BUS_DRIVER) && \
 	!defined(SM501_OHCI_DRIVER) && \
 	!defined(TMIO_OHCI_DRIVER) && \
-	!defined(CONFIG_USB_OHCI_HCD_TMPA900) && \
+	!defined(TMPA900_OHCI_DRIVER) && \
 	!defined(SSB_OHCI_DRIVER)
 #error "missing bus glue for ohci-hcd"
 #endif
@@ -1184,12 +1187,17 @@ static int __init ohci_hcd_mod_init(void)
 #ifdef TMPA900_OHCI_DRIVER
 	retval = platform_driver_register(&TMPA900_OHCI_DRIVER);
 	if (retval < 0)
-		goto error_tmpa900;
+		goto error_tmpa;
 #endif
+
 
 	return retval;
 
 	/* Error path */
+#ifdef TMPA900_OHCI_DRIVER
+	platform_driver_unregister(&TMPA900_OHCI_DRIVER);
+ error_tmpa:
+#endif
 #ifdef TMIO_OHCI_DRIVER
 	platform_driver_unregister(&TMIO_OHCI_DRIVER);
  error_tmio:
@@ -1197,10 +1205,6 @@ static int __init ohci_hcd_mod_init(void)
 #ifdef SM501_OHCI_DRIVER
 	platform_driver_unregister(&SM501_OHCI_DRIVER);
  error_sm501:
-#endif
-#ifdef TMPA900_OHCI_DRIVER
-	platform_driver_unregister(&TMPA900_OHCI_DRIVER);
- error_tmpa900:
 #endif
 #ifdef SSB_OHCI_DRIVER
 	ssb_driver_unregister(&SSB_OHCI_DRIVER);
@@ -1239,17 +1243,15 @@ module_init(ohci_hcd_mod_init);
 
 static void __exit ohci_hcd_mod_exit(void)
 {
+#ifdef TMPA900_OHCI_DRIVER
+	platform_driver_unregister(&TMPA900_OHCI_DRIVER);
+#endif
 #ifdef TMIO_OHCI_DRIVER
 	platform_driver_unregister(&TMIO_OHCI_DRIVER);
 #endif
 #ifdef SM501_OHCI_DRIVER
 	platform_driver_unregister(&SM501_OHCI_DRIVER);
 #endif
-
-#ifdef TMPA900_OHCI_DRIVER
-	platform_driver_unregister(&TMPA900_OHCI_DRIVER);
-#endif
-
 #ifdef SSB_OHCI_DRIVER
 	ssb_driver_unregister(&SSB_OHCI_DRIVER);
 #endif
