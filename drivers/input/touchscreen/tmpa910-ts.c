@@ -67,8 +67,8 @@ enum{
 	ADC_PASS_Y,
 };
 
-#define STARTDELAY_FIRST	20
-#define STARTDELAY_OTHERS	7
+#define STARTDELAY_FIRST	22
+#define STARTDELAY_OTHERS	9
 
 static void _start_convertion(struct tmpa910_ts_priv *tmpa910_ts_priv);
 
