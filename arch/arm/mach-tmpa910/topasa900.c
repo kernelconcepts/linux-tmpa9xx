@@ -95,7 +95,6 @@ static void dummy_release(struct device *dev)
         /* normally not freed */
 }
 
-static u64  topas910_dmamask = 0xffffffffUL;
 
 /* Ethernet */
  
