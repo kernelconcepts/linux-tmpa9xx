@@ -212,7 +212,7 @@ static struct tmpa910_gpio_irq irq_gpio_desc[TMPA9xx_NUM_GPIO_IRQS] = {
 
 #define GPIO_NUM_FOR_GPIO_IRQ(_x) (irq_gpio_desc[_x].gpio)
 
-inline int __tmpa910_gpio_to_irq(unsigned gpio) {
+int tmpa910_gpio_to_irq(unsigned gpio) {
 	int i;
 
 	for (i = 0; i < TMPA9xx_NUM_GPIO_IRQS; i++)
@@ -222,9 +222,13 @@ inline int __tmpa910_gpio_to_irq(unsigned gpio) {
 	return -1;		
 }
 
-inline int __tmpa910_irq_to_gpio(unsigned irq) {
+EXPORT_SYMBOL(tmpa910_gpio_to_irq);
+
+int tmpa910_irq_to_gpio(unsigned irq) {
 	return GPIO_NUM_FOR_GPIO_IRQ(irq - TMPA9xx_NUM_IRQS);
 }
+
+EXPORT_SYMBOL(tmpa910_irq_to_gpio);
 
 /* 
  * Interrupt handler

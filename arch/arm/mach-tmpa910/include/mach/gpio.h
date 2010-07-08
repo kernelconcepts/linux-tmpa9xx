@@ -19,9 +19,11 @@
  *          F0..F7 (16..24) to irq 80..87.
  */
 
-#define gpio_to_irq __tmpa910_gpio_to_irq
-#define irq_to_gpio __tmpa910_irq_to_gpio
-extern int __tmpa910_irq_to_gpio(unsigned irq);
-extern int __tmpa910_gpio_to_irq(unsigned gpio);
-extern int tmpa910_gpio_init(void);
+#define gpio_to_irq tmpa910_gpio_to_irq
+#define irq_to_gpio tmpa910_irq_to_gpio
+
+int tmpa910_irq_to_gpio(unsigned irq);
+int tmpa910_gpio_to_irq(unsigned gpio);
+int tmpa910_gpio_init(void);
+
 #endif
