@@ -735,7 +735,7 @@ static void __init topasa900_init(void)
 	/* Pin configuration */
 	TMPA910_CFG_PORT_GPIO(PORTA); /* Keypad */
 	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
-	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
+	/* TMPA910_CFG_PORT_GPIO(PORTG);*/ /* SDIO0, for SPI MMC */
 	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
 
     /* Configure LCD interface */

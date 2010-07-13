@@ -620,7 +620,7 @@ static void __init tonga_init(void)
 	TMPA910_CFG_PORT_GPIO(PORTA); /* Keypad */
 	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
 	TMPA910_CFG_PORT_GPIO(PORTC); /* TEST display */
-	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
+	/*TMPA910_CFG_PORT_GPIO(PORTG); */ /* SDIO0, for SPI MMC */
 	TMPA910_CFG_PORT_GPIO(PORTR); /*  */
 	GPIOBODE = 0x00; /* Disable Open Drain */
 	GPIOCODE = 0x00; /* Disable Open Drain */
