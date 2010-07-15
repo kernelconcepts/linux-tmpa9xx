@@ -599,6 +599,26 @@ static struct platform_device tmpa910_udc_device = {
 };
 #endif
 
+#ifdef CONFIG_TMPA9X0_WATCHDOG
+/* USB Device Controller */
+static struct resource tmpa9x0_wdt_resource[] = {
+        [0] = {
+                .start = 0xf0010000,
+                .end   = 0xf0010c04,
+                .flags = IORESOURCE_MEM
+        },
+};
+
+static struct platform_device tmpa910_wdt_device = {
+        .name           = "tmpa9x0_wdt",
+        .id             = 0,
+        .num_resources  = ARRAY_SIZE(tmpa9x0_wdt_resource),
+        .resource       = tmpa9x0_wdt_resource,
+        .dev            = {
+        .platform_data  = NULL,
+        }
+};
+#endif
 
 static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_ts,
@@ -626,7 +646,10 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_SPI_CHANNEL1
 	&tmpa910_device_spi1,
 #endif
-	&tmpa910_device_rtc
+	&tmpa910_device_rtc,
+#ifdef CONFIG_TMPA9X0_WATCHDOG
+	&tmpa910_wdt_device
+#endif
 };
 
 

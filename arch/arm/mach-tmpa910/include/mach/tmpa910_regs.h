@@ -481,6 +481,16 @@
 #define	TIMER4_CMP_MIS		__REG(TIME4_BASE_ADDRESS + 0x00E8)
 
 
+/* WhatchDog Timer registers */
+#define	WDT_BASE_ADDRESS	(0xF0010000)
+#define	WDT_WDOGLOAD		__REG(WDT_BASE_ADDRESS + 0x0000) /* Watchdog load register */
+#define	WDT_WDOGVALUE 		__REG(WDT_BASE_ADDRESS + 0x0004) /* The current value for the watchdog counter */
+#define	WDT_WDOGCONTROL 	__REG(WDT_BASE_ADDRESS + 0x0008) /* Watchdog control register */
+#define	WDT_WDOGINTCLR 		__REG(WDT_BASE_ADDRESS + 0x000C) /* Clears the watchdog interrupt */
+#define	WDT_WDOGRIS 		__REG(WDT_BASE_ADDRESS + 0x0010) /* Watchdog raw interrupt status */
+#define	WDT_WDOGMIS 		__REG(WDT_BASE_ADDRESS + 0x0014) /* Watchdog masked interrupt status */
+#define	WDT_WDOGLOCK 		__REG(WDT_BASE_ADDRESS + 0x0C00) /* Watchdog Lock register */
+
 /* NAND Flash Controller */
 #define NANDF_BASE  0xF2010000
 
