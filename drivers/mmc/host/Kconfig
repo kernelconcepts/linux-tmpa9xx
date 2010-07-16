@@ -24,6 +24,18 @@ config MMC_PXA
 
 	  If unsure, say N.
 
+config MMC_TMPA910_SDHC
+	tristate "Toshiba TMPA910 Host Controller"
+	depends on ARCH_TMPA910
+        help
+        This is only the Kernel-Space part of the driver.
+        For using the SD host controller you still need a userspace helper application.
+        
+        To get this and to use the SD host controller, you need to join the SD Association.
+        Please also note that a non-disclosure agreement must be signed with Toshiba 
+        before the detailed specifications of the SD host controller can be disclosed.
+        For details, please contact your local Toshiba sales representative.
+
 config MMC_SDHCI
 	tristate "Secure Digital Host Controller Interface support"
 	depends on HAS_DMA
