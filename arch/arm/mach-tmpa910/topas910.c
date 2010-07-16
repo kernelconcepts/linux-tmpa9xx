@@ -188,6 +188,24 @@ struct platform_device tmpa910_device_i2c = {
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
 };
 
+static struct resource tmpa910_resource_sdhc[] = {
+{
+		.start	= INTR_VECT_SDHC,
+		.end	= INTR_VECT_SDHC,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	},
+};
+
+struct platform_device tmpa910_device_sdhc = {
+	.name		= "tmpa910-sdhc",
+	.id		= 0,
+	.dev =
+	{
+		.coherent_dma_mask = 0xffffffff,
+	},
+	.resource	= tmpa910_resource_sdhc,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_sdhc),
+};
 
 #ifdef CONFIG_SPI_CHANNEL0
 static struct resource tmpa910_resource_spi0[] = {
@@ -543,8 +561,10 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_SPI_CHANNEL1
 	&tmpa910_device_spi1,
 #endif
-
 	&tmpa910_device_rtc
+#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
+ 	&tmpa910_device_sdhc,
+#endif
 };
 
 
@@ -657,7 +677,10 @@ static void __init topas910_init(void)
 	/* Pin configuration */
 	TMPA910_CFG_PORT_GPIO(PORTA); /* Keypad */
 	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
+#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
+#else
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
+#endif
 	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
 
         /* Configure LCD interface */
