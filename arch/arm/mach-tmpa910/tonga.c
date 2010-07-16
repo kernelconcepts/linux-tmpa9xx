@@ -215,24 +215,6 @@ struct platform_device tmpa910_device_i2c = {
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
 };
 
-static struct resource tmpa910_resource_sdhc[] = {
-{
-		.start	= INTR_VECT_SDHC,
-		.end	= INTR_VECT_SDHC,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	},
-};
-
-struct platform_device tmpa910_device_sdhc = {
-	.name		= "tmpa910-sdhc",
-	.id		= 0,
-	.dev =
-	{
-		.coherent_dma_mask = 0xffffffff,
-	},
-	.resource	= tmpa910_resource_sdhc,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_sdhc),
-};
 
 #ifdef CONFIG_SPI_CHANNEL0
 static struct resource tmpa910_resource_spi0[] = {
@@ -532,10 +514,7 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_SPI_CHANNEL1
 	&tmpa910_device_spi1,
 #endif
-	&tmpa910_device_rtc,
-#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
- 	&tmpa910_device_sdhc,
-#endif
+	&tmpa910_device_rtc
 };
 
 
@@ -638,16 +617,13 @@ static void __init tonga_init(void)
 	platform_bus.dma_mask=&topas910_dmamask;
 	
 	/* Pin configuration */
-	TMPA910_CFG_PORT_GPIO(PORTA); /* All useable for GPIO */
-	TMPA910_CFG_PORT_GPIO(PORTB); 
-	TMPA910_CFG_PORT_GPIO(PORTC); 
-#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
-#else
-	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0 or GPIO */
-#endif
-	TMPA910_CFG_PORT_GPIO(PORTR); 
+	TMPA910_CFG_PORT_GPIO(PORTA); /* Keypad */
+	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
+	TMPA910_CFG_PORT_GPIO(PORTC); /* TEST display */
+	/*TMPA910_CFG_PORT_GPIO(PORTG); */ /* SDIO0, for SPI MMC */
+	TMPA910_CFG_PORT_GPIO(PORTR); /*  */
 	GPIOBODE = 0x00; /* Disable Open Drain */
-	GPIOCODE = 0x00; 
+	GPIOCODE = 0x00; /* Disable Open Drain */
 
 	GPIORDIR &= ~(1 << 2); /* Eth IRQ */
     
@@ -678,7 +654,7 @@ static void __init tonga_init(void)
 	GPIOKFR2 = 0x00;
 	GPIOKFR1 = 0xFF;
     
-       	GPIOTFR1 = 0xFF;  /* USB, SPI0 and UART 1 */
+       	GPIOTFR1 = 0xFF;  /* USB and UART 1 */
     
 	/* Configure LCD interface */
 	setup_lcdc_device();
