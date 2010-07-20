@@ -133,7 +133,7 @@ static struct mtd_partition mtd_parts_builtin[] = {
 	}, {
 		.name		= "kernel",
 		.offset		= 0x00080000,
-		.size		= 0x00380000,
+		.size		= 0x00300000,
 	}, {
 		.name		= "filesystem",
 		.offset		= 0x00380000,
