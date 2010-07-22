@@ -104,8 +104,9 @@ static struct resource smsc911x_resources[] = {
 static struct smsc911x_platform_config tonga_smsc911x_pdata = {
 	.irq_polarity  = SMSC911X_IRQ_POLARITY_ACTIVE_LOW,
 	.irq_type      = SMSC911X_IRQ_TYPE_PUSH_PULL,
-	.flags         = SMSC911X_USE_32BIT | SMSC911X_FORCE_INTERNAL_PHY,
+	.flags         = SMSC911X_USE_32BIT | SMSC911X_SAVE_MAC_ADDRESS,
 	.phy_interface = PHY_INTERFACE_MODE_MII,
+        .mac           = "deadaa",
 };
 
 
@@ -624,12 +625,40 @@ void __init tonga_init_irq(void) {
 	tmpa910_init_irq();
 }
 
+#define ETHERNET_MAC_ASCII_LENGTH 17
+#define MAC_OFFSET		   8
+
+static void parse_enetaddr(char *addr, unsigned char *enetaddr)
+{
+	char *end;
+	int i;
+
+	for (i = 0; i < 6; ++i) {
+		enetaddr[i] = addr ? simple_strtoul(addr, &end, 16) : 0;
+		if (addr)
+			addr = (*end) ? end + 1 : end;
+	}
+}
 
 /* 
  * Tonga2 device initialisation
  */
 static void __init tonga_init(void)
 {
+        char *p;
+        char eth_mac_ascii[ETHERNET_MAC_ASCII_LENGTH+2];
+
+	memset(eth_mac_ascii,0,sizeof(eth_mac_ascii));
+
+        p = strstr(boot_command_line, "ethaddr=");
+
+        if (p != NULL && (p == boot_command_line || p[-1] == ' '))
+        {
+		printk("U-BOOT Ethernet Address: %s\n",p+8);
+                memcpy(&eth_mac_ascii,p+MAC_OFFSET,ETHERNET_MAC_ASCII_LENGTH);
+		parse_enetaddr (eth_mac_ascii,tonga_smsc911x_pdata.mac);
+        }
+
 	/* Memory controller - for SMSC Ethernet */
     	SMC_TIMEOUT = 0x01;
     
