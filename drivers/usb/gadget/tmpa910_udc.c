@@ -1839,14 +1839,19 @@ static int tmpa910udc_suspend(struct platform_device *pdev, pm_message_t mesg)
 	 */
 	if ((!udc->suspended && udc->addr)
 			|| !wake
-			|| tmpa910_suspend_entering_slow_clock()) {
+#if 0 /* missing? */
+			|| tmpa910_suspend_entering_slow_clock()
+#endif
+			) {
 		wake = 0;
 	} else
 		enable_irq_wake(udc->udp_irq);
 
 	udc->active_suspend = wake;
+#if 0 /* API change, needs update */
 	if (udc->board.vbus_pin > 0 && wake)
 		enable_irq_wake(udc->board.vbus_pin);
+#endif
 	return 0;
 }
 
@@ -1854,13 +1859,15 @@ static int tmpa910udc_resume(struct platform_device *pdev)
 {
 	struct tmpa910_udc *udc = platform_get_drvdata(pdev);
 
+#if 0 /* API change, needs update */
 	if (udc->board.vbus_pin > 0 && udc->active_suspend)
 		disable_irq_wake(udc->board.vbus_pin);
+#endif
 
 	/* maybe reconnect to host; if so, clocks on */
 	if (udc->active_suspend)
 		disable_irq_wake(udc->udp_irq);
-	else
+	//else
 	//	pullup(udc, 1);
 	return 0;
 }
