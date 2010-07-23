@@ -5,6 +5,9 @@
 obj-$(CONFIG_SND_TMPA910_WM8976) += snd-tmpa910-wm8976.o 
 snd-tmpa910-wm8976-objs		:= tmpa910_i2s.o wm8976.o
 
+obj-$(CONFIG_SND_TMPA910_WM8983) += snd-tmpa910-wm8983.o 
+snd-tmpa910-wm8983-objs		:= tmpa910_i2s.o wm8983.o
+
 obj-$(CONFIG_SND_TMPA910_PCM1773) += snd-tmpa910-pcm1773.o 
 snd-tmpa910-pcm1773-objs	:= tmpa910_i2s.o pcm1773.o
 

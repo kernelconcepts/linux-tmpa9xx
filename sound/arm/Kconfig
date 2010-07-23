@@ -19,6 +19,14 @@ config SND_TMPA910_WM8976
 	  Say Y here if you have a Toshiba tmpa910 EVB
 	  and want to use its WM8976 audio chip.
 
+config SND_TMPA910_WM8983
+	tristate "TMPA910 WM8983 driver"
+	depends on ARCH_TMPA910 && SND
+	select SND_PCM
+	help
+	  Say Y here if you have a TMPA900-CPU-Board
+	  and want to use its WM8983 audio codec.
+
 config SND_TMPA910_PCM1773
 	tristate "TMPA910 PCM1773 driver"
 	depends on ARCH_TMPA910 && SND

@@ -1,3 +1,11 @@
+/*
+ * Author?
+ * (c) ?
+ *
+ * Function: Handles TMPA I2S DMA
+ *
+ */
+
 #include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
