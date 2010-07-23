@@ -57,10 +57,6 @@
 
 #include "topas910.h"
 
-#define CONFIG_SPI_CHANNEL0
-#define CONFIG_UART0
-#define CONFIG_UART1
-
 /* I/O Mapping related, might want to be moved to a CPU specific file */
 
 static struct map_desc tmpa900_io_desc[] __initdata = {
@@ -127,6 +123,10 @@ static struct platform_device tonga_smsc911x_device = {
  * Serial UARTs
  */ 
 #if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
+#define CONFIG_UART0	/* enable UART0 */
+#define CONFIG_UART1	/* enable UART1 */
+
+#ifdef CONFIG_UART0
 static struct resource tmpa910_resource_uart0[] = {
 	{
 		.start	= 0xf2000000,
@@ -145,8 +145,9 @@ struct platform_device tmpa910_device_uart0 = {
 	.resource	= tmpa910_resource_uart0,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart0),
 };
+#endif
 
-
+#ifdef CONFIG_UART1
 static struct resource tmpa910_resource_uart1[] = {
 	{
 		.start	= 0xf2001000,
@@ -165,8 +166,9 @@ struct platform_device tmpa910_device_uart1 = {
 	.resource	= tmpa910_resource_uart1,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart1),
 };
+#endif
 
-
+#ifdef CONFIG_UART2
 static struct resource tmpa910_resource_uart2[] = {
 	{
 		.start	= 0xf2004000,
@@ -185,6 +187,7 @@ struct platform_device tmpa910_device_uart2 = {
 	.resource	= tmpa910_resource_uart2,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart2),
 };
+#endif
 #endif
 
 /*
@@ -251,7 +254,8 @@ struct platform_device tmpa910_device_sdhc = {
  * SPI
  */
 #if defined CONFIG_SPI_TMPA910 || defined CONFIG_SPI_TMPA910_MODULE
- 
+#define CONFIG_SPI_CHANNEL0	/* enable SPI channel 0 */
+
 #ifdef CONFIG_SPI_CHANNEL0
 static struct resource tmpa910_resource_spi0[] = {
 	{
@@ -543,10 +547,12 @@ static struct platform_device tmpa910_wdt_device = {
 };
 #endif
 
+#if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE
 static struct platform_device tmpa910_i2s_device = {
-	.name = "WM8976-I2S",
+	.name = "WM8983-I2S",
 	.id   = -1,
 };
+#endif
 
 static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
@@ -608,8 +614,9 @@ static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_TMPA9X0_WATCHDOG || defined CONFIG_TMPA9X0_WATCHDOG_MODULE
 	&tmpa910_wdt_device,
 #endif
+#if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE
  	&tmpa910_i2s_device,	
-
+#endif
 };
 
 
@@ -814,7 +821,7 @@ static void __init tonga_init(void)
 
         /* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
            In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
-           I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins.>         
+           I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins.
            TMPA910_CFG_PORT_GPIO(PORTR) */
 
 
