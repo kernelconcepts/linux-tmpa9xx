@@ -823,14 +823,17 @@ static void __init tonga_init(void)
            In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
            I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins.
            TMPA910_CFG_PORT_GPIO(PORTR) */
-
+        GPIOLFR2 = 0x00;
+        GPIOLFR1 = 0x1f; /* bits 4:0 for I2S */
+        
 
         /* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
            Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
            I2S1WS).*/
 	GPIOMDIR |= 0x03; /* M0, MI GPIO OUT */
 	GPIOMFR1 &= ~0x03;
-	GPIOMFR2 &= ~0x03;
+	GPIOMFR1 |= 0x04; /* M2 I2S1DAT0 */
+	/* GPIOMFR2 &= ~0x03; */ /* there is no FR2 for port M */
            
            
         /* Port N can be used as general-purpose input/output pins.
