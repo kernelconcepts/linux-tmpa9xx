@@ -812,7 +812,7 @@ MACHINE_START(TOPASA900, "Toshiba TopasA900")
         .io_pg_offst    = (io_p2v(TMPA910_IO_PHYS_BASE) >> 18) & 0xfffc,
         .map_io         = topasa900_map_io,
         .init_irq       = topasa900_init_irq,
-        .timer          = &topas910_timer,
+        .timer          = &tmpa910_timer,
         .init_machine   = topasa900_init,
 MACHINE_END
 

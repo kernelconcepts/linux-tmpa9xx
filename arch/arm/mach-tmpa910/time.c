@@ -264,7 +264,7 @@ static int tmpa910_clockevent_init(int clock_tick_rate)
 	return 0;
 }
 
-static void topas910_timer_init(void)
+static void tmpa910_timer_init(void)
 {
 	volatile struct hw_timer *hw_timer =
 	    (volatile struct hw_timer *)TMPA910_TIMER0;
@@ -276,6 +276,6 @@ static void topas910_timer_init(void)
 	tmpa910_clockevent_init(REFCLK);
 }
 
-struct sys_timer topas910_timer = {
-	.init = topas910_timer_init,
+struct sys_timer tmpa910_timer = {
+	.init = tmpa910_timer_init,
 };

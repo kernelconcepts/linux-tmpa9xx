@@ -12,6 +12,6 @@
 extern void __init tmpa910_init_irq(void);
 
 struct sys_timer;
-extern struct sys_timer topas910_timer;
+extern struct sys_timer tmpa910_timer;
 
 #endif

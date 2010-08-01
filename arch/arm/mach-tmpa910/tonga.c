@@ -886,6 +886,6 @@ MACHINE_START(TONGA, "Tonga 2")
         .io_pg_offst    = (io_p2v(TMPA910_IO_PHYS_BASE) >> 18) & 0xfffc,
         .map_io         = tonga_map_io,
         .init_irq       = tonga_init_irq,
-        .timer          = &topas910_timer,
+        .timer          = &tmpa910_timer,
         .init_machine   = tonga_init,
 MACHINE_END
