@@ -1,5 +1,6 @@
 /*
  *  arch/arm/mach-tmpa910/time.c
+ *  periodic timer tick implementation based on SOC timer #0
  *
  *  Copyright (C) 2000-2001 Deep Blue Solutions
  *  Copyright (C) 2002 Shane Nay (shane@minirl.com)
@@ -51,15 +52,15 @@ struct hw_timer {
 	uint32_t TimerBGCmp;	// 0x00EC Background compare value for Timer0
 };
 
-#define TIMxEN							(1<<7)
-#define TIMxMOD							(1<<6)
-#define TIMxINTE						(1<<5)
-#define TIMxSIZE_16B				(1<<1)
+#define TIMxEN			(1<<7)
+#define TIMxMOD			(1<<6)
+#define TIMxINTE		(1<<5)
+#define TIMxSIZE_16B		(1<<1)
 #define TIMxOSCTL_NORESTART	(1<<0)
 
-#define TIMxPRS_1 			(0x0<<2)
-#define TIMxPRS_16 			(0x1<<2)
-#define TIMxPRS_256			(0x2<<2)
+#define TIMxPRS_1 		(0x0<<2)
+#define TIMxPRS_16 		(0x1<<2)
+#define TIMxPRS_256		(0x2<<2)
 
 /*
  * TimerControl
@@ -101,7 +102,7 @@ struct hw_timer {
 
 /*********/
 /*********/
-static irqreturn_t topas910_timer_interrupt(int irq, void *dev_id)
+static irqreturn_t tmpa910_timer_interrupt(int irq, void *dev_id)
 {
 	volatile struct hw_timer *hw_timer =
 	    (volatile struct hw_timer *)TMPA910_TIMER0;
@@ -226,10 +227,10 @@ static struct clock_event_device clockevent_tmpa910 = {
 	.rating = 200,
 };
 
-static struct irqaction topas910_timer_irq = {
-	.name = "TMPA910/TOPAS910 Timer Tick",
+static struct irqaction tmpa910_timer_irq = {
+	.name = "TMPA910 Timer Tick",
 	.flags = IRQF_DISABLED | IRQF_TIMER,
-	.handler = topas910_timer_interrupt,
+	.handler = tmpa910_timer_interrupt,
 	.dev_id = &clockevent_tmpa910,
 };
 
@@ -271,7 +272,7 @@ static void tmpa910_timer_init(void)
 
 	hw_timer->TimerControl = 0;
 
-	setup_irq(INTR_VECT_TIMER01, &topas910_timer_irq);
+	setup_irq(INTR_VECT_TIMER01, &tmpa910_timer_irq);
 
 	tmpa910_clockevent_init(REFCLK);
 }
