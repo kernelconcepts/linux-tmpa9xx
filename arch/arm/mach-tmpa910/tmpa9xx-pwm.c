@@ -11,6 +11,16 @@
  *
  */
 
+/*
+ * The TMPA9xx PWM is implemented in the timer controller.
+ * The TMPA9xx has six timers in three blocks. Each block uses
+ * one common input clock, so there are only three independant
+ * timers available.
+ * Only Block-1 and Block-2 habe PWM option in their first parts, Block-3
+ * only has pure timers.
+ * Block-1 is used as periodic system timer source so we can only use
+ * function 1 of Block-2 as PWM output through Port-C4.
+ */
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
@@ -22,12 +32,14 @@
 
 #include <asm/div64.h>
 
+#include "tmpa9xx-timer.h"
+
 #define HAS_SECONDARY_PWM	0x10
 #define PWM_ID_BASE(d)		((d) & 0xf)
 
 static const struct platform_device_id pwm_id_table[] = {
 	/*   PWM    has_secondary_pwm? */
-	{ "tmpa9xx-pwm", 0 | HAS_SECONDARY_PWM}, /* TMPA910 & TMPA900 have two PWM channels */
+	{ "tmpa9xx-pwm", 0 }, /* TMPA910 & TMPA900 have two PWM channels but only one usable */
 	{ },
 };
 MODULE_DEVICE_TABLE(platform, pwm_id_table);
