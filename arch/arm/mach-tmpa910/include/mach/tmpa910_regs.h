@@ -289,6 +289,8 @@
 
 /* Timer */
 #define TMPA910_TIMER0 0xf0040000
+#define TMPA910_TIMER2 0xf0041000
+#define TMPA910_TIMER4 0xf0042000
 
 /* LCD Controller */
 #define LCDC_BASE 0xf4200000
@@ -304,7 +306,7 @@
 
 /* I2C Ports */
 #define I2C0_BASE   0xF0070000
-
+#define I2C1_BASE   0xF0071000
 
 /* Camera sensor controller */
 #define CMOSCAM_BASE  0xF2020000
@@ -533,7 +535,7 @@
 #define	NAND_DMAC_STATUS	(1 << 5)
 #define	NAND_DMAC_CLEAR		(1 << 5)
 
-// added for MLC
+/* added for MLC */
 #define NDFMCR0_ECC_RSM_ON		0x394
 #define NDFMCR0_ECC_RSECGW_ON	0x0194
 #define NDFMCR0_ECC_RSECGW_OFF	0x094
@@ -586,7 +588,8 @@
 
 
 /* I2C_1 : 0xf0071000	*/
-#define	I2C1_BASE			    (0xF0071000)         
+/* to be removed - handled in I2C bus driver */
+/*#define	I2C1_BASE			    (0xF0071000)         */
 #define	I2C1CR1				    __REG(I2C1_BASE + 0x00)
 #define	I2C1DBR				    __REG(I2C1_BASE + 0x04)
 #define	I2C1AR				    __REG(I2C1_BASE + 0x08)
@@ -622,7 +625,7 @@
 #define I2STDAT_ADR            (I2S_BASE + 0x1000)
 #define I2SRDAT_ADR            (I2S_BASE + 0x2000)
 
-/* UART registers: 0xF200x000*/
+/* UART registers: 0xF200x000 */
 #define	UART0_BASE_ADDRESS	(0xF2000000)
 #define	UART0DR			__REG(UART0_BASE_ADDRESS + 0x000)
 #define	UART0RSR		__REG(UART0_BASE_ADDRESS + 0x004)
