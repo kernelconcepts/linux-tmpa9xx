@@ -548,6 +548,71 @@ static struct platform_device tmpa910_wdt_device = {
 };
 #endif
 
+static struct resource tmpa9xx_pwm_resource[] = {
+	[0] = {
+		.start = TMPA910_TIMER2,
+		.end   = TMPA910_TIMER2 + 0x0fff,
+		.flags = IORESOURCE_MEM
+	},
+};
+
+static struct platform_device tmpa9xx_pwm_device = {
+	.name		= "tmpa9xx-pwm",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(tmpa9xx_pwm_resource),
+	.resource	= tmpa9xx_pwm_resource,
+	.dev		= {
+	.platform_data	= NULL,
+	}
+};
+
+#if defined CONFIG_BACKLIGHT_PWM
+static int tonga_backlight_init(struct device *dev)
+{
+	int ret=0;
+
+	return ret;
+}
+
+static int tonga_backlight_notify(struct device *dev, int brightness)
+{
+/*
+	gpio_set_value(VIPER_LCD_EN_GPIO, !!brightness);
+	gpio_set_value(VIPER_BCKLIGHT_EN_GPIO, !!brightness);
+*/
+	printk(KERN_ERR "tonga_backlight_notify() brightness=%d (-> %d)\n", brightness, !brightness);
+	/* Backlight is on pin port C4 */
+	//gpio_set_value(20, !brightness);
+
+	return brightness;
+}
+
+static void tonga_backlight_exit(struct device *dev)
+{
+/*
+	gpio_free(VIPER_LCD_EN_GPIO);
+	gpio_free(VIPER_BCKLIGHT_EN_GPIO);
+*/
+}
+
+static struct platform_pwm_backlight_data tonga_backlight_data = {
+	.pwm_id		= 0,
+	.max_brightness	= 100,
+	.dft_brightness	= 100,
+	.pwm_period_ns	= 255,
+	.init		= tonga_backlight_init,
+	.notify		= tonga_backlight_notify,
+	.exit		= tonga_backlight_exit,
+};
+
+static struct platform_device tonga_backlight_device = {
+	.name		= "pwm-backlight",
+	.dev		= {
+		.platform_data	= &tonga_backlight_data,
+	},
+};
+#endif
+
 #if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE
 static struct platform_device tmpa910_i2s_device = {
 	.name = "WM8983-I2S",
@@ -618,6 +683,10 @@ static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE
  	&tmpa910_i2s_device,	
 #endif
+	&tmpa9xx_pwm_device,
+#if defined CONFIG_BACKLIGHT_PWM
+	&tonga_backlight_device,
+#endif
 };
 
 
@@ -678,7 +747,7 @@ static void __init setup_lcdc_device(void)
     
 	/* LCDControl */
 	LCDReg[4] = (0x4 << 1) | (1 << 5) | (1 << 11) | (1 << 16);
-    
+
 	tmpa9xx_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
 
 	/* Configure Pins and reset LCD */
@@ -726,23 +795,22 @@ static void parse_enetaddr(char *addr, unsigned char *enetaddr)
  */
 static void __init tonga_init(void)
 {
-        char *p;
-        char eth_mac_ascii[ETHERNET_MAC_ASCII_LENGTH+2];
+	char *p;
+	char eth_mac_ascii[ETHERNET_MAC_ASCII_LENGTH+2];
 
 	/* get mac address from the command line */
 	memset(eth_mac_ascii,0,sizeof(eth_mac_ascii));
 
-        p = strstr(boot_command_line, "ethaddr=");
+	p = strstr(boot_command_line, "ethaddr=");
 
-        if (p != NULL && (p == boot_command_line || p[-1] == ' '))
-        {
+	if (p != NULL && (p == boot_command_line || p[-1] == ' ')) {
 		printk("U-BOOT Ethernet Address: %s\n",p+8);
-                memcpy(&eth_mac_ascii,p+MAC_OFFSET,ETHERNET_MAC_ASCII_LENGTH);
+		memcpy(&eth_mac_ascii,p+MAC_OFFSET,ETHERNET_MAC_ASCII_LENGTH);
 		parse_enetaddr (eth_mac_ascii,tonga_smsc911x_pdata.mac);
-        }
+	}
 
 	/* Memory controller - for SMSC Ethernet */
-    	SMC_TIMEOUT = 0x01;
+	SMC_TIMEOUT = 0x01;
     
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = 0xffffffff;
@@ -750,19 +818,19 @@ static void __init tonga_init(void)
 	
 	/* Pin configuration */
         
-        /* Port A can be used not only as a general-purpose input pin with pull up but also as key input pin. */
+	/* Port A can be used not only as a general-purpose input pin with pull up but also as key input pin. */
 	TMPA910_CFG_PORT_GPIO(PORTA); /* All useable for GPIO */
         
 	/* Port B can be used not only as general-purpose output pins but also as key output pins. */
 	TMPA910_CFG_PORT_GPIO(PORTB); 
 	GPIOBODE = 0x00; /* Disable Open Drain */
         
-        /* Port C
-           The upper 2 bits (bits [7:6]) of Port C can be used as general-purpose input/output pins
+	/* Port C
+	   The upper 2 bits (bits [7:6]) of Port C can be used as general-purpose input/output pins
 	   and the lower 3 bits (bits [4:2]) can be used as general-purpose output pins.
-           Port C can also be used as interrupt (INT9), I2C (I2C0DA, I2C0CL), low-frequency clock
-           output (FSOUT), melody output (MLDALM), PWM output function (PWM0OUT,
-           PWM2OUT), and USB Host power supply control function (USBOCn, USBPON). */
+	   Port C can also be used as interrupt (INT9), I2C (I2C0DA, I2C0CL), low-frequency clock
+	   output (FSOUT), melody output (MLDALM), PWM output function (PWM0OUT,
+	   PWM2OUT), and USB Host power supply control function (USBOCn, USBPON). */
 
 	TMPA910_CFG_PORT_GPIO(PORTC);
 	GPIOCODE = 0x00; 
@@ -771,44 +839,48 @@ static void __init tonga_init(void)
 	GPIOCFR2 = 0;
 	GPIOCDATA = 0x00;
 #if defined CONFIG_USB_OHCI_HCD_TMPA900 || defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE
-	GPIOCIE &= ~0xC0; /* USB Host */
+	GPIOCIE &= ~0xC0;	/* USB Host */
 	GPIOCFR1 &= ~0xC0;
 	GPIOCFR2 |=  0xC0;
 #endif
+#if defined CONFIG_BACKLIGHT_PWM
+	GPIOCFR1 &= ~0x10;	/* enable PWM2OUT */
+	GPIOCFR2 |=  0x10;
+#endif
 
 	/* Port D can be used as general-purpose input.
-           Port D can also be used as interrupt (INTB, INTA), ADC (AN7-AN0), and touch screen
-           control (PX, PY, MX, MY) pins. */
+	   Port D can also be used as interrupt (INTB, INTA), ADC (AN7-AN0), and touch screen
+	   control (PX, PY, MX, MY) pins. */
 #if defined CONFIG_TOUCHSCREEN_TMPA910 || CONFIG_TOUCHSCREEN_TMPA910_MODULE
-       	GPIODFR1 = 0x0f;
+	GPIODFR1 = 0x0f;
 	GPIODFR2 = 0xf0;
 	GPIODIE = 0x00;
 #endif
 
 	/* Port F
-           The upper 2 bits (bits [7:6]) of Port F can be used as general-purpose input/output pins.
-           Port F can also be used as interrupt (INTC), UART (U2RXD, U2TXD) and I2C (I2C1DA,
-           I2C1CL) pins. */
+	   The upper 2 bits (bits [7:6]) of Port F can be used as general-purpose input/output pins.
+	   Port F can also be used as interrupt (INTC), UART (U2RXD, U2TXD) and I2C (I2C1DA,
+	   I2C1CL) pins. */
 #ifdef CONFIG_UART2
-        GPIOFFR1 &= ~0xC0;  /* UART 2 */
+	GPIOFFR1 &= ~0xC0;  /* UART 2 */
 	GPIOFFR2 |= 0xC0;
-        GPIOFIE  &= ~0xC0;
-        GPIOFODE &= ~0xC0;
+	GPIOFIE  &= ~0xC0;
+	GPIOFODE &= ~0xC0;
 #endif    
    
-        /* Port G can be used as general-purpose input/output pins.
-           Port G can also be used as SD host controller function pins (SDC0CLK, SDC0CD,
-           SDC0WP, SDC0CMD, SDC0DAT3, SDC0DAT2, SDC0DAT1 and SDC0DAT0). */
+	/* Port G can be used as general-purpose input/output pins.
+	   Port G can also be used as SD host controller function pins (SDC0CLK, SDC0CD,
+	   SDC0WP, SDC0CMD, SDC0DAT3, SDC0DAT2, SDC0DAT1 and SDC0DAT0). */
 #if !defined CONFIG_MMC_TMPA910_SDHC || !defined CONFIG_MMC_TMPA910_SDHC_MODULE
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0 or GPIO */
 #endif
 
-        /* Port J can be used as general-purpose input/output pins.
-           Port J can also be used as LCD cotroller function pins (LD15-LD8) and CMOS image
-           sensor control (CMSVSY, CMSHBK, CMSHSY and CMSPCK) pins. */
-        /* Port K can be used as general-purpose input/output pins.
-           Port K can also be used as LCD controller function pins (LD23 to LD16) and CMOS image
-           sensor control (CMSD7 toCMSD0) pins. */
+	/* Port J can be used as general-purpose input/output pins.
+	   Port J can also be used as LCD cotroller function pins (LD15-LD8) and CMOS image
+	   sensor control (CMSVSY, CMSHBK, CMSHSY and CMSPCK) pins. */
+	/* Port K can be used as general-purpose input/output pins.
+	   Port K can also be used as LCD controller function pins (LD23 to LD16) and CMOS image
+	   sensor control (CMSD7 toCMSD0) pins. */
 #if defined CONFIG_FB_TMPA910 || CONFIG_FB_TMPA910_MODULE
 	LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
 	GPIOJFR2 = 0x00;
@@ -817,47 +889,46 @@ static void __init tonga_init(void)
 	GPIOKFR1 = 0xFF;
 	PMCCTL &= ~PMCCTL_PMCPWE;
 	PMCWV1 |= PMCWV1_PMCCTLV;
-    	udelay(200);
+	udelay(200);
 #endif
 
-        /* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
-           In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
-           I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins.
-           TMPA910_CFG_PORT_GPIO(PORTR) */
-        GPIOLFR2 = 0x00;
-        GPIOLFR1 = 0x1f; /* bits 4:0 for I2S */
-        
+	/* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
+	   In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
+	   I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins.
+	   TMPA910_CFG_PORT_GPIO(PORTR) */
+	GPIOLFR2 = 0x00;
+	GPIOLFR1 = 0x1f; /* bits 4:0 for I2S */
 
-        /* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
-           Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
-           I2S1WS).*/
+	/* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
+	   Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
+	   I2S1WS).*/
 	GPIOMDIR |= 0x03; /* M0, MI GPIO OUT */
 	GPIOMFR1 &= ~0x03;
 	GPIOMFR1 |= 0x04; /* M2 I2S1DAT0 */
 	/* GPIOMFR2 &= ~0x03; */ /* there is no FR2 for port M */
            
            
-        /* Port N can be used as general-purpose input/output pins.
-           Port N can also be used as UART/IrDA function (U0RTSn, U0DTRn, U0RIn, U0DSRn,
-           U0DCDn, U0CTSn, U0RXD, U0TXD, SIR0IN, SIR0OUT) and interrupt function (INTD,
-           INTE, INTF, INTG) pins. */
+	/* Port N can be used as general-purpose input/output pins.
+	   Port N can also be used as UART/IrDA function (U0RTSn, U0DTRn, U0RIn, U0DSRn,
+	   U0DCDn, U0CTSn, U0RXD, U0TXD, SIR0IN, SIR0OUT) and interrupt function (INTD,
+	   INTE, INTF, INTG) pins. */
            
-        /* already set by bootloader */
+	/* already set by bootloader */
            
-        /* Port R
-           Bit 2 of Port R can be used as a general-purpose input/output pin and bits [1:0] can be
-           used as general-purpose output pins. (Bits [7:3] are not used.)
-           Port R can also be used as reset output (RESETOUTn), high-frequency clock output
-          (FCOUT), interrupt function (INTH) and Oscillation Frequency Detection (OFDOUTn). */
+	/* Port R
+	   Bit 2 of Port R can be used as a general-purpose input/output pin and bits [1:0] can be
+	   used as general-purpose output pins. (Bits [7:3] are not used.)
+	   Port R can also be used as reset output (RESETOUTn), high-frequency clock output
+	   (FCOUT), interrupt function (INTH) and Oscillation Frequency Detection (OFDOUTn). */
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
 	GPIORDIR &= ~(1 << 2); /* Eth IRQ */
 #endif
     
-        /* Port T can be used as general-purpose input/output pins.
-           Port T can also be used as USB external clock input (X1USB), UART function (U1CTSn,
-           U1RXD, U1TXD), and SPI function (SP0DI, SP0DO, SP0CLK, SP0FSS) and pins. */
+	/* Port T can be used as general-purpose input/output pins.
+	   Port T can also be used as USB external clock input (X1USB), UART function (U1CTSn,
+	   U1RXD, U1TXD), and SPI function (SP0DI, SP0DO, SP0CLK, SP0FSS) and pins. */
 #ifdef CONFIG_UART1
-       	GPIOTFR1 = 0xFF;
+	GPIOTFR1 = 0xFF;
 #endif        
     
 	/* Configure LCD interface */
@@ -889,3 +960,4 @@ MACHINE_START(TONGA, "Tonga 2")
         .timer          = &tmpa910_timer,
         .init_machine   = tonga_init,
 MACHINE_END
+

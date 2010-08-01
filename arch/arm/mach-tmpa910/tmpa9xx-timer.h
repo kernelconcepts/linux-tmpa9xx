@@ -68,3 +68,6 @@ struct tmpa9xx_hw_timer {
 /* system timer reference clock, in Hz */
 #define REFCLK          (32768)
 
+/* timer counter value, to get an interrupt every HZ */
+#define TIMER_RELOAD    (REFCLK/HZ)
+
