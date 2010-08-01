@@ -33,6 +33,7 @@
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
+#include <linux/pwm_backlight.h>
 
 #include <asm/system.h>
 #include <mach/hardware.h>

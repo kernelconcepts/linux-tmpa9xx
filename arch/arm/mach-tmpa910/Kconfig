@@ -25,6 +25,7 @@ config MACH_TOPASA900
 config MACH_TONGA
         bool "Glyn ARM9 / Tonga board"
 	depends on CPU_TMPA900
+	select HAVE_PWM
 
 endchoice        
 

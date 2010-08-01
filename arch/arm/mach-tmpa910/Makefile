@@ -7,7 +7,8 @@
 
 # Object file lists.
 
-obj-y                   += irq.o time.o gpio.o dma.o
-obj-$(CONFIG_MACH_TOPAS910)    += topas910.o led-topas910.o 
-obj-$(CONFIG_MACH_TOPASA900)   += topasa900.o led-topas910.o 
-obj-$(CONFIG_MACH_TONGA)   += tonga.o
+obj-y				+= irq.o time.o gpio.o dma.o
+obj-$(CONFIG_HAVE_PWM)		+= tmpa9xx-pwm.o
+obj-$(CONFIG_MACH_TOPAS910)	+= topas910.o led-topas910.o 
+obj-$(CONFIG_MACH_TOPASA900)	+= topasa900.o led-topas910.o 
+obj-$(CONFIG_MACH_TONGA)	+= tonga.o
