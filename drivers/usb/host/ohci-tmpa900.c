@@ -41,7 +41,7 @@ struct memory_item
 	unsigned char in_use;
 };
 
-#define MAX_NUM_ITEMS 64
+#define MAX_NUM_ITEMS 256 /* 64 */
 
 static struct memory_item memory_map[MAX_NUM_ITEMS];
 static spinlock_t sram_lock;
