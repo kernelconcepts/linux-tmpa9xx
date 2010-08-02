@@ -66,7 +66,7 @@ int pwm_config(struct pwm_device *pwm, int duty_ns, int period_ns)
 	volatile struct tmpa9xx_hw_timer *hw_timer =
 	    (volatile struct tmpa9xx_hw_timer *)TMPA910_TIMER2;
 
-	printk(KERN_ERR "pwm_config() duty=%d period=%d\n", duty_ns, period_ns);
+	/* printk(KERN_ERR "pwm_config() duty=%d period=%d\n", duty_ns, period_ns); */
 
 	if (pwm == NULL || period_ns == 0 || duty_ns > period_ns)
 		return -EINVAL;
@@ -87,7 +87,7 @@ int pwm_enable(struct pwm_device *pwm)
 	    (volatile struct tmpa9xx_hw_timer *)TMPA910_TIMER2;
 	int rc = 0;
 
-	printk(KERN_ERR "pwm_enable()\n");
+	/* printk(KERN_ERR "pwm_enable()\n"); */
 
 	hw_timer->TimerMode = 0x40;		/* select PWM mode */
 	hw_timer->TimerControl = 0xe2; /* start */
@@ -101,7 +101,7 @@ void pwm_disable(struct pwm_device *pwm)
 	volatile struct tmpa9xx_hw_timer *hw_timer =
 	    (volatile struct tmpa9xx_hw_timer *)TMPA910_TIMER2;
 
-	printk(KERN_ERR "pwm_disable()\n");
+	/* printk(KERN_ERR "pwm_disable()\n"); */
 
 	if (pwm->clk_enabled) {
 		pwm->clk_enabled = 0;
@@ -264,7 +264,7 @@ static struct platform_driver pwm_driver = {
 
 static int __init pwm_init(void)
 {
-	printk (KERN_ERR "tmpa9xx pwm_init()\n");
+	/* printk (KERN_ERR "tmpa9xx pwm_init()\n"); */
 	return platform_driver_register(&pwm_driver);
 }
 arch_initcall(pwm_init);

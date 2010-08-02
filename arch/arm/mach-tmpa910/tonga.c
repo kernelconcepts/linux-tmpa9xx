@@ -576,13 +576,9 @@ static int tonga_backlight_init(struct device *dev)
 
 static int tonga_backlight_notify(struct device *dev, int brightness)
 {
-/*
-	gpio_set_value(VIPER_LCD_EN_GPIO, !!brightness);
-	gpio_set_value(VIPER_BCKLIGHT_EN_GPIO, !!brightness);
-*/
-	printk(KERN_ERR "tonga_backlight_notify() brightness=%d (-> %d)\n", brightness, !brightness);
+	/* printk(KERN_ERR "tonga_backlight_notify() brightness=%d (-> %d)\n", brightness, !brightness); */
 	/* Backlight is on pin port C4 */
-	//gpio_set_value(20, !brightness);
+	/* we could also power down the LCD or do other things here... */
 
 	return brightness;
 }
