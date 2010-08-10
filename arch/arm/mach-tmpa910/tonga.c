@@ -619,12 +619,19 @@ static struct platform_device tonga_backlight_device = {
 };
 #endif
 
+/* this is for the old alsa/arm/ sound driver */
 #if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE
 static struct platform_device tmpa910_i2s_device = {
 	.name = "WM8983-I2S",
 	.id   = -1,
 };
 #endif
+
+/* new Alsa SOC driver */
+static struct platform_device tmpa910_i2s_device = {
+	.name = "tmpa9xx-i2s",
+	.id    = -1,
+};
 
 static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
@@ -686,7 +693,7 @@ static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_TMPA9X0_WATCHDOG || defined CONFIG_TMPA9X0_WATCHDOG_MODULE
 	&tmpa910_wdt_device,
 #endif
-#if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE
+#if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
  	&tmpa910_i2s_device,	
 #endif
 	&tmpa9xx_pwm_device,
