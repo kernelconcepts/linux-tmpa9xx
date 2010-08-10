@@ -25,6 +25,7 @@
  */
 
 #include <linux/device.h>
+#include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
@@ -54,10 +55,6 @@
 #include <mach/tmpa910_regs.h>
 #include <linux/mmc/host.h>
 #include <asm/serial.h>
-
-#if defined(CONFIG_USB_ISP1362_HCD)
-#include <linux/usb/isp1362.h>
-#endif
 
 #ifdef CONFIG_SPI_TMPA910
 #include <linux/spi/spi.h>
@@ -100,7 +97,7 @@ static u64  topas910_dmamask = 0xffffffffUL;
 
 
 /* Ethernet */
- 
+#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
 static struct resource dm9000_resources[] = {
         [0] = {
                 .start  = 0x60000002,
@@ -130,12 +127,16 @@ static struct platform_device topas910_dm9000_device = {
 		.coherent_dma_mask = 0xffffffff,		
         },
 };
-
+#endif
 
 /*
- * Serial UART
+ * Serial UARTs
  */ 
+#if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
+#define CONFIG_UART0	/* enable UART0 */
+#define CONFIG_UART1	/* enable UART1 */
 
+#ifdef CONFIG_UART0
 static struct resource tmpa910_resource_uart0[] = {
 	{
 		.start	= 0xf2000000,
@@ -148,15 +149,61 @@ static struct resource tmpa910_resource_uart0[] = {
 	}
 };
 
-
 struct platform_device tmpa910_device_uart0 = {
 	.name		= "tmpa910-uart",
 	.id		= 0,
 	.resource	= tmpa910_resource_uart0,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart0),
 };
+#endif
 
+#ifdef CONFIG_UART1
+static struct resource tmpa910_resource_uart1[] = {
+	{
+		.start	= 0xf2001000,
+		.end	= 0xf2001000 + 0x100,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= 11,
+		.end	= 11,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
 
+struct platform_device tmpa910_device_uart1 = {
+	.name		= "tmpa910-uart",
+	.id		= 1,
+	.resource	= tmpa910_resource_uart1,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart1),
+};
+#endif
+
+#ifdef CONFIG_UART2
+static struct resource tmpa910_resource_uart2[] = {
+	{
+		.start	= 0xf2004000,
+		.end	= 0xf2004000 + 0x100,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= 9,
+		.end	= 9,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+
+struct platform_device tmpa910_device_uart2 = {
+	.name		= "tmpa910-uart",
+	.id		= 2,
+	.resource	= tmpa910_resource_uart2,
+	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart2),
+};
+#endif
+#endif
+
+/*
+ * I2C
+ */ 
+#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 static struct resource tmpa910_resource_i2c[] = {
 	{
 		.start	= I2C0_BASE,
@@ -187,7 +234,12 @@ struct platform_device tmpa910_device_i2c = {
 	.resource	= tmpa910_resource_i2c,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
 };
+#endif
 
+/*
+ * SDHC
+ */ 
+#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
 static struct resource tmpa910_resource_sdhc[] = {
 {
 		.start	= INTR_VECT_SDHC,
@@ -206,6 +258,13 @@ struct platform_device tmpa910_device_sdhc = {
 	.resource	= tmpa910_resource_sdhc,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_sdhc),
 };
+#endif
+
+/*
+ * SPI
+ */
+#if defined CONFIG_SPI_TMPA910 || defined CONFIG_SPI_TMPA910_MODULE
+#define CONFIG_SPI_CHANNEL0	/* enable SPI channel 0 */
 
 #ifdef CONFIG_SPI_CHANNEL0
 static struct resource tmpa910_resource_spi0[] = {
@@ -219,7 +278,7 @@ static struct resource tmpa910_resource_spi0[] = {
 		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
 	}
 };
-#endif
+#endif /* CONFIG_SPI_CHANNEL0 */
 
 #ifdef CONFIG_SPI_CHANNEL1
 static struct resource tmpa910_resource_spi1[] = {
@@ -233,7 +292,7 @@ static struct resource tmpa910_resource_spi1[] = {
 		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
 	}
 };
-#endif
+#endif /* CONFIG_SPI_CHANNEL1 */
 
 #ifdef CONFIG_SPI_CHANNEL0
 struct platform_device tmpa910_device_spi0 = {
@@ -245,7 +304,7 @@ struct platform_device tmpa910_device_spi0 = {
 	.resource	= tmpa910_resource_spi0,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_spi0),
 };
-#endif
+#endif /* CONFIG_SPI_CHANNEL0 */
 
 #ifdef CONFIG_SPI_CHANNEL1
 struct platform_device tmpa910_device_spi1 = {
@@ -257,13 +316,58 @@ struct platform_device tmpa910_device_spi1 = {
 	.resource	= tmpa910_resource_spi1,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_spi1),
 };
+#endif /* CONFIG_SPI_CHANNEL1 */
+
+static struct mmc_spi_platform_data mmc_spi_info = {
+	.caps = MMC_CAP_NEEDS_POLL | MMC_CAP_SPI,
+	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3.3V only */
+};
+
+#ifdef CONFIG_MMC_SPI
+static struct spi_board_info spi_board_info[] = 
+{
+{
+	.modalias = "mmc_spi",
+	.platform_data = &mmc_spi_info,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 1000000,
+	.bus_num = 0,
+
+}
+};
+#elif defined(CONFIG_SPI_SPIDEV)
+static struct spi_board_info spi_board_info[] = {
+{
+	.modalias = "spidev",
+	.platform_data = &mmc_spi_info,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 10000000,
+	.bus_num = 0,
+},
+{
+	.modalias = "spidev",
+	.platform_data = NULL,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 10000000,
+	.bus_num = 1,
+}
+};
 #endif
 
-
+#endif /* CONFIG_SPI_TMPA910 */
 
 /*
  * Touchscreen
  */
+#if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
+static struct tmpa910_ts_platforminfo tmpa910_info_ts = {
+		.fuzz       = 0,
+		.rate       = 36,
+		.skip_count = 4,
+};
 
 static struct resource tmpa910_resource_ts[] = {
 	{
@@ -289,41 +393,12 @@ struct platform_device tmpa910_device_ts = {
 	.name		= "tmpa910_ts",
 	.id		= 0,
 	.dev = {
-		.platform_data = NULL
+		.platform_data = &tmpa910_info_ts,
 	},
 	.resource	= tmpa910_resource_ts,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_ts),
 };
-
-
-/* LCD controller device */
-
-static struct resource tmpa910_resource_lcdc[] = {
-	{
-		.start	= LCDC_BASE,
-		.end	= LCDC_BASE + 0x400,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= INTR_VECT_LCDC,
-		.end	= INTR_VECT_LCDC,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
-
-
-static struct tmpa910_lcdc_platforminfo topas910_v1_lcdc_platforminfo;
-
-
-struct platform_device tmpa910_device_lcdc= {
-	.name		= "tmpa9xxfb",
-	.id		= 0,
-	.resource	= tmpa910_resource_lcdc,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_lcdc),
-        .dev = {
-		.coherent_dma_mask = 0xffffffff,		
-        },
-};
-
+#endif
 
 /* 
  * 7 segment LED display
@@ -393,16 +468,43 @@ static struct platform_device topas910_keys_device = {
 	},
 };
 
+/* 
+ * LCD controller device 
+ */
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
+static struct resource tmpa9xx_resource_lcdc[] = {
+	{
+		.start	= LCDC_BASE,
+		.end	= LCDC_BASE + 0x400,
+		.flags	= IORESOURCE_MEM,
+	},{
+		.start	= INTR_VECT_LCDC,
+		.end	= INTR_VECT_LCDC,
+		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+	}
+};
+
+static struct tmpa910_lcdc_platforminfo topas910_v1_lcdc_platforminfo;
+
+struct platform_device tmpa9xx_device_lcdc= {
+	.name		= "tmpa9xxfb",
+	.id		= 0,
+	.resource	= tmpa9xx_resource_lcdc,
+	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_lcdc),
+        .dev = {
+		.coherent_dma_mask = 0xffffffff,		
+        },
+};
+#endif
 
 /*
  * NAND Flash Controller
  */
-
-#ifdef CONFIG_MTD_NAND_TMPA910
+#if defined CONFIG_MTD_NAND_TMPA910 || defined CONFIG_MTD_NAND_TMPA910_MODULE
 static struct resource tmpa910_nand_resources[] = {
 	[0] = {
-		.start	=  NANDF_BASE ,
-		.end	=  NANDF_BASE + 0xFFF,
+		.start	=  NANDF_BASE,
+		.end	=  NANDF_BASE + 0x200,
 		.flags	= IORESOURCE_MEM,
 	},
 };
@@ -413,85 +515,12 @@ static struct platform_device tmpa910_nand_device = {
 	.num_resources	= ARRAY_SIZE(tmpa910_nand_resources),
 	.resource	= tmpa910_nand_resources,
 };
-
 #endif
 
-
-static struct platform_device tmpa910_i2s_device = {
-	.name = "WM8976-I2S",
-	.id   = -1,
-};
-
-
-#ifdef CONFIG_MMC_SPI
-static struct mmc_spi_platform_data mmc_spi_info = {
-	.caps = MMC_CAP_NEEDS_POLL|MMC_CAP_SPI,
-	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3.3V only */
-};
-
-static struct spi_board_info spi_board_info[] = 
-{
-{
-	.modalias = "mmc_spi",
-	.platform_data = &mmc_spi_info,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 1000000,
-	.bus_num = 0,
-
-}
-};
-
-#elif defined(CONFIG_SPI_AT25)
-static struct spi_eeprom spi_eeprom_info = {
-	.page_size = 256,
-	.name = "AT25F512",
-	.flags = EE_ADDR3|EE_READONLY
-};
- 
-static struct spi_board_info spi_board_info[] = {
-{
-	.modalias = "at25",
-	.platform_data = &spi_eeprom_info,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 20000000,
-	.bus_num = 0,
-},
-{
-	.modalias = "at25",
-	.platform_data = &spi_eeprom_info,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 20000000,
-	.bus_num = 1,
-}
-};
-#elif defined(CONFIG_SPI_SPIDEV)
-static struct spi_board_info spi_board_info[] = {
-{
-	.modalias = "spidev",
-	.platform_data = NULL,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 20000000,
-	.bus_num = 0,
-},
-{
-	.modalias = "spidev",
-	.platform_data = NULL,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 20000000,
-	.bus_num = 1,
-}
-};
-
-#endif
-
-
-#define RTC_BASE		0xF0030000
-
+/*
+ * Real Time Clock
+ */
+#if defined CONFIG_RTC_DRV_TMPA910 || defined CONFIG_RTC_DRV_TMPA910_MODULE
 static struct resource tmpa910_resource_rtc[] = {
 	{
 		.start = RTC_BASE,
@@ -511,9 +540,12 @@ static struct platform_device tmpa910_device_rtc = {
 	.resource       = tmpa910_resource_rtc
 	}
 ;
+#endif
 
-#ifdef CONFIG_USB_GADGET_TMPA910
-/* USB Device Controller */
+/*
+ * USB Device Controller
+ */
+#if defined CONFIG_USB_GADGET_TMPA910 || defined CONFIG_USB_GADGET_TMPA910_MODULE
 static struct resource tmpa910_udc_resource[] = {
         [0] = {
                 .start = 0xf4400000,
@@ -528,49 +560,116 @@ static struct resource tmpa910_udc_resource[] = {
 };
 
 static struct platform_device tmpa910_udc_device = {
-        .name           = "tmpa910-usb",
-        .id             = 0,
+        .name           = "tmpa9xx-udc",
+        .id             = -1,
         .num_resources  = ARRAY_SIZE(tmpa910_udc_resource),
         .resource       = tmpa910_udc_resource,
         .dev            = {
         .platform_data  = NULL,
         }
 };
-
 #endif
+
+/*
+ * Watchdog
+ */
+#if defined CONFIG_TMPA9X0_WATCHDOG || defined CONFIG_TMPA9X0_WATCHDOG_MODULE
+static struct resource tmpa9x0_wdt_resource[] = {
+        [0] = {
+                .start = 0xf0010000,
+                .end   = 0xf0010c04,
+                .flags = IORESOURCE_MEM
+        },
+};
+
+static struct platform_device tmpa910_wdt_device = {
+        .name           = "tmpa9x0_wdt",
+        .id             = 0,
+        .num_resources  = ARRAY_SIZE(tmpa9x0_wdt_resource),
+        .resource       = tmpa9x0_wdt_resource,
+        .dev            = {
+        .platform_data  = NULL,
+        }
+};
+#endif
+
+static struct platform_device tmpa910_i2s_device = {
+	.name = "WM8976-I2S",
+	.id   = -1,
+};
 
 
 static struct platform_device *devices[] __initdata = {
-	&tmpa910_device_ts,
-	&topas910_led_device,
+#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
 	&topas910_dm9000_device,
+#endif
+
+#if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
+#ifdef CONFIG_UART0
 	&tmpa910_device_uart0,
-	&topas910_keys_device,
-	&tmpa910_device_lcdc,
+#endif
+#ifdef CONFIG_UART1
+	&tmpa910_device_uart1,
+#endif
+#ifdef CONFIG_UART2
+	&tmpa910_device_uart2,
+#endif
+#endif /* CONFIG_SERIAL_TMPA910 */
+
+#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 	&tmpa910_device_i2c,
-#ifdef CONFIG_USB_GADGET_TMPA910
-	&tmpa910_udc_device,
 #endif
-#ifdef CONFIG_MTD_NAND_TMPA910
- 	&tmpa910_nand_device,
+
+#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
+ 	&tmpa910_device_sdhc,
 #endif
- 	&tmpa910_i2s_device,	
+
+#if defined CONFIG_SPI_TMPA910 || defined CONFIG_SPI_TMPA910_MODULE
 #ifdef CONFIG_SPI_CHANNEL0
 	&tmpa910_device_spi0,
 #endif
 #ifdef CONFIG_SPI_CHANNEL1
 	&tmpa910_device_spi1,
 #endif
-	&tmpa910_device_rtc
-#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
- 	&tmpa910_device_sdhc,
+#endif /* CONFIG_SPI_TMPA910 */
+
+#if defined CONFIG_TOUCHSCREEN_TMPA910 || CONFIG_TOUCHSCREEN_TMPA910_MODULE
+	&tmpa910_device_ts,
 #endif
+
+#if defined CONFIG_FB_TMPA910 || CONFIG_FB_TMPA910_MODULE
+	&tmpa9xx_device_lcdc,
+#endif
+
+#if defined CONFIG_MTD_NAND_TMPA910 || defined CONFIG_MTD_NAND_TMPA910_MODULE
+ 	&tmpa910_nand_device,
+#endif
+
+#if defined CONFIG_RTC_DRV_TMPA910 || defined CONFIG_RTC_DRV_TMPA910_MODULE
+	&tmpa910_device_rtc,
+#endif
+
+#if defined CONFIG_USB_OHCI_HCD_TMPA900 || defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE
+	&tmpa900_ohci_device,
+#endif       
+
+#if defined CONFIG_USB_GADGET_TMPA910 || defined CONFIG_USB_GADGET_TMPA910_MODULE
+	&tmpa910_udc_device,
+#endif
+#if defined CONFIG_TMPA9X0_WATCHDOG || defined CONFIG_TMPA9X0_WATCHDOG_MODULE
+	&tmpa910_wdt_device,
+#endif
+	&topas910_keys_device,
+ 	&tmpa910_i2s_device,	
+	&topas910_led_device,
 };
 
 
-static void __init _setup_lcdc_device(void)
+static void __init setup_lcdc_device(void)
 {
 	uint32_t *LCDReg;
+	int width  = 320;
+	int height = 240;
 	
 	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
 #ifdef CONFIG_DISPLAY_GLYN_640_480
@@ -626,8 +725,6 @@ static void __init _setup_lcdc_device(void)
 	LCDReg[3] = 0;
 	LCDReg[4] = (0x5<<1)  | (1<<5)  | (1<<11) | (1<<16); /* LCDControl */
 #else
-	int width  = 320;
-	int height = 240;
 
 	topas910_v1_lcdc_platforminfo.width  = width;
 	topas910_v1_lcdc_platforminfo.height = height;
@@ -651,7 +748,7 @@ static void __init _setup_lcdc_device(void)
 	LCDReg[3] = 0;
 	LCDReg[4]	= (0x5<<1)  | (1<<5) | (1<<11);
 #endif
-	tmpa910_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
+	tmpa9xx_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
 }
 
 
@@ -675,16 +772,117 @@ static void __init topas910_init(void)
 	platform_bus.dma_mask=&topas910_dmamask;
 	
 	/* Pin configuration */
-	TMPA910_CFG_PORT_GPIO(PORTA); /* Keypad */
-	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
-#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
-#else
-	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0, for SPI MMC */
+        
+	/* Port A can be used not only as a general-purpose input pin with pull up but also as key input pin. */
+	TMPA910_CFG_PORT_GPIO(PORTA); /* All useable for GPIO */
+        
+	/* Port B can be used not only as general-purpose output pins but also as key output pins. */
+	TMPA910_CFG_PORT_GPIO(PORTB); 
+	GPIOBODE = 0x00; /* Disable Open Drain */
+        
+	/* Port C
+	   The upper 2 bits (bits [7:6]) of Port C can be used as general-purpose input/output pins
+	   and the lower 3 bits (bits [4:2]) can be used as general-purpose output pins.
+	   Port C can also be used as interrupt (INT9), I2C (I2C0DA, I2C0CL), low-frequency clock
+	   output (FSOUT), melody output (MLDALM), PWM output function (PWM0OUT,
+	   PWM2OUT). */
+
+	TMPA910_CFG_PORT_GPIO(PORTC);
+	GPIOCODE = 0x00; 
+	GPIOCDIR = 0xFF;
+	GPIOCFR1 = 0;
+	GPIOCFR2 = 0;
+	GPIOCDATA = 0x00;
+
+	/* Port D can be used as general-purpose input.
+	   Port D can also be used as interrupt (INTB, INTA), ADC (AN7-AN0), and touch screen
+	   control (PX, PY, MX, MY) pins. */
+#if defined CONFIG_TOUCHSCREEN_TMPA910 || CONFIG_TOUCHSCREEN_TMPA910_MODULE
+	GPIODFR1 = 0x0f;
+	GPIODFR2 = 0xf0;
+	GPIODIE = 0x00;
 #endif
+
+	/* Port F
+	   The upper 2 bits (bits [7:6]) of Port F can be used as general-purpose input/output pins.
+	   Port F can also be used as interrupt (INTC), UART (U2RXD, U2TXD) and I2C (I2C1DA,
+	   I2C1CL) pins. */
+#ifdef CONFIG_UART2
+	GPIOFFR1 &= ~0xC0;  /* UART 2 */
+	GPIOFFR2 |= 0xC0;
+	GPIOFIE  &= ~0xC0;
+	GPIOFODE &= ~0xC0;
+#endif    
+   
+	/* Port G can be used as general-purpose input/output pins.
+	   Port G can also be used as SD host controller function pins (SDC0CLK, SDC0CD,
+	   SDC0WP, SDC0CMD, SDC0DAT3, SDC0DAT2, SDC0DAT1 and SDC0DAT0). */
+#if defined CONFIG_MMC_TMPA910_SDHC || !defined CONFIG_MMC_TMPA910_SDHC_MODULE
+	GPIOGFR1 = 0xFF;
+#else
+	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0 or GPIO */
+#endif
+
+	/* Port J can be used as general-purpose input/output pins.
+	   Port J can also be used as LCD cotroller function pins (LD15-LD8) and CMOS image
+	   sensor control (CMSVSY, CMSHBK, CMSHSY and CMSPCK) pins. */
+	/* Port K can be used as general-purpose input/output pins.
+	   Port K can also be used as LCD controller function pins (LD23 to LD16) and CMOS image
+	   sensor control (CMSD7 toCMSD0) pins. */
+#if defined CONFIG_FB_TMPA910 || CONFIG_FB_TMPA910_MODULE
+	GPIOJFR2 = 0x00;
+	GPIOJFR1 = 0xFF;
+	GPIOKFR2 = 0x00;
+	GPIOKFR1 = 0xFF;
+	PMCCTL &= ~PMCCTL_PMCPWE;
+	PMCWV1 |= PMCWV1_PMCCTLV;
+	udelay(200);
+#endif
+
+	/* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
+	   In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
+	   I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins.
+	   TMPA910_CFG_PORT_GPIO(PORTR) */
+	GPIOLFR2 = 0x00;
+	GPIOLFR1 = 0x1f; /* bits 4:0 for I2S */
+
+	/* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
+	   Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
+	   I2S1WS).*/
+	GPIOMDIR |= 0x03; /* M0, MI GPIO OUT */
+	GPIOMFR1 &= ~0x03;
+	GPIOMFR1 |= 0x04; /* M2 I2S1DAT0 */
+	/* GPIOMFR2 &= ~0x03; */ /* there is no FR2 for port M */
+           
+           
+	/* Port N can be used as general-purpose input/output pins.
+	   Port N can also be used as UART/IrDA function (U0RTSn, U0DTRn, U0RIn, U0DSRn,
+	   U0DCDn, U0CTSn, U0RXD, U0TXD, SIR0IN, SIR0OUT) and interrupt function (INTD,
+	   INTE, INTF, INTG) pins. */
+           
+	/* already set by bootloader */
+
+	/* Port P */
 	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
 
+	/* Port R
+	   Bit 2 of Port R can be used as a general-purpose input/output pin and bits [1:0] can be
+	   used as general-purpose output pins. (Bits [7:3] are not used.)
+	   Port R can also be used as reset output (RESETOUTn), high-frequency clock output
+	   (FCOUT), interrupt function (INTH) and Oscillation Frequency Detection (OFDOUTn). */
+#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
+	GPIORDIR &= ~(1 << 2); /* Eth IRQ */
+#endif
+    
+	/* Port T can be used as general-purpose input/output pins.
+	   Port T can also be used as USB external clock input (X1USB), UART function (U1CTSn,
+	   U1RXD, U1TXD), and SPI function (SP0DI, SP0DO, SP0CLK, SP0FSS) and pins. */
+#ifdef CONFIG_UART1
+	GPIOTFR1 = 0xFF;
+#endif        
+
         /* Configure LCD interface */
-	_setup_lcdc_device();
+	setup_lcdc_device();
 
 	/* NAND Controller */
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
