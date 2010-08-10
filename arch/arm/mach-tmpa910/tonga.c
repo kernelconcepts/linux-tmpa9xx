@@ -497,7 +497,7 @@ static struct resource tmpa900_ohci_resources[] = {
 
 static struct platform_device tmpa900_ohci_device = {
         .name           = "tmpa900-usb",
-        .id             = 0,
+        .id             = -1,
         .num_resources  = ARRAY_SIZE(tmpa900_ohci_resources),
         .resource       = tmpa900_ohci_resources,
         .dev = {
@@ -525,8 +525,8 @@ static struct resource tmpa910_udc_resource[] = {
 };
 
 static struct platform_device tmpa910_udc_device = {
-        .name           = "tmpa910-usb",
-        .id             = 0,
+        .name           = "tmpa9xx-udc",
+        .id             = -1,
         .num_resources  = ARRAY_SIZE(tmpa910_udc_resource),
         .resource       = tmpa910_udc_resource,
         .dev            = {
@@ -535,8 +535,10 @@ static struct platform_device tmpa910_udc_device = {
 };
 #endif
 
+/*
+ * Watchdog
+ */
 #if defined CONFIG_TMPA9X0_WATCHDOG || defined CONFIG_TMPA9X0_WATCHDOG_MODULE
-/* USB Device Controller */
 static struct resource tmpa9x0_wdt_resource[] = {
         [0] = {
                 .start = 0xf0010000,
@@ -843,17 +845,31 @@ static void __init tonga_init(void)
 	   output (FSOUT), melody output (MLDALM), PWM output function (PWM0OUT,
 	   PWM2OUT), and USB Host power supply control function (USBOCn, USBPON). */
 
+#if defined CONFIG_USB_OHCI_HCD_TMPA900 || defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE
+	/* prepare Port C for USB Host */
+        GPIOCDATA  = 0xcf;
+	GPIOCDIR  &= ~(0xc0);
+	GPIOCFR1  &= ~(0xc0);
+	GPIOCFR2  |= 0xc0;
+	GPIOCODE  &= ~(0xc0);
+	GPIOCIE   &= ~(0xc0);
+	/* Enable USB Host Controller Clock Domain */
+	CLKCR5    |= (1<<4);
+	/* Set appropriate clock seting for USB in SYSCR8.
+	   For USB device, 24Mhz directly from quartz: [5:4]  11 / 0x3
+	   For USB host  , 48Mhz from F PPL / 4      : [3:0] 100 / 0x4 */
+	SYSCR8    |= ((0x3<<4)|(0x4<<0));
+	/* Enable overcurrent */
+	HCBCR0     = 0;
+#else
 	TMPA910_CFG_PORT_GPIO(PORTC);
 	GPIOCODE = 0x00; 
 	GPIOCDIR = 0xFF;
 	GPIOCFR1 = 0;
 	GPIOCFR2 = 0;
 	GPIOCDATA = 0x00;
-#if defined CONFIG_USB_OHCI_HCD_TMPA900 || defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE
-	GPIOCIE &= ~0xC0;	/* USB Host */
-	GPIOCFR1 &= ~0xC0;
-	GPIOCFR2 |=  0xC0;
-#endif
+#endif 
+
 #if defined CONFIG_BACKLIGHT_PWM
 	GPIOCFR1 &= ~0x10;	/* enable PWM2OUT */
 	GPIOCFR2 |=  0x10;
@@ -882,7 +898,9 @@ static void __init tonga_init(void)
 	/* Port G can be used as general-purpose input/output pins.
 	   Port G can also be used as SD host controller function pins (SDC0CLK, SDC0CD,
 	   SDC0WP, SDC0CMD, SDC0DAT3, SDC0DAT2, SDC0DAT1 and SDC0DAT0). */
-#if !defined CONFIG_MMC_TMPA910_SDHC || !defined CONFIG_MMC_TMPA910_SDHC_MODULE
+#if defined CONFIG_MMC_TMPA910_SDHC || !defined CONFIG_MMC_TMPA910_SDHC_MODULE
+	GPIOGFR1 = 0xFF;
+#else
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0 or GPIO */
 #endif
 

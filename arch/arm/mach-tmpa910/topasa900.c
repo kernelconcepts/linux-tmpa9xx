@@ -55,10 +55,6 @@
 #include <linux/mmc/host.h>
 #include <asm/serial.h>
 
-#if defined(CONFIG_USB_ISP1362_HCD)
-#include <linux/usb/isp1362.h>
-#endif
-
 #ifdef CONFIG_SPI_TMPA910
 #include <linux/spi/spi.h>
 #endif
@@ -130,9 +126,17 @@ static struct platform_device topas910_dm9000_device = {
 
 
 /*
- * Serial UART
+ * Serial UARTs
  */ 
 
+/*
+ * Serial UARTs
+ */ 
+#if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
+#define CONFIG_UART0	/* enable UART0 */
+#define CONFIG_UART1	/* enable UART1 */
+
+#ifdef CONFIG_UART0
 static struct resource tmpa910_resource_uart0[] = {
 	{
 		.start	= 0xf2000000,
@@ -145,15 +149,15 @@ static struct resource tmpa910_resource_uart0[] = {
 	}
 };
 
-
 struct platform_device tmpa910_device_uart0 = {
 	.name		= "tmpa910-uart",
 	.id		= 0,
 	.resource	= tmpa910_resource_uart0,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart0),
 };
+#endif
 
-
+#ifdef CONFIG_UART1
 static struct resource tmpa910_resource_uart1[] = {
 	{
 		.start	= 0xf2001000,
@@ -172,8 +176,9 @@ struct platform_device tmpa910_device_uart1 = {
 	.resource	= tmpa910_resource_uart1,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart1),
 };
+#endif
 
-
+#ifdef CONFIG_UART2
 static struct resource tmpa910_resource_uart2[] = {
 	{
 		.start	= 0xf2004000,
@@ -192,9 +197,13 @@ struct platform_device tmpa910_device_uart2 = {
 	.resource	= tmpa910_resource_uart2,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart2),
 };
+#endif
+#endif
 
-
-
+/*
+ * I2C
+ */ 
+#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 static struct resource tmpa910_resource_i2c[] = {
 	{
 		.start	= I2C0_BASE,
@@ -225,7 +234,12 @@ struct platform_device tmpa910_device_i2c = {
 	.resource	= tmpa910_resource_i2c,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
 };
+#endif
 
+/*
+ * SDHC
+ */ 
+#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
 static struct resource tmpa910_resource_sdhc[] = {
 {
 		.start	= INTR_VECT_SDHC,
@@ -244,6 +258,13 @@ struct platform_device tmpa910_device_sdhc = {
 	.resource	= tmpa910_resource_sdhc,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_sdhc),
 };
+#endif
+
+/*
+ * SPI
+ */
+#if defined CONFIG_SPI_TMPA910 || defined CONFIG_SPI_TMPA910_MODULE
+#define CONFIG_SPI_CHANNEL0	/* enable SPI channel 0 */
 
 #ifdef CONFIG_SPI_CHANNEL0
 static struct resource tmpa910_resource_spi0[] = {
@@ -257,7 +278,7 @@ static struct resource tmpa910_resource_spi0[] = {
 		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
 	}
 };
-#endif
+#endif /* CONFIG_SPI_CHANNEL0 */
 
 #ifdef CONFIG_SPI_CHANNEL1
 static struct resource tmpa910_resource_spi1[] = {
@@ -271,7 +292,7 @@ static struct resource tmpa910_resource_spi1[] = {
 		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
 	}
 };
-#endif
+#endif /* CONFIG_SPI_CHANNEL1 */
 
 #ifdef CONFIG_SPI_CHANNEL0
 struct platform_device tmpa910_device_spi0 = {
@@ -283,7 +304,7 @@ struct platform_device tmpa910_device_spi0 = {
 	.resource	= tmpa910_resource_spi0,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_spi0),
 };
-#endif
+#endif /* CONFIG_SPI_CHANNEL0 */
 
 #ifdef CONFIG_SPI_CHANNEL1
 struct platform_device tmpa910_device_spi1 = {
@@ -469,7 +490,7 @@ static struct platform_device tmpa910_i2s_device = {
 
 
 static struct mmc_spi_platform_data mmc_spi_info = {
-	.caps = MMC_CAP_NEEDS_POLL|MMC_CAP_SPI,
+	.caps = MMC_CAP_NEEDS_POLL | MMC_CAP_SPI,
 	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3.3V only */
 };
 
@@ -556,9 +577,12 @@ static struct platform_device tmpa910_device_rtc = {
 	.resource       = tmpa910_resource_rtc
 	}
 ;
+#endif
 
-
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
+/*
+ * USB Host Controller
+ */
+#if defined CONFIG_USB_OHCI_HCD_TMPA900 || defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE
 static struct resource tmpa900_ohci_resources[] = {
         [0] = {
                 .start  = 0xf4500000,
@@ -583,15 +607,16 @@ static struct platform_device tmpa900_ohci_device = {
         .num_resources  = ARRAY_SIZE(tmpa900_ohci_resources),
         .resource       = tmpa900_ohci_resources,
         .dev = {
-		.release        = dummy_release, // not needed
 		.coherent_dma_mask = 0xffffffff,		
         },
 };
-
 #endif /* CONFIG_USB_OHCI_HCD_TMPA900 */
 
-#ifdef CONFIG_USB_GADGET_TMPA910
-/* USB Device Controller */
+
+/*
+ * USB Device Controller
+ */
+#if defined CONFIG_USB_GADGET_TMPA910 || defined CONFIG_USB_GADGET_TMPA910_MODULE
 static struct resource tmpa910_udc_resource[] = {
         [0] = {
                 .start = 0xf4400000,
@@ -606,7 +631,7 @@ static struct resource tmpa910_udc_resource[] = {
 };
 
 static struct platform_device tmpa910_udc_device = {
-        .name           = "tmpa910-usb",
+        .name           = "tmpa9xx-ucd",
         .id             = 0,
         .num_resources  = ARRAY_SIZE(tmpa910_udc_resource),
         .resource       = tmpa910_udc_resource,
@@ -616,7 +641,7 @@ static struct platform_device tmpa910_udc_device = {
 };
 #endif
 
-#ifdef CONFIG_TMPA9X0_WATCHDOG
+#if defined CONFIG_TMPA9X0_WATCHDOG || defined CONFIG_TMPA9X0_WATCHDOG_MODULE
 /* USB Device Controller */
 static struct resource tmpa9x0_wdt_resource[] = {
         [0] = {
@@ -641,8 +666,14 @@ static struct platform_device *devices[] __initdata = {
 	&tmpa910_device_ts,
 	&topas910_led_device,
 	&topas910_dm9000_device,
+#if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
+#ifdef CONFIG_UART0
 	&tmpa910_device_uart0,
+#endif
+#ifdef CONFIG_UART1
 	&tmpa910_device_uart1,
+#endif
+#ifdef CONFIG_UART2
 	&tmpa910_device_uart2,
 #ifdef CONFIG_MTD_NAND_TMPA910
  	&tmpa910_nand_device,
@@ -793,13 +824,13 @@ static void __init topasa900_init(void)
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
 	NDFMCR1 = 0x00000000; // ECC = Hamming
 	NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
-              	             // NDREn L = 4clks,H = 3clks
+              	              // NDREn L = 4clks,H = 3clks
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
   
-#if defined(CONFIG_SPI_AT25) || defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
+#if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
 }
