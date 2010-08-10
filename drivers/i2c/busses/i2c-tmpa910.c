@@ -80,7 +80,7 @@ void tmpa910_i2c_dump_regs(struct tmpa910_i2c_algo_data *algo)
 }
 #endif
 
-//#define USE_UDELAY
+/* #define USE_UDELAY */
 
 int tmpa910_i2c_wait_status_timeout(struct tmpa910_i2c_algo_data *algo,
 				    uint32_t mask, uint32_t val)
@@ -98,7 +98,7 @@ int tmpa910_i2c_wait_status_timeout(struct tmpa910_i2c_algo_data *algo,
 		udelay(10);
 #endif
 		if (timeout-- < 0) {
-			//tmpa910_i2c_dump_regs(algo);
+			/* tmpa910_i2c_dump_regs(algo); */
 			return -1;
 		}
 	}
@@ -121,23 +121,27 @@ int tmpa910_i2c_start(struct tmpa910_i2c_algo_data *algo, int slave_adr)
 	volatile struct tmpa910_i2c_regs __iomem *regs = algo->regs;
 
 	if (tmpa910_i2c_wait_free_bus(algo) < 0) {
+#ifdef __DEBUG
 		printk(KERN_ERR "tmpa9xx i2c bus not free\n");
+#endif
 		return -EBUSY;
 	}
 
-	regs->i2c_cr1 |= (1UL << 4);	// enable acknowledge clock
+	regs->i2c_cr1 |= (1UL << 4);	/* enable acknowledge clock */
 
-	regs->i2c_dbr = slave_adr;	// send slave address
+	regs->i2c_dbr = slave_adr;	/* send slave address */
 
-	regs->i2c_cr2 = (1UL << 7)	// select master mode
-	    | (1UL << 6)	// transmit operation
-	    | (1UL << 5)	// generate start condition
-	    | (1UL << 4)	// clear service request
-	    | (1UL << 3)	// enable I2C operation
+	regs->i2c_cr2 = (1UL << 7)	/* select master mode */
+	    | (1UL << 6)		/* transmit operation */
+	    | (1UL << 5)		/* generate start condition */
+	    | (1UL << 4)		/* clear service request */
+	    | (1UL << 3)		/* enable I2C operation */
 	    ;
 
 	if (tmpa910_i2c_wait_done(algo) < 0) {
+#ifdef __DEBUG__
 		printk(KERN_ERR "done timeout \n");
+#endif
 		return -ETIMEDOUT;
 	}
 	return 0;
@@ -147,11 +151,11 @@ int tmpa910_i2c_stop(struct tmpa910_i2c_algo_data *algo)
 {
 	volatile struct tmpa910_i2c_regs __iomem *regs = algo->regs;
 
-	regs->i2c_cr2 = (1UL << 7)	// select master mode
-	    | (1UL << 6)	// transmit operation
-	    | (0UL << 5)	// generate stop condition
-	    | (1UL << 4)	// clear service request
-	    | (1UL << 3)	// enable I2C operation
+	regs->i2c_cr2 = (1UL << 7)	/* select master mode */
+	    | (1UL << 6)	/* transmit operation */
+	    | (0UL << 5)	/* generate stop condition */
+	    | (1UL << 4)	/* clear service request */
+	    | (1UL << 3)	/* enable I2C operation */
 	    ;
 
 	if (tmpa910_i2c_wait_free_bus(algo) < 0) {
@@ -179,23 +183,21 @@ int tmpa910_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	sr = regs->i2c_sr;
 
-	if (sr & (1UL << 0))	// check last received bit (should be low for ACK)
-	{
+	if (sr & (1UL << 0)) {	/* check last received bit (should be low for ACK) */
 		dev_dbg(&adap->dev, "no ack!\n");
 		tmpa910_i2c_dump_regs(algo);
 		return -EIO;
 	}
 
-	if ((sr & (1UL << 6)) == 0)	// check xmit/rcv selection state (should be xmit)
-	{
+	if ((sr & (1UL << 6)) == 0) {	/* check xmit/rcv selection state (should be xmit) */
 		dev_dbg(&adap->dev, "wrong transfer state!\n");
 		return -EIO;
 	}
 
 	for (i = 0; i < msg->len; i++) {
 		cr1 = regs->i2c_cr1;
-		cr1 &= ~(7UL << 5);	// 8bit transfer
-		cr1 |= (1UL << 4);	// acknowledge
+		cr1 &= ~(7UL << 5);	/* 8bit transfer */
+		cr1 |= (1UL << 4);	/* acknowledge */
 
 		if (tmpa910_i2c_wait_done(algo) < 0) {
 			dev_dbg(&adap->dev, "timeout !\n");
@@ -204,7 +206,7 @@ int tmpa910_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 		regs->i2c_cr1 = cr1;
 
-		regs->i2c_dbr = data[i] & 0xFF;	// put 8bits into xmit FIFO
+		regs->i2c_dbr = data[i] & 0xFF;	/* put 8bits into xmit FIFO */
 
 		if (tmpa910_i2c_wait_done(algo) < 0) {
 			dev_dbg(&adap->dev, "timeout !\n");
@@ -246,24 +248,24 @@ int tmpa910_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	sr = regs->i2c_sr;
 
-	if (sr & (1UL << 0)) { // check last received bit (should be low for ACK)
+	if (sr & (1UL << 0)) { /* check last received bit (should be low for ACK) */
 		printk(KERN_ERR "i2c timeout - no ack !\n");
-		//tmpa910_i2c_dump_regs(algo);
+		/* tmpa910_i2c_dump_regs(algo); */
 		return -EIO;
 	}
 
-	if (sr & (1UL << 6)) {	// check xmit/rcv selection state (should be rcv)
+	if (sr & (1UL << 6)) {	/* check xmit/rcv selection state (should be rcv) */
 		printk(KERN_ERR "wrong transfer state!\n");
 		return -EIO;
 	}
-	// read receive data 
+	/* read receive data */
 	dummy = regs->i2c_dbr;
 
 	cr1 = regs->i2c_cr1;
-	cr1 &= ~((1UL << 4) | (7UL << 5));	// 8bit transfer, no ACK
+	cr1 &= ~((1UL << 4) | (7UL << 5));	/* 8bit transfer, no ACK */
 	regs->i2c_cr1 = cr1;
 
-	// write dummy data to set PIN to 1
+	/* write dummy data to set PIN to 1 */
 	regs->i2c_dbr = 0x00;
 
 	for (i = 0; i < msg->len; i++) {
@@ -281,16 +283,16 @@ int tmpa910_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 		data[i] = regs->i2c_dbr;
 
-		// generate NACK, clear ACK
+		/* generate NACK, clear ACK */
 		cr1 = regs->i2c_cr1;
-		cr1 &= ~((1UL << 4) | (7UL << 5));	// clear no of xfer bits, no ACK
-		cr1 |= (1UL << 5);	// xfer bits = 1
+		cr1 &= ~((1UL << 4) | (7UL << 5));	/* clear no of xfer bits, no ACK */
+		cr1 |= (1UL << 5);			/* xfer bits = 1 */
 		regs->i2c_cr1 = cr1;
 
-		// write dummy data to issue the ack
+		/* write dummy data to issue the ack */
 		regs->i2c_dbr = 0;
 
-		// wait until 1bit xfer is complete
+		/* wait until 1bit xfer is complete */
 		ret = tmpa910_i2c_wait_status_timeout(algo, (1UL << 4), (1UL << 4));	// SCL line = free ? ?
 		if (ret < 0) {
 			dev_dbg(&adap->dev, "wait 1bit xfer failed!\n");
@@ -326,13 +328,12 @@ static int tmpa910_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 		tmpa910_i2c_setup(adap);
 	}
 
-    dev_dbg(&adap->dev, "tmpa910_i2c_xfer: processing %d messages:\n", num);
+	dev_dbg(&adap->dev, "tmpa910_i2c_xfer: processing %d messages:\n", num);
 
 	for (i = 0; i < num; i++) {
 		msg = &msgs[i];
 
 		printk(KERN_DEBUG " msg %p msg->buf 0x%x msg->len 0x%x msg->flags 0x%x\n",msg,msg->buf,msg->len,msg->flags);
-
 
 		dev_dbg(&adap->dev, " #%d : %sing %d byte%s %s 0x%02x\n",
 			i,
@@ -352,7 +353,7 @@ static int tmpa910_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 		if (err)
 			break;
 
-		//dev_dbg(&adap->dev, "transfer complete\n");
+		/* dev_dbg(&adap->dev, "transfer complete\n"); */
 
 		msgcnt++;
 	};
@@ -363,14 +364,18 @@ static int tmpa910_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 		return err;
 }
 
-// serial clock rate = PCLK / (Prescaler*(2**(2+sck)+16))
-//
-// 400khz for PCLK = 96MHz
-// 400 = 96*1000 / ( 12 * (2**(2+0) + 16))
+/*
+ * serial clock rate = PCLK / (Prescaler*(2**(2+sck)+16))
+ *
+ * 400khz for PCLK = 96MHz
+ * 400 = 96*1000 / ( 12 * (2**(2+0) + 16))
+ */
 #define PRSCK_400KHZ 12
 #define CR1SCK_400KHZ 0
-// 100khz for PCLK = 96MHz
-// 100 = 96*1000 / ( 30 * (2**(2+2) + 16))
+/*
+ * 100khz for PCLK = 96MHz
+ * 100 = 96*1000 / ( 30 * (2**(2+2) + 16))
+ */
 #define PRSCK_100KHZ 30
 #define CR1SCK_100KHZ 2
 
@@ -379,20 +384,20 @@ int tmpa910_i2c_setup(struct i2c_adapter *adap)
 	struct tmpa910_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa910_i2c_regs __iomem *regs = algo->regs;
 
-	// software reset
+	/* software reset */
 	regs->i2c_cr2 = (1UL << 1) | (0UL << 0);
 	regs->i2c_cr2 = (0UL << 1) | (1UL << 0);
 
 	regs->i2c_ar = 0;
 
-	// setup scalers to 100khz default
+	/* setup scalers to 100khz default */
 	regs->i2c_prs = PRSCK_100KHZ;
 	regs->i2c_cr1 = CR1SCK_100KHZ;
 
-	// enable i2c operation
+	/* enable i2c operation */
 	regs->i2c_cr2 = (1UL << 3);
 
-	//tmpa910_i2c_dump_regs(algo);
+	/* tmpa910_i2c_dump_regs(algo); */
 
 	return 0;
 }
@@ -404,13 +409,13 @@ int tmpa910_i2c_shutdown(struct i2c_adapter *adap)
 
 	if(tmpa910_i2c_wait_free_bus(algo) < 0)	{
 		printk(KERN_ERR "bus not free !\n");
-		//return -EBUSY;
+		/* return -EBUSY; */
 	}
 
 	regs->i2c_prs = 0;
 	regs->i2c_cr1 = 0;
 
-	// disable i2c operation
+	/* disable i2c operation */
 	regs->i2c_cr2 = (0UL << 3);
 
 	return 0;
@@ -558,7 +563,7 @@ static int __init tmpa910_i2c_probe(struct platform_device *pdev)
 	priv->i2c_algo_data[1].channel = 1;
 	adapter->class = I2C_CLASS_HWMON;
 	adapter->dev.parent = &pdev->dev;
-	adapter->id = 0;	// new style drivers don't need those
+	adapter->id = 0;	/* new style drivers don't need those */
 	adapter->nr = 1;
 	priv->i2c_adapter[1] = adapter;
 
@@ -608,13 +613,11 @@ static int tmpa910_i2c_remove(struct platform_device *pdev)
 		kfree(adap);
 	}
 
-
 	kfree(priv);
 	return 0;
 }
 
 #ifdef CONFIG_PM
-
 static int tmpa910_i2c_suspend(struct platform_device *pdev, pm_message_t msg)
 {
 	return 0;
@@ -624,9 +627,7 @@ static int tmpa910_i2c_resume(struct platform_device *pdev)
 {
 	return 0;
 }
-
 #else
-
 #define tmpa910_i2c_suspend NULL
 #define tmpa910_i2c_resume  NULL
 #endif
@@ -656,6 +657,6 @@ static void __exit tmpa910_i2c_exit(void)
 
 module_exit(tmpa910_i2c_exit);
 
-MODULE_DESCRIPTION("Toshiba TMPA910 I2C Driver");
+MODULE_DESCRIPTION("Toshiba TMPA9xx I2C Driver");
 MODULE_AUTHOR("bplan GmbH");
 MODULE_LICENSE("GPL");
