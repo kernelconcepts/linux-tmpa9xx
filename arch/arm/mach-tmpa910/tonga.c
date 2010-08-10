@@ -30,6 +30,7 @@
 #include <linux/input.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/mmc_spi.h>
+#include <linux/i2c.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
@@ -51,10 +52,6 @@
 #include <mach/tmpa910_regs.h>
 #include <linux/smsc911x.h>
 
-
-#ifdef CONFIG_SPI_TMPA910
-#include <linux/spi/spi.h>
-#endif
 
 #include "topas910.h"
 
@@ -224,6 +221,17 @@ struct platform_device tmpa910_device_i2c = {
 	},
 	.resource	= tmpa910_resource_i2c,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
+};
+
+static struct i2c_board_info tonga_i2c_0_devices[] = {
+	{
+	},
+};
+
+static struct i2c_board_info tonga_i2c_1_devices[] = {
+	{
+		I2C_BOARD_INFO("wm8983", 0x1a),
+	},
 };
 #endif
 
@@ -940,6 +948,13 @@ static void __init tonga_init(void)
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
   
+#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
+	i2c_register_board_info(0, tonga_i2c_0_devices,
+			ARRAY_SIZE(tonga_i2c_0_devices));
+
+	i2c_register_board_info(1, tonga_i2c_1_devices,
+			ARRAY_SIZE(tonga_i2c_1_devices));
+#endif
 #if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
