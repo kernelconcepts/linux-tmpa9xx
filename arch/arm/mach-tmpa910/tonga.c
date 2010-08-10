@@ -667,11 +667,11 @@ static struct platform_device *devices[] __initdata = {
 #endif
 #endif /* CONFIG_SPI_TMPA910 */
 
-#if defined CONFIG_TOUCHSCREEN_TMPA910 || CONFIG_TOUCHSCREEN_TMPA910_MODULE
+#if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
 	&tmpa910_device_ts,
 #endif
 
-#if defined CONFIG_FB_TMPA910 || CONFIG_FB_TMPA910_MODULE
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
 	&tmpa9xx_device_lcdc,
 #endif
 
@@ -702,7 +702,7 @@ static struct platform_device *devices[] __initdata = {
 #endif
 };
 
-
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
 static void __init setup_lcdc_device(void)
 {
 	uint32_t *LCDReg;
@@ -782,7 +782,7 @@ static void __init setup_lcdc_device(void)
 	/* Light */
 	gpio_set_value(20, 0);
 }
-
+#endif
 
 void __init tonga_init_irq(void) {
 	tmpa910_init_irq();
@@ -878,7 +878,7 @@ static void __init tonga_init(void)
 	/* Port D can be used as general-purpose input.
 	   Port D can also be used as interrupt (INTB, INTA), ADC (AN7-AN0), and touch screen
 	   control (PX, PY, MX, MY) pins. */
-#if defined CONFIG_TOUCHSCREEN_TMPA910 || CONFIG_TOUCHSCREEN_TMPA910_MODULE
+#if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
 	GPIODFR1 = 0x0f;
 	GPIODFR2 = 0xf0;
 	GPIODIE = 0x00;
@@ -910,7 +910,7 @@ static void __init tonga_init(void)
 	/* Port K can be used as general-purpose input/output pins.
 	   Port K can also be used as LCD controller function pins (LD23 to LD16) and CMOS image
 	   sensor control (CMSD7 toCMSD0) pins. */
-#if defined CONFIG_FB_TMPA910 || CONFIG_FB_TMPA910_MODULE
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
 	LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
 	GPIOJFR2 = 0x00;
 	GPIOJFR1 = 0xFF;
@@ -959,10 +959,12 @@ static void __init tonga_init(void)
 #ifdef CONFIG_UART1
 	GPIOTFR1 = 0xFF;
 #endif        
-    
+   
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
 	/* Configure LCD interface */
 	setup_lcdc_device();
-    
+#endif
+
 	/* NAND Controller */
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
 	NDFMCR1 = 0x00000000; // ECC = Hamming
