@@ -324,8 +324,9 @@ static int tmpa910_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	int err = 0, msgcnt = 0;
 	struct tmpa910_i2c_algo_data *algo = adap->algo_data;
 
+#ifdef __DEBUG__
 	printk(KERN_DEBUG "tmpa910_i2c_xfer(adap %p,msgs %p,num %d)\n",adap,msgs,num);
-
+#endif
 
 	if (tmpa910_i2c_wait_free_bus(algo) < 0) {
 #ifdef __DEBUG__
@@ -338,9 +339,9 @@ static int tmpa910_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 
 	for (i = 0; i < num; i++) {
 		msg = &msgs[i];
-
+#ifdef __DEBUG__
 		printk(KERN_DEBUG " msg %p msg->buf 0x%x msg->len 0x%x msg->flags 0x%x\n", msg, (unsigned int)msg->buf, msg->len, msg->flags);
-
+#endif
 		dev_dbg(&adap->dev, " #%d : %sing %d byte%s %s 0x%02x\n",
 			i,
 			msg->flags & I2C_M_RD ? "Read" : "Writ",
@@ -429,8 +430,9 @@ int tmpa910_i2c_shutdown(struct i2c_adapter *adap)
 
 static u32 tmpa910_i2c_func(struct i2c_adapter *adapter)
 {
+#ifdef __DEBUG__
 	printk(KERN_INFO "tmpa910_i2c_func adapter %p\n",adapter);
-
+#endif
 	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
 }
 
