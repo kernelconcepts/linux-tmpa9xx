@@ -236,8 +236,10 @@ int tmpa910_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 	data = msg->buf;
 
 	if ((ret = tmpa910_i2c_start(algo, (msg->addr << 1) | 1)) < 0) {
+#ifdef __DEBUG__
 		printk(KERN_ERR "failed to generate start! ret=%d. addr=0x%x\n", ret,
 			msg->addr);
+#endif
 		return ret;
 	}
 
@@ -249,7 +251,9 @@ int tmpa910_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 	sr = regs->i2c_sr;
 
 	if (sr & (1UL << 0)) { /* check last received bit (should be low for ACK) */
+#ifdef __DEBUG__
 		printk(KERN_ERR "i2c timeout - no ack !\n");
+#endif
 		/* tmpa910_i2c_dump_regs(algo); */
 		return -EIO;
 	}
@@ -324,7 +328,9 @@ static int tmpa910_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 
 
 	if (tmpa910_i2c_wait_free_bus(algo) < 0) {
+#ifdef __DEBUG__
 		printk(KERN_ERR "bus not free ! Reset!\n");
+#endif
 		tmpa910_i2c_setup(adap);
 	}
 
@@ -333,7 +339,7 @@ static int tmpa910_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	for (i = 0; i < num; i++) {
 		msg = &msgs[i];
 
-		printk(KERN_DEBUG " msg %p msg->buf 0x%x msg->len 0x%x msg->flags 0x%x\n",msg,msg->buf,msg->len,msg->flags);
+		printk(KERN_DEBUG " msg %p msg->buf 0x%x msg->len 0x%x msg->flags 0x%x\n", msg, (unsigned int)msg->buf, msg->len, msg->flags);
 
 		dev_dbg(&adap->dev, " #%d : %sing %d byte%s %s 0x%02x\n",
 			i,
