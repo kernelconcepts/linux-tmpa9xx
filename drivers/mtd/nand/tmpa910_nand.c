@@ -456,6 +456,7 @@ static void tmpa9x0_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int 
 {
 	struct nand_chip *this = mtd->priv;
 	struct tmpa9x0_nand_private * priv= (struct tmpa9x0_nand_private *)this->priv;
+        static int former_column;
 
 	/* The DMA Transfer can only be started for an exact size of 512 bytes to read */
         /* Therefore do the 512 pagesize reads with DMA (if enabled) and the 64/16 bytes for OOB with polling */
@@ -465,14 +466,15 @@ static void tmpa9x0_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int 
         /* First send the command, then set up the DMA and autoload functions, then the address */
         /* The autoload waits then until the rising edge of the busy signal from the NAND and starts the transfer to the FIFO */
         
+	if (priv->column==0 || (former_column!=2048 && len==64))
+        {
+		tmpa9x0_nand_set_cmd(NAND_CMD_SEQIN);			/* Set sqeuential data in */
+		tmpa9x0_nand_set_addr(priv->column,priv->page_addr);	/* Set adress to start writing */
+		tmpa9x0_nand_set_rw_mode(0);				/* Set controller to write mode */
+        }       
+
 	if ((len==NAND_DMA_TRANSFER_SIZE) && (priv->dma==1))
         {
-		if (priv->column==0)						/* Send command only for the first transfer */
-                {
-			tmpa9x0_nand_set_cmd(NAND_CMD_SEQIN);			/* Set sqeuential data in */
-			tmpa9x0_nand_set_addr(priv->column,priv->page_addr);	/* Set adress to start writing */
-			tmpa9x0_nand_set_rw_mode(0);				/* Set controller to write mode */
-                }       
                 memcpy(priv->buf,buf,len);					/* Have to use our own dma_coherend created buffer */
 		tmpa9x0_nand_dma_write(priv,priv->phy_buf, len);		/* Set up the DMA transfer */
 		tmpa9x0_nand_start_autoload(0);					/* Set up autoload for writing */
@@ -486,17 +488,13 @@ static void tmpa9x0_nand_write_buf(struct mtd_info *mtd, const u_char *buf, int 
         else
         {
         	int i;
-		if (priv->column==0)
-                {
-			tmpa9x0_nand_set_cmd(NAND_CMD_SEQIN);			/* Set sqeuential data in */
-			tmpa9x0_nand_set_addr(priv->column,priv->page_addr);	/* Set adress to start writing */
-			tmpa9x0_nand_set_rw_mode(0);				/* Set controller to write mode */
-                }
 		for (i=0;i < len;i++)
 			NDFDTR=buf[i];						/* Poll in the data */
 		while(!tmpa9x0_nand_dev_ready(mtd));
                 priv->column+=len;						/* Remember internal position */
-	}       
+	} 
+              
+        former_column = priv->column;       
 }
 
 static void tmpa9x0_nand_enable_hwecc(struct mtd_info *mtd, int mode)
