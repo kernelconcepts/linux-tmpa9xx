@@ -29,10 +29,9 @@
 
 #include <mach/tmpa910_regs.h>
 
-/*
 #include "tmpa9xx-pcm.h"
 #include "tmpa9xx-i2s.h"
-*/
+
 
 static int tmpa9xx_i2s_startup(struct snd_pcm_substream *substream,
 			      struct snd_soc_dai *dai)
@@ -40,12 +39,14 @@ static int tmpa9xx_i2s_startup(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *cpu_dai = rtd->dai->cpu_dai;
 
+	printk(KERN_ERR "%s\n", __FUNCTION__);
 	return 0;
 }
 
 static void tmpa9xx_i2s_shutdown(struct snd_pcm_substream *substream,
 				struct snd_soc_dai *dai)
 {
+	printk(KERN_ERR "%s\n", __FUNCTION__);
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 	} else {
 	}
@@ -57,21 +58,22 @@ static int tmpa9xx_i2s_trigger(struct snd_pcm_substream *substream, int cmd,
 {
 	int ret = 0;
 
+	printk(KERN_ERR "%s\n", __FUNCTION__);
 	switch (cmd) {
-	case SNDRV_PCM_TRIGGER_START:
-		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-			ret=0;
-		else
-			ret=0;
-		break;
-	case SNDRV_PCM_TRIGGER_RESUME:
-	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-	case SNDRV_PCM_TRIGGER_STOP:
-	case SNDRV_PCM_TRIGGER_SUSPEND:
-	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-		break;
-	default:
-		ret = -EINVAL;
+		case SNDRV_PCM_TRIGGER_START:
+			if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+				ret=0;
+			else
+				ret=0;
+			break;
+		case SNDRV_PCM_TRIGGER_RESUME:
+		case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+		case SNDRV_PCM_TRIGGER_STOP:
+		case SNDRV_PCM_TRIGGER_SUSPEND:
+		case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
+			break;
+		default:
+			ret = -EINVAL;
 	}
 
 	return ret;
@@ -85,6 +87,7 @@ static int tmpa9xx_i2s_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *cpu_dai = rtd->dai->cpu_dai;
 	struct tmpa9xx_pcm_dma_params *dma_data;
 
+	printk(KERN_ERR "%s\n", __FUNCTION__);
 #if 0
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 		NOP;
@@ -117,22 +120,24 @@ static int tmpa9xx_i2s_hw_params(struct snd_pcm_substream *substream,
 static int tmpa9xx_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		unsigned int fmt)
 {
+	printk(KERN_ERR "%s\n", __FUNCTION__);
 	/* interface format */
 	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
-	case SND_SOC_DAIFMT_I2S:
-		break;
-	case SND_SOC_DAIFMT_LEFT_J:
-		break;
+		case SND_SOC_DAIFMT_I2S:
+			break;
+		case SND_SOC_DAIFMT_LEFT_J:
+			break;
 	}
 
 	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
-	case SND_SOC_DAIFMT_CBS_CFS:
-		break;
-	case SND_SOC_DAIFMT_CBM_CFS:
-		break;
-	default:
-		break;
+		case SND_SOC_DAIFMT_CBS_CFS:
+			break;
+		case SND_SOC_DAIFMT_CBM_CFS:
+			break;
+		default:
+			break;
 	}
+
 	return 0;
 }
 
@@ -146,14 +151,15 @@ static int tmpa9xx_i2s_set_dai_sysclk(struct snd_soc_dai *cpu_dai,
 #ifdef CONFIG_PM
 static int tmpa9xx_i2s_suspend(struct snd_soc_dai *dai)
 {
+	printk(KERN_ERR "%s\n", __FUNCTION__);
 	return 0;
 }
 
 static int tmpa9xx_i2s_resume(struct snd_soc_dai *dai)
 {
+	printk(KERN_ERR "%s\n", __FUNCTION__);
 	return 0;
 }
-
 #else
 #define tmpa9xx_i2s_suspend	NULL
 #define tmpa9xx_i2s_resume	NULL
@@ -194,13 +200,15 @@ struct snd_soc_dai tmpa_i2s_dai = {
 
 EXPORT_SYMBOL_GPL(tmpa_i2s_dai);
 
-static int tmpa9xx_i2s_probe(struct platform_device *dev)
+static int __init tmpa9xx_i2s_probe(struct platform_device *dev)
 {
 	int ret;
 
 	tmpa_i2s_dai.dev = &dev->dev;
 	tmpa_i2s_dai.private_data = NULL;
 	ret = snd_soc_register_dai(&tmpa_i2s_dai);
+
+	printk(KERN_ERR "%s snd_soc_register_dai()=%d\n", __FUNCTION__, ret);
 
 	return ret;
 }
@@ -209,6 +217,7 @@ static int __devexit tmpa9xx_i2s_remove(struct platform_device *dev)
 {
 	snd_soc_unregister_dai(&tmpa_i2s_dai);
 
+	printk(KERN_ERR "%s\n", __FUNCTION__);
 	return 0;
 }
 
@@ -224,7 +233,11 @@ static struct platform_driver tmpa9xx_i2s_driver = {
 
 static int __init tmpa9xx_i2s_init(void)
 {
-	return platform_driver_register(&tmpa9xx_i2s_driver);
+	int ret = platform_driver_register(&tmpa9xx_i2s_driver);
+
+	printk(KERN_ERR "%s platform_driver_register()=%d\n", __FUNCTION__, ret);
+
+	return ret;
 }
 
 static void __exit tmpa9xx_i2s_exit(void)

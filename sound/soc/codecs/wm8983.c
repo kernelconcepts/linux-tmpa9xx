@@ -1073,6 +1073,7 @@ static __devinit int wm8983_register(struct wm8983_priv *wm8983)
 		goto err_codec;
 	}
 
+	printk(KERN_ERR "WM8983 register successful\n");
 	return 0;
 
 err_codec:
@@ -1096,10 +1097,13 @@ static __devinit int wm8983_i2c_probe(struct i2c_client *i2c,
 {
 	struct wm8983_priv *wm8983;
 	struct snd_soc_codec *codec;
+	int ret;
 
 	wm8983 = kzalloc(sizeof(struct wm8983_priv), GFP_KERNEL);
-	if (wm8983 == NULL)
+	if (wm8983 == NULL) {
+		printk(KERN_ERR "wm8983_i2c_probe(): kzalloc() failed\n");
 		return -ENOMEM;
+	}
 
 	codec = &wm8983->codec;
 	codec->hw_write = (hw_write_t)i2c_master_send;
@@ -1109,7 +1113,10 @@ static __devinit int wm8983_i2c_probe(struct i2c_client *i2c,
 
 	codec->dev = &i2c->dev;
 
-	return wm8983_register(wm8983);
+	ret = wm8983_register(wm8983);
+	printk(KERN_ERR "wm8983_register()=%d\n", ret);
+
+	return ret;
 }
 
 static __devexit int wm8983_i2c_remove(struct i2c_client *client)
@@ -1137,7 +1144,12 @@ static struct i2c_driver wm8983_i2c_driver = {
 
 static int __init wm8983_modinit(void)
 {
-	return i2c_add_driver(&wm8983_i2c_driver);
+	int ret;
+
+	ret = i2c_add_driver(&wm8983_i2c_driver);
+	printk(KERN_ERR "wm8983_modinit() i2c_add_driver()=%d\n", ret);
+
+	return ret;
 }
 module_init(wm8983_modinit);
 
