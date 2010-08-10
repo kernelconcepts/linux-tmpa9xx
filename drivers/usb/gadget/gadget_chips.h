@@ -143,9 +143,9 @@
 #endif
 
 #ifdef CONFIG_USB_GADGET_TMPA910
-#define	gadget_is_tmpa910(g)	!strcmp("tmpa910_udc", (g)->name)
+#define	gadget_is_tmpa9xx(g)	!strcmp("tmpa9xx-udc", (g)->name)
 #else
-#define	gadget_is_tmpa910(g)	0
+#define	gadget_is_tmpa9xx(g)	0
 #endif
 
 /**
@@ -205,7 +205,7 @@ static inline int usb_gadget_controller_number(struct usb_gadget *gadget)
 		return 0x25;
 	else if (gadget_is_s3c_hsotg(gadget))
 		return 0x26;
-	else if (gadget_is_tmpa910(gadget))
+	else if (gadget_is_tmpa9xx(gadget))
 		return 0x27;
 	return -ENOENT;
 }
