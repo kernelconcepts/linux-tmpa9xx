@@ -18,10 +18,9 @@ static int tmpa9xx_pcm_hw_params(struct snd_pcm_substream *substream,
 	struct snd_pcm_hw_params *params)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct tmpa9xx_runtime_data *prtd = runtime->private_data;
+	//struct tmpa9xx_runtime_data *prtd = runtime->private_data;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct tmpa9xx_pcm_dma_params *dma;
-	int ret;
 
 	dma = snd_soc_dai_get_dma_data(rtd->dai->cpu_dai, substream);
 
@@ -103,7 +102,20 @@ static u64 tmpa9xx_pcm_dmamask = DMA_BIT_MASK(32);
 
 static int tmpa9xx_pcm_preallocate_dma_buffer(struct snd_pcm *pcm, int stream)
 {
-	printk(KERN_ERR "%s\n", __FUNCTION__);
+	struct snd_pcm_substream *substream = pcm->streams[stream].substream;
+	struct snd_dma_buffer *buf = &substream->dma_buffer;
+	size_t size = 64 * 1024; /* 64k */
+
+	buf->dev.type = SNDRV_DMA_TYPE_DEV;
+	buf->dev.dev = pcm->card->dev;
+	buf->private_data = NULL;
+	buf->area = dma_alloc_writecombine(pcm->card->dev, size,
+										&buf->addr, GFP_KERNEL);
+	if (!buf->area)
+		return -ENOMEM;
+
+	buf->bytes = size;
+
 	return 0;
 }
 
@@ -133,6 +145,7 @@ static int tmpa9xx_soc_pcm_new(struct snd_card *card, struct snd_soc_dai *dai,
 	int ret = 0;
 
 	printk(KERN_ERR "%s\n", __FUNCTION__);
+
 	if (!card->dev->dma_mask)
 		card->dev->dma_mask = &tmpa9xx_pcm_dmamask;
 	if (!card->dev->coherent_dma_mask)

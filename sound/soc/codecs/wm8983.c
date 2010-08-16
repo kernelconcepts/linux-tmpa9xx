@@ -1073,7 +1073,6 @@ static __devinit int wm8983_register(struct wm8983_priv *wm8983)
 		goto err_codec;
 	}
 
-	printk(KERN_ERR "WM8983 register successful\n");
 	return 0;
 
 err_codec:
@@ -1114,7 +1113,6 @@ static __devinit int wm8983_i2c_probe(struct i2c_client *i2c,
 	codec->dev = &i2c->dev;
 
 	ret = wm8983_register(wm8983);
-	printk(KERN_ERR "wm8983_register()=%d\n", ret);
 
 	return ret;
 }
@@ -1147,7 +1145,6 @@ static int __init wm8983_modinit(void)
 	int ret;
 
 	ret = i2c_add_driver(&wm8983_i2c_driver);
-	printk(KERN_ERR "wm8983_modinit() i2c_add_driver()=%d\n", ret);
 
 	return ret;
 }

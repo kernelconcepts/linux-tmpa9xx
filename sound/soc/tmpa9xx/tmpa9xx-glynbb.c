@@ -113,7 +113,7 @@ static int glynbb_wm8983_init(struct snd_soc_codec *codec)
 {
 	int err;
 
-	printk(KERN_ERR "glynbb_wm8983_init()\n");
+	// printk(KERN_ERR "glynbb_wm8983_init()\n");
 	/* NC codec pins */
 	snd_soc_dapm_nc_pin(codec, "LSPK");
 	snd_soc_dapm_nc_pin(codec, "RSPK");
@@ -175,7 +175,7 @@ static int __init glynbb_init(void)
 		platform_device_put(glynbb_snd_device);
 	}
 
-	printk(KERN_ERR "%s =%d\n", __FUNCTION__, ret);
+	// printk(KERN_ERR "%s =%d\n", __FUNCTION__, ret);
 
 	return ret;
 }
