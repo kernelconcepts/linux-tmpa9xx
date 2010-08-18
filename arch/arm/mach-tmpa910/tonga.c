@@ -30,28 +30,27 @@
 #include <linux/input.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/mmc_spi.h>
+#include <linux/mmc/host.h>
 #include <linux/i2c.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
 #include <linux/pwm_backlight.h>
-
-#include <asm/system.h>
-#include <mach/hardware.h>
-#include <asm/irq.h>
-
-#include <asm/mach/map.h>
-#include <asm/mach-types.h>
+#include <linux/smsc911x.h>
+#include <linux/dma-mapping.h>
 
 #include <video/tmpa910_fb.h>
+
+#include <asm/system.h>
+#include <asm/irq.h>
+#include <mach/hardware.h>
 #include <mach/gpio.h>
-#include <linux/mmc/host.h>
-#include <asm/mach/arch.h>
 #include <mach/hardware.h>
 #include <mach/ts.h>
 #include <mach/tmpa910_regs.h>
-#include <linux/smsc911x.h>
-
+#include <asm/mach-types.h>
+#include <asm/mach/arch.h>
+#include <asm/mach/map.h>
 
 #include "topas910.h"
 
@@ -72,8 +71,6 @@ void __init tonga_map_io(void)
 	iotable_init(tmpa900_io_desc, ARRAY_SIZE(tmpa900_io_desc));
 }
 
-
-static u64 tmpa9xx_dmamask = 0xffffffffUL;
 
 /* 
  * Ethernet 
@@ -217,7 +214,7 @@ struct platform_device tmpa910_device_i2c = {
 	.id = 0,
 	.dev = {
 		.platform_data = NULL,
-		.coherent_dma_mask = 0xffffffff,
+		.coherent_dma_mask = DMA_BIT_MASK(32),
 	},
 	.resource	= tmpa910_resource_i2c,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
@@ -252,7 +249,7 @@ struct platform_device tmpa910_device_sdhc = {
 	.id		= 0,
 	.dev =
 	{
-		.coherent_dma_mask = 0xffffffff,
+		.coherent_dma_mask = DMA_BIT_MASK(32),
 	},
 	.resource	= tmpa910_resource_sdhc,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_sdhc),
@@ -423,7 +420,7 @@ struct platform_device tmpa9xx_device_lcdc= {
 	.resource	= tmpa9xx_resource_lcdc,
 	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_lcdc),
         .dev = {
-		.coherent_dma_mask = 0xffffffff,		
+		.coherent_dma_mask = DMA_BIT_MASK(32),
         },
 };
 #endif
@@ -501,7 +498,7 @@ static struct platform_device tmpa900_ohci_device = {
         .num_resources  = ARRAY_SIZE(tmpa900_ohci_resources),
         .resource       = tmpa900_ohci_resources,
         .dev = {
-		.coherent_dma_mask = 0xffffffff,		
+		.coherent_dma_mask = DMA_BIT_MASK(32),
         },
 };
 #endif /* CONFIG_USB_OHCI_HCD_TMPA900 */
@@ -826,8 +823,8 @@ static void __init tonga_init(void)
 	SMC_TIMEOUT = 0x01;
     
 	/* DMA setup */
-	platform_bus.coherent_dma_mask = 0xffffffff;
-	platform_bus.dma_mask=&tmpa9xx_dmamask;
+	platform_bus.coherent_dma_mask = DMA_BIT_MASK(32);
+	platform_bus.dma_mask=DMA_BIT_MASK(32);
 	
 	/* Pin configuration */
         
