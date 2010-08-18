@@ -36,8 +36,8 @@
 #define NR_FIQS		(MAXFIQNUM + 1)
 
 /*
- *  Topas910 IRQ Vectors
- *  TODO: Move to a board specific file.
+ *  TMPA9xx IRQ definitions
+ *  TODO: Move to a board definitions specific file.
  */
 #define TOPAS910_INT_DM9000    INT_GPIO_INTH
 #define TONGA_INT_SMSC911X     INT_GPIO_INTH
@@ -58,6 +58,9 @@
 #define INTR_VECT_I2C_CH1     7 
 #define INTR_VECT_ADC         8 
 
+#ifdef CONFIG_CPU_TMPA900
+#define INTR_VECT_UART_CH2    9
+#endif
 #define INTR_VECT_UART_CH0    10
 #define INTR_VECT_UART_CH1    11
 #define INTR_VECT_SSP_CH0     12

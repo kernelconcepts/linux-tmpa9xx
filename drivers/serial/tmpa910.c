@@ -611,6 +611,19 @@ static struct uart_tmpa910_port serial_tmpa910_ports[] = {
 			.ops		= &serial_tmpa910_pops,
 			.line		= 1,
 		},
+	}, {	/* UART 2 */
+		.name	= "UART 2",
+		.port	= {
+			.type		= PORT_TMPA910,
+			.iotype		= UPIO_MEM,
+			.membase	= (void *)&UART2DR,
+			.mapbase	= __PREG(UART2DR),
+			.irq		= INTR_VECT_UART_CH2,
+			.uartclk	= 96000000, 
+			.fifosize	= 16,
+			.ops		= &serial_tmpa910_pops,
+			.line		= 2,
+		},
 	}
 };
 
@@ -681,7 +694,7 @@ static int __init serial_tmpa910_console_setup(struct console *co, char *options
 	int bits = 8;
 	int parity = 'n';
 	int flow = 'n';
-    int getclk;
+	int getclk;
 
     getclk = GetUartClock();
 
@@ -689,8 +702,8 @@ static int __init serial_tmpa910_console_setup(struct console *co, char *options
 		co->index = 1;
 
     if(getclk > 0) {
-        serial_tmpa910_ports[0].port.uartclk = getclk*1000000;
-        serial_tmpa910_ports[1].port.uartclk = getclk*1000000;
+        serial_tmpa910_ports[0].port.uartclk = getclk * 1000000;
+        serial_tmpa910_ports[1].port.uartclk = getclk * 1000000;
     }
 
     up = &serial_tmpa910_ports[co->index];
@@ -734,7 +747,7 @@ console_initcall(serial_tmpa910_console_init);
 
 static struct uart_driver serial_tmpa910_reg = {
 	.owner		= THIS_MODULE,
-	.driver_name	= "TMPA910 serial",
+	.driver_name	= "TMPA9xx serial",
 	.dev_name	= "ttyS",
 	.major		= TTY_MAJOR,
 	.minor		= 64,
