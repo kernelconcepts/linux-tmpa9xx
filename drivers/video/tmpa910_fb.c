@@ -268,19 +268,23 @@ static int __init tmpa910_lcdc_init_fb(
 /* parse options in form video=tmpa9xxfb:%08x:%08x:%08x */
 int tmpa9xx_lcdc_parse_params(uint32_t *LCDReg, char *options)
 {
-    	unsigned int r0, r1, r2;
-    
-	if (sscanf(options, "%08x:%08x:%08x", &r0, &r1, &r2) != 3) {
-		printk(KERN_WARNING "tmpa9xxfb: Unable to parse options %s\n", options);
-		return 0;
+    	unsigned int r0, r1, r2 , r3;
+    	r3=0;
+
+	if (sscanf(options, "%08x:%08x:%08x:%08x", &r0, &r1, &r2, &r3) != 4) {
+		if (sscanf(options, "%08x:%08x:%08x", &r0, &r1, &r2) != 3) {
+			printk(KERN_WARNING "tmpa9xxfb: Unable to parse options %s\n", options);
+			return 0;
+                }
 	}
-	
 	printk(KERN_INFO "tmpa9xxfb: Options from cmdline: \n" \
-	                 "LCDTiming0: 0x%08x\nLCDTiming1: 0x%08x\nLCDTiming2: 0x%08x\n", r0, r1, r2);
+	                 "LCDTiming0: 0x%08x\nLCDTiming1: 0x%08x\nLCDTiming2: 0x%08x\nLCDControl: 0x%08x\n", r0, r1, r2, r3);
 	
 	LCDReg[0] = r0;
 	LCDReg[1] = r1;
 	LCDReg[2] = r2;
+        if (r3!=0)
+		LCDReg[4] = r3;
     
 	return 1;
 }
