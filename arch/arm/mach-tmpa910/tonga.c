@@ -73,7 +73,7 @@ void __init tonga_map_io(void)
 }
 
 
-static u64 topas910_dmamask = 0xffffffffUL;
+static u64 tmpa9xx_dmamask = 0xffffffffUL;
 
 /* 
  * Ethernet 
@@ -817,9 +817,9 @@ static void __init tonga_init(void)
 	p = strstr(boot_command_line, "ethaddr=");
 
 	if (p != NULL && (p == boot_command_line || p[-1] == ' ')) {
-		printk("U-BOOT Ethernet Address: %s\n",p+8);
-		memcpy(&eth_mac_ascii,p+MAC_OFFSET,ETHERNET_MAC_ASCII_LENGTH);
-		parse_enetaddr (eth_mac_ascii,tonga_smsc911x_pdata.mac);
+		printk(KERN_DEBUG "U-BOOT Ethernet Address: %s\n", p+8);
+		memcpy(&eth_mac_ascii,p + MAC_OFFSET, ETHERNET_MAC_ASCII_LENGTH);
+		parse_enetaddr (eth_mac_ascii, tonga_smsc911x_pdata.mac);
 	}
 
 	/* Memory controller - for SMSC Ethernet */
@@ -827,7 +827,7 @@ static void __init tonga_init(void)
     
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = 0xffffffff;
-	platform_bus.dma_mask=&topas910_dmamask;
+	platform_bus.dma_mask=&tmpa9xx_dmamask;
 	
 	/* Pin configuration */
         
