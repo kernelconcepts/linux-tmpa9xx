@@ -361,7 +361,7 @@ static struct spi_board_info spi_board_info[] = {
 #if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
 static struct tmpa910_ts_platforminfo tmpa910_info_ts = {
 		.fuzz       = 0,
-		.rate       = 36,
+		.rate       = 100,
 		.skip_count = 4,
 };
 
