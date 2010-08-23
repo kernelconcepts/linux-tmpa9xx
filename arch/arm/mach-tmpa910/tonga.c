@@ -425,6 +425,31 @@ struct platform_device tmpa9xx_device_lcdc= {
 };
 #endif
 
+static u64 tmpa9xx_device_lcdda_dmamask = 0xffffffffUL;
+static struct resource tmpa9xx_lcdda_resource[] = {
+	[0] = {
+		.start = 0xF2050000,
+		.end   = 0xF2050000 + 0x4000,
+		.flags = IORESOURCE_MEM,
+	},
+	[1] = {
+		.start = INTR_VECT_LCDDA,
+		.end   = INTR_VECT_LCDDA,
+		.flags = IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device tmpa9xx_device_lcdda = {
+	.name = "tmpa9xx-lcdda",
+	.id = -1,
+	.num_resources = ARRAY_SIZE(tmpa9xx_lcdda_resource),
+	.resource = tmpa9xx_lcdda_resource,
+	.dev              = {
+		.dma_mask		= &tmpa9xx_device_lcdda_dmamask,
+		.coherent_dma_mask	= 0xffffffffUL
+	}
+};
+
 /*
  * NAND Flash Controller
  */
@@ -697,6 +722,7 @@ static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_BACKLIGHT_PWM
 	&tonga_backlight_device,
 #endif
+	&tmpa9xx_device_lcdda,
 };
 
 #if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
