@@ -672,59 +672,6 @@ static void __init setup_lcdc_device(void)
 	int height = 240;
 	
 	LCDReg = topas910_v1_lcdc_platforminfo.LCDReg;
-#ifdef CONFIG_DISPLAY_GLYN_640_480
- // ET057007DHU Display
-
-#define XSIZE_PHYS 640
-#define YSIZE_PHYS 480
-	topas910_v1_lcdc_platforminfo.width  = XSIZE_PHYS;
-	topas910_v1_lcdc_platforminfo.height = YSIZE_PHYS;
-	topas910_v1_lcdc_platforminfo.depth  = 32;
-	topas910_v1_lcdc_platforminfo.pitch  = XSIZE_PHYS * 4;
-
-
-//      Horizontal timing, LCDTiming0
-#define HBP                       (90)                      // Horizontal back porch  0..255
-#define HFP                       (6)                      // Horizontal front porch 0..255
-#define HSW                       (10)                      // Horizontal sync pulse width 0..255
-#define PPL                       ((XSIZE_PHYS / 16) - 1)     // Pixel per line value 0..255
-
-//      Vertical timing, LCDTiming1
-#define VBP                       (8)                      // Vertical back porch  0..255
-#define VFP                       (8)                      // Vertical front porch 0..255
-#define VSW                       (2)                      // Vertical sync pulse lines value 0..63
-#define LPP                       (YSIZE_PHYS - 1)            // Lines per panel value 0..1023
-
-//      Clock timing, LCDTiming2
-#define PCD_HI                    (0)            // PCD value, upper 5 bits
-#define PCD_LO                    ((2) & 0x1F)          // PCD value, lower 5 bits
-#define IPC                       1
-#define IHS			  1
-#define IVS			  1
-#define CPL                       ((XSIZE_PHYS-1)&0x3FF)
-
-	LCDReg[0] = 
-				  ( (PPL << 2)	// pixel per line
-				| ( (HSW) << 8 ) 			// tHSW. Horizontal sync pulse
-				| ( (HFP) << 16 ) 			// tHFP, Horizontal front porch
-				| ( (HBP) << 24 )); 			// tHBP, Horizontal back porch
-
-
-	LCDReg[1] =  		  (( VBP << 24) 		// tVBP		
-				| ( VFP << 16) 		// tVFP
-				| ( VSW << 10) 		// tVSP
-				| ( LPP));
-
-	LCDReg[2] =               ((PCD_HI << 27)
-	                        | (CPL << 16)
-			        | (IPC<<13)
-				| (IHS<<12)
-				| (IVS<<11)
-				| (PCD_LO << 0));
-				
-	LCDReg[3] = 0;
-	LCDReg[4] = (0x5<<1)  | (1<<5)  | (1<<11) | (1<<16); /* LCDControl */
-#else
 
 	topas910_v1_lcdc_platforminfo.width  = width;
 	topas910_v1_lcdc_platforminfo.height = height;
@@ -747,7 +694,7 @@ static void __init setup_lcdc_device(void)
 	LCDReg[2] = ((width-1)<<16) | 0x0000e | 1<<13 | 0<<12 | 0<<11;
 	LCDReg[3] = 0;
 	LCDReg[4]	= (0x5<<1)  | (1<<5) | (1<<11);
-#endif
+
 	tmpa9xx_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
 }
 
