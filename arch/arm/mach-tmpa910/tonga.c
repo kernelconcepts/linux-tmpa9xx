@@ -225,11 +225,18 @@ static struct i2c_board_info tonga_i2c_0_devices[] = {
 	},
 };
 
+#if defined CONFIG_SND_SOC_TMPA9XX_I2S
 static struct i2c_board_info tonga_i2c_1_devices[] = {
 	{
 		I2C_BOARD_INFO("wm8983", 0x1a),
 	},
 };
+#else
+static struct i2c_board_info tonga_i2c_1_devices[] = {
+	{
+	},
+};
+#endif
 #endif
 
 /*
@@ -650,10 +657,12 @@ static struct platform_device tmpa910_i2s_device = {
 #endif
 
 /* new Alsa SOC driver */
+#if defined CONFIG_SND_SOC_TMPA9XX_I2S
 static struct platform_device tmpa910_i2s_device = {
 	.name = "tmpa9xx-i2s",
 	.id    = -1,
 };
+#endif
 
 static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
@@ -891,7 +900,15 @@ static void __init tonga_init(void)
 	GPIOCFR1 = 0;
 	GPIOCFR2 = 0;
 	GPIOCDATA = 0x00;
-#endif 
+#endif
+#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
+#if 0
+	/* set PORT-C 6,7 to I2C and enable open drain */
+	GPIOCFR1 |= 0xc0;
+	GPIOCFR2 &= ~(0xc0);
+	GPIOCODE |= 0xc0;
+#endif
+#endif
 
 #if defined CONFIG_BACKLIGHT_PWM
 	GPIOCFR1 &= ~0x10;	/* enable PWM2OUT */
@@ -917,7 +934,15 @@ static void __init tonga_init(void)
 	GPIOFIE  &= ~0xC0;
 	GPIOFODE &= ~0xC0;
 #endif    
-   
+#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
+	/* set PORT-C 6,7 to I2C and enable open drain */
+	GPIOFDIR  &= ~(0xc0);
+	GPIOFFR1 |= 0xc0;
+	GPIOFFR2 &= ~(0xc0);
+	GPIOFIE  &= ~0xC0;
+	GPIOFODE |= 0xc0;
+#endif
+
 	/* Port G can be used as general-purpose input/output pins.
 	   Port G can also be used as SD host controller function pins (SDC0CLK, SDC0CD,
 	   SDC0WP, SDC0CMD, SDC0DAT3, SDC0DAT2, SDC0DAT1 and SDC0DAT0). */
@@ -949,14 +974,18 @@ static void __init tonga_init(void)
 	   I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins.
 	   TMPA910_CFG_PORT_GPIO(PORTR) */
 	GPIOLFR2 = 0x00;
+#if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
 	GPIOLFR1 = 0x1f; /* bits 4:0 for I2S */
+#endif
 
 	/* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
 	   Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
 	   I2S1WS).*/
 	GPIOMDIR |= 0x03; /* M0, MI GPIO OUT */
+#if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
 	GPIOMFR1 &= ~0x03;
 	GPIOMFR1 |= 0x04; /* M2 I2S1DAT0 */
+#endif
 	/* GPIOMFR2 &= ~0x03; */ /* there is no FR2 for port M */
            
            
