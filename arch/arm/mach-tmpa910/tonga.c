@@ -253,7 +253,7 @@ static struct resource tmpa910_resource_sdhc[] = {
 
 struct platform_device tmpa910_device_sdhc = {
 	.name		= "tmpa910-sdhc",
-	.id		= 0,
+	.id		= -1,
 	.dev =
 	{
 		.coherent_dma_mask = DMA_BIT_MASK(32),
@@ -394,7 +394,7 @@ static struct resource tmpa910_resource_ts[] = {
 
 struct platform_device tmpa910_device_ts = {
 	.name		= "tmpa910_ts",
-	.id		= 0,
+	.id		= -1,
 	.dev = {
 		.platform_data = &tmpa910_info_ts,
 	},
@@ -423,7 +423,7 @@ static struct tmpa910_lcdc_platforminfo topas910_v1_lcdc_platforminfo;
 
 struct platform_device tmpa9xx_device_lcdc= {
 	.name		= "tmpa9xxfb",
-	.id		= 0,
+	.id		= -1,
 	.resource	= tmpa9xx_resource_lcdc,
 	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_lcdc),
         .dev = {
@@ -471,7 +471,7 @@ static struct resource tmpa910_nand_resources[] = {
 
 static struct platform_device tmpa910_nand_device = {
 	.name		= "tmpa9x0-nand",
-	.id		= 0,
+	.id		= -1,
 	.num_resources	= ARRAY_SIZE(tmpa910_nand_resources),
 	.resource	= tmpa910_nand_resources,
 };
@@ -495,7 +495,7 @@ static struct resource tmpa910_resource_rtc[] = {
 
 static struct platform_device tmpa910_device_rtc = {
 	.name           = "tmpa910_rtc",
-	.id             = 0,
+	.id             = -1,
 	.num_resources  = ARRAY_SIZE(tmpa910_resource_rtc),
 	.resource       = tmpa910_resource_rtc
 	}
@@ -578,7 +578,7 @@ static struct resource tmpa9x0_wdt_resource[] = {
 
 static struct platform_device tmpa910_wdt_device = {
         .name           = "tmpa9x0_wdt",
-        .id             = 0,
+        .id             = -1,
         .num_resources  = ARRAY_SIZE(tmpa9x0_wdt_resource),
         .resource       = tmpa9x0_wdt_resource,
         .dev            = {
@@ -820,6 +820,8 @@ void __init tonga_init_irq(void) {
 	tmpa910_init_irq();
 }
 
+#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
+
 #define ETHERNET_MAC_ASCII_LENGTH 17
 #define MAC_OFFSET		   8
 
@@ -834,12 +836,14 @@ static void parse_enetaddr(char *addr, unsigned char *enetaddr)
 			addr = (*end) ? end + 1 : end;
 	}
 }
+#endif
 
 /* 
  * Tonga2 device initialisation
  */
 static void __init tonga_init(void)
 {
+#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
 	char *p;
 	char eth_mac_ascii[ETHERNET_MAC_ASCII_LENGTH+2];
 
@@ -853,7 +857,7 @@ static void __init tonga_init(void)
 		memcpy(&eth_mac_ascii,p + MAC_OFFSET, ETHERNET_MAC_ASCII_LENGTH);
 		parse_enetaddr (eth_mac_ascii, tonga_smsc911x_pdata.mac);
 	}
-
+#endif
 	/* Memory controller - for SMSC Ethernet */
 	SMC_TIMEOUT = 0x01;
     
