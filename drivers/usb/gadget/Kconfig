@@ -189,6 +189,7 @@ config USB_LH7A40X
 
 config USB_GADGET_TMPA9XX
 	boolean "TMPA9xx USB Device Controller"
+	select USB_GADGET_DUALSPEED
 	depends on ARCH_TMPA910
 	help
 	The TOSHIBA ARM MCU TMPA9xxCRAXBG has a full speed USB Device
