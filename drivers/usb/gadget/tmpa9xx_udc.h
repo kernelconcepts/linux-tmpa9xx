@@ -108,6 +108,7 @@
 #define EP0_STALL		0x0004	/* to set STALL for Endpoint0*/
 #define EP1_STALL		0x0014	/* to set STALL for Endpoint1*/
 #define EP2_STALL		0x0024	/* to set STALL for Endpoint2*/
+#define EP3_STALL		0x0044	/* to set STALL for Endpoint3*/
 
 #define STATUS_NAK_E		0xfdff	/* STATUS_NAK Interrupt Enaable */
 #define STATUS_NAK_D		0x0200	/* STATUS_NAK Interrupt Desable */
@@ -120,6 +121,7 @@
 #define EP0_EOP			0x000C	/* to set ENDPOINT0 EOP*/
 #define EP1_EOP			0x001C	/* to set ENDPOINT1 EOP*/
 #define EP2_EOP			0x002C	/* to set ENDPOINT2 EOP*/
+#define EP3_EOP			0x004C	/* to set ENDPOINT3 EOP*/
 
 /* UDC Stage parameters */
 #define IDLE_STAGE		0x00	/* Idle Stage*/
@@ -252,7 +254,7 @@
  * controller driver data structures
  */
 
-#define	NUM_ENDPOINTS	3   //GCH
+#define	NUM_ENDPOINTS	4
 
 /*
  * hardware won't disable bus reset, or resume while the controller
@@ -264,7 +266,7 @@
 struct tmpa9xx_ep {
 	struct usb_ep			ep;
 	struct list_head		queue;
-	struct tmpa9xx_udc	*udc;
+	struct tmpa9xx_udc		*udc;
 	void __iomem			*creg;
 
 	unsigned			maxpacket:16;
