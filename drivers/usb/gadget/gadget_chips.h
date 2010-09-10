@@ -142,7 +142,7 @@
 #define gadget_is_s3c_hsotg(g)    0
 #endif
 
-#ifdef CONFIG_USB_GADGET_TMPA910
+#ifdef CONFIG_USB_GADGET_TMPA9XX
 #define	gadget_is_tmpa9xx(g)	!strcmp("tmpa9xx-udc", (g)->name)
 #else
 #define	gadget_is_tmpa9xx(g)	0
