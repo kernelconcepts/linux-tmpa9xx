@@ -949,7 +949,7 @@ static int __init tmpa9x0_nand_probe(struct platform_device *pdev)
 	
 	mtd->owner    = THIS_MODULE;
 	/* Many callers got this wrong, so check for it for a while... */
-	ret = nand_scan_ident(mtd, 1);
+	ret = nand_scan_ident(mtd, 1, NULL);
 	if (ret) {
 		goto free_dma_buf;
 	}
