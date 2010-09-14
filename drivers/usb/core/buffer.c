@@ -14,7 +14,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/dmapool.h>
 #include <linux/usb.h>
-#include "hcd.h"
+#include <linux/usb/hcd.h>
 
 #ifdef CONFIG_USB_OHCI_HCD_TMPA900
 void *tmpa9x0_sram_alloc(int size);
