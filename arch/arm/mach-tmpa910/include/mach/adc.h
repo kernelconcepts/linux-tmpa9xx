@@ -23,7 +23,7 @@
 #define __TMPA910_ADC_H__
 
 
-struct tmpa910_adc
+struct tmpa9xx_adc
 {
 	uint32_t adreg0l; //   0x0000 a/d conversion result lower-order register 0
 	uint32_t adreg0h; //   0x0004 a/d conversion result higher-order register 0

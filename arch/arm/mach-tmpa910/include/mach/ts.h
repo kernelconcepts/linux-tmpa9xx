@@ -1,5 +1,5 @@
 /*
- *  Header file for TMPA910 TS Controller
+ *  Header file for TMPA9xx TS Controller
  *
  *  Data structure and register user interface
  *
@@ -23,25 +23,20 @@
 #define __TMPA910_TS_H__
 
 
-/******/
-/******/
-struct tmpa910_ts_platforminfo {
-	int fuzz;
 #define TMPA910_TS_DEFAULT_FUZZ 4
-
-	int rate;
 #define TMPA910_TS_DEFAULT_RATE 25
-
-	int skip_count;
 #define TMPA910_TS_DEFAULT_SKIP_COUNT 1
+
+struct tmpa9xx_ts_platforminfo {
+	int fuzz;
+	int rate;
+	int skip_count;
 };
 
-/******/
-/******/
+
 /*
  * Controller register
-*/
-
+ */
 #define TMPA910_TS_CR0_TSI7     (1<<7) //  TSI7  R/W 0y0 pull-down resistor(refer to Explanation)
 #define TMPA910_TS_CR0_INGE     (1<<6) //  INGE  R/W 0y0 Input gate control of Port PD6, PD7
 #define TMPA910_TS_CR0_PTST     (1<<5) //  PTST  R   0y0 Detection condition
@@ -52,7 +47,7 @@ struct tmpa910_ts_platforminfo {
 #define TMPA910_TS_CR0_MXEN     (1<<0) // MXEN[0] MXEN  R/W 0y0 SMX
 
 
-struct tmpa910_ts
+struct tmpa9xx_ts
 {
 	uint32_t tsicr0; // 0x01f0 tsi control register0
 	uint32_t tsicr1; // 0x01f4 tsi control register1
