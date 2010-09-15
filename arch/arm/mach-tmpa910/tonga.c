@@ -118,8 +118,9 @@ static struct platform_device tonga_smsc911x_device = {
  * Serial UARTs
  */ 
 #if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
-#define CONFIG_UART0	/* enable UART0 */
-#define CONFIG_UART1	/* enable UART1 */
+#define CONFIG_UART0
+#define CONFIG_UART1
+#define CONFIG_UART2
 
 #ifdef CONFIG_UART0
 static struct resource tmpa910_resource_uart0[] = {
@@ -366,13 +367,13 @@ static struct spi_board_info spi_board_info[] = {
  * Touchscreen
  */
 #if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
-static struct tmpa910_ts_platforminfo tmpa910_info_ts = {
+static struct tmpa9xx_ts_platforminfo tmpa9xx_info_ts = {
 		.fuzz       = 0,
 		.rate       = 100,
 		.skip_count = 4,
 };
 
-static struct resource tmpa910_resource_ts[] = {
+static struct resource tmpa9xx_resource_ts[] = {
 	{
 		.start	= TS_BASE,
 		.end	= TS_BASE + 0x40,
@@ -393,13 +394,13 @@ static struct resource tmpa910_resource_ts[] = {
 };
 
 struct platform_device tmpa910_device_ts = {
-	.name		= "tmpa910_ts",
+	.name		= "tmpa9xx_ts",
 	.id		= 0,
 	.dev = {
-		.platform_data = &tmpa910_info_ts,
+		.platform_data = &tmpa9xx_info_ts,
 	},
-	.resource	= tmpa910_resource_ts,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_ts),
+	.resource	= tmpa9xx_resource_ts,
+	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_ts),
 };
 #endif
 
