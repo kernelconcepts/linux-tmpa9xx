@@ -449,8 +449,6 @@ static int __init tmpa910_i2c_probe(struct platform_device *pdev)
 	struct i2c_adapter *adapter;
 	struct tmpa910_i2c_priv *priv;
 
-	printk(KERN_INFO "probe i2c dev!\n");
-
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (r == NULL) {
 		dev_err(&pdev->dev, "No IO memory resource for I2C0\n");
