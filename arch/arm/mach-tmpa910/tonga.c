@@ -189,7 +189,7 @@ struct platform_device tmpa910_device_uart2 = {
 /*
  * I2C
  */ 
-#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
+//#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 static struct resource tmpa910_resource_i2c[] = {
 	{
 		.start	= I2C0_BASE,
@@ -221,8 +221,27 @@ struct platform_device tmpa910_device_i2c = {
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
 };
 
+
+#include <linux/i2c-gpio.h>
+
+  static struct i2c_gpio_platform_data i2c_gpio_data = {
+	.sda_pin	= 47,
+	.scl_pin	= 46,
+  };
+  static struct platform_device i2c_gpio_device = {
+	.name		= "i2c-gpio",
+	.id		= 0,
+	.dev		= {
+		.platform_data	= &i2c_gpio_data,
+	},
+  };
+
+
 static struct i2c_board_info tonga_i2c_0_devices[] = {
 	{
+		.type		= "dts413",
+		.addr		= 0x0a,
+		.irq		= INT_GPIO_KI0,
 	},
 };
 
@@ -237,7 +256,7 @@ static struct i2c_board_info tonga_i2c_1_devices[] = {
 	},
 };
 
-#endif /* CONFIG_I2C_TMPA910 */
+//#endif /* CONFIG_I2C_TMPA910 */
 
 /*
  * SDHC
@@ -684,6 +703,7 @@ static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 	&tmpa910_device_i2c,
 #endif
+	&i2c_gpio_device,
 
 #if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
  	&tmpa910_device_sdhc,
@@ -919,6 +939,7 @@ static void __init tonga_init(void)
 	   Port D can also be used as interrupt (INTB, INTA), ADC (AN7-AN0), and touch screen
 	   control (PX, PY, MX, MY) pins. */
 #if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
+#warning wrong too, writes all bits
 	GPIODFR1 = 0x0f;
 	GPIODFR2 = 0xf0;
 	GPIODIE = 0x00;
@@ -1028,13 +1049,12 @@ static void __init tonga_init(void)
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
   
-#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 	i2c_register_board_info(0, tonga_i2c_0_devices,
 			ARRAY_SIZE(tonga_i2c_0_devices));
 
 	i2c_register_board_info(1, tonga_i2c_1_devices,
 			ARRAY_SIZE(tonga_i2c_1_devices));
-#endif
+
 #if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif

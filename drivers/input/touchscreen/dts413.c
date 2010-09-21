@@ -84,7 +84,7 @@ static void dts413_poscheck(struct work_struct *work)
 		dev_err(&priv->client->dev, "Unable to read i2c page\n");
 		goto out;
 	}
-
+printk(KERN_DEBUG "stat %x\n", buf[0]);
 	event = (buf[0] & 0x01) ? 1 : 0;
 	xpos = (unsigned short)(buf[2] & 0x7f) |
 			((unsigned short)(buf[1] & 0x0f) << 7);
@@ -155,6 +155,7 @@ static int dts413_probe(struct i2c_client *client,
 	struct input_dev *input;
 	int error;
 	
+	dev_info(&client->dev, "DTS413 probing...\n");
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (!priv) {
 		dev_err(&client->dev, "failed to allocate driver data\n");

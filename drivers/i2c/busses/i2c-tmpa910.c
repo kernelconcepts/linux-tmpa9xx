@@ -296,6 +296,7 @@ int tmpa910_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 		/* write dummy data to issue the ack */
 		regs->i2c_dbr = 0;
+//		regs->i2c_cr2 = (1UL << 4);
 
 		/* wait until 1bit xfer is complete */
 		ret = tmpa910_i2c_wait_status_timeout(algo, (1UL << 4), (1UL << 4));	// SCL line = free ? ?
