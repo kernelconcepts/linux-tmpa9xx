@@ -16,7 +16,7 @@ endchoice
 
 choice
 
-	prompt "Select TMPA900 board"
+	prompt "Select TMPA9xx board"
         
 config MACH_TOPASA900
         bool "Toshiba TopasA900 TMPA900 development board"
