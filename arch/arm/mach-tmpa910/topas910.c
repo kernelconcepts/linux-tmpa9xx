@@ -177,27 +177,6 @@ struct platform_device tmpa910_device_uart1 = {
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart1),
 };
 #endif
-
-#ifdef CONFIG_UART2
-static struct resource tmpa910_resource_uart2[] = {
-	{
-		.start	= 0xf2004000,
-		.end	= 0xf2004000 + 0x100,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= 9,
-		.end	= 9,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
-
-struct platform_device tmpa910_device_uart2 = {
-	.name		= "tmpa910-uart",
-	.id		= 2,
-	.resource	= tmpa910_resource_uart2,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart2),
-};
-#endif
 #endif
 
 /*
@@ -610,9 +589,6 @@ static struct platform_device *devices[] __initdata = {
 #endif
 #ifdef CONFIG_UART1
 	&tmpa910_device_uart1,
-#endif
-#ifdef CONFIG_UART2
-	&tmpa910_device_uart2,
 #endif
 #endif /* CONFIG_SERIAL_TMPA910 */
 
