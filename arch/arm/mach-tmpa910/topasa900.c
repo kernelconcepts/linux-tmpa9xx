@@ -25,6 +25,7 @@
  */
 
 #include <linux/device.h>
+#include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
@@ -32,41 +33,29 @@
 #include <linux/gpio_keys.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/mmc_spi.h>
+#include <linux/mmc/host.h>
+#include <linux/i2c.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
-
-#include <asm/system.h>
-#include <mach/hardware.h>
-#include <asm/irq.h>
-#include <asm/pgtable.h>
-#include <asm/page.h>
-
-#include <asm/mach/map.h>
-#include <asm/mach-types.h>
+#include <linux/dma-mapping.h>
+#include <linux/amba/bus.h>
+#include <linux/amba/pl022.h>
 
 #include <video/tmpa910_fb.h>
-#include <mach/gpio.h>
 
-#include <asm/mach/arch.h>
+#include <asm/system.h>
+#include <asm/irq.h>
+#include <mach/hardware.h>
+#include <mach/gpio.h>
 #include <mach/hardware.h>
 #include <mach/ts.h>
 #include <mach/tmpa910_regs.h>
-#include <linux/mmc/host.h>
-#include <asm/serial.h>
-
-#ifdef CONFIG_SPI_TMPA910
-#include <linux/spi/spi.h>
-#endif
-
-#ifdef CONFIG_SPI_AT25
-#include <linux/spi/eeprom.h>
-#endif
+#include <asm/mach-types.h>
+#include <asm/mach/arch.h>
+#include <asm/mach/map.h>
 
 #include "topas910.h"
-
-#define CONFIG_SPI_CHANNEL0
-
 
 /* I/O Mapping related, might want to be moved to a CPU specific file */
 
@@ -125,9 +114,6 @@ static struct platform_device topas910_dm9000_device = {
 };
 
 
-/*
- * Serial UARTs
- */ 
 
 /*
  * Serial UARTs
@@ -229,7 +215,7 @@ struct platform_device tmpa910_device_i2c = {
 	.id = 0,
 	.dev = {
 		.platform_data = NULL,
-		.coherent_dma_mask = 0xffffffff,
+		.coherent_dma_mask = DMA_BIT_MASK(32),
 	},
 	.resource	= tmpa910_resource_i2c,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
@@ -250,10 +236,10 @@ static struct resource tmpa910_resource_sdhc[] = {
 
 struct platform_device tmpa910_device_sdhc = {
 	.name		= "tmpa910-sdhc",
-	.id		= 0,
+	.id		= -1,
 	.dev =
 	{
-		.coherent_dma_mask = 0xffffffff,
+		.coherent_dma_mask = DMA_BIT_MASK(32),
 	},
 	.resource	= tmpa910_resource_sdhc,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_sdhc),
@@ -263,69 +249,208 @@ struct platform_device tmpa910_device_sdhc = {
 /*
  * SPI
  */
-#if defined CONFIG_SPI_TMPA910 || defined CONFIG_SPI_TMPA910_MODULE
-#define CONFIG_SPI_CHANNEL0	/* enable SPI channel 0 */
+#if defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+ 
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+static void tmpa9xx_spi0_cs_control(u32 command)
+{
 
-#ifdef CONFIG_SPI_CHANNEL0
-static struct resource tmpa910_resource_spi0[] = {
-	{
-		.start	= 0xF2002000,
-		.end	= 0xF2002000+0x27,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= INTR_VECT_SSP_CH0,
-		.end	= INTR_VECT_SSP_CH0,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
+}
+#endif
+
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+static void tmpa9xx_spi1_cs_control(u32 command)
+{
+
+}
+#endif
+
+#if defined CONFIG_SPI_PL022_CHANNEL_0
+struct pl022_config_chip mmc_info = {
+	.lbm = LOOPBACK_DISABLED,
+	.com_mode = INTERRUPT_TRANSFER,
+	.iface = SSP_INTERFACE_MOTOROLA_SPI,
+	/* we can act as master only */
+	.hierarchy = SSP_MASTER,
+	.slave_tx_disable = 0,
+	.endian_rx = SSP_RX_MSB,
+	.endian_tx = SSP_TX_MSB,
+	.data_size = SSP_DATA_BITS_8,
+	.rx_lev_trig = SSP_RX_1_OR_MORE_ELEM,
+	.tx_lev_trig = SSP_TX_1_OR_MORE_EMPTY_LOC,
+	.clk_phase = SSP_CLK_SECOND_EDGE,
+	.clk_pol = SSP_CLK_POL_IDLE_HIGH,
+	.cs_control = tmpa9xx_spi0_cs_control,
 };
-#endif /* CONFIG_SPI_CHANNEL0 */
+#endif
 
-#ifdef CONFIG_SPI_CHANNEL1
-static struct resource tmpa910_resource_spi1[] = {
-	{
-		.start	= 0xF2003000,
-		.end	= 0xF2003000+0x27,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= INTR_VECT_SSP_CH1,
-		.end	= INTR_VECT_SSP_CH1,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
+#if defined CONFIG_SPI_PL022_CHANNEL_0
+struct pl022_config_chip spidev0_info = {
+	.lbm = LOOPBACK_DISABLED,
+	.com_mode = INTERRUPT_TRANSFER,
+	.iface = SSP_INTERFACE_MOTOROLA_SPI,
+	/* we can act as master only */
+	.hierarchy = SSP_MASTER,
+	.slave_tx_disable = 0,
+	.endian_rx = SSP_RX_MSB,
+	.endian_tx = SSP_TX_MSB,
+	.data_size = SSP_DATA_BITS_8,
+	.rx_lev_trig = SSP_RX_1_OR_MORE_ELEM,
+	.tx_lev_trig = SSP_TX_1_OR_MORE_EMPTY_LOC,
+	.clk_phase = SSP_CLK_SECOND_EDGE,
+	.clk_pol = SSP_CLK_POL_IDLE_HIGH,
+	.cs_control = tmpa9xx_spi0_cs_control,
 };
-#endif /* CONFIG_SPI_CHANNEL1 */
+#endif
 
-#ifdef CONFIG_SPI_CHANNEL0
-struct platform_device tmpa910_device_spi0 = {
-	.name		 = "tmpa910-spi",
-	.id = 0,
-	.dev = {
-		.platform_data = NULL,
-	},
-	.resource	= tmpa910_resource_spi0,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_spi0),
+#if defined CONFIG_SPI_PL022_CHANNEL_1
+struct pl022_config_chip spidev1_info = {
+	.lbm = LOOPBACK_DISABLED,
+	.com_mode = INTERRUPT_TRANSFER,
+	.iface = SSP_INTERFACE_MOTOROLA_SPI,
+	/* we can act as master only */
+	.hierarchy = SSP_MASTER,
+	.slave_tx_disable = 0,
+	.endian_rx = SSP_RX_MSB,
+	.endian_tx = SSP_TX_MSB,
+	.data_size = SSP_DATA_BITS_8,
+	.rx_lev_trig = SSP_RX_1_OR_MORE_ELEM,
+	.tx_lev_trig = SSP_TX_1_OR_MORE_EMPTY_LOC,
+	.clk_phase = SSP_CLK_SECOND_EDGE,
+	.clk_pol = SSP_CLK_POL_IDLE_HIGH,
+	.cs_control = tmpa9xx_spi1_cs_control,
 };
-#endif /* CONFIG_SPI_CHANNEL0 */
+#endif
 
-#ifdef CONFIG_SPI_CHANNEL1
-struct platform_device tmpa910_device_spi1 = {
-	.name		 = "tmpa910-spi",
-	.id = 1,
-	.dev = {
-		.platform_data = NULL,
-	},
-	.resource	= tmpa910_resource_spi1,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_spi1),
+#if defined CONFIG_MMC_SPI && defined CONFIG_SPI_PL022_CHANNEL_0
+static struct mmc_spi_platform_data mmc_spi_info = {
+	.caps = MMC_CAP_NEEDS_POLL | MMC_CAP_SPI,
+	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3.3V only */
+};
+
+static struct spi_board_info spi_board_info[] = {
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+{
+	.modalias = "mmc_spi",
+    .controller_data = &mmc_info,
+	.platform_data = &mmc_spi_info,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 24000000,
+	.bus_num = 0,
+
+},
+#endif
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+{
+	.modalias = "spidev",
+        .controller_data = &spidev1_info,
+	.platform_data = NULL,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 10000000,
+	.bus_num = 1,
+}
+#endif
+};
+#elif defined(CONFIG_SPI_SPIDEV)
+static struct spi_board_info spi_board_info[] = {
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+{
+	.modalias = "spidev",
+        .controller_data = &spidev0_info,
+	.platform_data = NULL,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 10000000,
+	.bus_num = 0,
+},
+#endif
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+{
+	.modalias = "spidev",
+        .controller_data = &spidev1_info,
+	.platform_data = NULL,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 10000000,
+	.bus_num = 1,
+}
+#endif
+};
+#endif
+
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+static struct pl022_ssp_controller ssp0_platform_data = {
+	.bus_id = 0,
+	/* pl022 not yet supports dma */
+	.enable_dma = 0,
+	.num_chipselect = 1,
+};
+#endif
+
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+static struct pl022_ssp_controller ssp1_platform_data = {
+	.bus_id = 1,
+	/* pl022 not yet supports dma */
+	.enable_dma = 0,
+	.num_chipselect = 1,
 };
 #endif
 
 
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+static struct amba_device pl022_device0 = {
+	.dev = {
+		.coherent_dma_mask = ~0,
+		.init_name = "tmpa9xx-spi0",
+		.platform_data = &ssp0_platform_data,
+	},
+	.res = {
+		.start = 0xF2002000,
+		.end   = 0xF2002027,
+		.flags = IORESOURCE_MEM,
+	},
+	.irq = {INTR_VECT_SSP_CH0, NO_IRQ },
+	.periphid = 0x00041022,
+};
+#endif
+
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+static struct amba_device pl022_device1 = {
+	.dev = {
+		.coherent_dma_mask = ~0,
+		.init_name = "tmpa9xx-spi1",
+		.platform_data = &ssp1_platform_data,
+	},
+	.res = {
+		.start = 0xF2003000,
+		.end   = 0xF2003027,
+		.flags = IORESOURCE_MEM,
+	},
+	.irq = {INTR_VECT_SSP_CH1, NO_IRQ },
+	.periphid = 0x00041022,
+};
+#endif
+
+static struct amba_device *amba_devs[] __initdata = {
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+	&pl022_device0,
+#endif        
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+	&pl022_device1,
+#endif        
+};
+
+#endif //defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
 
 /*
  * Touchscreen
  */
+#if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
 static struct tmpa910_ts_platforminfo tmpa910_info_ts = {
 		.fuzz       = 0,
-		.rate       = 36,
+		.rate       = 100,
 		.skip_count = 4,
 };
 
@@ -351,43 +476,68 @@ static struct resource tmpa910_resource_ts[] = {
 
 struct platform_device tmpa910_device_ts = {
 	.name		= "tmpa910_ts",
-	.id		= 0,
+	.id		= -1,
 	.dev = {
 		.platform_data = &tmpa910_info_ts,
 	},
 	.resource	= tmpa910_resource_ts,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_ts),
 };
+#endif
 
-
-/* LCD controller device */
-
-static struct resource tmpa910_resource_lcdc[] = {
+/* 
+ * LCD controller device 
+ */
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
+static struct resource tmpa9xx_resource_lcdc[] = {
 	{
 		.start	= LCDC_BASE,
 		.end	= LCDC_BASE + 0x400,
 		.flags	= IORESOURCE_MEM,
-	}, {
+	},{
 		.start	= INTR_VECT_LCDC,
 		.end	= INTR_VECT_LCDC,
 		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
 	}
 };
 
-
 static struct tmpa910_lcdc_platforminfo topas910_v1_lcdc_platforminfo;
 
-
-struct platform_device tmpa910_device_lcdc= {
+struct platform_device tmpa9xx_device_lcdc= {
 	.name		= "tmpa9xxfb",
-	.id		= 0,
-	.resource	= tmpa910_resource_lcdc,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_lcdc),
+	.id		= -1,
+	.resource	= tmpa9xx_resource_lcdc,
+	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_lcdc),
         .dev = {
-		.coherent_dma_mask = 0xffffffff,		
+		.coherent_dma_mask = DMA_BIT_MASK(32),
         },
 };
+#endif
 
+static u64 tmpa9xx_device_lcdda_dmamask = 0xffffffffUL;
+static struct resource tmpa9xx_lcdda_resource[] = {
+	[0] = {
+		.start = 0xF2050000,
+		.end   = 0xF2050000 + 0x4000,
+		.flags = IORESOURCE_MEM,
+	},
+	[1] = {
+		.start = INTR_VECT_LCDDA,
+		.end   = INTR_VECT_LCDDA,
+		.flags = IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device tmpa9xx_device_lcdda = {
+	.name = "tmpa9xx-lcdda",
+	.id = -1,
+	.num_resources = ARRAY_SIZE(tmpa9xx_lcdda_resource),
+	.resource = tmpa9xx_lcdda_resource,
+	.dev              = {
+		.dma_mask		= &tmpa9xx_device_lcdda_dmamask,
+		.coherent_dma_mask	= 0xffffffffUL
+	}
+};
 
 /* 
  * 7 segment LED display
@@ -463,8 +613,7 @@ static struct platform_device topas910_keys_device = {
 /*
  * NAND Flash Controller
  */
-
-#ifdef CONFIG_MTD_NAND_TMPA910
+#if defined CONFIG_MTD_NAND_TMPA910 || defined CONFIG_MTD_NAND_TMPA910_MODULE
 static struct resource tmpa910_nand_resources[] = {
 	[0] = {
 		.start	=  NANDF_BASE,
@@ -475,89 +624,16 @@ static struct resource tmpa910_nand_resources[] = {
 
 static struct platform_device tmpa910_nand_device = {
 	.name		= "tmpa9x0-nand",
-	.id		= 0,
+	.id		= -1,
 	.num_resources	= ARRAY_SIZE(tmpa910_nand_resources),
 	.resource	= tmpa910_nand_resources,
 };
-
 #endif
 
-
-static struct platform_device tmpa910_i2s_device = {
-	.name = "WM8976-I2S",
-	.id   = -1,
-};
-
-
-static struct mmc_spi_platform_data mmc_spi_info = {
-	.caps = MMC_CAP_NEEDS_POLL | MMC_CAP_SPI,
-	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3.3V only */
-};
-
-#ifdef CONFIG_MMC_SPI
-static struct spi_board_info spi_board_info[] = 
-{
-{
-	.modalias = "mmc_spi",
-	.platform_data = &mmc_spi_info,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 1000000,
-	.bus_num = 0,
-
-}
-};
-
-#elif defined(CONFIG_SPI_AT25)
-static struct spi_eeprom spi_eeprom_info = {
-	.page_size = 256,
-	.name = "AT25F512",
-	.flags = EE_ADDR3|EE_READONLY
-};
- 
-static struct spi_board_info spi_board_info[] = {
-{
-	.modalias = "at25",
-	.platform_data = &spi_eeprom_info,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 20000000,
-	.bus_num = 0,
-},
-{
-	.modalias = "at25",
-	.platform_data = &spi_eeprom_info,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 20000000,
-	.bus_num = 1,
-}
-};
-#elif defined(CONFIG_SPI_SPIDEV)
-static struct spi_board_info spi_board_info[] = {
-{
-	.modalias = "spidev",
-	.platform_data = &mmc_spi_info,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 10000000,
-	.bus_num = 0,
-},
-{
-	.modalias = "spidev",
-	.platform_data = NULL,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 10000000,
-	.bus_num = 1,
-}
-};
-
-#endif
-
-
-#define RTC_BASE		0xF0030000
-
+/*
+ * Real Time Clock
+ */
+#if defined CONFIG_RTC_DRV_TMPA910 || defined CONFIG_RTC_DRV_TMPA910_MODULE
 static struct resource tmpa910_resource_rtc[] = {
 	{
 		.start = RTC_BASE,
@@ -572,7 +648,7 @@ static struct resource tmpa910_resource_rtc[] = {
 
 static struct platform_device tmpa910_device_rtc = {
 	.name           = "tmpa910_rtc",
-	.id             = 0,
+	.id             = -1,
 	.num_resources  = ARRAY_SIZE(tmpa910_resource_rtc),
 	.resource       = tmpa910_resource_rtc
 	}
@@ -603,11 +679,11 @@ static struct resource tmpa900_ohci_resources[] = {
 
 static struct platform_device tmpa900_ohci_device = {
         .name           = "tmpa900-usb",
-        .id             = 0,
+        .id             = -1,
         .num_resources  = ARRAY_SIZE(tmpa900_ohci_resources),
         .resource       = tmpa900_ohci_resources,
         .dev = {
-		.coherent_dma_mask = 0xffffffff,		
+		.coherent_dma_mask = DMA_BIT_MASK(32),
         },
 };
 #endif /* CONFIG_USB_OHCI_HCD_TMPA900 */
@@ -631,8 +707,8 @@ static struct resource tmpa910_udc_resource[] = {
 };
 
 static struct platform_device tmpa910_udc_device = {
-        .name           = "tmpa9xx-ucd",
-        .id             = 0,
+        .name           = "tmpa9xx-udc",
+        .id             = -1,
         .num_resources  = ARRAY_SIZE(tmpa910_udc_resource),
         .resource       = tmpa910_udc_resource,
         .dev            = {
@@ -641,8 +717,10 @@ static struct platform_device tmpa910_udc_device = {
 };
 #endif
 
+/*
+ * Watchdog
+ */
 #if defined CONFIG_TMPA9X0_WATCHDOG || defined CONFIG_TMPA9X0_WATCHDOG_MODULE
-/* USB Device Controller */
 static struct resource tmpa9x0_wdt_resource[] = {
         [0] = {
                 .start = 0xf0010000,
@@ -653,7 +731,7 @@ static struct resource tmpa9x0_wdt_resource[] = {
 
 static struct platform_device tmpa910_wdt_device = {
         .name           = "tmpa9x0_wdt",
-        .id             = 0,
+        .id             = -1,
         .num_resources  = ARRAY_SIZE(tmpa9x0_wdt_resource),
         .resource       = tmpa9x0_wdt_resource,
         .dev            = {
@@ -663,9 +741,10 @@ static struct platform_device tmpa910_wdt_device = {
 #endif
 
 static struct platform_device *devices[] __initdata = {
-	&tmpa910_device_ts,
-	&topas910_led_device,
+#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
 	&topas910_dm9000_device,
+#endif
+
 #if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
 #ifdef CONFIG_UART0
 	&tmpa910_device_uart0,
@@ -675,34 +754,53 @@ static struct platform_device *devices[] __initdata = {
 #endif
 #ifdef CONFIG_UART2
 	&tmpa910_device_uart2,
-#ifdef CONFIG_MTD_NAND_TMPA910
+#endif
+#endif /* CONFIG_SERIAL_TMPA910 */
+
+#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
+	&tmpa910_device_i2c,
+#endif
+
+#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
+ 	&tmpa910_device_sdhc,
+#endif
+
+#if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
+	&tmpa910_device_ts,
+#endif
+
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
+	&tmpa9xx_device_lcdc,
+#endif
+
+#if defined CONFIG_MTD_NAND_TMPA910 || defined CONFIG_MTD_NAND_TMPA910_MODULE
  	&tmpa910_nand_device,
 #endif
-	&topas910_keys_device,
-	&tmpa910_device_lcdc,
-	&tmpa910_device_i2c,
-#ifdef CONFIG_USB_GADGET_TMPA910
+
+#if defined CONFIG_RTC_DRV_TMPA910 || defined CONFIG_RTC_DRV_TMPA910_MODULE
+	&tmpa910_device_rtc,
+#endif
+
+#if defined CONFIG_USB_OHCI_HCD_TMPA900 || defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE
+	&tmpa900_ohci_device,
+#endif       
+
+#if defined CONFIG_USB_GADGET_TMPA910 || defined CONFIG_USB_GADGET_TMPA910_MODULE
 	&tmpa910_udc_device,
 #endif
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-	&tmpa900_ohci_device,
+#if defined CONFIG_TMPA9X0_WATCHDOG || defined CONFIG_TMPA9X0_WATCHDOG_MODULE
+	&tmpa910_wdt_device,
 #endif
+#if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
  	&tmpa910_i2s_device,	
-#ifdef CONFIG_SPI_CHANNEL0
-	&tmpa910_device_spi0,
 #endif
-#ifdef CONFIG_SPI_CHANNEL1
-	&tmpa910_device_spi1,
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
+	&tmpa9xx_device_lcdda,
 #endif
-	&tmpa910_device_rtc,
-#ifdef CONFIG_TMPA9X0_WATCHDOG
-	&tmpa910_wdt_device
-#endif
-#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
-  	&tmpa910_device_sdhc,
-#endif
-};
+	&topas910_led_device,
+        &topas910_keys_device,
 
+};
 
 static void __init setup_lcdc_device(void)
 {
@@ -733,7 +831,7 @@ static void __init setup_lcdc_device(void)
 	LCDReg[3] = 0;
 	LCDReg[4]	= (0x5<<1)  | (1<<5) | (1<<11);
 
-	tmpa910_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
+	tmpa9xx_device_lcdc.dev.platform_data = &topas910_v1_lcdc_platforminfo;
 }
 
 
@@ -741,42 +839,196 @@ void __init topasa900_init_irq(void) {
 	tmpa910_init_irq();
 }
 
-
-/* TopasA900 device initialisation */
-
+/*
+ * TopasA900 device initialisation
+ */
 static void __init topasa900_init(void)
 {
+#if defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+	int i;
+#endif        
         
-	/* Memory controller - for DM9000 */
-	SMC_SET_CYCLES_3 = 0x0004AFAA;
-	SMC_SET_OPMODE_3 = 0x00000002;
-	SMC_DIRECT_CMD_3 = 0x00C00000;
-    	SMC_TIMEOUT = 0x01;
+	/* Port A can be used not only as a general-purpose input pin with pull up but also as key input pin. */
+	TMPA910_CFG_PORT_GPIO(PORTA); /* All useable for GPIO */
+        
+	/* Port B can be used not only as general-purpose output pins but also as key output pins. */
+	TMPA910_CFG_PORT_GPIO(PORTB); 
+	GPIOBODE = 0x00; /* Disable Open Drain */
+        
+	/* Port C
+	   The upper 2 bits (bits [7:6]) of Port C can be used as general-purpose input/output pins
+	   and the lower 3 bits (bits [4:2]) can be used as general-purpose output pins.
+	   Port C can also be used as interrupt (INT9), I2C (I2C0DA, I2C0CL), low-frequency clock
+	   output (FSOUT), melody output (MLDALM), PWM output function (PWM0OUT,
+	   PWM2OUT), and USB Host power supply control function (USBOCn, USBPON). */
 
-	/* Pin configuration */
-	TMPA910_CFG_PORT_GPIO(PORTA); /* Keypad */
-	TMPA910_CFG_PORT_GPIO(PORTB); /* 7 segment LED */
-#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
+#if defined CONFIG_USB_OHCI_HCD_TMPA900 || defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE
+	/* prepare Port C for USB Host */
+        GPIOCDATA  = 0xcf;
+	GPIOCDIR  &= ~(0xc0);
+	GPIOCFR1  &= ~(0xc0);
+	GPIOCFR2  |= 0xc0;
+	GPIOCODE  &= ~(0xc0);
+	GPIOCIE   &= ~(0xc0);
+	/* Enable USB Host Controller Clock Domain */
+	CLKCR5    |= (1<<4);
+	/* Set appropriate clock seting for USB in SYSCR8.
+	   For USB device, 24Mhz directly from quartz: [5:4]  11 / 0x3
+	   For USB host  , 48Mhz from F PPL / 4      : [3:0] 100 / 0x4 */
+	SYSCR8    |= ((0x3<<4)|(0x4<<0));
+	/* Enable overcurrent */
+	HCBCR0     = 0;
 #else
-  	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0 or GPIO */
+	TMPA910_CFG_PORT_GPIO(PORTC);
+	GPIOCODE = 0x00; 
+	GPIOCDIR = 0xFF;
+	GPIOCFR1 = 0;
+	GPIOCFR2 = 0;
+	GPIOCDATA = 0x00;
 #endif
-	TMPA910_CFG_PORT_GPIO(PORTP); /* GPIO routed to CM605 left */
+#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
+#if 0
+	/* set PORT-C 6,7 to I2C and enable open drain */
+	GPIOCFR1 |= 0xc0;
+	GPIOCFR2 &= ~(0xc0);
+	GPIOCODE |= 0xc0;
+#endif
+#endif
 
        	GPIOTFR1 = 0xFF;  /* USB, SPI0 and UART 1 */
 
+	/* Port D can be used as general-purpose input.
+	   Port D can also be used as interrupt (INTB, INTA), ADC (AN7-AN0), and touch screen
+	   control (PX, PY, MX, MY) pins. */
+#if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
+	GPIODFR1 = 0x0f;
+	GPIODFR2 = 0xf0;
+	GPIODIE = 0x00;
+#endif
+
+	/* Port F
+	   The upper 2 bits (bits [7:6]) of Port F can be used as general-purpose input/output pins.
+	   Port F can also be used as interrupt (INTC), UART (U2RXD, U2TXD) and I2C (I2C1DA,
+	   I2C1CL) pins. */
+#ifdef CONFIG_UART2
+	GPIOFFR1 &= ~0xC0;  /* UART 2 */
+	GPIOFFR2 |= 0xC0;
+	GPIOFIE  &= ~0xC0;
+	GPIOFODE &= ~0xC0;
+#endif    
+#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
+	/* set PORT-C 6,7 to I2C and enable open drain */
+	GPIOFDIR  &= ~(0xc0);
+	GPIOFFR1 |= 0xc0;
+	GPIOFFR2 &= ~(0xc0);
+	GPIOFIE  &= ~0xC0;
+	GPIOFODE |= 0xc0;
+#endif
+
+	/* Port G can be used as general-purpose input/output pins.
+	   Port G can also be used as SD host controller function pins (SDC0CLK, SDC0CD,
+	   SDC0WP, SDC0CMD, SDC0DAT3, SDC0DAT2, SDC0DAT1 and SDC0DAT0). */
+#if defined CONFIG_MMC_TMPA910_SDHC || !defined CONFIG_MMC_TMPA910_SDHC_MODULE
+	GPIOGFR1 = 0xFF;
+#else
+	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0 or GPIO */
+#endif
+
+	/* Port J can be used as general-purpose input/output pins.
+	   Port J can also be used as LCD cotroller function pins (LD15-LD8) and CMOS image
+	   sensor control (CMSVSY, CMSHBK, CMSHSY and CMSPCK) pins. */
+	/* Port K can be used as general-purpose input/output pins.
+	   Port K can also be used as LCD controller function pins (LD23 to LD16) and CMOS image
+	   sensor control (CMSD7 toCMSD0) pins. */
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
+	LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
+	GPIOJFR2 = 0x00;
+	GPIOJFR1 = 0xFF;
+	GPIOKFR2 = 0x00;
+	GPIOKFR1 = 0xFF;
+	PMCCTL &= ~PMCCTL_PMCPWE;
+	PMCWV1 |= PMCWV1_PMCCTLV;
+	udelay(200);
+#endif
+
+	/* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
+	   In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
+	   I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins. */
+#if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
+	GPIOLFR1 |= 0x1f; /* bits 4:0 for I2S */
+#endif        
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+	GPIOLFR2 |= 0x08;
+#endif
+	/* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
+	   Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
+	   I2S1WS).*/
+	GPIOMDIR |= 0x03; /* M0, MI GPIO OUT */
+#if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
+	GPIOMFR1 &= ~0x03;
+	GPIOMFR1 |= 0x04; /* M2 I2S1DAT0 */
+#endif
+	/* GPIOMFR2 &= ~0x03; */ /* there is no FR2 for port M */
+           
+           
+	/* Port N can be used as general-purpose input/output pins.
+	   Port N can also be used as UART/IrDA function (U0RTSn, U0DTRn, U0RIn, U0DSRn,
+	   U0DCDn, U0CTSn, U0RXD, U0TXD, SIR0IN, SIR0OUT) and interrupt function (INTD,
+	   INTE, INTF, INTG) pins. */
+           
+	/* already set by bootloader */
+           
+	/* Port R
+	   Bit 2 of Port R can be used as a general-purpose input/output pin and bits [1:0] can be
+	   used as general-purpose output pins. (Bits [7:3] are not used.)
+	   Port R can also be used as reset output (RESETOUTn), high-frequency clock output
+	   (FCOUT), interrupt function (INTH) and Oscillation Frequency Detection (OFDOUTn). */
+#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
+	GPIORDIR &= ~(1 << 2); /* Eth IRQ */
+#endif
+    
+	/* Port T can be used as general-purpose input/output pins.
+	   Port T can also be used as USB external clock input (X1USB), UART function (U1CTSn,
+	   U1RXD, U1TXD), and SPI function (SP0DI, SP0DO, SP0CLK, SP0FSS) and pins. */
+#ifdef CONFIG_UART1
+	GPIOTFR1 |= (0x07 << 4);
+#endif
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+	GPIOTFR1 |= 0x0F;
+#endif
+   
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
 	/* Configure LCD interface */
 	setup_lcdc_device();
-    
+#endif
+
 	/* NAND Controller */
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
 	NDFMCR1 = 0x00000000; // ECC = Hamming
 	NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
-              	              // NDREn L = 4clks,H = 3clks
+              	             // NDREn L = 4clks,H = 3clks
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
+	/* Register the active AMBA devices on this board */
+#if defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+	for (i= 0; i < ARRAY_SIZE(amba_devs); i++)
+        {
+		amba_device_register(amba_devs[i], &iomem_resource);
+	}
+#endif        
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
-  
+
+#if 0  
+#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
+	i2c_register_board_info(0, topas_i2c_0_devices,
+			ARRAY_SIZE(topas_i2c_0_devices));
+
+	i2c_register_board_info(1, topas_i2c_1_devices,
+			ARRAY_SIZE(topas_i2c_1_devices));
+#endif
+#endif
+
 #if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
