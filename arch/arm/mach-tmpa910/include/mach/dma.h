@@ -64,12 +64,16 @@ void tmpa910_dma_free (int dma_ch);
 
 #define DMAC_PERIPHERAL_UART0TX        0  // UART0 transmit
 #define DMAC_PERIPHERAL_UART0RX        1  // UART0 receive
+#define DMAC_PERIPHERAL_SSP0_TX	       2  // SSP0 transmit
+#define DMAC_PERIPHERAL_SSP0_RX	       3  // SSP0 receive
 #define DMAC_PERIPHERAL_NANDC0         4  // NANDC0
 #define DMAC_PERIPHERAL_CMSI           5  // CMSI
 #define DMAC_PERIPHERAL_SDHC_SD_WRITE  8  // SDHC SD buffer write request
 #define DMAC_PERIPHERAL_SDHC_SD_READ   9  // SDHC SD buffer read request
-#define DMAC_PERIPHERAL_I2S0 10 I2S0   10 //
-#define DMAC_PERIPHERAL_I2S1 11 I2S1   11 //
+#define DMAC_PERIPHERAL_I2S0           10 // I2S0   10
+#define DMAC_PERIPHERAL_I2S1           11 // I2S1   11 
+#define DMAC_PERIPHERAL_SSP1_TX	       12 // SSP1 transmit
+#define DMAC_PERIPHERAL_SSP1_RX	       13 // SSP1 receive
 #define DMAC_PERIPHERAL_LCDDA14 LCDDA  14 //
 
 #define DMAC_CH_CONF_HALT      (1<<18)   // Halt           R/W 0y0       0y0: Enable DMA requests

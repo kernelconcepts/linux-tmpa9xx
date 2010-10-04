@@ -379,8 +379,10 @@ config ARCH_H720X
 config ARCH_TMPA910
 	bool "Toshiba TX09 / TMPA9xx based"
 	select CPU_ARM926T
+        select ARM_AMBA
 	select GENERIC_GPIO
 	select ARCH_REQUIRE_GPIOLIB
+	select COMMON_CLKDEV
 	select GENERIC_CLOCKEVENTS
 	select GENERIC_CLOCKEVENTS_BUILD
 	help
