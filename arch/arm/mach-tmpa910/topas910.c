@@ -119,75 +119,60 @@ static struct platform_device topas910_dm9000_device = {
 
 /*
  * Serial UARTs
- */ 
-#if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
-#define CONFIG_UART0	/* enable UART0 */
-#define CONFIG_UART1	/* enable UART1 */
+ */
+#if defined CONFIG_SERIAL_AMBA_PL011 || defined CONFIG_SERIAL_AMBA_PL011_MODULE
 
-#ifdef CONFIG_UART0
-static struct resource tmpa910_resource_uart0[] = {
-	{
-		.start	= 0xf2000000,
-		.end	= 0xf2000000 + 0x100,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= 10,
-		.end	= 10,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
-
-struct platform_device tmpa910_device_uart0 = {
-	.name		= "tmpa910-uart",
-	.id		= 0,
-	.resource	= tmpa910_resource_uart0,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart0),
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_0
+struct amba_device pl011_device0 = {
+	.dev = {
+		.init_name = "uart0",
+		.platform_data = NULL,
+	},
+	.res = {
+        	 .start = 0xf2000000,
+                 .end   = 0xf2000000 + SZ_4K -1,
+                 .flags = IORESOURCE_MEM
+               },
+	.irq = {10, NO_IRQ},
+	.periphid = 0x00041011,
 };
 #endif
 
-#ifdef CONFIG_UART1
-static struct resource tmpa910_resource_uart1[] = {
-	{
-		.start	= 0xf2001000,
-		.end	= 0xf2001000 + 0x100,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= 11,
-		.end	= 11,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_1
+struct amba_device pl011_device1 = {
+	.dev = {
+		.init_name = "uart1",
+		.platform_data = NULL,
+	},
+	.res = {
+        	 .start = 0xf2001000,
+                 .end   = 0xf2001000 + SZ_4K -1,
+                 .flags = IORESOURCE_MEM
+               },
+	.irq = {11, NO_IRQ},
+	.periphid = 0x00041011,
 };
 
-struct platform_device tmpa910_device_uart1 = {
-	.name		= "tmpa910-uart",
-	.id		= 1,
-	.resource	= tmpa910_resource_uart1,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart1),
+#endif
+
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_2
+struct amba_device pl011_device2 = {
+	.dev = {
+		.init_name = "uart2",
+		.platform_data = NULL,
+	},
+	.res = {
+        	 .start = 0xf2004000,
+                 .end   = 0xf2004000 + SZ_4K -1,
+                 .flags = IORESOURCE_MEM
+               },
+	.irq = {9, NO_IRQ},
+	.periphid = 0x00041011,
 };
 #endif
 
-#ifdef CONFIG_UART2
-static struct resource tmpa910_resource_uart2[] = {
-	{
-		.start	= 0xf2004000,
-		.end	= 0xf2004000 + 0x100,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= 9,
-		.end	= 9,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
-
-struct platform_device tmpa910_device_uart2 = {
-	.name		= "tmpa910-uart",
-	.id		= 2,
-	.resource	= tmpa910_resource_uart2,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart2),
-};
-#endif
-#endif
-
+#endif // defined SERIAL_AMBA_PL011 || defined SERIAL_AMBA_PL011_MODULE
+ 
 /*
  * I2C
  */ 
@@ -217,7 +202,7 @@ struct platform_device tmpa910_device_i2c = {
 	.id = 0,
 	.dev = {
 		.platform_data = NULL,
-		.coherent_dma_mask = 0xffffffff,
+		.coherent_dma_mask = DMA_BIT_MASK(32),
 	},
 	.resource	= tmpa910_resource_i2c,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
@@ -334,7 +319,7 @@ static struct spi_board_info spi_board_info[] = {
 #ifdef CONFIG_SPI_PL022_CHANNEL_0
 {
 	.modalias = "mmc_spi",
-    .controller_data = &mmc_info,
+	.controller_data = &mmc_info,
 	.platform_data = &mmc_spi_info,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
@@ -441,6 +426,15 @@ static struct amba_device *amba_devs[] __initdata = {
 #endif        
 #ifdef CONFIG_SPI_PL022_CHANNEL_1
 	&pl022_device1,
+#endif
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_0
+	&pl011_device0,
+#endif
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_1
+	&pl011_device1,
+#endif        
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_2
+	&pl011_device2,
 #endif        
 };
 
@@ -647,7 +641,7 @@ static struct resource tmpa910_resource_rtc[] = {
 
 static struct platform_device tmpa910_device_rtc = {
 	.name           = "tmpa910_rtc",
-	.id             = 0,
+	.id             = -1,
 	.num_resources  = ARRAY_SIZE(tmpa910_resource_rtc),
 	.resource       = tmpa910_resource_rtc
 	}
@@ -715,18 +709,6 @@ static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
 	&topas910_dm9000_device,
 #endif
-
-#if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
-#ifdef CONFIG_UART0
-	&tmpa910_device_uart0,
-#endif
-#ifdef CONFIG_UART1
-	&tmpa910_device_uart1,
-#endif
-#ifdef CONFIG_UART2
-	&tmpa910_device_uart2,
-#endif
-#endif /* CONFIG_SERIAL_TMPA910 */
 
 #if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 	&tmpa910_device_i2c,
@@ -815,16 +797,10 @@ static void __init topas910_init(void)
 #if defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
 	int i;
 #endif        
-        
-	/* Memory controller - for DM9000 */
-	SMC_SET_CYCLES_3 = 0x0004AFAA;
-	SMC_SET_OPMODE_3 = 0x00000002;
-	SMC_DIRECT_CMD_3 = 0x00C00000;
-    	SMC_TIMEOUT = 0x01;
 
 	/* DMA setup */
-	platform_bus.coherent_dma_mask = 0xffffffff;
-	platform_bus.dma_mask=&topas910_dmamask;
+	platform_bus.coherent_dma_mask = DMA_BIT_MASK(32);
+	platform_bus.dma_mask=DMA_BIT_MASK(32);
 	
 	/* Pin configuration */
         
@@ -840,7 +816,7 @@ static void __init topas910_init(void)
 	   and the lower 3 bits (bits [4:2]) can be used as general-purpose output pins.
 	   Port C can also be used as interrupt (INT9), I2C (I2C0DA, I2C0CL), low-frequency clock
 	   output (FSOUT), melody output (MLDALM), PWM output function (PWM0OUT,
-	   PWM2OUT). */
+	   PWM2OUT)*/
 
 	TMPA910_CFG_PORT_GPIO(PORTC);
 	GPIOCODE = 0x00; 
@@ -971,11 +947,11 @@ static void __init topas910_init(void)
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
 	NDFMCR1 = 0x00000000; // ECC = Hamming
 	NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
-              	             // NDREn L = 4clks,H = 3clks
+							// NDREn L = 4clks,H = 3clks
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
 	/* Register the active AMBA devices on this board */
-#if defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+#if defined CONFIG_ARM_AMBA
 	for (i= 0; i < ARRAY_SIZE(amba_devs); i++)
         {
 		amba_device_register(amba_devs[i], &iomem_resource);

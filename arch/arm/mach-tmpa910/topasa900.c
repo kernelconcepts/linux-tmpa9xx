@@ -117,75 +117,60 @@ static struct platform_device topas910_dm9000_device = {
 
 /*
  * Serial UARTs
- */ 
-#if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
-#define CONFIG_UART0	/* enable UART0 */
-#define CONFIG_UART1	/* enable UART1 */
+ */
+#if defined CONFIG_SERIAL_AMBA_PL011 || defined CONFIG_SERIAL_AMBA_PL011_MODULE
 
-#ifdef CONFIG_UART0
-static struct resource tmpa910_resource_uart0[] = {
-	{
-		.start	= 0xf2000000,
-		.end	= 0xf2000000 + 0x100,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= 10,
-		.end	= 10,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
-
-struct platform_device tmpa910_device_uart0 = {
-	.name		= "tmpa910-uart",
-	.id		= 0,
-	.resource	= tmpa910_resource_uart0,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart0),
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_0
+struct amba_device pl011_device0 = {
+	.dev = {
+		.init_name = "uart0",
+		.platform_data = NULL,
+	},
+	.res = {
+        	 .start = 0xf2000000,
+                 .end   = 0xf2000000 + SZ_4K -1,
+                 .flags = IORESOURCE_MEM
+               },
+	.irq = {10, NO_IRQ},
+	.periphid = 0x00041011,
 };
 #endif
 
-#ifdef CONFIG_UART1
-static struct resource tmpa910_resource_uart1[] = {
-	{
-		.start	= 0xf2001000,
-		.end	= 0xf2001000 + 0x100,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= 11,
-		.end	= 11,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_1
+struct amba_device pl011_device1 = {
+	.dev = {
+		.init_name = "uart1",
+		.platform_data = NULL,
+	},
+	.res = {
+        	 .start = 0xf2001000,
+                 .end   = 0xf2001000 + SZ_4K -1,
+                 .flags = IORESOURCE_MEM
+               },
+	.irq = {11, NO_IRQ},
+	.periphid = 0x00041011,
 };
 
-struct platform_device tmpa910_device_uart1 = {
-	.name		= "tmpa910-uart",
-	.id		= 1,
-	.resource	= tmpa910_resource_uart1,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart1),
+#endif
+
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_2
+struct amba_device pl011_device2 = {
+	.dev = {
+		.init_name = "uart2",
+		.platform_data = NULL,
+	},
+	.res = {
+        	 .start = 0xf2004000,
+                 .end   = 0xf2004000 + SZ_4K -1,
+                 .flags = IORESOURCE_MEM
+               },
+	.irq = {9, NO_IRQ},
+	.periphid = 0x00041011,
 };
 #endif
 
-#ifdef CONFIG_UART2
-static struct resource tmpa910_resource_uart2[] = {
-	{
-		.start	= 0xf2004000,
-		.end	= 0xf2004000 + 0x100,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= 9,
-		.end	= 9,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
-
-struct platform_device tmpa910_device_uart2 = {
-	.name		= "tmpa910-uart",
-	.id		= 2,
-	.resource	= tmpa910_resource_uart2,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart2),
-};
-#endif
-#endif
-
+#endif // defined SERIAL_AMBA_PL011 || defined SERIAL_AMBA_PL011_MODULE
+ 
 /*
  * I2C
  */ 
@@ -332,7 +317,7 @@ static struct spi_board_info spi_board_info[] = {
 #ifdef CONFIG_SPI_PL022_CHANNEL_0
 {
 	.modalias = "mmc_spi",
-    .controller_data = &mmc_info,
+	.controller_data = &mmc_info,
 	.platform_data = &mmc_spi_info,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
@@ -439,6 +424,15 @@ static struct amba_device *amba_devs[] __initdata = {
 #endif        
 #ifdef CONFIG_SPI_PL022_CHANNEL_1
 	&pl022_device1,
+#endif
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_0
+	&pl011_device0,
+#endif
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_1
+	&pl011_device1,
+#endif        
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_2
+	&pl011_device2,
 #endif        
 };
 
@@ -745,18 +739,6 @@ static struct platform_device *devices[] __initdata = {
 	&topas910_dm9000_device,
 #endif
 
-#if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
-#ifdef CONFIG_UART0
-	&tmpa910_device_uart0,
-#endif
-#ifdef CONFIG_UART1
-	&tmpa910_device_uart1,
-#endif
-#ifdef CONFIG_UART2
-	&tmpa910_device_uart2,
-#endif
-#endif /* CONFIG_SERIAL_TMPA910 */
-
 #if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 	&tmpa910_device_i2c,
 #endif
@@ -1010,7 +992,7 @@ static void __init topasa900_init(void)
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
 	/* Register the active AMBA devices on this board */
-#if defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+#if defined CONFIG_ARM_AMBA
 	for (i= 0; i < ARRAY_SIZE(amba_devs); i++)
         {
 		amba_device_register(amba_devs[i], &iomem_resource);

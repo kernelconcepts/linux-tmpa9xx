@@ -62,21 +62,21 @@ static struct clk ssp_clk = {
 };
 
 /* fixed clock */
-static struct clk f38_clk = {
-	.rate = 38400000,
+static struct clk uart_clk = {
+	.rate = 96000000,
 };
 
 static struct clk_lookup lookups[] = {
 	{
 		/* UART0 */
 		.dev_id		= "uart0",
-		.clk		= &f38_clk,
+		.clk		= &uart_clk,
 	}, {	/* UART1 */
 		.dev_id		= "uart1",
-		.clk		= &f38_clk,
+		.clk		= &uart_clk,
 	}, {	/* UART2 */
 		.dev_id		= "uart2",
-		.clk		= &f38_clk,
+		.clk		= &uart_clk,
 	}, {	/* SSP0 */
 		.dev_id		= "tmpa9xx-spi0",
 		.clk		= &ssp_clk,
