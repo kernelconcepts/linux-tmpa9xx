@@ -91,7 +91,7 @@ static void dts413_poscheck(struct work_struct *work)
 	ypos = (unsigned short)(buf[4] & 0x7f) |
 			((unsigned short)(buf[3] & 0x0f) << 7);
 	speed = (buf[5] & 0x7f);
-	
+
 	if (event == EVENT_PENDOWN) {
 		input_report_key(priv->input, BTN_TOUCH, 1);
 		input_report_abs(priv->input, ABS_X, xpos);
@@ -196,7 +196,7 @@ static int dts413_probe(struct i2c_client *client,
 	if (error)
 		goto err1;
 
-	error = request_irq(priv->irq, dts413_isr, IRQF_TRIGGER_FALLING/*IRQF_TRIGGER_LOW*/,
+	error = request_irq(priv->irq, dts413_isr, IRQF_TRIGGER_FALLING,
 			    client->name, priv);
 	if (error) {
 		dev_err(&client->dev, "Unable to request touchscreen IRQ.\n");
@@ -204,6 +204,8 @@ static int dts413_probe(struct i2c_client *client,
 	}
 
 	device_init_wakeup(&client->dev, 1);
+	dev_info(&client->dev, "DTS413 initialized\n");
+
 	return 0;
 
  err2:
