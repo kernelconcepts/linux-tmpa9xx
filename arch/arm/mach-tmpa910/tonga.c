@@ -119,8 +119,8 @@ static struct platform_device tonga_smsc911x_device = {
  */ 
 #if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
 #define CONFIG_UART0
-#define CONFIG_UART1
-#define CONFIG_UART2
+//#define CONFIG_UART1
+//#define CONFIG_UART2
 
 #ifdef CONFIG_UART0
 static struct resource tmpa910_resource_uart0[] = {
@@ -226,19 +226,18 @@ static struct i2c_board_info tonga_i2c_0_devices[] = {
 	},
 };
 
+static struct i2c_board_info tonga_i2c_1_devices[] = {
+	{
 #if defined CONFIG_SND_SOC_TMPA9XX_I2S
-static struct i2c_board_info tonga_i2c_1_devices[] = {
-	{
 		I2C_BOARD_INFO("wm8983", 0x1a),
+#endif
+		.type		= "dts413",
+		.addr		= 0x0a,
+		.irq		= INT_GPIO_KI0,
 	},
 };
-#else
-static struct i2c_board_info tonga_i2c_1_devices[] = {
-	{
-	},
-};
-#endif
-#endif
+
+#endif /* CONFIG_I2C_TMPA910 */
 
 /*
  * SDHC
@@ -866,6 +865,14 @@ static void __init tonga_init(void)
         
 	/* Port A can be used not only as a general-purpose input pin with pull up but also as key input pin. */
 	TMPA910_CFG_PORT_GPIO(PORTA); /* All useable for GPIO */
+	gpio_request(8, "TS Reset");
+	gpio_direction_output(8, 1);
+
+	/* Reset Touchscreen */
+  	gpio_set_value(8, 1);
+    	udelay(1000);
+	gpio_set_value(8, 0);
+
         
 	/* Port B can be used not only as general-purpose output pins but also as key output pins. */
 	TMPA910_CFG_PORT_GPIO(PORTB); 
@@ -902,14 +909,6 @@ static void __init tonga_init(void)
 	GPIOCFR2 = 0;
 	GPIOCDATA = 0x00;
 #endif
-#if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
-#if 0
-	/* set PORT-C 6,7 to I2C and enable open drain */
-	GPIOCFR1 |= 0xc0;
-	GPIOCFR2 &= ~(0xc0);
-	GPIOCODE |= 0xc0;
-#endif
-#endif
 
 #if defined CONFIG_BACKLIGHT_PWM
 	GPIOCFR1 &= ~0x10;	/* enable PWM2OUT */
@@ -938,8 +937,8 @@ static void __init tonga_init(void)
 #if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 	/* set PORT-C 6,7 to I2C and enable open drain */
 	GPIOFDIR  &= ~(0xc0);
-	GPIOFFR1 |= 0xc0;
 	GPIOFFR2 &= ~(0xc0);
+	GPIOFFR1 |= 0xc0;
 	GPIOFIE  &= ~0xC0;
 	GPIOFODE |= 0xc0;
 #endif
@@ -1010,6 +1009,7 @@ static void __init tonga_init(void)
 	   Port T can also be used as USB external clock input (X1USB), UART function (U1CTSn,
 	   U1RXD, U1TXD), and SPI function (SP0DI, SP0DO, SP0CLK, SP0FSS) and pins. */
 #ifdef CONFIG_UART1
+#warning This is very very likely to be wrong.
 	GPIOTFR1 = 0xFF;
 #endif        
    
