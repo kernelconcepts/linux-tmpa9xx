@@ -201,6 +201,7 @@ config SPI_ORION
 config SPI_PL022
 	tristate "ARM AMBA PL022 SSP controller (EXPERIMENTAL)"
 	depends on ARM_AMBA && EXPERIMENTAL
+	default y if MACH_TMPA910
 	default y if MACH_U300
 	default y if ARCH_REALVIEW
 	default y if INTEGRATOR_IMPD1
@@ -209,6 +210,20 @@ config SPI_PL022
 	  This selects the ARM(R) AMBA(R) PrimeCell PL022 SSP
 	  controller. If you have an embedded system with an AMBA(R)
 	  bus and a PL022 controller, say Y or M here.
+
+config SPI_PL022_CHANNEL_0
+	bool "Use SPI Controller Channel 0"
+	depends on SPI_PL022
+	default y
+	help
+          Make use of spi controller channel 0
+        
+config SPI_PL022_CHANNEL_1
+	bool "Use SPI Controller Channel 1"
+	depends on SPI_PL022
+	default y
+	help
+          Make use of spi controller channel 1
 
 config SPI_PPC4xx
 	tristate "PPC4xx SPI Controller"
@@ -274,13 +289,6 @@ config SPI_SH_SCI
 	select SPI_BITBANG
 	help
 	  SPI driver for SuperH SCI blocks.
-
-config SPI_TMPA910
-	tristate "Toshiba TMPA910 SPI controller"
-	depends on SPI_MASTER && ARCH_TMPA910
-	help
-	  This enables using the Toshiba TMPA910 SPI
-	  Controller in master SPI mode.
 
 config SPI_STMP3XXX
 	tristate "Freescale STMP37xx/378x SPI/SSP controller"

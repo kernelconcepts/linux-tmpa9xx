@@ -38,6 +38,8 @@
 #include <linux/pwm_backlight.h>
 #include <linux/smsc911x.h>
 #include <linux/dma-mapping.h>
+#include <linux/amba/bus.h>
+#include <linux/amba/pl022.h>
 
 #include <video/tmpa910_fb.h>
 
@@ -116,76 +118,60 @@ static struct platform_device tonga_smsc911x_device = {
 
 /*
  * Serial UARTs
- */ 
-#if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
-#define CONFIG_UART0
-#define CONFIG_UART1
-#define CONFIG_UART2
+ */
+#if defined CONFIG_SERIAL_AMBA_PL011 || defined CONFIG_SERIAL_AMBA_PL011_MODULE
 
-#ifdef CONFIG_UART0
-static struct resource tmpa910_resource_uart0[] = {
-	{
-		.start	= 0xf2000000,
-		.end	= 0xf2000000 + 0x100,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= 10,
-		.end	= 10,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
-
-struct platform_device tmpa910_device_uart0 = {
-	.name		= "tmpa910-uart",
-	.id		= 0,
-	.resource	= tmpa910_resource_uart0,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart0),
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_0
+struct amba_device pl011_device0 = {
+	.dev = {
+		.init_name = "uart0",
+		.platform_data = NULL,
+	},
+	.res = {
+        	 .start = 0xf2000000,
+                 .end   = 0xf2000000 + SZ_4K -1,
+                 .flags = IORESOURCE_MEM
+               },
+	.irq = {10, NO_IRQ},
+	.periphid = 0x00041011,
 };
 #endif
 
-#ifdef CONFIG_UART1
-static struct resource tmpa910_resource_uart1[] = {
-	{
-		.start	= 0xf2001000,
-		.end	= 0xf2001000 + 0x100,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= 11,
-		.end	= 11,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_1
+struct amba_device pl011_device1 = {
+	.dev = {
+		.init_name = "uart1",
+		.platform_data = NULL,
+	},
+	.res = {
+        	 .start = 0xf2001000,
+                 .end   = 0xf2001000 + SZ_4K -1,
+                 .flags = IORESOURCE_MEM
+               },
+	.irq = {11, NO_IRQ},
+	.periphid = 0x00041011,
 };
 
-struct platform_device tmpa910_device_uart1 = {
-	.name		= "tmpa910-uart",
-	.id		= 1,
-	.resource	= tmpa910_resource_uart1,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart1),
+#endif
+
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_2
+struct amba_device pl011_device2 = {
+	.dev = {
+		.init_name = "uart2",
+		.platform_data = NULL,
+	},
+	.res = {
+        	 .start = 0xf2004000,
+                 .end   = 0xf2004000 + SZ_4K -1,
+                 .flags = IORESOURCE_MEM
+               },
+	.irq = {9, NO_IRQ},
+	.periphid = 0x00041011,
 };
 #endif
 
-#ifdef CONFIG_UART2
-static struct resource tmpa910_resource_uart2[] = {
-	{
-		.start	= 0xf2004000,
-		.end	= 0xf2004000 + 0x100,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= 9,
-		.end	= 9,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
-};
-
-struct platform_device tmpa910_device_uart2 = {
-	.name		= "tmpa910-uart",
-	.id		= 2,
-	.resource	= tmpa910_resource_uart2,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_uart2),
-};
-#endif
-#endif
-
+#endif // defined SERIAL_AMBA_PL011 || defined SERIAL_AMBA_PL011_MODULE
+ 
 /*
  * I2C
  */ 
@@ -254,7 +240,7 @@ static struct resource tmpa910_resource_sdhc[] = {
 
 struct platform_device tmpa910_device_sdhc = {
 	.name		= "tmpa910-sdhc",
-	.id		= 0,
+	.id		= -1,
 	.dev =
 	{
 		.coherent_dma_mask = DMA_BIT_MASK(32),
@@ -267,101 +253,209 @@ struct platform_device tmpa910_device_sdhc = {
 /*
  * SPI
  */
-#if defined CONFIG_SPI_TMPA910 || defined CONFIG_SPI_TMPA910_MODULE
-#define CONFIG_SPI_CHANNEL0	/* enable SPI channel 0 */
+#if defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+ 
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+static void tmpa9xx_spi0_cs_control(u32 command)
+{
 
-#ifdef CONFIG_SPI_CHANNEL0
-static struct resource tmpa910_resource_spi0[] = {
-	{
-		.start	= 0xF2002000,
-		.end	= 0xF2002000+0x27,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= INTR_VECT_SSP_CH0,
-		.end	= INTR_VECT_SSP_CH0,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
+}
+#endif
+
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+static void tmpa9xx_spi1_cs_control(u32 command)
+{
+
+}
+#endif
+
+#if defined CONFIG_SPI_PL022_CHANNEL_0
+struct pl022_config_chip mmc_info = {
+	.lbm = LOOPBACK_DISABLED,
+	.com_mode = INTERRUPT_TRANSFER,
+	.iface = SSP_INTERFACE_MOTOROLA_SPI,
+	/* we can act as master only */
+	.hierarchy = SSP_MASTER,
+	.slave_tx_disable = 0,
+	.endian_rx = SSP_RX_MSB,
+	.endian_tx = SSP_TX_MSB,
+	.data_size = SSP_DATA_BITS_8,
+	.rx_lev_trig = SSP_RX_1_OR_MORE_ELEM,
+	.tx_lev_trig = SSP_TX_1_OR_MORE_EMPTY_LOC,
+	.clk_phase = SSP_CLK_SECOND_EDGE,
+	.clk_pol = SSP_CLK_POL_IDLE_HIGH,
+	.cs_control = tmpa9xx_spi0_cs_control,
 };
-#endif /* CONFIG_SPI_CHANNEL0 */
+#endif
 
-#ifdef CONFIG_SPI_CHANNEL1
-static struct resource tmpa910_resource_spi1[] = {
-	{
-		.start	= 0xF2003000,
-		.end	= 0xF2003000+0x27,
-		.flags	= IORESOURCE_MEM,
-	}, {
-		.start	= INTR_VECT_SSP_CH1,
-		.end	= INTR_VECT_SSP_CH1,
-		.flags	= IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-	}
+#if defined CONFIG_SPI_PL022_CHANNEL_0
+struct pl022_config_chip spidev0_info = {
+	.lbm = LOOPBACK_DISABLED,
+	.com_mode = INTERRUPT_TRANSFER,
+	.iface = SSP_INTERFACE_MOTOROLA_SPI,
+	/* we can act as master only */
+	.hierarchy = SSP_MASTER,
+	.slave_tx_disable = 0,
+	.endian_rx = SSP_RX_MSB,
+	.endian_tx = SSP_TX_MSB,
+	.data_size = SSP_DATA_BITS_8,
+	.rx_lev_trig = SSP_RX_1_OR_MORE_ELEM,
+	.tx_lev_trig = SSP_TX_1_OR_MORE_EMPTY_LOC,
+	.clk_phase = SSP_CLK_SECOND_EDGE,
+	.clk_pol = SSP_CLK_POL_IDLE_HIGH,
+	.cs_control = tmpa9xx_spi0_cs_control,
 };
-#endif /* CONFIG_SPI_CHANNEL1 */
+#endif
 
-#ifdef CONFIG_SPI_CHANNEL0
-struct platform_device tmpa910_device_spi0 = {
-	.name		 = "tmpa910-spi",
-	.id = 0,
-	.dev = {
-		.platform_data = NULL,
-	},
-	.resource	= tmpa910_resource_spi0,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_spi0),
+#if defined CONFIG_SPI_PL022_CHANNEL_1
+struct pl022_config_chip spidev1_info = {
+	.lbm = LOOPBACK_DISABLED,
+	.com_mode = INTERRUPT_TRANSFER,
+	.iface = SSP_INTERFACE_MOTOROLA_SPI,
+	/* we can act as master only */
+	.hierarchy = SSP_MASTER,
+	.slave_tx_disable = 0,
+	.endian_rx = SSP_RX_MSB,
+	.endian_tx = SSP_TX_MSB,
+	.data_size = SSP_DATA_BITS_8,
+	.rx_lev_trig = SSP_RX_1_OR_MORE_ELEM,
+	.tx_lev_trig = SSP_TX_1_OR_MORE_EMPTY_LOC,
+	.clk_phase = SSP_CLK_SECOND_EDGE,
+	.clk_pol = SSP_CLK_POL_IDLE_HIGH,
+	.cs_control = tmpa9xx_spi1_cs_control,
 };
-#endif /* CONFIG_SPI_CHANNEL0 */
+#endif
 
-#ifdef CONFIG_SPI_CHANNEL1
-struct platform_device tmpa910_device_spi1 = {
-	.name		 = "tmpa910-spi",
-	.id = 1,
-	.dev = {
-		.platform_data = NULL,
-	},
-	.resource	= tmpa910_resource_spi1,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_spi1),
-};
-#endif /* CONFIG_SPI_CHANNEL1 */
-
+#if defined CONFIG_MMC_SPI && defined CONFIG_SPI_PL022_CHANNEL_0
 static struct mmc_spi_platform_data mmc_spi_info = {
 	.caps = MMC_CAP_NEEDS_POLL | MMC_CAP_SPI,
 	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3.3V only */
 };
 
-#ifdef CONFIG_MMC_SPI
-static struct spi_board_info spi_board_info[] = 
-{
+static struct spi_board_info spi_board_info[] = {
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
 {
 	.modalias = "mmc_spi",
+	.controller_data = &mmc_info,
 	.platform_data = &mmc_spi_info,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
-	.max_speed_hz = 1000000,
+	.max_speed_hz = 24000000,
 	.bus_num = 0,
 
-}
-};
-#elif defined(CONFIG_SPI_SPIDEV)
-static struct spi_board_info spi_board_info[] = {
-{
-	.modalias = "spidev",
-	.platform_data = &mmc_spi_info,
-	.mode = SPI_MODE_0,
-	.chip_select = 0,
-	.max_speed_hz = 10000000,
-	.bus_num = 0,
 },
+#endif
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
 {
 	.modalias = "spidev",
+        .controller_data = &spidev1_info,
 	.platform_data = NULL,
 	.mode = SPI_MODE_0,
 	.chip_select = 0,
 	.max_speed_hz = 10000000,
 	.bus_num = 1,
 }
+#endif
+};
+#elif defined(CONFIG_SPI_SPIDEV)
+static struct spi_board_info spi_board_info[] = {
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+{
+	.modalias = "spidev",
+        .controller_data = &spidev0_info,
+	.platform_data = NULL,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 10000000,
+	.bus_num = 0,
+},
+#endif
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+{
+	.modalias = "spidev",
+        .controller_data = &spidev1_info,
+	.platform_data = NULL,
+	.mode = SPI_MODE_0,
+	.chip_select = 0,
+	.max_speed_hz = 10000000,
+	.bus_num = 1,
+}
+#endif
 };
 #endif
 
-#endif /* CONFIG_SPI_TMPA910 */
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+static struct pl022_ssp_controller ssp0_platform_data = {
+	.bus_id = 0,
+	/* pl022 not yet supports dma */
+	.enable_dma = 0,
+	.num_chipselect = 1,
+};
+#endif
+
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+static struct pl022_ssp_controller ssp1_platform_data = {
+	.bus_id = 1,
+	/* pl022 not yet supports dma */
+	.enable_dma = 0,
+	.num_chipselect = 1,
+};
+#endif
+
+
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+static struct amba_device pl022_device0 = {
+	.dev = {
+		.coherent_dma_mask = ~0,
+		.init_name = "tmpa9xx-spi0",
+		.platform_data = &ssp0_platform_data,
+	},
+	.res = {
+		.start = 0xF2002000,
+		.end   = 0xF2002027,
+		.flags = IORESOURCE_MEM,
+	},
+	.irq = {INTR_VECT_SSP_CH0, NO_IRQ },
+	.periphid = 0x00041022,
+};
+#endif
+
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+static struct amba_device pl022_device1 = {
+	.dev = {
+		.coherent_dma_mask = ~0,
+		.init_name = "tmpa9xx-spi1",
+		.platform_data = &ssp1_platform_data,
+	},
+	.res = {
+		.start = 0xF2003000,
+		.end   = 0xF2003027,
+		.flags = IORESOURCE_MEM,
+	},
+	.irq = {INTR_VECT_SSP_CH1, NO_IRQ },
+	.periphid = 0x00041022,
+};
+#endif
+
+static struct amba_device *amba_devs[] __initdata = {
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+	&pl022_device0,
+#endif        
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+	&pl022_device1,
+#endif
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_0
+	&pl011_device0,
+#endif
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_1
+	&pl011_device1,
+#endif        
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_2
+	&pl011_device2,
+#endif        
+};
+
+#endif //defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
 
 /*
  * Touchscreen
@@ -394,8 +488,8 @@ static struct resource tmpa9xx_resource_ts[] = {
 };
 
 struct platform_device tmpa910_device_ts = {
-	.name		= "tmpa9xx_ts",
-	.id		= 0,
+	.name		= "tmpa910_ts",
+	.id		= -1,
 	.dev = {
 		.platform_data = &tmpa9xx_info_ts,
 	},
@@ -424,7 +518,7 @@ static struct tmpa910_lcdc_platforminfo topas910_v1_lcdc_platforminfo;
 
 struct platform_device tmpa9xx_device_lcdc= {
 	.name		= "tmpa9xxfb",
-	.id		= 0,
+	.id		= -1,
 	.resource	= tmpa9xx_resource_lcdc,
 	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_lcdc),
         .dev = {
@@ -472,7 +566,7 @@ static struct resource tmpa910_nand_resources[] = {
 
 static struct platform_device tmpa910_nand_device = {
 	.name		= "tmpa9x0-nand",
-	.id		= 0,
+	.id		= -1,
 	.num_resources	= ARRAY_SIZE(tmpa910_nand_resources),
 	.resource	= tmpa910_nand_resources,
 };
@@ -496,7 +590,7 @@ static struct resource tmpa910_resource_rtc[] = {
 
 static struct platform_device tmpa910_device_rtc = {
 	.name           = "tmpa910_rtc",
-	.id             = 0,
+	.id             = -1,
 	.num_resources  = ARRAY_SIZE(tmpa910_resource_rtc),
 	.resource       = tmpa910_resource_rtc
 	}
@@ -579,7 +673,7 @@ static struct resource tmpa9x0_wdt_resource[] = {
 
 static struct platform_device tmpa910_wdt_device = {
         .name           = "tmpa9x0_wdt",
-        .id             = 0,
+        .id             = -1,
         .num_resources  = ARRAY_SIZE(tmpa9x0_wdt_resource),
         .resource       = tmpa9x0_wdt_resource,
         .dev            = {
@@ -670,18 +764,6 @@ static struct platform_device *devices[] __initdata = {
 	&tonga_smsc911x_device,
 #endif
 
-#if defined CONFIG_SERIAL_TMPA910 || defined CONFIG_SERIAL_TMPA910_MODULE
-#ifdef CONFIG_UART0
-	&tmpa910_device_uart0,
-#endif
-#ifdef CONFIG_UART1
-	&tmpa910_device_uart1,
-#endif
-#ifdef CONFIG_UART2
-	&tmpa910_device_uart2,
-#endif
-#endif /* CONFIG_SERIAL_TMPA910 */
-
 #if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 	&tmpa910_device_i2c,
 #endif
@@ -689,15 +771,6 @@ static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
  	&tmpa910_device_sdhc,
 #endif
-
-#if defined CONFIG_SPI_TMPA910 || defined CONFIG_SPI_TMPA910_MODULE
-#ifdef CONFIG_SPI_CHANNEL0
-	&tmpa910_device_spi0,
-#endif
-#ifdef CONFIG_SPI_CHANNEL1
-	&tmpa910_device_spi1,
-#endif
-#endif /* CONFIG_SPI_TMPA910 */
 
 #if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
 	&tmpa910_device_ts,
@@ -821,6 +894,8 @@ void __init tonga_init_irq(void) {
 	tmpa910_init_irq();
 }
 
+#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
+
 #define ETHERNET_MAC_ASCII_LENGTH 17
 #define MAC_OFFSET		   8
 
@@ -835,12 +910,17 @@ static void parse_enetaddr(char *addr, unsigned char *enetaddr)
 			addr = (*end) ? end + 1 : end;
 	}
 }
+#endif
 
 /* 
  * Tonga2 device initialisation
  */
 static void __init tonga_init(void)
 {
+#ifdef CONFIG_ARM_AMBA
+	int i;
+#endif        
+#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
 	char *p;
 	char eth_mac_ascii[ETHERNET_MAC_ASCII_LENGTH+2];
 
@@ -854,10 +934,8 @@ static void __init tonga_init(void)
 		memcpy(&eth_mac_ascii,p + MAC_OFFSET, ETHERNET_MAC_ASCII_LENGTH);
 		parse_enetaddr (eth_mac_ascii, tonga_smsc911x_pdata.mac);
 	}
+#endif
 
-	/* Memory controller - for SMSC Ethernet */
-	SMC_TIMEOUT = 0x01;
-    
 	/* DMA setup */
 	platform_bus.coherent_dma_mask = DMA_BIT_MASK(32);
 	platform_bus.dma_mask=DMA_BIT_MASK(32);
@@ -972,13 +1050,13 @@ static void __init tonga_init(void)
 
 	/* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
 	   In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
-	   I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins.
-	   TMPA910_CFG_PORT_GPIO(PORTR) */
-	GPIOLFR2 = 0x00;
+	   I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins. */
 #if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
-	GPIOLFR1 = 0x1f; /* bits 4:0 for I2S */
+	GPIOLFR1 |= 0x1f; /* bits 4:0 for I2S */
+#endif        
+#ifdef CONFIG_SPI_PL022_CHANNEL_1
+	GPIOLFR2 |= 0x08;
 #endif
-
 	/* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
 	   Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
 	   I2S1WS).*/
@@ -1010,8 +1088,11 @@ static void __init tonga_init(void)
 	   Port T can also be used as USB external clock input (X1USB), UART function (U1CTSn,
 	   U1RXD, U1TXD), and SPI function (SP0DI, SP0DO, SP0CLK, SP0FSS) and pins. */
 #ifdef CONFIG_UART1
-	GPIOTFR1 = 0xFF;
-#endif        
+	GPIOTFR1 |= (0x07 << 4);
+#endif
+#ifdef CONFIG_SPI_PL022_CHANNEL_0
+	GPIOTFR1 |= 0x0F;
+#endif
    
 #if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
 	/* Configure LCD interface */
@@ -1022,9 +1103,16 @@ static void __init tonga_init(void)
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
 	NDFMCR1 = 0x00000000; // ECC = Hamming
 	NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
-              	              // NDREn L = 4clks,H = 3clks
+							// NDREn L = 4clks,H = 3clks
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
+	/* Register the active AMBA devices on this board */
+#ifdef CONFIG_ARM_AMBA
+	for (i= 0; i < ARRAY_SIZE(amba_devs); i++)
+        {
+		amba_device_register(amba_devs[i], &iomem_resource);
+	}
+#endif        
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
   
@@ -1039,7 +1127,6 @@ static void __init tonga_init(void)
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
 }
-
 
 MACHINE_START(TONGA, "Tonga 2")
         /* Maintainer:  Florian Boor <florian.boor@kernelconcepts.de> */
