@@ -21,6 +21,7 @@
 #include <linux/irq.h>
 #include <linux/slab.h>
 
+#define __DEBUG__
 
 struct tmpa910_i2c_regs {
 	uint32_t i2c_cr1;	// 0x0000 I2C Control Register 1
@@ -386,6 +387,9 @@ static int tmpa910_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 #define PRSCK_100KHZ 30
 #define CR1SCK_100KHZ 2
 
+#define PRSCK_40KHZ 30
+#define CR1SCK_40KHZ 4
+
 int tmpa910_i2c_setup(struct i2c_adapter *adap)
 {
 	struct tmpa910_i2c_algo_data *algo = adap->algo_data;
@@ -397,9 +401,9 @@ int tmpa910_i2c_setup(struct i2c_adapter *adap)
 
 	regs->i2c_ar = 0;
 
-	/* setup scalers to 100khz default */
-	regs->i2c_prs = PRSCK_100KHZ;
-	regs->i2c_cr1 = CR1SCK_100KHZ;
+	/* setup scalers to 50khz default */
+	regs->i2c_prs = PRSCK_40KHZ;
+	regs->i2c_cr1 = CR1SCK_40KHZ;
 
 	/* enable i2c operation */
 	regs->i2c_cr2 = (1UL << 3);
