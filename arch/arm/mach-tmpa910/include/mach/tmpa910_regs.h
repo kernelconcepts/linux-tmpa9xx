@@ -89,8 +89,8 @@
 #define PORTB_GPIODATA	 (PORTB_BASE + PORT_OFS_DATA)
 
 
-#define PORTF_BASE  			0xF0805000
-#define PORTF_GPIOFDIR		(PORTF_BASE + 0x0400)
+#define PORTF_BASE  	  0xF0805000
+#define PORTF_GPIOFDIR	  (PORTF_BASE + 0x0400)
 #define PORTF_GPIOFFR     (PORTF_BASE + 0x0424)
 #define PORTF_GPIOFODE    (PORTF_BASE + 0x0c00)
 
@@ -303,6 +303,17 @@
 
 /* RTC */
 #define RTC_BASE		0xF0030000
+#define RTCDATA		(RTC_BASE + 0x0000)		/* RTC Data Register */
+#define RTCCOMP		(RTC_BASE + 0x0004)		/* RTC Compare Register */
+#define RTCPRST		(RTC_BASE + 0x0008)		/* RTC Preset Register */
+#define MLDALMINV	__REG(RTC_BASE + 0x0100)	/* Melody Alarm Invert Register */
+#define MLDALMSEL	__REG(RTC_BASE + 0x0104)	/* Melody Alarm signal Select Register */ 
+#define ALMCNTCR	__REG(RTC_BASE + 0x0108)	/* Alarm Counter Control Register */
+#define ALMPATERN	__REG(RTC_BASE + 0x010C)	/* Alarm Pattern Register */
+#define MLDCNTCR	__REG(RTC_BASE + 0x0110)	/* Melody Counter Control Register */
+#define MLDFRQ		__REG(RTC_BASE + 0x0114)	/* Melody Frequency Register */
+#define RTCALMINTCTR	(RTC_BASE + 0x0200)		/* RTC ALM Interrupt Control Register */
+#define RTCALMMIS	(RTC_BASE + 0x0204)		/* RTC ALM Interrupt Status Register */
 
 /* I2C Ports */
 #define I2C0_BASE   0xF0070000
@@ -546,7 +557,9 @@
 #define INTC_DIS				0
 
 /* Interrupt Controller */
-#define INTR_BASE  0xF4000000
+#define INTR_BASE  	0xF4000000
+#define VICINTENABLE	0xF4000010
+
 
 /* LCDDA (LCD Data Process Accelerator) */
 #define LCDDA_BASE  0xF2050000

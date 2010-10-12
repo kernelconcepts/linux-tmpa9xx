@@ -69,6 +69,13 @@ config ATMEL_TCB_CLKSRC_BLOCK
 	  TC can be used for other purposes, such as PWM generation and
 	  interval timing.
 
+config TMPA9XX_MLDALM
+	tristate "Melody/Ararm Driver for TMPA9xx"
+	depends on ARCH_TMPA910
+	help
+          Enable Melody/Araml output on Pin MLDALM
+          ATTENTION: Pin Sharing with SPI Channel 0
+
 config IBM_ASM
 	tristate "Device driver for IBM RSA service processor"
 	depends on X86 && PCI && INPUT && EXPERIMENTAL

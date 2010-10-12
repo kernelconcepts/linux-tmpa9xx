@@ -1,6 +1,6 @@
 /*
- *  Driver for Toshiba TMPA910 Real Time Clock unit.
- *  derived from rtc_tmpa910.c
+ *  Driver for Toshiba tmpa9xx Real Time Clock unit.
+ *  derived from rtc_tmpa9xx.c
  *  Copyright (C) 2003-2006  Yoichi Yuasa <yoichi_yuasa@tripeaks.co.jp>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -38,26 +38,16 @@
 #include <mach/tmpa910_regs.h>
 #include <mach/irqs.h>
 
-#define RTC_BASE		0xF0030000
-
-#define RTCDATA		(RTC_BASE + 0x0000)
-#define RTCCOMP		(RTC_BASE + 0x0004)
-#define RTCPRST		(RTC_BASE + 0x0008)
-#define RTCALMINTCR	(RTC_BASE + 0x0200) 
-#define RTCALMMIS	(RTC_BASE + 0x0204)
-
-#define VICINTENABLE	0xF4000010
-
 MODULE_AUTHOR("Michael Hasselberg <mh@open-engineering.de>");
-MODULE_DESCRIPTION("Toshiba TMPA910 RTC driver");
+MODULE_DESCRIPTION("Toshiba tmpa9xx RTC driver");
 MODULE_LICENSE("GPL");
 
 /*
- * This is the initial release of the TMPA910 RTC driver
+ * This is the initial release of the tmpa9xx RTC driver
  * it currently only supports set / read time and set / read alarm
  * TODO:
  * implement RTC_WKLAM_xxx and RTC_PIE_xxx ioctls and functionality
- * RTC_UIE_xxx is not available on TMPA910
+ * RTC_UIE_xxx is not available on tmpa9xx
  *
  */
 
@@ -68,7 +58,7 @@ static unsigned long rtc_alarm_value;
 static unsigned int rtc_irq_enabled;
 static int rtc_irq = -1;
 /* static int pie_irq = -1; */
-static void __iomem *rtc_base;
+static void __iomem *rtc_base,*rtc_base2;
 
 static inline unsigned long read_elapsed_second(void)
 {
@@ -88,7 +78,7 @@ static inline void write_elapsed_second(unsigned long sec)
 	spin_unlock_irq(&rtc_lock);
 }
 
-static void tmpa910_rtc_release(struct device *dev)
+static void tmpa9xx_rtc_release(struct device *dev)
 {
 	uint32_t reg;
 //printk("rtc: release\n");
@@ -96,9 +86,9 @@ static void tmpa910_rtc_release(struct device *dev)
 
 	if (rtc_irq_enabled) {
 //printk("rtc: ioctl alarm disable\n");
-		reg = _in32(RTCALMINTCR);
+		reg = _in32(RTCALMINTCTR);
 		reg &= 0x3e;
-		_out32(RTCALMINTCR, reg);
+		_out32(RTCALMINTCTR, reg);
 		disable_irq(rtc_irq);
 		rtc_irq_enabled = 0;
 	}
@@ -107,7 +97,7 @@ static void tmpa910_rtc_release(struct device *dev)
 
 }
 
-static int tmpa910_rtc_read_time(struct device *dev, struct rtc_time *time)
+static int tmpa9xx_rtc_read_time(struct device *dev, struct rtc_time *time)
 {
 	unsigned long epoch_sec, elapsed_sec;
 //printk("rtc: read time\n");
@@ -119,7 +109,7 @@ static int tmpa910_rtc_read_time(struct device *dev, struct rtc_time *time)
 	return 0;
 }
 
-static int tmpa910_rtc_set_time(struct device *dev, struct rtc_time *time)
+static int tmpa9xx_rtc_set_time(struct device *dev, struct rtc_time *time)
 {
 	unsigned long epoch_sec, current_sec;
 //printk("rtc: set time\n");
@@ -132,7 +122,7 @@ static int tmpa910_rtc_set_time(struct device *dev, struct rtc_time *time)
 	return 0;
 }
 
-static int tmpa910_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *wkalrm)
+static int tmpa9xx_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *wkalrm)
 {
 	struct rtc_time *time = &wkalrm->time;
 //printk("rtc: read alarm\n");
@@ -147,7 +137,7 @@ static int tmpa910_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *wkalrm)
 	return 0;
 }
 
-static int tmpa910_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *wkalrm)
+static int tmpa9xx_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *wkalrm)
 {
 	unsigned long alarm_sec;
 	uint32_t reg;
@@ -167,9 +157,9 @@ static int tmpa910_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *wkalrm)
 	udelay(100);
 
 	if (wkalrm->enabled) {
-		reg = _in32(RTCALMINTCR);
+		reg = _in32(RTCALMINTCTR);
 		reg |= 0x41;
-		_out32(RTCALMINTCR, reg);
+		_out32(RTCALMINTCTR, reg);
 		enable_irq(rtc_irq);
 	}
 	rtc_irq_enabled = wkalrm->enabled;
@@ -179,7 +169,7 @@ static int tmpa910_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *wkalrm)
 	return 0;
 }
 
-static int tmpa910_rtc_ioctl(struct device *dev, unsigned int cmd, unsigned long arg)
+static int tmpa9xx_rtc_ioctl(struct device *dev, unsigned int cmd, unsigned long arg)
 {
 	uint32_t reg;
 /*
@@ -195,12 +185,12 @@ static int tmpa910_rtc_ioctl(struct device *dev, unsigned int cmd, unsigned long
 //printk("rtc: ioctl alarm enable\n");
 			enable_irq(rtc_irq);
 //printk("rtc: RTCALMMIS=0x%02x\n",_in32(RTCALMMIS));
-			reg = _in32(RTCALMINTCR);
-//printk("rtc: RTCALMINTCR=0x%02x\n",reg);
+			reg = _in32(RTCALMINTCTR);
+//printk("rtc: RTCALMINTCTR=0x%02x\n",reg);
 			reg &= 0x3f;
 			reg |= 0x41;
-			_out32(RTCALMINTCR, reg);
-//printk("rtc: RTCALMINTCR=0x%02x\n",reg);
+			_out32(RTCALMINTCTR, reg);
+//printk("rtc: RTCALMINTCTR=0x%02x\n",reg);
 			reg = _in32(VICINTENABLE);
 //printk("rtc: VICINTENABLE=0x%04x\n",reg);
 			rtc_irq_enabled = 1;
@@ -213,9 +203,9 @@ static int tmpa910_rtc_ioctl(struct device *dev, unsigned int cmd, unsigned long
 
 		if (rtc_irq_enabled) {
 //printk("rtc: ioctl alarm disable\n");
-			reg = _in32(RTCALMINTCR);
+			reg = _in32(RTCALMINTCTR);
 			reg &= 0x3e;
-			_out32(RTCALMINTCR, reg);
+			_out32(RTCALMINTCTR, reg);
 			disable_irq(rtc_irq);
 			rtc_irq_enabled = 0;
 		}
@@ -276,36 +266,36 @@ static irqreturn_t elapsedtime_interrupt(int irq, void *dev_id)
 //printk("rtc: RTCALMMIS=0x%02x\n",reg2);
 	if (reg2 & 0x01) {
 //printk("rtc: interrupt 1\n");
-		reg = _in32(RTCALMINTCR);
-//printk("rtc: RTCALMINTCR=0x%02x\n",reg);
+		reg = _in32(RTCALMINTCTR);
+//printk("rtc: RTCALMINTCTR=0x%02x\n",reg);
 		reg &= 0x3f;
 		reg |= 0x40;
-		_out32(RTCALMINTCR, reg);
-//printk("rtc: RTCALMINTCR=0x%02x\n",reg);
+		_out32(RTCALMINTCTR, reg);
+//printk("rtc: RTCALMINTCTR=0x%02x\n",reg);
 		rtc_update_irq(rtc, 1, RTC_AF);
 	}
 	if (reg2 & 0x02) {
 //printk("rtc: interrupt 2\n");
-		reg = _in32(RTCALMINTCR);
+		reg = _in32(RTCALMINTCTR);
 		reg &= 0x3f;
 		reg |= 0x80;
-		_out32(RTCALMINTCR, reg);
-		printk(KERN_INFO "tmpa910_rtc: GLITCH! ALM irq triggered\n");
+		_out32(RTCALMINTCTR, reg);
+		//printk(KERN_INFO "tmpa9xx_rtc: GLITCH! ALM irq triggered\n");
 	}
 
 	return IRQ_HANDLED;
 }
 
-static const struct rtc_class_ops tmpa910_rtc_ops = {
-	.release	= tmpa910_rtc_release,
-	.ioctl		= tmpa910_rtc_ioctl,
-	.read_time	= tmpa910_rtc_read_time,
-	.set_time	= tmpa910_rtc_set_time,
-	.read_alarm	= tmpa910_rtc_read_alarm,
-	.set_alarm	= tmpa910_rtc_set_alarm,
+static const struct rtc_class_ops tmpa9xx_rtc_ops = {
+	.release	= tmpa9xx_rtc_release,
+	.ioctl		= tmpa9xx_rtc_ioctl,
+	.read_time	= tmpa9xx_rtc_read_time,
+	.set_time	= tmpa9xx_rtc_set_time,
+	.read_alarm	= tmpa9xx_rtc_read_alarm,
+	.set_alarm	= tmpa9xx_rtc_set_alarm,
 };
 
-static int __devinit tmpa910_rtc_probe(struct platform_device *pdev)
+static int __devinit tmpa9xx_rtc_probe(struct platform_device *pdev)
 {
 	struct resource *res;
 	struct rtc_device *rtc;
@@ -322,7 +312,15 @@ static int __devinit tmpa910_rtc_probe(struct platform_device *pdev)
 	if (!rtc_base)
 		return -EBUSY;
 
-	rtc = rtc_device_register("tmpa910", &pdev->dev, &tmpa910_rtc_ops, THIS_MODULE);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (!res)
+		return -EBUSY;
+
+ 	rtc_base2 = ioremap(res->start, res->end - res->start + 1);
+	if (!rtc_base2)
+		return -EBUSY;
+
+	rtc = rtc_device_register("tmpa9xx", &pdev->dev, &tmpa9xx_rtc_ops, THIS_MODULE);
 	if (IS_ERR(rtc)) {
 		retval = PTR_ERR(rtc);
 		goto err_iounmap_all;
@@ -330,10 +328,10 @@ static int __devinit tmpa910_rtc_probe(struct platform_device *pdev)
 
 	spin_lock_irq(&rtc_lock);
 
-	reg = _in32(RTCALMINTCR);
+	reg = _in32(RTCALMINTCTR);
 	reg &= 0x3e;
 	reg |= 0xc0;
-	_out32(RTCALMINTCR, reg);
+	_out32(RTCALMINTCTR, reg);
 	udelay(100);
 	_out32(RTCCOMP, 0);
 	udelay(100);
@@ -350,7 +348,7 @@ static int __devinit tmpa910_rtc_probe(struct platform_device *pdev)
 	}
 
 	retval = request_irq(rtc_irq, elapsedtime_interrupt, 0,
-	                     "tmpa910-rtc", pdev);
+	                     "tmpa9xx-rtc", pdev);
 	if (retval < 0)
 		goto err_device_unregister;
 
@@ -358,7 +356,7 @@ static int __devinit tmpa910_rtc_probe(struct platform_device *pdev)
 
 	disable_irq(rtc_irq);
 
-	printk(KERN_INFO "rtc: Toshiba TMPA910 Real Time Clock\n");
+	//printk(KERN_INFO "rtc: Toshiba TMPA9xx Real Time Clock\n");
 
 	return 0;
 
@@ -367,12 +365,14 @@ err_device_unregister:
 
 err_iounmap_all:
 	iounmap(rtc_base);
+	iounmap(rtc_base2);
 	rtc_base = NULL;
+	rtc_base2 = NULL;
 
 	return retval;
 }
 
-static int __devexit tmpa910_rtc_remove(struct platform_device *pdev)
+static int __devexit tmpa9xx_rtc_remove(struct platform_device *pdev)
 {
 	struct rtc_device *rtc;
 
@@ -385,47 +385,50 @@ static int __devexit tmpa910_rtc_remove(struct platform_device *pdev)
 	free_irq(rtc_irq, pdev);
 	/* free_irq(pie_irq, pdev); */
 	if (rtc_base)
+        {
 		iounmap(rtc_base);
+		iounmap(rtc_base2);
+        }
 
 	return 0;
 }
 #ifdef CONFIG_PM
 
 /* RTC Power management control */
-#define tmpa910_rtc_suspend NULL
-#define tmpa910_rtc_resume  NULL
+#define tmpa9xx_rtc_suspend NULL
+#define tmpa9xx_rtc_resume  NULL
 
 #else
-#define tmpa910_rtc_suspend NULL
-#define tmpa910_rtc_resume  NULL
+#define tmpa9xx_rtc_suspend NULL
+#define tmpa9xx_rtc_resume  NULL
 #endif
 
 
 /* work with hotplug and coldplug */
 MODULE_ALIAS("platform:RTC");
 
-static struct platform_driver tmpa910_rtc_platform_driver = {
-	.probe		= tmpa910_rtc_probe,
-	.remove		= __devexit_p(tmpa910_rtc_remove),
-	.suspend	= tmpa910_rtc_suspend,
-	.resume		= tmpa910_rtc_resume,
+static struct platform_driver tmpa9xx_rtc_platform_driver = {
+	.probe		= tmpa9xx_rtc_probe,
+	.remove		= __devexit_p(tmpa9xx_rtc_remove),
+	.suspend	= tmpa9xx_rtc_suspend,
+	.resume		= tmpa9xx_rtc_resume,
 	.driver		= {
-		.name	= "tmpa910_rtc",
+		.name	= "tmpa9xx_rtc",
 		.owner	= THIS_MODULE
 	},
 
 };
 
-static int __init tmpa910_rtc_init(void)
+static int __init tmpa9xx_rtc_init(void)
 {	
-	return platform_driver_register(&tmpa910_rtc_platform_driver);
+	return platform_driver_register(&tmpa9xx_rtc_platform_driver);
 }
 
-static void __exit tmpa910_rtc_exit(void)
+static void __exit tmpa9xx_rtc_exit(void)
 {
-	platform_driver_unregister(&tmpa910_rtc_platform_driver);
+	platform_driver_unregister(&tmpa9xx_rtc_platform_driver);
 }
 
-module_init(tmpa910_rtc_init);
-module_exit(tmpa910_rtc_exit);
+module_init(tmpa9xx_rtc_init);
+module_exit(tmpa9xx_rtc_exit);
 

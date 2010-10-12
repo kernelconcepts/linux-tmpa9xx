@@ -575,11 +575,15 @@ static struct platform_device tmpa910_nand_device = {
 /*
  * Real Time Clock
  */
-#if defined CONFIG_RTC_DRV_TMPA910 || defined CONFIG_RTC_DRV_TMPA910_MODULE
-static struct resource tmpa910_resource_rtc[] = {
+#if defined CONFIG_RTC_DRV_TMPA9XX || defined CONFIG_RTC_DRV_TMPA9XX_MODULE
+static struct resource tmpa9xx_resource_rtc[] = {
 	{
 		.start = RTC_BASE,
-		.end   = RTC_BASE + 0x3ff,
+		.end   = RTC_BASE + 0xff,
+		.flags = IORESOURCE_MEM
+	},{
+		.start = RTC_BASE + 0x200,
+		.end   = RTC_BASE + 0x2ff,
 		.flags = IORESOURCE_MEM
 	},{
 		.start = INTR_VECT_RTC,
@@ -588,11 +592,32 @@ static struct resource tmpa910_resource_rtc[] = {
 	}
 };
 
-static struct platform_device tmpa910_device_rtc = {
-	.name           = "tmpa910_rtc",
+static struct platform_device tmpa9xx_device_rtc = {
+	.name           = "tmpa9xx_rtc",
 	.id             = -1,
-	.num_resources  = ARRAY_SIZE(tmpa910_resource_rtc),
-	.resource       = tmpa910_resource_rtc
+	.num_resources  = ARRAY_SIZE(tmpa9xx_resource_rtc),
+	.resource       = tmpa9xx_resource_rtc
+	}
+;
+#endif
+
+/*
+ * Melody / Arlarm
+ */
+#if defined CONFIG_TMPA9XX_MLDALM || defined CONFIG_TMPA9XX_MLDALM_MODULE
+static struct resource tmpa9xx_resource_mldalm[] = {
+	{
+		.start = RTC_BASE + 0x100,
+		.end   = RTC_BASE + 0x1ff,
+		.flags = IORESOURCE_MEM
+	}
+};
+
+static struct platform_device tmpa9xx_device_mldalm = {
+	.name           = "tmpa9xx_mldalm",
+	.id             = -1,
+	.num_resources  = ARRAY_SIZE(tmpa9xx_resource_mldalm),
+	.resource       = tmpa9xx_resource_mldalm
 	}
 ;
 #endif
@@ -784,8 +809,12 @@ static struct platform_device *devices[] __initdata = {
  	&tmpa910_nand_device,
 #endif
 
-#if defined CONFIG_RTC_DRV_TMPA910 || defined CONFIG_RTC_DRV_TMPA910_MODULE
-	&tmpa910_device_rtc,
+#if defined CONFIG_RTC_DRV_TMPA9XX || defined CONFIG_RTC_DRV_TMPA9XX_MODULE
+	&tmpa9xx_device_rtc,
+#endif
+
+#if defined CONFIG_TMPA9XX_MLDALM || defined CONFIG_TMPA9XX_MLDALM_MODULE
+	&tmpa9xx_device_mldalm,
 #endif
 
 #if defined CONFIG_USB_OHCI_HCD_TMPA900 || defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE
@@ -972,7 +1001,16 @@ static void __init tonga_init(void)
 	SYSCR8    |= ((0x3<<4)|(0x4<<0));
 	/* Enable overcurrent */
 	HCBCR0     = 0;
-#else
+#endif
+#if defined CONFIG_TMPA9XX_MLDALM || defined CONFIG_TMPA9XX_MLDALM_MODULE
+	GPIOCFR1 |=  (0x1<<3);
+	GPIOCFR2 &= ~(0x1<<3);
+	GPIOCIE  &= ~(0x1<<3);
+	GPIOCODE &= ~(0x1<<3);
+#endif
+        
+#if !defined CONFIG_USB_OHCI_HCD_TMPA900 && !defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE \
+ && !defined CONFIG_TMPA9XX_MLDALM       && !defined CONFIG_TMPA9XX_MLDALM_MODULE
 	TMPA910_CFG_PORT_GPIO(PORTC);
 	GPIOCODE = 0x00; 
 	GPIOCDIR = 0xFF;
@@ -980,6 +1018,7 @@ static void __init tonga_init(void)
 	GPIOCFR2 = 0;
 	GPIOCDATA = 0x00;
 #endif
+
 #if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
 #if 0
 	/* set PORT-C 6,7 to I2C and enable open drain */
