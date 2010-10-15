@@ -436,7 +436,9 @@ static struct amba_device pl022_device1 = {
 	.periphid = 0x00041022,
 };
 #endif
+#endif //defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
 
+#ifdef CONFIG_ARM_AMBA
 static struct amba_device *amba_devs[] __initdata = {
 #ifdef CONFIG_SPI_PL022_CHANNEL_0
 	&pl022_device0,
@@ -454,8 +456,7 @@ static struct amba_device *amba_devs[] __initdata = {
 	&pl011_device2,
 #endif        
 };
-
-#endif //defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+#endif
 
 /*
  * Touchscreen
@@ -917,7 +918,7 @@ static void parse_enetaddr(char *addr, unsigned char *enetaddr)
  */
 static void __init tonga_init(void)
 {
-#if defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+#ifdef CONFIG_ARM_AMBA
 	int i;
 #endif        
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
@@ -1107,7 +1108,7 @@ static void __init tonga_init(void)
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
 	/* Register the active AMBA devices on this board */
-#if defined CONFIG_ARM_AMBA
+#ifdef CONFIG_ARM_AMBA
 	for (i= 0; i < ARRAY_SIZE(amba_devs); i++)
         {
 		amba_device_register(amba_devs[i], &iomem_resource);
