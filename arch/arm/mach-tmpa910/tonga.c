@@ -1129,6 +1129,8 @@ static void __init tonga_init(void)
 #endif
 }
 
+extern struct sys_timer tmpa9xx_timer;
+
 MACHINE_START(TONGA, "Tonga 2")
         /* Maintainer:  Florian Boor <florian.boor@kernelconcepts.de> */
         .phys_io        = TMPA910_IO_PHYS_BASE,
@@ -1136,7 +1138,7 @@ MACHINE_START(TONGA, "Tonga 2")
         .io_pg_offst    = (io_p2v(TMPA910_IO_PHYS_BASE) >> 18) & 0xfffc,
         .map_io         = tonga_map_io,
         .init_irq       = tonga_init_irq,
-        .timer          = &tmpa910_timer,
+        .timer          = &tmpa9xx_timer,
         .init_machine   = tonga_init,
 MACHINE_END
 
