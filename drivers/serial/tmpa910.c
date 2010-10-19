@@ -598,7 +598,8 @@ static struct uart_tmpa910_port serial_tmpa910_ports[] = {
 			.ops		= &serial_tmpa910_pops,
 			.line		= 0,
 		},
-	}, {	/* UART 1 */
+	}, 
+	{	/* UART 1 */
 		.name	= "UART 1",
 		.port	= {
 			.type		= PORT_TMPA910,
@@ -611,7 +612,9 @@ static struct uart_tmpa910_port serial_tmpa910_ports[] = {
 			.ops		= &serial_tmpa910_pops,
 			.line		= 1,
 		},
-	}, {	/* UART 2 */
+	}, 
+#ifdef CONFIG_CPU_TMPA900
+	{	/* UART 2 */
 		.name	= "UART 2",
 		.port	= {
 			.type		= PORT_TMPA910,
@@ -625,6 +628,7 @@ static struct uart_tmpa910_port serial_tmpa910_ports[] = {
 			.line		= 2,
 		},
 	}
+#endif
 };
 
 

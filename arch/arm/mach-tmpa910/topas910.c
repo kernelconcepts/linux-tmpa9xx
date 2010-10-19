@@ -444,13 +444,13 @@ static struct amba_device *amba_devs[] __initdata = {
  * Touchscreen
  */
 #if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
-static struct tmpa910_ts_platforminfo tmpa910_info_ts = {
+static struct tmpa9xx_ts_platforminfo tmpa9xx_info_ts = {
 		.fuzz       = 0,
 		.rate       = 100,
 		.skip_count = 4,
 };
 
-static struct resource tmpa910_resource_ts[] = {
+static struct resource tmpa9xx_resource_ts[] = {
 	{
 		.start	= TS_BASE,
 		.end	= TS_BASE + 0x40,
@@ -471,13 +471,13 @@ static struct resource tmpa910_resource_ts[] = {
 };
 
 struct platform_device tmpa910_device_ts = {
-	.name		= "tmpa910_ts",
-	.id		= -1,
+	.name		= "tmpa9xx_ts",
+	.id		= 0,
 	.dev = {
-		.platform_data = &tmpa910_info_ts,
+		.platform_data = &tmpa9xx_info_ts,
 	},
-	.resource	= tmpa910_resource_ts,
-	.num_resources	= ARRAY_SIZE(tmpa910_resource_ts),
+	.resource	= tmpa9xx_resource_ts,
+	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_ts),
 };
 #endif
 
@@ -794,7 +794,7 @@ void __init topas910_init_irq(void) {
 
 static void __init topas910_init(void)
 {
-#if defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+#ifdef CONFIG_ARM_AMBA
 	int i;
 #endif        
 
@@ -951,7 +951,7 @@ static void __init topas910_init(void)
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
 	/* Register the active AMBA devices on this board */
-#if defined CONFIG_ARM_AMBA
+#ifdef CONFIG_ARM_AMBA
 	for (i= 0; i < ARRAY_SIZE(amba_devs); i++)
         {
 		amba_device_register(amba_devs[i], &iomem_resource);

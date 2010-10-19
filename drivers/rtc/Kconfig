@@ -736,12 +736,12 @@ config RTC_DRV_AT91RM9200
 	  Atmel AT91RM9200's and AT91SAM9RL chips. On SAM9RL chips
 	  this is powered by the backup power supply.
 
-config RTC_DRV_TMPA910
-	tristate "Toshiba TMPA910 RTC"
+config RTC_DRV_TMPA9XX
+	tristate "Toshiba TMPA9xx RTC"
 	depends on ARCH_TMPA910
 	help
 	  Driver for the internal RTC (Realtime Clock) module found on
-	  Toshiba TMPA910 chip.
+	  Toshiba TMPA9xx chip.
 
 config RTC_DRV_AT91SAM9
 	tristate "AT91SAM9x/AT91CAP9"

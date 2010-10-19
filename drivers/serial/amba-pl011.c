@@ -766,7 +766,7 @@ static struct uart_driver amba_reg = {
 	.dev_name		= "ttyS",
 #else
 	.dev_name		= "ttyAMA",
-#endif
+#endif        
 	.major			= SERIAL_AMBA_MAJOR,
 	.minor			= SERIAL_AMBA_MINOR,
 	.nr			= UART_NR,
