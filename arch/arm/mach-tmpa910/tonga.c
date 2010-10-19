@@ -390,8 +390,6 @@ static struct pl022_ssp_controller ssp0_platform_data = {
 	/* pl022 not yet supports dma */
 	.enable_dma = 0,
 	.num_chipselect = 1,
-<<<<<<< HEAD
-=======
 };
 #endif
 
