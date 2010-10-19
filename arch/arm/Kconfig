@@ -386,8 +386,7 @@ config ARCH_TMPA910
 	select GENERIC_GPIO
 	select ARCH_REQUIRE_GPIOLIB
 	select COMMON_CLKDEV
-	select GENERIC_CLOCKEVENTS
-	select GENERIC_CLOCKEVENTS_BUILD
+	select ARCH_USES_GETTIMEOFFSET
 	help
 		This enables support for Toshiba TX09 series TMPA9xx / TMPA9xxCR based
 		devices.
