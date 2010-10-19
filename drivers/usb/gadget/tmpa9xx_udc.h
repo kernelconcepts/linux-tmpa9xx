@@ -1,9 +1,9 @@
-#ifndef tmpa910_UDC_H
-#define tmpa910_UDC_H
+#ifndef tmpa9xx_UDC_H
+#define tmpa9xx_UDC_H
 
 /*
  * USB Device Port (UDP) registers.
- * Based on tmpa910RM9200 datasheet revision E.
+ * Based on tmpa9xxRM9200 datasheet revision E.
  */
 
 #define   UD2AB_INTSTS		0x000
@@ -108,6 +108,7 @@
 #define EP0_STALL		0x0004	/* to set STALL for Endpoint0*/
 #define EP1_STALL		0x0014	/* to set STALL for Endpoint1*/
 #define EP2_STALL		0x0024	/* to set STALL for Endpoint2*/
+#define EP3_STALL		0x0044	/* to set STALL for Endpoint3*/
 
 #define STATUS_NAK_E		0xfdff	/* STATUS_NAK Interrupt Enaable */
 #define STATUS_NAK_D		0x0200	/* STATUS_NAK Interrupt Desable */
@@ -120,6 +121,7 @@
 #define EP0_EOP			0x000C	/* to set ENDPOINT0 EOP*/
 #define EP1_EOP			0x001C	/* to set ENDPOINT1 EOP*/
 #define EP2_EOP			0x002C	/* to set ENDPOINT2 EOP*/
+#define EP3_EOP			0x004C	/* to set ENDPOINT3 EOP*/
 
 /* UDC Stage parameters */
 #define IDLE_STAGE		0x00	/* Idle Stage*/
@@ -252,19 +254,19 @@
  * controller driver data structures
  */
 
-#define	NUM_ENDPOINTS	3   //GCH
+#define	NUM_ENDPOINTS	4
 
 /*
  * hardware won't disable bus reset, or resume while the controller
  * is suspended ... watching suspend helps keep the logic symmetric.
  */
 #define	MINIMUS_INTERRUPTUS \
-	(tmpa910_UDP_ENDBUSRES | tmpa910_UDP_RXRSM | tmpa910_UDP_RXSUSP)
+	(tmpa9xx_UDP_ENDBUSRES | tmpa9xx_UDP_RXRSM | tmpa9xx_UDP_RXSUSP)
 
-struct tmpa910_ep {
+struct tmpa9xx_ep {
 	struct usb_ep			ep;
 	struct list_head		queue;
-	struct tmpa910_udc	*udc;
+	struct tmpa9xx_udc		*udc;
 	void __iomem			*creg;
 
 	unsigned			maxpacket:16;
@@ -281,9 +283,9 @@ struct tmpa910_ep {
 	unsigned			datasize;
 };
 
-struct tmpa910_udc {
+struct tmpa9xx_udc {
 	struct usb_gadget		gadget;
-	struct tmpa910_ep		ep[NUM_ENDPOINTS];
+	struct tmpa9xx_ep		ep[NUM_ENDPOINTS];
 	struct usb_gadget_driver	*driver;
 	unsigned			vbus:1;
 	unsigned			enabled:1;
@@ -312,12 +314,12 @@ struct tmpa910_udc {
 	unsigned char 			dma_status;
 };
 
-static inline struct tmpa910_udc *to_udc(struct usb_gadget *g)
+static inline struct tmpa9xx_udc *to_udc(struct usb_gadget *g)
 {
-	return container_of(g, struct tmpa910_udc, gadget);
+	return container_of(g, struct tmpa9xx_udc, gadget);
 }
 
-struct tmpa910_request {
+struct tmpa9xx_request {
 	struct usb_request		req;
 	struct list_head		queue;
 };

@@ -660,8 +660,8 @@ static struct platform_device tmpa900_ohci_device = {
 /*
  * USB Device Controller
  */
-#if defined CONFIG_USB_GADGET_TMPA910 || defined CONFIG_USB_GADGET_TMPA910_MODULE
-static struct resource tmpa910_udc_resource[] = {
+#if defined CONFIG_USB_GADGET_TMPA9XX || defined CONFIG_USB_GADGET_TMPA9XX_MODULE
+static struct resource tmpa9xx_udc_resource[] = {
         [0] = {
                 .start = 0xf4400000,
                 .end   = 0xf44003ff,
@@ -674,11 +674,11 @@ static struct resource tmpa910_udc_resource[] = {
         }
 };
 
-static struct platform_device tmpa910_udc_device = {
+static struct platform_device tmpa9xx_udc_device = {
         .name           = "tmpa9xx-udc",
         .id             = -1,
-        .num_resources  = ARRAY_SIZE(tmpa910_udc_resource),
-        .resource       = tmpa910_udc_resource,
+        .num_resources  = ARRAY_SIZE(tmpa9xx_udc_resource),
+        .resource       = tmpa9xx_udc_resource,
         .dev            = {
         .platform_data  = NULL,
         }
@@ -822,8 +822,8 @@ static struct platform_device *devices[] __initdata = {
 	&tmpa900_ohci_device,
 #endif       
 
-#if defined CONFIG_USB_GADGET_TMPA910 || defined CONFIG_USB_GADGET_TMPA910_MODULE
-	&tmpa910_udc_device,
+#if defined CONFIG_USB_GADGET_TMPA9XX || defined CONFIG_USB_GADGET_TMPA9XX_MODULE
+	&tmpa9xx_udc_device,
 #endif
 #if defined CONFIG_TMPA9X0_WATCHDOG || defined CONFIG_TMPA9X0_WATCHDOG_MODULE
 	&tmpa910_wdt_device,

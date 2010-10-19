@@ -187,21 +187,22 @@ config USB_LH7A40X
 	default USB_GADGET
 	select USB_GADGET_SELECTED
 
-config USB_GADGET_TMPA910
-	boolean "TMPA910 USB Device Controller"
+config USB_GADGET_TMPA9XX
+	boolean "TMPA9xx USB Device Controller"
+	select USB_GADGET_DUALSPEED
 	depends on ARCH_TMPA910
 	help
-	The TOSHIBA ARM MCU TMPA910CRAXBG has a full speed USB Device
+	The TOSHIBA ARM MCU TMPA9xxCRAXBG has a full speed USB Device
            Controller with support for 3 configurable endpoints (plus
            endpoint zero).
 
            Say "y" to link the driver statically, or "m" to build a
-           dynamically linked module called "tmpa910_udc" and force all
+           dynamically linked module called "tmpa9xx_udc" and force all
            gadget drivers to also be dynamically linked.
 
-config USB_TMPA910
+config USB_TMPA9XX
 	tristate
-	depends on USB_GADGET_TMPA910
+	depends on USB_GADGET_TMPA9XX
 	default USB_GADGET
 	select USB_GADGET_SELECTED
 
