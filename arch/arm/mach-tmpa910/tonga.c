@@ -390,6 +390,8 @@ static struct pl022_ssp_controller ssp0_platform_data = {
 	/* pl022 not yet supports dma */
 	.enable_dma = 0,
 	.num_chipselect = 1,
+<<<<<<< HEAD
+=======
 };
 #endif
 
@@ -489,8 +491,8 @@ static struct resource tmpa9xx_resource_ts[] = {
 };
 
 struct platform_device tmpa910_device_ts = {
-	.name		= "tmpa910_ts",
-	.id		= -1,
+	.name		= "tmpa9xx_ts",
+	.id		= 0,
 	.dev = {
 		.platform_data = &tmpa9xx_info_ts,
 	},
@@ -519,7 +521,7 @@ static struct tmpa910_lcdc_platforminfo topas910_v1_lcdc_platforminfo;
 
 struct platform_device tmpa9xx_device_lcdc= {
 	.name		= "tmpa9xxfb",
-	.id		= -1,
+	.id		= 0,
 	.resource	= tmpa9xx_resource_lcdc,
 	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_lcdc),
         .dev = {
