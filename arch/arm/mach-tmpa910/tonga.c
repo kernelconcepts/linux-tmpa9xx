@@ -489,7 +489,7 @@ static struct resource tmpa9xx_resource_ts[] = {
 };
 
 struct platform_device tmpa910_device_ts = {
-	.name		= "tmpa910_ts",
+	.name		= "tmpa9xx_ts",
 	.id		= -1,
 	.dev = {
 		.platform_data = &tmpa9xx_info_ts,
