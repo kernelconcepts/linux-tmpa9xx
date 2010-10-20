@@ -490,7 +490,7 @@ static struct resource tmpa9xx_resource_ts[] = {
 
 struct platform_device tmpa910_device_ts = {
 	.name		= "tmpa9xx_ts",
-	.id		= 0,
+	.id		= -1,
 	.dev = {
 		.platform_data = &tmpa9xx_info_ts,
 	},
@@ -519,7 +519,7 @@ static struct tmpa910_lcdc_platforminfo topas910_v1_lcdc_platforminfo;
 
 struct platform_device tmpa9xx_device_lcdc= {
 	.name		= "tmpa9xxfb",
-	.id		= 0,
+	.id		= -1,
 	.resource	= tmpa9xx_resource_lcdc,
 	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_lcdc),
         .dev = {
@@ -832,10 +832,12 @@ static struct platform_device *devices[] __initdata = {
  	&tmpa910_i2s_device,	
 #endif
 	&tmpa9xx_pwm_device,
+#if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
+	&tmpa9xx_device_lcdda,
+#endif
 #if defined CONFIG_BACKLIGHT_PWM
 	&tonga_backlight_device,
 #endif
-	&tmpa9xx_device_lcdda,
 };
 
 #if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
@@ -1021,12 +1023,10 @@ static void __init tonga_init(void)
 #endif
 
 #if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
-#if 0
 	/* set PORT-C 6,7 to I2C and enable open drain */
 	GPIOCFR1 |= 0xc0;
 	GPIOCFR2 &= ~(0xc0);
 	GPIOCODE |= 0xc0;
-#endif
 #endif
 
 #if defined CONFIG_BACKLIGHT_PWM
@@ -1163,6 +1163,7 @@ static void __init tonga_init(void)
 	i2c_register_board_info(1, tonga_i2c_1_devices,
 			ARRAY_SIZE(tonga_i2c_1_devices));
 #endif
+
 #if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
