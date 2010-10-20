@@ -75,14 +75,10 @@ void __init topasa900_map_io(void)
 }
 
 
-static void dummy_release(struct device *dev)
-{
-        /* normally not freed */
-}
-
-
-/* Ethernet */
- 
+/* 
+ * Ethernet 
+ */ 
+#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
 static struct resource dm9000_resources[] = {
         [0] = {
                 .start  = 0x60000002,
@@ -108,12 +104,10 @@ static struct platform_device topas910_dm9000_device = {
         .num_resources  = ARRAY_SIZE(dm9000_resources),
         .resource       = dm9000_resources,
         .dev = {
-		.release        = dummy_release,
 		.coherent_dma_mask = 0xffffffff,		
         },
 };
-
-
+#endif
 
 /*
  * Serial UARTs
@@ -204,6 +198,16 @@ struct platform_device tmpa910_device_i2c = {
 	},
 	.resource	= tmpa910_resource_i2c,
 	.num_resources	= ARRAY_SIZE(tmpa910_resource_i2c),
+};
+
+static struct i2c_board_info topasa900_i2c_0_devices[] = {
+	{
+	},
+};
+
+static struct i2c_board_info topasa900_i2c_1_devices[] = {
+	{
+	},
 };
 #endif
 
@@ -417,7 +421,9 @@ static struct amba_device pl022_device1 = {
 	.periphid = 0x00041022,
 };
 #endif
+#endif //defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
 
+#ifdef CONFIG_ARM_AMBA
 static struct amba_device *amba_devs[] __initdata = {
 #ifdef CONFIG_SPI_PL022_CHANNEL_0
 	&pl022_device0,
@@ -435,14 +441,13 @@ static struct amba_device *amba_devs[] __initdata = {
 	&pl011_device2,
 #endif        
 };
-
-#endif //defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+#endif
 
 /*
  * Touchscreen
  */
 #if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
-static struct tmpa9xx_ts_platforminfo tmpa910_info_ts = {
+static struct tmpa9xx_ts_platforminfo tmpa9xx_info_ts = {
 		.fuzz       = 0,
 		.rate       = 100,
 		.skip_count = 4,
@@ -469,10 +474,10 @@ static struct resource tmpa9xx_resource_ts[] = {
 };
 
 struct platform_device tmpa910_device_ts = {
-	.name		= "tmpa910_ts",
+	.name		= "tmpa9xx_ts",
 	.id		= -1,
 	.dev = {
-		.platform_data = &tmpa910_info_ts,
+		.platform_data = &tmpa9xx_info_ts,
 	},
 	.resource	= tmpa9xx_resource_ts,
 	.num_resources	= ARRAY_SIZE(tmpa9xx_resource_ts),
@@ -627,11 +632,15 @@ static struct platform_device tmpa910_nand_device = {
 /*
  * Real Time Clock
  */
-#if defined CONFIG_RTC_DRV_TMPA910 || defined CONFIG_RTC_DRV_TMPA910_MODULE
-static struct resource tmpa910_resource_rtc[] = {
+#if defined CONFIG_RTC_DRV_TMPA9XX || defined CONFIG_RTC_DRV_TMPA9XX_MODULE
+static struct resource tmpa9xx_resource_rtc[] = {
 	{
 		.start = RTC_BASE,
-		.end   = RTC_BASE + 0x3ff,
+		.end   = RTC_BASE + 0xff,
+		.flags = IORESOURCE_MEM
+	},{
+		.start = RTC_BASE + 0x200,
+		.end   = RTC_BASE + 0x2ff,
 		.flags = IORESOURCE_MEM
 	},{
 		.start = INTR_VECT_RTC,
@@ -640,11 +649,32 @@ static struct resource tmpa910_resource_rtc[] = {
 	}
 };
 
-static struct platform_device tmpa910_device_rtc = {
-	.name           = "tmpa910_rtc",
+static struct platform_device tmpa9xx_device_rtc = {
+	.name           = "tmpa9xx_rtc",
 	.id             = -1,
-	.num_resources  = ARRAY_SIZE(tmpa910_resource_rtc),
-	.resource       = tmpa910_resource_rtc
+	.num_resources  = ARRAY_SIZE(tmpa9xx_resource_rtc),
+	.resource       = tmpa9xx_resource_rtc
+	}
+;
+#endif
+
+/*
+ * Melody / Arlarm
+ */
+#if defined CONFIG_TMPA9XX_MLDALM || defined CONFIG_TMPA9XX_MLDALM_MODULE
+static struct resource tmpa9xx_resource_mldalm[] = {
+	{
+		.start = RTC_BASE + 0x100,
+		.end   = RTC_BASE + 0x1ff,
+		.flags = IORESOURCE_MEM
+	}
+};
+
+static struct platform_device tmpa9xx_device_mldalm = {
+	.name           = "tmpa9xx_mldalm",
+	.id             = -1,
+	.num_resources  = ARRAY_SIZE(tmpa9xx_resource_mldalm),
+	.resource       = tmpa9xx_resource_mldalm
 	}
 ;
 #endif
@@ -686,8 +716,8 @@ static struct platform_device tmpa900_ohci_device = {
 /*
  * USB Device Controller
  */
-#if defined CONFIG_USB_GADGET_TMPA910 || defined CONFIG_USB_GADGET_TMPA910_MODULE
-static struct resource tmpa910_udc_resource[] = {
+#if defined CONFIG_USB_GADGET_TMPA9XX || defined CONFIG_USB_GADGET_TMPA9XX_MODULE
+static struct resource tmpa9xx_udc_resource[] = {
         [0] = {
                 .start = 0xf4400000,
                 .end   = 0xf44003ff,
@@ -700,11 +730,11 @@ static struct resource tmpa910_udc_resource[] = {
         }
 };
 
-static struct platform_device tmpa910_udc_device = {
+static struct platform_device tmpa9xx_udc_device = {
         .name           = "tmpa9xx-udc",
         .id             = -1,
-        .num_resources  = ARRAY_SIZE(tmpa910_udc_resource),
-        .resource       = tmpa910_udc_resource,
+        .num_resources  = ARRAY_SIZE(tmpa9xx_udc_resource),
+        .resource       = tmpa9xx_udc_resource,
         .dev            = {
         .platform_data  = NULL,
         }
@@ -734,6 +764,30 @@ static struct platform_device tmpa910_wdt_device = {
 };
 #endif
 
+static struct resource tmpa9xx_pwm_resource[] = {
+	[0] = {
+		.start = TMPA910_TIMER2,
+		.end   = TMPA910_TIMER2 + 0x0fff,
+		.flags = IORESOURCE_MEM
+	},
+};
+
+static struct platform_device tmpa9xx_pwm_device = {
+	.name		= "tmpa9xx-pwm",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(tmpa9xx_pwm_resource),
+	.resource	= tmpa9xx_pwm_resource,
+	.dev		= {
+	.platform_data	= NULL,
+	}
+};
+
+static struct platform_device tmpa910_i2s_device = {
+	.name = "WM8976-I2S",
+	.id   = -1,
+};
+
+
 static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
 	&topas910_dm9000_device,
@@ -759,16 +813,20 @@ static struct platform_device *devices[] __initdata = {
  	&tmpa910_nand_device,
 #endif
 
-#if defined CONFIG_RTC_DRV_TMPA910 || defined CONFIG_RTC_DRV_TMPA910_MODULE
-	&tmpa910_device_rtc,
+#if defined CONFIG_RTC_DRV_TMPA9XX || defined CONFIG_RTC_DRV_TMPA9XX_MODULE
+	&tmpa9xx_device_rtc,
+#endif
+
+#if defined CONFIG_TMPA9XX_MLDALM || defined CONFIG_TMPA9XX_MLDALM_MODULE
+	&tmpa9xx_device_mldalm,
 #endif
 
 #if defined CONFIG_USB_OHCI_HCD_TMPA900 || defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE
 	&tmpa900_ohci_device,
 #endif       
 
-#if defined CONFIG_USB_GADGET_TMPA910 || defined CONFIG_USB_GADGET_TMPA910_MODULE
-	&tmpa910_udc_device,
+#if defined CONFIG_USB_GADGET_TMPA9XX || defined CONFIG_USB_GADGET_TMPA9XX_MODULE
+	&tmpa9xx_udc_device,
 #endif
 #if defined CONFIG_TMPA9X0_WATCHDOG || defined CONFIG_TMPA9X0_WATCHDOG_MODULE
 	&tmpa910_wdt_device,
@@ -776,11 +834,12 @@ static struct platform_device *devices[] __initdata = {
 #if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
  	&tmpa910_i2s_device,	
 #endif
+	&tmpa9xx_pwm_device,
 #if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
 	&tmpa9xx_device_lcdda,
 #endif
 	&topas910_led_device,
-        &topas910_keys_device,
+    &topas910_keys_device,
 
 };
 
@@ -826,9 +885,15 @@ void __init topasa900_init_irq(void) {
  */
 static void __init topasa900_init(void)
 {
-#if defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+#ifdef CONFIG_ARM_AMBA
 	int i;
 #endif        
+
+	/* DMA setup */
+	platform_bus.coherent_dma_mask = DMA_BIT_MASK(32);
+	platform_bus.dma_mask=DMA_BIT_MASK(32);
+	
+	/* Pin configuration */
         
 	/* Port A can be used not only as a general-purpose input pin with pull up but also as key input pin. */
 	TMPA910_CFG_PORT_GPIO(PORTA); /* All useable for GPIO */
@@ -860,7 +925,16 @@ static void __init topasa900_init(void)
 	SYSCR8    |= ((0x3<<4)|(0x4<<0));
 	/* Enable overcurrent */
 	HCBCR0     = 0;
-#else
+#endif
+#if defined CONFIG_TMPA9XX_MLDALM || defined CONFIG_TMPA9XX_MLDALM_MODULE
+	GPIOCFR1 |=  (0x1<<3);
+	GPIOCFR2 &= ~(0x1<<3);
+	GPIOCIE  &= ~(0x1<<3);
+	GPIOCODE &= ~(0x1<<3);
+#endif
+        
+#if !defined CONFIG_USB_OHCI_HCD_TMPA900 && !defined CONFIG_USB_OHCI_HCD_TMPA900_MODULE \
+ && !defined CONFIG_TMPA9XX_MLDALM       && !defined CONFIG_TMPA9XX_MLDALM_MODULE
 	TMPA910_CFG_PORT_GPIO(PORTC);
 	GPIOCODE = 0x00; 
 	GPIOCDIR = 0xFF;
@@ -868,14 +942,14 @@ static void __init topasa900_init(void)
 	GPIOCFR2 = 0;
 	GPIOCDATA = 0x00;
 #endif
+
 #if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
-#if 0
 	/* set PORT-C 6,7 to I2C and enable open drain */
 	GPIOCFR1 |= 0xc0;
 	GPIOCFR2 &= ~(0xc0);
 	GPIOCODE |= 0xc0;
 #endif
-#endif
+
 
        	GPIOTFR1 = 0xFF;  /* USB, SPI0 and UART 1 */
 
@@ -923,7 +997,6 @@ static void __init topasa900_init(void)
 	   Port K can also be used as LCD controller function pins (LD23 to LD16) and CMOS image
 	   sensor control (CMSD7 toCMSD0) pins. */
 #if defined CONFIG_FB_TMPA910 || defined CONFIG_FB_TMPA910_MODULE
-	LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
 	GPIOJFR2 = 0x00;
 	GPIOJFR1 = 0xFF;
 	GPIOKFR2 = 0x00;
@@ -988,11 +1061,11 @@ static void __init topasa900_init(void)
 	NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
 	NDFMCR1 = 0x00000000; // ECC = Hamming
 	NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
-              	             // NDREn L = 4clks,H = 3clks
+							// NDREn L = 4clks,H = 3clks
 	NDFINTC = 0x00000000; // ALL Interrupt Disable
 
 	/* Register the active AMBA devices on this board */
-#if defined CONFIG_ARM_AMBA
+#ifdef CONFIG_ARM_AMBA
 	for (i= 0; i < ARRAY_SIZE(amba_devs); i++)
         {
 		amba_device_register(amba_devs[i], &iomem_resource);
@@ -1001,21 +1074,19 @@ static void __init topasa900_init(void)
 	/* Add devices */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 
-#if 0  
 #if defined CONFIG_I2C_TMPA910 || defined CONFIG_I2C_TMPA910_MODULE
-	i2c_register_board_info(0, topas_i2c_0_devices,
-			ARRAY_SIZE(topas_i2c_0_devices));
+	i2c_register_board_info(0, topasa900_i2c_0_devices,
+			ARRAY_SIZE(topasa900_i2c_0_devices));
 
-	i2c_register_board_info(1, topas_i2c_1_devices,
-			ARRAY_SIZE(topas_i2c_1_devices));
+	i2c_register_board_info(1, topasa900_i2c_1_devices,
+			ARRAY_SIZE(topasa900_i2c_1_devices));
 #endif
-#endif
-
 #if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
 }
 
+extern struct sys_timer tmpa9xx_timer;
 
 MACHINE_START(TOPASA900, "Toshiba TopasA900")
         /* Maintainer:  Florian Boor <florian.boor@kernelconcepts.de> */
@@ -1024,7 +1095,7 @@ MACHINE_START(TOPASA900, "Toshiba TopasA900")
         .io_pg_offst    = (io_p2v(TMPA910_IO_PHYS_BASE) >> 18) & 0xfffc,
         .map_io         = topasa900_map_io,
         .init_irq       = topasa900_init_irq,
-        .timer          = &tmpa910_timer,
+        .timer          = &tmpa9xx_timer,
         .init_machine   = topasa900_init,
 MACHINE_END
 
