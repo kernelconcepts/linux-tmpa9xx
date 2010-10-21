@@ -725,6 +725,30 @@ static struct platform_device tmpa9xx_pwm_device = {
 	.platform_data	= NULL,
 	}
 };
+#if defined CONFIG_TMPA9XX_ADC || defined CONFIG_TMPA9XX_ADC_MODULE
+static struct resource tmpa9xx_adc_resource[] = {
+	[0] = {
+		.start = ADC_BASE,
+		.end   = ADC_BASE + 0x0FFF,
+		.flags = IORESOURCE_MEM
+	},
+        [1] = {
+                .start = INTR_VECT_ADC,
+                .end   = INTR_VECT_ADC,
+                .flags = IORESOURCE_IRQ
+        }
+};
+
+static struct platform_device tmpa9xx_adc_device = {
+	.name		= "tmpa9xx_adc",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(tmpa9xx_adc_resource),
+	.resource	= tmpa9xx_adc_resource,
+	.dev		= {
+	.platform_data	= NULL,
+	}
+};
+#endif
 
 #if defined CONFIG_BACKLIGHT_PWM
 static int tonga_backlight_init(struct device *dev)
@@ -837,6 +861,9 @@ static struct platform_device *devices[] __initdata = {
 #endif
 #if defined CONFIG_BACKLIGHT_PWM
 	&tonga_backlight_device,
+#endif
+#if defined CONFIG_TMPA9XX_ADC || defined CONFIG_TMPA9XX_ADC_MODULE
+	&tmpa9xx_adc_device,
 #endif
 };
 
@@ -1038,8 +1065,21 @@ static void __init tonga_init(void)
 	   Port D can also be used as interrupt (INTB, INTA), ADC (AN7-AN0), and touch screen
 	   control (PX, PY, MX, MY) pins. */
 #if defined CONFIG_TOUCHSCREEN_TMPA910 || defined CONFIG_TOUCHSCREEN_TMPA910_MODULE
-	GPIODFR1 = 0x0f;
-	GPIODFR2 = 0xf0;
+	GPIODFR1 |= 0x00;
+	GPIODFR2 |= 0xf0;
+	GPIODIE = 0x00;
+#endif
+
+#if defined CONFIG_TMPA9XX_ADC || defined CONFIG_TMPA9XX_ADC_MODULE
+	GPIODFR1 |= 0x0f;
+	GPIODFR2 |= 0x00;
+	GPIODIE = 0x00;
+#endif
+
+#if  ( defined CONFIG_TMPA9XX_ADC         ||  defined CONFIG_TMPA9XX_ADC_MODULE) \
+   &&(!defined CONFIG_TOUCHSCREEN_TMPA910 && !defined CONFIG_TOUCHSCREEN_TMPA910_MODULE)
+	GPIODFR1 |= 0xf0;
+	GPIODFR2 |= 0x00;
 	GPIODIE = 0x00;
 #endif
 
