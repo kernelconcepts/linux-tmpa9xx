@@ -1132,10 +1132,10 @@ static void __init tonga_init(void)
 	   In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
 	   I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins. */
 #if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
-	GPIOLFR1 |= 0x1f; /* bits 4:0 for I2S */
+	GPIOLFR1 |= 0x1F; /* bits 4:0 for I2S */
 #endif        
 #ifdef CONFIG_SPI_PL022_CHANNEL_1
-	GPIOLFR2 |= 0x08;
+	GPIOLFR2 |= 0x0F;
 #endif
 	/* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
 	   Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
