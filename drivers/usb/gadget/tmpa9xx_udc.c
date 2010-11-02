@@ -50,7 +50,7 @@
 
 #include <linux/dma-mapping.h>
 #include <mach/dma.h>
-#include <mach/tmpa910_regs.h>
+#include <mach/regs.h>
 #include "tmpa9xx_udc.h"
 
 #define DRIVER_VERSION  "10 Sep 2010"
@@ -1745,7 +1745,7 @@ static int __init tmpa9xx_udc_probe(struct platform_device *pdev)
 	/* request DMA channel */
 	init_completion(&udc->dma_completion);
 	udc->dma_ch =
-	    tmpa910_dma_request("tmpa9xx UDC", 4, tmpa9xx_udc_dma_handler,
+	    tmpa9xx_dma_request("tmpa9xx UDC", 4, tmpa9xx_udc_dma_handler,
 				tmpa9xx_udc_dma_error_handler, NULL);
 	if (udc->dma_ch < 0) {
 		printk("Cannot allocate dma channel.");
@@ -1782,7 +1782,7 @@ static int __init tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	return 0;
 fail2:
-	tmpa910_dma_free(udc->dma_ch);
+	tmpa9xx_dma_free(udc->dma_ch);
 	dma_free_coherent(&pdev->dev, 2112, udc->buf, udc->phy_buf);
 
 fail1:
@@ -1809,7 +1809,7 @@ static int __exit tmpa9xx_udc_remove(struct platform_device *pdev)
 
 	iounmap(udc->udp_baseaddr);
 
-	tmpa910_dma_free(udc->dma_ch);
+	tmpa9xx_dma_free(udc->dma_ch);
 	dma_free_coherent(&pdev->dev, 2112, udc->buf, udc->phy_buf);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);

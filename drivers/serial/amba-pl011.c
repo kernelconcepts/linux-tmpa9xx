@@ -800,7 +800,7 @@ static int __init pl011_console_setup(struct console *co, char *options)
 
 static struct uart_driver amba_reg;
 static struct console amba_console = {
-#ifdef CONFIG_ARCH_TMPA910
+#ifdef CONFIG_ARCH_TMPA9XX
 	.name		= "ttyS",
 #else
 	.name		= "ttyAMA",
@@ -820,10 +820,11 @@ static struct console amba_console = {
 
 static struct uart_driver amba_reg = {
 	.owner			= THIS_MODULE,
-	.driver_name		= "ttyAMA",
-#ifdef CONFIG_ARCH_TMPA910
+#ifdef CONFIG_ARCH_TMPA9XX
+	.driver_name		= "ttyS",
 	.dev_name		= "ttyS",
 #else
+	.driver_name		= "ttyAMA",
 	.dev_name		= "ttyAMA",
 #endif        
 	.major			= SERIAL_AMBA_MAJOR,

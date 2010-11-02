@@ -6,9 +6,9 @@ ifeq ($(CONFIG_MMC_DEBUG),y)
 	EXTRA_CFLAGS		+= -DDEBUG
 endif
 
-obj-$(CONFIG_MMC_TMPA910_SDHC)	+= tmpa910-sdhc.o
-tmpa910-sdhc-y	                += tmpa910-sdhc-core.o
-tmpa910-sdhc-y	                += tmpa910-sdhc-user.o
+obj-$(CONFIG_MMC_TMPA9XX_SDHC)	+= tmpa9xx-sdhc.o
+tmpa9xx-sdhc-y	                += tmpa9xx-sdhc-core.o
+tmpa9xx-sdhc-y	                += tmpa9xx-sdhc-user.o
 obj-$(CONFIG_MMC_ARMMMCI)	+= mmci.o
 obj-$(CONFIG_MMC_PXA)		+= pxamci.o
 obj-$(CONFIG_MMC_IMX)		+= imxmmc.o

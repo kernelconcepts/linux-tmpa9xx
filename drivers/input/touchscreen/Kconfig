@@ -328,11 +328,11 @@ config TOUCHSCREEN_MIGOR
 	  To compile this driver as a module, choose M here: the
 	  module will be called migor_ts.
 
-config TOUCHSCREEN_TMPA910
-	bool "TMPA910 Touchscreen interface support"
-	depends on ARCH_TMPA910
+config TOUCHSCREEN_TMPA9XX
+	bool "TMPA9xx Touchscreen interface support"
+	depends on ARCH_TMPA9XX
 	help
-	  Say Y here if you have a TMPA910-based board with a touchscreen
+	  Say Y here if you have a TMPA9xx-based board with a touchscreen
 	  If unsure, say N.
 
 config TOUCHSCREEN_TOUCHRIGHT

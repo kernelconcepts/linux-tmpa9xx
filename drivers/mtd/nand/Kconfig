@@ -518,9 +518,9 @@ config MTD_NAND_SOCRATES
 	help
 	  Enables support for NAND Flash chips wired onto Socrates board.
 
-config MTD_NAND_TMPA910
-	tristate "Support for TMPA9x0 NAND Controller"
-	depends on MTD_NAND && ARCH_TMPA910
+config MTD_NAND_TMPA9XX
+	tristate "Support for TMPA9xx NAND Controller"
+	depends on MTD_NAND && ARCH_TMPA9XX
 	help
 	  Enables support for NAND flash controller of the Toshiba Topas910 board.
 

@@ -313,14 +313,14 @@ config TS72XX_WATCHDOG
 	  To compile this driver as a module, choose M here: the
 	  module will be called ts72xx_wdt.
 
-config TMPA9X0_WATCHDOG
-	tristate "Toshiba TMPA9x0 Watchdog"
-	depends on ARCH_TMPA910
+config TMPA9XX_WATCHDOG
+	tristate "Toshiba TMPA9xx Watchdog"
+	depends on ARCH_TMPA9XX
 	help
-	  Say Y here if you want support for the whatchdog timer on Toshiba TMPA9x0 based boards.
+	  Say Y here if you want support for the whatchdog timer on Toshiba TMPA9xx based boards.
 
 	  To compile this driver as a module, choose M here: the
-	  module will be called tmpa9x0_wdt.
+	  module will be called tmpa9xx_wdt.
 
 
 config MAX63XX_WATCHDOG

@@ -958,9 +958,9 @@ config FB_EPSON1355
 	  <http://www.erd.epson.com/vdc/html/products.htm>.
 
 
-config FB_TMPA910
+config FB_TMPA9XX
 	bool "Toshiba TMPA9xx frame buffer device support"
-	depends on (FB = y) && (ARCH_TMPA910)
+	depends on (FB = y) && (ARCH_TMPA9XX)
 	select FB_CFB_FILLRECT
 	select FB_CFB_COPYAREA
 	select FB_CFB_IMAGEBLIT

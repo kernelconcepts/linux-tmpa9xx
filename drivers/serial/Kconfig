@@ -326,21 +326,21 @@ config SERIAL_AMBA_PL011_CONSOLE
 config SERIAL_AMBA_PL011_CHANNEL_0
 	bool "Use PL011 Channel 0"
         depends on SERIAL_AMBA_PL011
-        default y if MACH_TMPA910
+        default y if ARCH_TMPA9XX
         help 
           Make use of pl011 controller channel 0
         
 config SERIAL_AMBA_PL011_CHANNEL_1
 	bool "Use PL011 Channel 1"
         depends on SERIAL_AMBA_PL011
-        default y if MACH_TMPA910
+        default y if ARCH_TMPA9XX
         help 
           Make use of pl011 controller channel 1
 
 config SERIAL_AMBA_PL011_CHANNEL_2
 	bool "Use PL011 Channel 2"
         depends on (SERIAL_AMBA_PL011 && !CPU_TMPA910)
-        default y if MACH_TOPASA900
+        default y if ARCH_TMPA9XX
         help 
           Make use of pl011 controller channel 2
 

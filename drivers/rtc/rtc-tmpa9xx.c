@@ -35,7 +35,7 @@
 #include <asm/system.h>
 #include <asm/irq.h>
 #include <asm/io.h>
-#include <mach/tmpa910_regs.h>
+#include <mach/regs.h>
 #include <mach/irqs.h>
 
 MODULE_AUTHOR("Michael Hasselberg <mh@open-engineering.de>");

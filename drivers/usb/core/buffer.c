@@ -16,10 +16,10 @@
 #include <linux/usb.h>
 #include <linux/usb/hcd.h>
 
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-void *tmpa9x0_sram_alloc(int size);
-unsigned long tmpa9x0_sram_to_phys(void *virt_sram);
-void tmpa9x0_sram_free(void *virt);
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+void *tmpa9xx_sram_alloc(int size);
+unsigned long tmpa9xx_sram_to_phys(void *virt_sram);
+void tmpa9xx_sram_free(void *virt);
 #else
 
 /*
@@ -63,7 +63,7 @@ int hcd_buffer_create(struct usb_hcd *hcd)
 	    !(hcd->driver->flags & HCD_LOCAL_MEM))
 		return 0;
 
-#ifndef CONFIG_USB_OHCI_HCD_TMPA900
+#ifndef CONFIG_USB_OHCI_HCD_TMPA9XX
 	for (i = 0; i < HCD_BUFFER_POOLS; i++) {
 		size = pool_max[i];
 		if (!size)
@@ -92,7 +92,7 @@ void hcd_buffer_destroy(struct usb_hcd *hcd)
 {
 	int i;
 
-#ifndef CONFIG_USB_OHCI_HCD_TMPA900
+#ifndef CONFIG_USB_OHCI_HCD_TMPA9XX
 	for (i = 0; i < HCD_BUFFER_POOLS; i++) {
 		struct dma_pool *pool = hcd->pool[i];
 		if (pool) {
@@ -125,11 +125,11 @@ void *hcd_buffer_alloc(
 		return kmalloc(size, mem_flags);
 	}
 
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
     {
         void *m;
-        m = tmpa9x0_sram_alloc(size);
-        *dma = tmpa9x0_sram_to_phys(m);
+        m = tmpa9xx_sram_alloc(size);
+        *dma = tmpa9xx_sram_to_phys(m);
         return m;
     }
 #else
@@ -159,8 +159,8 @@ void hcd_buffer_free(
 		kfree(addr);
 		return;
 	}
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-    tmpa9x0_sram_free (addr);
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+    tmpa9xx_sram_free (addr);
 #else
 	for (i = 0; i < HCD_BUFFER_POOLS; i++) {
 		if (size <= pool_max [i]) {

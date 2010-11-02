@@ -24,9 +24,9 @@ config MMC_PXA
 
 	  If unsure, say N.
 
-config MMC_TMPA910_SDHC
-	tristate "Toshiba TMPA910 Host Controller"
-	depends on ARCH_TMPA910
+config MMC_TMPA9XX_SDHC
+	tristate "Toshiba TMPA9xx Host Controller"
+	depends on ARCH_TMPA9XX
         help
         This is only the Kernel-Space part of the driver.
         For using the SD host controller you still need a userspace helper application.

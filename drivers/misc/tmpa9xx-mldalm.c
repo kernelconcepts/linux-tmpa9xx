@@ -33,7 +33,7 @@
 #include <linux/bitops.h>
 #include <linux/uaccess.h>
 #include <linux/tmpa9xx_mldalm.h>
-#include <mach/tmpa910_regs.h>
+#include <mach/regs.h>
 
 #define DRV_NAME "TMPA9xx Melody/Alarm"
 

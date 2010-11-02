@@ -23,10 +23,10 @@
 
 /*-------------------------------------------------------------------------*/
 
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-void *tmpa9x0_sram_alloc(int size);
-unsigned long tmpa9x0_sram_to_phys(void *virt_sram);
-void tmpa9x0_sram_free(void *virt);
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+void *tmpa9xx_sram_alloc(int size);
+unsigned long tmpa9xx_sram_to_phys(void *virt_sram);
+void tmpa9xx_sram_free(void *virt);
 #endif
 
 static void ohci_hcd_init (struct ohci_hcd *ohci)
@@ -40,7 +40,7 @@ static void ohci_hcd_init (struct ohci_hcd *ohci)
 
 static int ohci_mem_init (struct ohci_hcd *ohci)
 {
-#ifndef CONFIG_USB_OHCI_HCD_TMPA900
+#ifndef CONFIG_USB_OHCI_HCD_TMPA9XX
 	ohci->td_cache = dma_pool_create ("ohci_td",
 		ohci_to_hcd(ohci)->self.controller,
 		sizeof (struct td),
@@ -63,7 +63,7 @@ static int ohci_mem_init (struct ohci_hcd *ohci)
 
 static void ohci_mem_cleanup (struct ohci_hcd *ohci)
 {
-#ifndef CONFIG_USB_OHCI_HCD_TMPA900
+#ifndef CONFIG_USB_OHCI_HCD_TMPA9XX
 	if (ohci->td_cache) {
 		dma_pool_destroy (ohci->td_cache);
 		ohci->td_cache = NULL;
@@ -97,16 +97,16 @@ td_alloc (struct ohci_hcd *hc, gfp_t mem_flags)
 	dma_addr_t	dma;
 	struct td	*td;
 
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-    td = tmpa9x0_sram_alloc (sizeof (*td));
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+    td = tmpa9xx_sram_alloc (sizeof (*td));
 #else
     td = dma_pool_alloc (hc->td_cache, mem_flags, &dma);
 #endif
     if (td) {
 		/* in case hc fetches it, make it look dead */
 		memset (td, 0, sizeof *td);
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-        td->td_dma = tmpa9x0_sram_to_phys(td);
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+        td->td_dma = tmpa9xx_sram_to_phys(td);
 		td->hwNextTD = cpu_to_hc32 (hc, td->td_dma);
 #else
         td->hwNextTD = cpu_to_hc32 (hc, dma);
@@ -128,8 +128,8 @@ td_free (struct ohci_hcd *hc, struct td *td)
 		*prev = td->td_hash;
 	else if ((td->hwINFO & cpu_to_hc32(hc, TD_DONE)) != 0)
 		ohci_dbg (hc, "no hash for td %p\n", td);
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-    tmpa9x0_sram_free (td);
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+    tmpa9xx_sram_free (td);
 #else
 	dma_pool_free (hc->td_cache, td, td->td_dma);
 #endif
@@ -144,16 +144,16 @@ ed_alloc (struct ohci_hcd *hc, gfp_t mem_flags)
 	dma_addr_t	dma;
 	struct ed	*ed;
 
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-    ed = tmpa9x0_sram_alloc (sizeof (*ed));
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+    ed = tmpa9xx_sram_alloc (sizeof (*ed));
 #else
     ed = dma_pool_alloc (hc->ed_cache, mem_flags, &dma);
 #endif
     if (ed) {
 		memset (ed, 0, sizeof (*ed));
 		INIT_LIST_HEAD (&ed->td_list);
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-        ed->dma = tmpa9x0_sram_to_phys(ed) ;
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+        ed->dma = tmpa9xx_sram_to_phys(ed) ;
 #else
         ed->dma = dma;
 #endif
@@ -164,8 +164,8 @@ ed_alloc (struct ohci_hcd *hc, gfp_t mem_flags)
 static void
 ed_free (struct ohci_hcd *hc, struct ed *ed)
 {
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-    tmpa9x0_sram_free(ed);
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+    tmpa9xx_sram_free(ed);
 #else
     dma_pool_free (hc->ed_cache, ed, ed->dma);
 #endif

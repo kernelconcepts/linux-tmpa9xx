@@ -97,7 +97,7 @@ config ATMEL_TCB_CLKSRC_BLOCK
 
 config TMPA9XX_MLDALM
 	tristate "Melody/Ararm Driver for TMPA9xx"
-	depends on ARCH_TMPA910
+	depends on ARCH_TMPA9XX
 	help
           Enable Melody/Araml output on Pin MLDALM
           ATTENTION: Pin Sharing with SPI Channel 0

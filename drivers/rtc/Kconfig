@@ -774,7 +774,7 @@ config RTC_DRV_AT91RM9200
 
 config RTC_DRV_TMPA9XX
 	tristate "Toshiba TMPA9xx RTC"
-	depends on ARCH_TMPA910
+	depends on ARCH_TMPA9XX
 	help
 	  Driver for the internal RTC (Realtime Clock) module found on
 	  Toshiba TMPA9xx chip.

@@ -377,7 +377,7 @@ config ARCH_H720X
 	help
 	  This enables support for systems based on the Hynix HMS720x
 
-config ARCH_TMPA910
+config ARCH_TMPA9XX
 	bool "Toshiba TX09 / TMPA9xx based"
 	select CPU_ARM926T
         select ARM_AMBA
@@ -386,7 +386,7 @@ config ARCH_TMPA910
 	select COMMON_CLKDEV
 	select ARCH_USES_GETTIMEOFFSET
 	help
-		This enables support for Toshiba TX09 series TMPA9xx / TMPA9xxCR based
+		This enables support for Toshiba TX09 series TMPA9xx based
 		devices.
 
 config ARCH_IOP13XX
@@ -966,7 +966,7 @@ source "arch/arm/mach-vexpress/Kconfig"
 
 source "arch/arm/mach-w90x900/Kconfig"
 
-source "arch/arm/mach-tmpa910/Kconfig"
+source "arch/arm/mach-tmpa9xx/Kconfig"
 
 # Definitions to make life easier
 config ARCH_ACORN

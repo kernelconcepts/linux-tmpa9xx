@@ -7,9 +7,9 @@ menu "I2C Hardware Bus support"
 comment "PC SMBus host controller drivers"
 	depends on PCI
 
-config I2C_TMPA910
-	tristate "Toshiba TMPA910"
-	depends on ARCH_TMPA910
+config I2C_TMPA9XX
+	tristate "Toshiba TMPA9xx"
+	depends on ARCH_TMPA9XX
 
 config I2C_ALI1535
 	tristate "ALI 1535"
