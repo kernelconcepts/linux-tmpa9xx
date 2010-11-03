@@ -66,9 +66,7 @@ static struct clk uart_clk = {
 	.rate = 96000000,
 };
 
-static struct clk dummy_apb_pclk = {
-	.rate = 96000000,
-};
+static struct clk dummy_apb_pclk;
 
 static struct clk_lookup lookups[] = {
         {      /* Bus clock */
@@ -93,10 +91,10 @@ static struct clk_lookup lookups[] = {
 	}
 };
 
-static int __init clk_init(void)
+int __init clk_init(void)
 {
 	/* register the clock lookups */
 	clkdev_add_table(lookups, ARRAY_SIZE(lookups));
 	return 0;
 }
-arch_initcall(clk_init);
+core_initcall(clk_init);
