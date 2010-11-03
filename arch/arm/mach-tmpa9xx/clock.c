@@ -66,8 +66,15 @@ static struct clk uart_clk = {
 	.rate = 96000000,
 };
 
+static struct clk dummy_apb_pclk = {
+	.rate = 96000000,
+};
+
 static struct clk_lookup lookups[] = {
-	{
+        {      /* Bus clock */
+                .con_id         = "apb_pclk",
+                .clk            = &dummy_apb_pclk,
+        }, {
 		/* UART0 */
 		.dev_id		= "uart0",
 		.clk		= &uart_clk,
