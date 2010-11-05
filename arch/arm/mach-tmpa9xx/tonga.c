@@ -27,8 +27,28 @@
 #include <asm/mach/arch.h>
 #include <asm/mach-types.h>
 #include <mach/hardware.h>
+#include <mach/irqs.h>
+#include <linux/smsc911x.h>
+#include <linux/interrupt.h>
 
 #include "tmpa9xx.h"
+
+
+#include <linux/platform_device.h>
+#include <linux/input.h>
+#include <linux/dma-mapping.h>
+#include <linux/amba/pl022.h>
+
+#include <asm/system.h>
+#include <asm/irq.h>
+#include <mach/hardware.h>
+#include <mach/gpio.h>
+#include <mach/ts.h>
+#include <mach/regs.h>
+#include <asm/mach/map.h>
+
+
+
 
 /* 
  * Ethernet 

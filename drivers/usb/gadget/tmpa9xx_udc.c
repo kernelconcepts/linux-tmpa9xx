@@ -497,13 +497,6 @@ static void usb_ctl_init(struct tmpa9xx_udc *udc)
 	udc->interface_bak = USB_INIT;
 	udc->stage = IDLE_STAGE;
 
-	reg_data = SYSCR0;
-	reg_data &= 0x3f;
-	reg_data |= (1 << 6);	// [7:6]
-	SYSCR0 = reg_data;	// USBCLKSEL = X1
-
-	CLKCR4 = USB_ENABLE;	/* EN_USB */
-
 	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_PWCTL);
 
 	reg_data &= PWCTL_PHY_POWER_RESET_ON;	/* [5][1] <= 0 */
@@ -1891,6 +1884,6 @@ static void __exit udc_exit_module(void)
 
 module_exit(udc_exit_module);
 
-MODULE_DESCRIPTION("tmpa9xx udc driver");
+MODULE_DESCRIPTION("TMPA9xx udc driver");
 MODULE_AUTHOR("Thomas Haase");
 MODULE_LICENSE("GPL");
