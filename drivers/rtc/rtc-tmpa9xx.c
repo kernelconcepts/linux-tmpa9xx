@@ -413,7 +413,7 @@ static struct platform_driver tmpa9xx_rtc_platform_driver = {
 	.suspend	= tmpa9xx_rtc_suspend,
 	.resume		= tmpa9xx_rtc_resume,
 	.driver		= {
-		.name	= "tmpa9xx_rtc",
+		.name	= "tmpa9xx-rtc",
 		.owner	= THIS_MODULE
 	},
 

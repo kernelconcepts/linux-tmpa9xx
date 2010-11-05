@@ -585,7 +585,7 @@ static int __init tmpa9xx_i2c_probe(struct platform_device *pdev)
 	tmpa9xx_i2c_setup(adapter);
 
 	printk
-	    ("TMPA9x0 I2C: driver ready (ch0: irq=%d IO@%p ch1: irq=%d IO@%p)\n",
+	    ("TMPA9xx I2C: driver ready (ch0: irq=%d IO@%p ch1: irq=%d IO@%p)\n",
 	     priv->i2c_algo_data[0].irq, priv->i2c_algo_data[0].regs,
 	     priv->i2c_algo_data[1].irq, priv->i2c_algo_data[1].regs);
 

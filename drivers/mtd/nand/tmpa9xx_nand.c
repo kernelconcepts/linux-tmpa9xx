@@ -1040,6 +1040,6 @@ module_init(tmpa9xx_nand_init);
 module_exit(tmpa9xx_nand_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("NAND flash driver for TMPA9x0");
+MODULE_DESCRIPTION("NAND flash driver for TMPA9xx");
 MODULE_ALIAS("platform:tmpa9xx-nand");
 

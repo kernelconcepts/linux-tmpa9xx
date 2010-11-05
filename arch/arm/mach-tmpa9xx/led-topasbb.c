@@ -1,5 +1,5 @@
 /*
- *  arch/arm/mach-tmpa9xx/led-topas910.c 
+ *  arch/arm/mach-tmpa9xx/led-topasbb.c 
  *
  * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
  *
@@ -34,7 +34,7 @@
 #include <mach/hardware.h>
 #include <mach/regs.h>
 
-#include "topas910.h"
+#include "tmpa9xx.h"
 
 #define GPIO_LED_SEG_A       8
 #define GPIO_LED_SEG_B       9

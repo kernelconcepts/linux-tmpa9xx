@@ -24,47 +24,47 @@
 
 /* GPIO Ports */
 
-#define PORT_BASE          0xF0800000
-#define PORTA    0x0000
-#define PORTB    0x1000
-#define PORTC    0x2000
-#define PORTD    0x3000
+#define PORT_BASE                 (0xF0800000)
+#define PORTA                     0x0000
+#define PORTB                     0x1000
+#define PORTC                     0x2000
+#define PORTD                     0x3000
 #ifndef CONFIG_CPU_TMPA900
-#define PORTE    0x4000
+#define PORTE                     0x4000
 #endif
-#define PORTF    0x5000
-#define PORTG    0x6000
+#define PORTF                     0x5000
+#define PORTG                     0x6000
 #ifndef CONFIG_CPU_TMPA900
-#define PORTH    0x7000
+#define PORTH                     0x7000
 #endif
-#define PORTJ    0x8000
-#define PORTK    0x9000
-#define PORTL    0xA000
-#define PORTM    0xB000
-#define PORTN    0xC000
-#define PORTP    0xD000
-#define PORTR    0xE000
-#define PORTT    0xF000
+#define PORTJ                     0x8000
+#define PORTK                     0x9000
+#define PORTL                     0xA000
+#define PORTM                     0xB000
+#define PORTN                     0xC000
+#define PORTP                     0xD000
+#define PORTR                     0xE000
+#define PORTT                     0xF000
 
 /* TMPA900 */
 #ifdef CONFIG_CPU_TMPA900
-#define PORTU    0x4000
-#define PORTV    0x7000
+#define PORTU                     0x4000
+#define PORTV                     0x7000
 #endif
 
 
-#define PORT_OFS_DATA      0x03FC  /* 0x000 - 0x3FC, data register masked from 0x00 to 0xFF << 2 */
-#define PORT_OFS_DIR       0x0400  /* direction register */
-#define PORT_OFS_FR1       0x0424  /* function register 1 */
-#define PORT_OFS_FR2       0x0428  /* function register 2 */
-#define PORT_OFS_IS        0x0804  /* interrupt sensitivity */
-#define PORT_OFS_IBE       0x0808  /* interrupt both edge register */
-#define PORT_OFS_IEV       0x080C  /* interrupt event register */
-#define PORT_OFS_IE        0x0810  /* interrupt enable register*/
-#define PORT_OFS_RIS       0x0814  /* raw interrupt status register */
-#define PORT_OFS_MIS       0x0818  /* masked interrupt status */
-#define PORT_OFS_IC        0x081C  /* interrupt clear register */
-#define PORT_OFS_ODE       0x0C00  /* open drain output */
+#define PORT_OFS_DATA             0x03FC  /* 0x000 - 0x3FC, data register masked from 0x00 to 0xFF << 2 */
+#define PORT_OFS_DIR              0x0400  /* direction register */
+#define PORT_OFS_FR1              0x0424  /* function register 1 */
+#define PORT_OFS_FR2              0x0428  /* function register 2 */
+#define PORT_OFS_IS               0x0804  /* interrupt sensitivity */
+#define PORT_OFS_IBE              0x0808  /* interrupt both edge register */
+#define PORT_OFS_IEV              0x080C  /* interrupt event register */
+#define PORT_OFS_IE               0x0810  /* interrupt enable register*/
+#define PORT_OFS_RIS              0x0814  /* raw interrupt status register */
+#define PORT_OFS_MIS              0x0818  /* masked interrupt status */
+#define PORT_OFS_IC               0x081C  /* interrupt clear register */
+#define PORT_OFS_ODE              0x0C00  /* open drain output */
 
 #define TMPA9XX_GPIO_REG(x,y)     (PORT_BASE | (x) | (y)) /* base addr + port offset + register offset */
 
@@ -484,7 +484,7 @@
 #define TIMER5_BGLOAD           __REG(TIME5_BASE_ADDRESS + 0x0018)
 
 
-/* WhatchDog Timer registers */
+/* Watchdog Timer registers */
 #define WDT_BASE_ADDRESS        (0xF0010000)
 #define WDT_WDOGLOAD            __REG(WDT_BASE_ADDRESS + 0x0000) /* Watchdog load register */
 #define WDT_WDOGVALUE           __REG(WDT_BASE_ADDRESS + 0x0004) /* The current value for the watchdog counter */
@@ -721,6 +721,9 @@
 #define HCRHPORTSTATUS         __REG(USB_HOST_BASE_ADDRESS + 0x0054)
 #define HCBCR0                 __REG(USB_HOST_BASE_ADDRESS + 0x0080)
 
+/* USB Device */
+#define USB_DEVICE_BASE_ADDRESS  (0xF4400000)
+
 /* OFD */
 #define OFD_BASE_ADDRESS       (0xF0090000)
 #define OFD_CLKSCR1            __REG(OFD_BASE_ADDRESS + 0x0000)
@@ -728,5 +731,31 @@
 #define OFD_CLKSCR3            __REG(OFD_BASE_ADDRESS + 0x0008)
 #define OFD_CLKSMN             __REG(OFD_BASE_ADDRESS + 0x0010)
 #define OFD_CLKSMX             __REG(OFD_BASE_ADDRESS + 0x0020)
+
+/* SSP */
+#define SSP0_BASE_ADDRESS       (0xF2002000)
+#define SSP0_CR0                __REG(OFD_BASE_ADDRESS + 0x0000) /* SSP0 Control register 0 */
+#define SSP0_CR1                __REG(OFD_BASE_ADDRESS + 0x0004) /* SSP0 Control register 1 */
+#define SSP0_DR                 __REG(OFD_BASE_ADDRESS + 0x0008) /* SSP0 Data register */
+#define SSP0_SR                 __REG(OFD_BASE_ADDRESS + 0x000C) /* SSP0 Status register */
+#define SSP0_CPSR               __REG(OFD_BASE_ADDRESS + 0x0010) /* SSP0 Clock prescale register */
+#define SSP0_IMSC               __REG(OFD_BASE_ADDRESS + 0x0014) /* SSP0 Interrupt mask set and clear register */
+#define SSP0_RIS                __REG(OFD_BASE_ADDRESS + 0x0018) /* SSP0 Raw interrupt status register */
+#define SSP0_MIS                __REG(OFD_BASE_ADDRESS + 0x001C) /* SSP0 Masked interrupt status register */
+#define SSP0_ICR                __REG(OFD_BASE_ADDRESS + 0x0020) /* SSP0 Interrupt clear register */
+#define SSP0_DMACR              __REG(OFD_BASE_ADDRESS + 0x0024) /* DMA Control register */
+
+#define SSP1_BASE_ADDRESS       (0xF2003000)
+#define SSP1_CR0                __REG(OFD_BASE_ADDRESS + 0x0000) /* SSP1 Control register 0 */
+#define SSP1_CR1                __REG(OFD_BASE_ADDRESS + 0x0004) /* SSP1 Control register 1 */
+#define SSP1_DR                 __REG(OFD_BASE_ADDRESS + 0x0008) /* SSP1 Data register */
+#define SSP1_SR                 __REG(OFD_BASE_ADDRESS + 0x000C) /* SSP1 Status register */
+#define SSP1_CPSR               __REG(OFD_BASE_ADDRESS + 0x0010) /* SSP1 Clock prescale register */
+#define SSP1_IMSC               __REG(OFD_BASE_ADDRESS + 0x0014) /* SSP1 Interrupt mask set and clear register */
+#define SSP1_RIS                __REG(OFD_BASE_ADDRESS + 0x0018) /* SSP1 Raw interrupt status register */
+#define SSP1_MIS                __REG(OFD_BASE_ADDRESS + 0x001C) /* SSP1 Masked interrupt status register */
+#define SSP1_ICR                __REG(OFD_BASE_ADDRESS + 0x0020) /* SSP1 Interrupt clear register */
+#define SSP1_DMACR              __REG(OFD_BASE_ADDRESS + 0x0024) /* DMA Control register */
+
 
 #endif /* __TMPA9XX_REGS__ */

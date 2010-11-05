@@ -263,7 +263,7 @@ static struct platform_driver tmpa9xx_wdt_driver = {
 	.suspend	= tmpa9xx_wdt_suspend,
 	.resume		= tmpa9xx_wdt_resume,
 	.driver		= {
-		.name	= "tmpa9xx_wdt",
+		.name	= "tmpa9xx-wdt",
 		.owner	= THIS_MODULE,
 	},
 };
