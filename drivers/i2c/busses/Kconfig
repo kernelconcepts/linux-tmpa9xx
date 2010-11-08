@@ -10,6 +10,20 @@ comment "PC SMBus host controller drivers"
 config I2C_TMPA9XX
 	tristate "Toshiba TMPA9xx"
 	depends on ARCH_TMPA9XX
+        
+config I2C_TMPA9XX_CHANNEL_0
+	bool "Use I2C Controller Channel 0"
+	depends on I2C_TMPA9XX && !USB_OHCI_HCD_TMPA9XX
+	default n
+	help
+          Make use of i2c controller channel 0
+
+config I2C_TMPA9XX_CHANNEL_1
+	bool "Use I2C Controller Channel 1"
+	depends on I2C_TMPA9XX && !SERIAL_AMBA_PL011_CHANNEL_2
+	default y
+	help
+          Make use of i2c controller channel 1
 
 config I2C_ALI1535
 	tristate "ALI 1535"

@@ -212,7 +212,7 @@ config USB_OHCI_HCD
 
 config USB_OHCI_HCD_TMPA9XX
 	bool "OHCI support for Toshiba TMPA9xx"
-	depends on USB_OHCI_HCD && ARCH_TMPA9XX && !CPU_TMPA910
+	depends on USB_OHCI_HCD && ARCH_TMPA9XX && !CPU_TMPA910 && !I2C_TMPA9XX_CHANNEL_0
 	default y
 	---help---
 	  Enables support for the USB OHCI controller found on Toshiba

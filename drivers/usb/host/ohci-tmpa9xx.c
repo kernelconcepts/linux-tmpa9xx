@@ -18,7 +18,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/sysrq.h>
 
-#define MEM_DEBUG
+//#define MEM_DEBUG
 
 #ifdef MEM_DEBUG
 #define mprintk printk
