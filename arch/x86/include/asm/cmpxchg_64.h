@@ -152,4 +152,3 @@ extern void __cmpxchg_wrong_size(void);
 })
 
 #endif /* _ASM_X86_CMPXCHG_64_H */
-#endif /* _ASM_X86_CMPXCHG_64_H */

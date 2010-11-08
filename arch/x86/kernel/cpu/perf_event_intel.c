@@ -1054,16 +1054,3 @@ static int intel_pmu_init(void)
 }
 
 #endif /* CONFIG_CPU_SUP_INTEL */
-		pr_cont("generic architected perfmon, ");
-	}
-	return 0;
-}
-
-#else /* CONFIG_CPU_SUP_INTEL */
-
-static int intel_pmu_init(void)
-{
-	return 0;
-}
-
-#endif /* CONFIG_CPU_SUP_INTEL */

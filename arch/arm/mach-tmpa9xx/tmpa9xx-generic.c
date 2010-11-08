@@ -37,8 +37,6 @@
 #include <linux/amba/bus.h>
 #include <linux/amba/pl022.h>
 
-#include <video/tmpa9xx_fb.h>
-
 #include <asm/system.h>
 #include <asm/irq.h>
 #include <mach/hardware.h>

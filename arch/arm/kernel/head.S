@@ -102,7 +102,6 @@ ENTRY(stext)
  THUMB(	add	r12, r10, #PROCINFO_INITFUNC	)
  THUMB(	mov	pc, r12				)
 ENDPROC(stext)
-PB_ADDR: .word (0xf08013FC)
 
 #if defined(CONFIG_SMP)
 ENTRY(secondary_startup)

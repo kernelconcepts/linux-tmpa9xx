@@ -1184,4 +1184,3 @@ const struct eeprom_ops eep_ar9287_ops = {
 	.set_txpower		= ath9k_hw_ar9287_set_txpower,
 	.get_spur_channel	= ath9k_hw_ar9287_get_spur_channel
 };
-

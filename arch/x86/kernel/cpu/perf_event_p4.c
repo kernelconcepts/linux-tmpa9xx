@@ -949,6 +949,3 @@ static __init int p4_pmu_init(void)
 }
 
 #endif /* CONFIG_CPU_SUP_INTEL */
-}
-
-#endif /* CONFIG_CPU_SUP_INTEL */

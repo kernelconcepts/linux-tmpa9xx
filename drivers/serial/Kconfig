@@ -339,7 +339,7 @@ config SERIAL_AMBA_PL011_CHANNEL_1
 
 config SERIAL_AMBA_PL011_CHANNEL_2
 	bool "Use PL011 Channel 2"
-        depends on (SERIAL_AMBA_PL011 && !CPU_TMPA910 &&!I2C_TMPA9XX_CHANNEL_1)
+        depends on (SERIAL_AMBA_PL011 && !CPU_TMPA910 )
         default n if ARCH_TMPA9XX
         help 
           Make use of pl011 controller channel 2
