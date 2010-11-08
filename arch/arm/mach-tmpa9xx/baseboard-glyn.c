@@ -51,6 +51,7 @@
 /*
  * I2C
  */
+#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
 static struct i2c_board_info baseboard_i2c_0_devices[] = {
         {
         },
@@ -68,6 +69,7 @@ static struct i2c_board_info baseboard_i2c_1_devices[] = {
         },
 };
 #endif
+#endif // CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
 
 /*
  * SPI

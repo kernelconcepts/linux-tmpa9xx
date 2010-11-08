@@ -653,7 +653,8 @@ void __init tmpa9xx_init(void)
 #endif
 
 #if (defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE) \
- && (!defined CONFIG_USB_OHCI_HCD_TMPA9XX || !defined CONFIG_USB_OHCI_HCD_TMPA9XX_MODULE)
+ && (!defined CONFIG_USB_OHCI_HCD_TMPA9XX && !defined CONFIG_USB_OHCI_HCD_TMPA9XX_MODULE) \
+ && defined CONFIG_I2C_TMPA9XX_CHANNEL_0
         /* set PORT-C 6,7 to I2C and enable open drain */
         GPIOCFR1 |=  (0xc0);
         GPIOCFR2 &= ~(0xc0);
@@ -686,13 +687,13 @@ void __init tmpa9xx_init(void)
            The upper 2 bits (bits [7:6]) of Port F can be used as general-purpose input/output pins.
            Port F can also be used as interrupt (INTC), UART (U2RXD, U2TXD) and I2C (I2C1DA,
            I2C1CL) pins. */
-#ifdef CONFIG_UART2
+#if defined CONFIG_UART2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1
         GPIOFFR1 &= ~(0xc0);  /* UART 2 */
         GPIOFFR2 |=  (0xc0);
         GPIOFIE  &= ~(0xc0);
         GPIOFODE &= ~(0xc0);
 #endif    
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
+#if (defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE) && defined CONFIG_I2C_TMPA9XX_CHANNEL_1
         /* set PORT-C 6,7 to I2C and enable open drain */
         GPIOFDIR &= ~(0xc0);
         GPIOFFR1 |=  (0xc0);
