@@ -127,16 +127,24 @@ static int num_partitions = 3;
 
 static struct mtd_partition mtd_parts_builtin[] = {
 	{
-		.name		= "bootloader",
+		.name		= "u-boot",
 		.offset		= 0x00000000,
-		.size		= 0x00080000,
+		.size		= 0x00060000,
 	}, {
-		.name		= "kernel",
+		.name		= "u-boot_env",
+		.offset		= 0x00060000,
+		.size		= 0x00020000,
+	}, {
+		.name		= "splash",
 		.offset		= 0x00080000,
 		.size		= 0x00300000,
 	}, {
-		.name		= "filesystem",
+		.name		= "kernel",
 		.offset		= 0x00380000,
+		.size		= 0x00300000,
+	}, {
+		.name		= "rootfs",
+		.offset		= 0x00680000,
 		.size		= MTDPART_SIZ_FULL,
 	}, 
 };
