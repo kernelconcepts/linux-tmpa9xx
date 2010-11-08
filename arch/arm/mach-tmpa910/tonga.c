@@ -1065,7 +1065,7 @@ static void __init tonga_init(void)
 	/* Port G can be used as general-purpose input/output pins.
 	   Port G can also be used as SD host controller function pins (SDC0CLK, SDC0CD,
 	   SDC0WP, SDC0CMD, SDC0DAT3, SDC0DAT2, SDC0DAT1 and SDC0DAT0). */
-#if defined CONFIG_MMC_TMPA910_SDHC || !defined CONFIG_MMC_TMPA910_SDHC_MODULE
+#if defined CONFIG_MMC_TMPA910_SDHC || defined CONFIG_MMC_TMPA910_SDHC_MODULE
 	GPIOGFR1 = 0xFF;
 #else
 	TMPA910_CFG_PORT_GPIO(PORTG); /* SDIO0 or GPIO */
