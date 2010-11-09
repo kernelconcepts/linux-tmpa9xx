@@ -60,11 +60,6 @@ static void putc(int c)
 	UART0DR = (unsigned long)(c & 0xff);
 }
 
-static void puthex(unsigned long x)
-{
-//	_out32(0xf08013FC, x);
-}
-
 /*
  * nothing to setup and wdog currently not used
  */
