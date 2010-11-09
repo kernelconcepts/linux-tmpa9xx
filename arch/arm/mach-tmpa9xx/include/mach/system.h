@@ -34,7 +34,7 @@ arch_idle(void)
 }
 
 static inline void
-arch_reset(char mode,const char cmd)
+arch_reset(char mode,const char * cmd)
 {
   uint8_t *wdt_base;
 
