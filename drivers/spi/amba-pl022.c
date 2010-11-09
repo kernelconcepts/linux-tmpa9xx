@@ -1765,6 +1765,7 @@ pl022_probe(struct amba_device *adev, struct amba_id *id)
 	master->cleanup = pl022_cleanup;
 	master->setup = pl022_setup;
 	master->transfer = pl022_transfer;
+        master->mode_bits = MODEBITS;
 
 	dev_dbg(&adev->dev, "BUSNO: %d\n", master->bus_num);
 
