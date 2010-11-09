@@ -15,9 +15,9 @@
 
 #include <mach/dma.h>
 #include <mach/irqs.h>
-#include <mach/tmpa910_regs.h>
+#include <mach/regs.h>
 
-#include "tmpa910_i2s.h"
+#include "tmpa9xx_i2s.h"
 
 #define I2S_DMA_RX   I2S0
 #define I2S_DMA_TX   I2S1
@@ -60,7 +60,7 @@ typedef struct snd_pcm_ops snd_pcm_ops_t;
 struct snd_pcm1773 {
 
 	struct snd_card    *card;
-	struct tmpa910_i2s *i2s;
+	struct tmpa9xx_i2s *i2s;
 	spinlock_t    pcm1773_lock;
 
 	struct snd_pcm *pcm;
@@ -185,7 +185,7 @@ static int snd_pcm1773_playback_prepare(snd_pcm_substream_t *substream)
 			frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
-	err = tmpa910_i2s_config_tx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
+	err = tmpa9xx_i2s_config_tx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
 			runtime->periods, fragsize_bytes, word_len);
 
 	return err;
@@ -200,10 +200,10 @@ static int snd_pcm1773_playback_trigger(snd_pcm_substream_t *substream, int cmd)
 	{
 	case SNDRV_PCM_TRIGGER_START:
 	    //printk("  SNDRV_PCM_TRIGGER_START\n");
-		tmpa910_i2s_tx_start(chip->i2s);
+		tmpa9xx_i2s_tx_start(chip->i2s);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
-	    tmpa910_i2s_tx_stop(chip->i2s);
+	    tmpa9xx_i2s_tx_stop(chip->i2s);
 	    //printk("  SNDRV_PCM_TRIGGER_STOP\n");
 		break;
 	default:
@@ -225,15 +225,15 @@ static snd_pcm_uframes_t snd_pcm1773_playback_pointer(snd_pcm_substream_t *subst
 
 	// snd_printk_marker();
 
-	offset = tmpa910_i2s_curr_offset_tx(chip->i2s);
+	offset = tmpa9xx_i2s_curr_offset_tx(chip->i2s);
 	
 	offset = bytes_to_frames(runtime, offset);
 	if (offset >= runtime->buffer_size)
 		offset = 0;
 		
 	// printk("runtime: 0x%p, offset:0x%x\n", runtime, offset);
-	// tmpa910_i2s_hw_dump();
-	// tmpa910_i2s_dma_dump();
+	// tmpa9xx_i2s_hw_dump();
+	// tmpa9xx_i2s_dma_dump();
 
 	return offset;
 }
@@ -272,9 +272,9 @@ static struct snd_device_ops snd_pcm1773_ops = {
 static int snd_pcm1773_configure(pcm1773_t *chip)
 {
 	int err = 0;
-	struct tmpa910_i2s *i2s= chip->i2s;
+	struct tmpa9xx_i2s *i2s= chip->i2s;
 
-	err = err | tmpa910_i2s_config_tx(i2s);
+	err = err | tmpa9xx_i2s_config_tx(i2s);
 	
 	if (err)
 	{
@@ -289,8 +289,8 @@ static void snd_pcm1773_dma_tx(void *data)
 	struct snd_pcm1773 *pcm1773 = data;
 	unsigned tmp;
 
-	 // tmpa910_i2s_hw_dump();
-	 // tmpa910_i2s_dma_dump();
+	 // tmpa9xx_i2s_hw_dump();
+	 // tmpa9xx_i2s_dma_dump();
 
 	if (pcm1773->tx_substream)
 	{
@@ -349,8 +349,8 @@ static int __devinit snd_pcm1773_probe(struct platform_device *pdev)
 	int err = 0;
 	struct snd_card *card = NULL;
 	struct snd_pcm1773 *pcm1773;
-	struct tmpa910_i2s *i2s;
-	char * id = "TMPA910 + PCM1773";
+	struct tmpa9xx_i2s *i2s;
+	char * id = "TMPA9XX + PCM1773";
 	
 	
 	if (g_device != NULL)
@@ -365,7 +365,7 @@ static int __devinit snd_pcm1773_probe(struct platform_device *pdev)
 
 	pcm1773 = card->private_data;
 	pcm1773->card = card;
-	if ((i2s = tmpa910_i2s_init(0, NULL, I2S_DMA_TX, snd_pcm1773_dma_tx,
+	if ((i2s = tmpa9xx_i2s_init(0, NULL, I2S_DMA_TX, snd_pcm1773_dma_tx,
 			    I2S_IRQ_ERR, snd_pcm1773_i2s_err, pcm1773)) == NULL)
 	{
 		printk(KERN_ERR DRIVER_NAME ": Failed to find device on i2s\n");
@@ -413,7 +413,7 @@ static int __devinit snd_pcm1773_probe(struct platform_device *pdev)
 	return 0;
 
 __nodev:
-	tmpa910_i2s_free(i2s);
+	tmpa9xx_i2s_free(i2s);
 __i2s_err:
 	snd_card_free(card);
 
@@ -429,7 +429,7 @@ static int __devexit snd_pcm1773_remove(struct platform_device *pdev)
 	pcm1773 = card->private_data;
 
 	snd_pcm1773_stop(pcm1773);
-	tmpa910_i2s_free(pcm1773->i2s);
+	tmpa9xx_i2s_free(pcm1773->i2s);
 
 	snd_card_free(card);
 	platform_set_drvdata(pdev, NULL);
@@ -437,7 +437,7 @@ static int __devexit snd_pcm1773_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#define TMPA910_PCM1773_DRIVER	"tmpa910_pcm1773"
+#define TMPA9XX_PCM1773_DRIVER	"tmpa9xx_pcm1773"
 static struct platform_driver snd_pcm1773_driver = {
 	.probe		= snd_pcm1773_probe,
 	.remove		= __devexit_p(snd_pcm1773_remove),
@@ -482,7 +482,7 @@ static void __exit snd_pcm1773_exit(void)
 }
 
 MODULE_AUTHOR("OPEN-engineering.de <info@open-engineering.de>");
-MODULE_DESCRIPTION("TMPA910/PCM1773");
+MODULE_DESCRIPTION("TMPA9XX/PCM1773");
 MODULE_LICENSE("GPL");
 
 module_init(snd_pcm1773_init);

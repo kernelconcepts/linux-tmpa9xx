@@ -161,11 +161,9 @@ int main(int argc, char *argv[])
 
 	parse_opts(argc, argv);
 
-	printf("open <%s>\n", device);
-
 	fd = open(device, O_RDWR);
 	if (fd < 0)
-		pabort("can't open device <%s>");
+		pabort("can't open device");
 
 	/*
 	 * spi mode

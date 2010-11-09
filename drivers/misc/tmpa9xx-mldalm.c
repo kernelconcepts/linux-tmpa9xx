@@ -33,7 +33,7 @@
 #include <linux/bitops.h>
 #include <linux/uaccess.h>
 #include <linux/tmpa9xx_mldalm.h>
-#include <mach/tmpa910_regs.h>
+#include <mach/regs.h>
 
 #define DRV_NAME "TMPA9xx Melody/Alarm"
 
@@ -45,7 +45,7 @@ unsigned char used_type=0;
 /*
  *  Open the Melody/Alarm device
  */
-static int tmpa9x0_mldalm_open(struct inode *inode, struct file *file)
+static int tmpa9xx_mldalm_open(struct inode *inode, struct file *file)
 {
 	return nonseekable_open(inode, file);
 }
@@ -53,13 +53,13 @@ static int tmpa9x0_mldalm_open(struct inode *inode, struct file *file)
 /*
  * Close the Melody/Alarm device.
  */
-static int tmpa9x0_mldalm_close(struct inode *inode, struct file *file)
+static int tmpa9xx_mldalm_close(struct inode *inode, struct file *file)
 {
         
 	return 0;
 }
 
-static void tmpa9x0_mldalm_settype(struct mldalm_type type)
+static void tmpa9xx_mldalm_settype(struct mldalm_type type)
 {
 	
         
@@ -119,7 +119,7 @@ static void tmpa9x0_mldalm_settype(struct mldalm_type type)
         
 }
 
-static void tmpa9x0_mldalm_startstop(unsigned char start_stop)
+static void tmpa9xx_mldalm_startstop(unsigned char start_stop)
 {
 	switch (start_stop) {
         
@@ -147,7 +147,7 @@ static void tmpa9x0_mldalm_startstop(unsigned char start_stop)
 /*
  * Handle commands from user-space.
  */
-static long tmpa9x0_mldalm_ioctl(struct file *file,unsigned int cmd, unsigned long arg)
+static long tmpa9xx_mldalm_ioctl(struct file *file,unsigned int cmd, unsigned long arg)
 {
 	void __user *argp = (void __user *)arg;
 	int __user *p = argp;
@@ -160,7 +160,7 @@ static long tmpa9x0_mldalm_ioctl(struct file *file,unsigned int cmd, unsigned lo
 		if (copy_from_user(&type,p,sizeof(struct mldalm_type)))
 			return -EFAULT;
                 if (!running)
-			tmpa9x0_mldalm_settype(type);
+			tmpa9xx_mldalm_settype(type);
                 else
                 	printk(KERN_ERR "Not stopped\n");
 		break;                        
@@ -168,7 +168,7 @@ static long tmpa9x0_mldalm_ioctl(struct file *file,unsigned int cmd, unsigned lo
         case MLDALM_START_STOP:
 		if (get_user(start_stop,(const unsigned char __user *)argp))
 			return -EFAULT;
-		tmpa9x0_mldalm_startstop(start_stop);
+		tmpa9xx_mldalm_startstop(start_stop);
                 break;
                 
         default:
@@ -182,87 +182,87 @@ static long tmpa9x0_mldalm_ioctl(struct file *file,unsigned int cmd, unsigned lo
 
 /* ......................................................................... */
 
-static const struct file_operations tmpa9x0_mldalm_fops = {
+static const struct file_operations tmpa9xx_mldalm_fops = {
 	.owner			= THIS_MODULE,
 	.llseek			= no_llseek,
-	.unlocked_ioctl		= tmpa9x0_mldalm_ioctl,
-	.open			= tmpa9x0_mldalm_open,
-	.release		= tmpa9x0_mldalm_close,
+	.unlocked_ioctl		= tmpa9xx_mldalm_ioctl,
+	.open			= tmpa9xx_mldalm_open,
+	.release		= tmpa9xx_mldalm_close,
 };
 
-static struct miscdevice tmpa9x0_mldalm_miscdev = {
+static struct miscdevice tmpa9xx_mldalm_miscdev = {
 	.minor		= MISC_DYNAMIC_MINOR,
 	.name		= "mldalm",
-	.fops		= &tmpa9x0_mldalm_fops,
+	.fops		= &tmpa9xx_mldalm_fops,
 };
 
-static int __init tmpa9x0_mldalm_probe(struct platform_device *pdev)
+static int __init tmpa9xx_mldalm_probe(struct platform_device *pdev)
 {
 	int ret;
 
-	if (tmpa9x0_mldalm_miscdev.parent)
+	if (tmpa9xx_mldalm_miscdev.parent)
 		return -EBUSY;
-	tmpa9x0_mldalm_miscdev.parent = &pdev->dev;
+	tmpa9xx_mldalm_miscdev.parent = &pdev->dev;
 
 	
 
-        ret = misc_register(&tmpa9x0_mldalm_miscdev);
+        ret = misc_register(&tmpa9xx_mldalm_miscdev);
 
 	printk(KERN_INFO DRV_NAME " enabled\n");
 
 	return 0;
 }
 
-static int __exit tmpa9x0_mldalm_remove(struct platform_device *pdev)
+static int __exit tmpa9xx_mldalm_remove(struct platform_device *pdev)
 {
 	int res;
 
-	res = misc_deregister(&tmpa9x0_mldalm_miscdev);
+	res = misc_deregister(&tmpa9xx_mldalm_miscdev);
 	if (!res)
-		tmpa9x0_mldalm_miscdev.parent = NULL;
+		tmpa9xx_mldalm_miscdev.parent = NULL;
 
 	return res;
 }
 
 #ifdef CONFIG_PM
 
-static int tmpa9x0_mldalm_suspend(struct platform_device *pdev, pm_message_t message)
+static int tmpa9xx_mldalm_suspend(struct platform_device *pdev, pm_message_t message)
 {
 	return 0;
 }
 
-static int tmpa9x0_mldalm_resume(struct platform_device *pdev)
+static int tmpa9xx_mldalm_resume(struct platform_device *pdev)
 {
 	return 0;
 }
 
 #else
-#define tmpa9x0_mldalm_suspend	NULL
-#define tmpa9x0_mldalm_resume	NULL
+#define tmpa9xx_mldalm_suspend	NULL
+#define tmpa9xx_mldalm_resume	NULL
 #endif
 
-static struct platform_driver tmpa9x0_mldalm_driver = {
-	.remove		= __exit_p(tmpa9x0_mldalm_remove),
-	.suspend	= tmpa9x0_mldalm_suspend,
-	.resume		= tmpa9x0_mldalm_resume,
+static struct platform_driver tmpa9xx_mldalm_driver = {
+	.remove		= __exit_p(tmpa9xx_mldalm_remove),
+	.suspend	= tmpa9xx_mldalm_suspend,
+	.resume		= tmpa9xx_mldalm_resume,
 	.driver		= {
-		.name	= "tmpa9xx_mldalm",
+		.name	= "tmpa9xx-mldalm",
 		.owner	= THIS_MODULE,
 	},
 };
 
-static int __init tmpa9x0_mldalm_init(void)
+static int __init tmpa9xx_mldalm_init(void)
 {
-	return platform_driver_probe(&tmpa9x0_mldalm_driver, tmpa9x0_mldalm_probe);
+	return platform_driver_probe(&tmpa9xx_mldalm_driver, tmpa9xx_mldalm_probe);
 }
 
-static void __exit tmpa9x0_mldalm_exit(void)
+static void __exit tmpa9xx_mldalm_exit(void)
 {
-	platform_driver_unregister(&tmpa9x0_mldalm_driver);
+	platform_driver_unregister(&tmpa9xx_mldalm_driver);
 }
 
-module_init(tmpa9x0_mldalm_init);
-module_exit(tmpa9x0_mldalm_exit);
+module_init(tmpa9xx_mldalm_init);
+module_exit(tmpa9xx_mldalm_exit);
 
 MODULE_AUTHOR("Thomas Haase <Thomas.Haase@web.de>");
 MODULE_DESCRIPTION("Melody / Alarm driver for Toshiba TMPA9xx processors");

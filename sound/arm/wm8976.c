@@ -16,9 +16,9 @@
 
 #include <mach/dma.h>
 #include <mach/irqs.h>
-#include <mach/tmpa910_regs.h>
+#include <mach/regs.h>
 
-#include "tmpa910_i2s.h"
+#include "tmpa9xx_i2s.h"
 #include "wm8976.h"
 
 #define I2S_DMA_RX   I2S0
@@ -77,7 +77,7 @@ typedef struct snd_pcm_ops snd_pcm_ops_t;
 struct snd_wm8976 {
 
 	struct snd_card    *card;
-	struct tmpa910_i2s *i2s;
+	struct tmpa9xx_i2s *i2s;
 	spinlock_t    wm8976_lock;
 
 	struct snd_pcm *pcm;
@@ -371,7 +371,7 @@ static int snd_wm8976_playback_prepare(snd_pcm_substream_t *substream)
 			frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
-	err = tmpa910_i2s_config_tx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
+	err = tmpa9xx_i2s_config_tx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
 			runtime->periods, fragsize_bytes, word_len);
 
 	return err;
@@ -400,7 +400,7 @@ static int snd_wm8976_capture_prepare(snd_pcm_substream_t *substream)
 			frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
-	err = tmpa910_i2s_config_rx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
+	err = tmpa9xx_i2s_config_rx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
 			runtime->periods, fragsize_bytes, word_len);
 
 	return err;
@@ -418,11 +418,11 @@ static int snd_wm8976_playback_trigger(snd_pcm_substream_t *substream, int cmd)
 	{
 	case SNDRV_PCM_TRIGGER_START:
 	    //printk("  SNDRV_PCM_TRIGGER_START\n");
-		ret = tmpa910_i2s_tx_start(chip->i2s);
+		ret = tmpa9xx_i2s_tx_start(chip->i2s);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 	    //printk("  SNDRV_PCM_TRIGGER_STOP\n");
-	    ret = tmpa910_i2s_tx_stop(chip->i2s);
+	    ret = tmpa9xx_i2s_tx_stop(chip->i2s);
 		break;
 	default:
 		ret = -1;
@@ -450,11 +450,11 @@ static int snd_wm8976_capture_trigger(snd_pcm_substream_t *substream, int cmd)
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 		//printk("  SNDRV_PCM_TRIGGER_START\n");
-		tmpa910_i2s_rx_start(chip->i2s);
+		tmpa9xx_i2s_rx_start(chip->i2s);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 	    //printk("  SNDRV_PCM_TRIGGER_STOP\n");
-	    tmpa910_i2s_rx_stop(chip->i2s);
+	    tmpa9xx_i2s_rx_stop(chip->i2s);
 		break;
 	default:
 		spin_unlock(&chip->wm8976_lock);
@@ -473,7 +473,7 @@ static snd_pcm_uframes_t snd_wm8976_playback_pointer(snd_pcm_substream_t *substr
 	snd_pcm_runtime_t *runtime = substream->runtime;
 	unsigned int offset;
 
-	offset = tmpa910_i2s_curr_offset_tx(chip->i2s);
+	offset = tmpa9xx_i2s_curr_offset_tx(chip->i2s);
 	
 	offset = bytes_to_frames(runtime, offset);
 	if (offset >= runtime->buffer_size)
@@ -488,7 +488,7 @@ static snd_pcm_uframes_t snd_wm8976_capture_pointer(snd_pcm_substream_t *substre
 	snd_pcm_runtime_t *runtime = substream->runtime;
 	unsigned int offset;
 
-	offset = tmpa910_i2s_curr_offset_rx(chip->i2s);
+	offset = tmpa9xx_i2s_curr_offset_rx(chip->i2s);
 	
 	offset = bytes_to_frames(runtime, offset);
 
@@ -560,13 +560,13 @@ static int snd_bf53x_wm8976_reset(wm8976_t *chip)
 static int snd_wm8976_configure(wm8976_t *chip)
 {
 	int err = 0;
-	struct tmpa910_i2s *i2s= chip->i2s;
+	struct tmpa9xx_i2s *i2s= chip->i2s;
 
 	snd_printk_marker();
 
 	snd_bf53x_wm8976_reset(chip);
 
-	err = err || tmpa910_i2s_config_tx(i2s);
+	err = err || tmpa9xx_i2s_config_tx(i2s);
 	
 	if (err)
 	{
@@ -658,8 +658,8 @@ static int __devinit snd_wm8976_probe(struct platform_device *pdev)
 	int err = 0;
 	struct snd_card *card = NULL;
 	struct snd_wm8976 *wm8976;
-	struct tmpa910_i2s *i2s;
-	char *id = "ID string for TMPA910 + WM8976 soundcard.";
+	struct tmpa9xx_i2s *i2s;
+	char *id = "ID string for TMPA9XX + WM8976 soundcard.";
 	
 	snd_printk_marker();
 	
@@ -675,7 +675,7 @@ static int __devinit snd_wm8976_probe(struct platform_device *pdev)
 	wm8976 = card->private_data;
 	wm8976->card = card;
 	//wm8976->samplerate = AUDIO_RATE_DEFAULT;
-	if ((i2s = tmpa910_i2s_init(I2S_DMA_RX, snd_wm8976_dma_rx, I2S_DMA_TX, snd_wm8976_dma_tx,
+	if ((i2s = tmpa9xx_i2s_init(I2S_DMA_RX, snd_wm8976_dma_rx, I2S_DMA_TX, snd_wm8976_dma_tx,
 			    I2S_IRQ_ERR, snd_wm8976_i2s_err, wm8976)) == NULL)
 	{
 		printk(KERN_ERR DRIVER_NAME ": Failed to find device on i2s\n");
@@ -724,7 +724,7 @@ static int __devinit snd_wm8976_probe(struct platform_device *pdev)
 	return 0;
 
 __nodev:
-	tmpa910_i2s_free(i2s);
+	tmpa9xx_i2s_free(i2s);
 __i2s_err:
 	snd_card_free(card);
 	return err;
@@ -739,7 +739,7 @@ static int __devexit snd_wm8976_remove(struct platform_device *pdev)
 	wm8976 = card->private_data;
 
 	snd_wm8976_stop(wm8976);
-	tmpa910_i2s_free(wm8976->i2s);
+	tmpa9xx_i2s_free(wm8976->i2s);
 
 	snd_card_free(card);
 	platform_set_drvdata(pdev, NULL);
@@ -747,7 +747,7 @@ static int __devexit snd_wm8976_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#define TMPA910_WM8976_DRIVER	"tmpa910_wm8976"
+#define TMPA9XX_WM8976_DRIVER	"tmpa9xx_wm8976"
 static struct platform_driver snd_wm8976_driver = {
 	.probe		= snd_wm8976_probe,
 	.remove		= __devexit_p(snd_wm8976_remove),
@@ -814,8 +814,8 @@ static void snd_wm8976_set_samplerate(long rate)
 }	
 
 
-MODULE_AUTHOR("TOSHIBA <tmpa910@toshiba.com>");
-MODULE_DESCRIPTION("TMPA910/WM8976");
+MODULE_AUTHOR("TOSHIBA <tmpa9xx@toshiba.com>");
+MODULE_DESCRIPTION("TMPA9XX/WM8976");
 MODULE_LICENSE("GPL");
 
 module_init(snd_wm8976_init);

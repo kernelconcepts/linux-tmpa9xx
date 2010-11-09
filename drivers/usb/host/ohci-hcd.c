@@ -212,7 +212,7 @@ static int ohci_urb_enqueue (
 	spin_lock_irqsave (&ohci->lock, flags);
 
 	/* don't submit to a dead HC */
-	if (!test_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags)) {
+	if (!HCD_HW_ACCESSIBLE(hcd)) {
 		retval = -ENODEV;
 		goto fail;
 	}
@@ -553,9 +553,9 @@ static int ohci_init (struct ohci_hcd *ohci)
 	if (ohci->hcca)
 		return 0;
 
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-	ohci->hcca = (struct ohci_hcca*)tmpa9x0_sram_alloc(sizeof *ohci->hcca);
-	ohci->hcca_dma = tmpa9x0_sram_to_phys(ohci->hcca);
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+	ohci->hcca = (struct ohci_hcca*)tmpa9xx_sram_alloc(sizeof *ohci->hcca);
+	ohci->hcca_dma = tmpa9xx_sram_to_phys(ohci->hcca);
 #else
 	ohci->hcca = dma_alloc_coherent (hcd->self.controller,
 			sizeof *ohci->hcca, &ohci->hcca_dma, 0);
@@ -690,7 +690,7 @@ retry:
 	}
 
 	/* use rhsc irqs after khubd is fully initialized */
-	hcd->poll_rh = 1;
+	set_bit(HCD_FLAG_POLL_RH, &hcd->flags);
 	hcd->uses_new_polling = 1;
 
 	/* start controller operations */
@@ -827,7 +827,7 @@ static irqreturn_t ohci_irq (struct usb_hcd *hcd)
 	else if (ints & OHCI_INTR_RD) {
 		ohci_vdbg(ohci, "resume detect\n");
 		ohci_writel(ohci, OHCI_INTR_RD, &regs->intrstatus);
-		hcd->poll_rh = 1;
+		set_bit(HCD_FLAG_POLL_RH, &hcd->flags);
 		if (ohci->autostop) {
 			spin_lock (&ohci->lock);
 			ohci_rh_resume (ohci);
@@ -915,8 +915,8 @@ static void ohci_stop (struct usb_hcd *hcd)
 	remove_debug_files (ohci);
 	ohci_mem_cleanup (ohci);
 	if (ohci->hcca) {
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-	tmpa9x0_sram_free (ohci->hcca);
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+	tmpa9xx_sram_free (ohci->hcca);
 #else
 		dma_free_coherent (hcd->self.controller,
 				sizeof *ohci->hcca,
@@ -1040,7 +1040,7 @@ MODULE_LICENSE ("GPL");
 #define PLATFORM_DRIVER		ohci_hcd_ep93xx_driver
 #endif
 
-#ifdef CONFIG_SOC_AU1X00
+#ifdef CONFIG_MIPS_ALCHEMY
 #include "ohci-au1xxx.c"
 #define PLATFORM_DRIVER		ohci_hcd_au1xxx_driver
 #endif
@@ -1104,9 +1104,14 @@ MODULE_LICENSE ("GPL");
 #define TMIO_OHCI_DRIVER	ohci_hcd_tmio_driver
 #endif
 
-#ifdef CONFIG_USB_OHCI_HCD_TMPA900
-#include "ohci-tmpa900.c"
-#define TMPA900_OHCI_DRIVER	ohci_hcd_tmpa900_driver
+#ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
+#include "ohci-tmpa9xx.c"
+#define TMPA9XX_OHCI_DRIVER	ohci_hcd_tmpa9xx_driver
+#endif
+
+#ifdef CONFIG_MACH_JZ4740
+#include "ohci-jz4740.c"
+#define PLATFORM_DRIVER	ohci_hcd_jz4740_driver
 #endif
 
 #if	!defined(PCI_DRIVER) &&		\
@@ -1118,7 +1123,7 @@ MODULE_LICENSE ("GPL");
 	!defined(PS3_SYSTEM_BUS_DRIVER) && \
 	!defined(SM501_OHCI_DRIVER) && \
 	!defined(TMIO_OHCI_DRIVER) && \
-	!defined(TMPA900_OHCI_DRIVER) && \
+	!defined(TMPA9XX_OHCI_DRIVER) && \
 	!defined(SSB_OHCI_DRIVER)
 #error "missing bus glue for ohci-hcd"
 #endif
@@ -1203,8 +1208,8 @@ static int __init ohci_hcd_mod_init(void)
 		goto error_tmio;
 #endif
 
-#ifdef TMPA900_OHCI_DRIVER
-	retval = platform_driver_register(&TMPA900_OHCI_DRIVER);
+#ifdef TMPA9XX_OHCI_DRIVER
+	retval = platform_driver_register(&TMPA9XX_OHCI_DRIVER);
 	if (retval < 0)
 		goto error_tmpa;
 #endif
@@ -1213,8 +1218,8 @@ static int __init ohci_hcd_mod_init(void)
 	return retval;
 
 	/* Error path */
-#ifdef TMPA900_OHCI_DRIVER
-	platform_driver_unregister(&TMPA900_OHCI_DRIVER);
+#ifdef TMPA9XX_OHCI_DRIVER
+	platform_driver_unregister(&TMPA9XX_OHCI_DRIVER);
  error_tmpa:
 #endif
 #ifdef TMIO_OHCI_DRIVER
@@ -1270,8 +1275,8 @@ module_init(ohci_hcd_mod_init);
 
 static void __exit ohci_hcd_mod_exit(void)
 {
-#ifdef TMPA900_OHCI_DRIVER
-	platform_driver_unregister(&TMPA900_OHCI_DRIVER);
+#ifdef TMPA9XX_OHCI_DRIVER
+	platform_driver_unregister(&TMPA9XX_OHCI_DRIVER);
 #endif
 #ifdef TMIO_OHCI_DRIVER
 	platform_driver_unregister(&TMIO_OHCI_DRIVER);

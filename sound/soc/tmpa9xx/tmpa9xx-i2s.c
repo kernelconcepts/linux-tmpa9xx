@@ -27,7 +27,7 @@
 #include <mach/dma.h>
 /*#include <mach/audio.h>*/
 
-#include <mach/tmpa910_regs.h>
+#include <mach/regs.h>
 
 #include "tmpa9xx-pcm.h"
 #include "tmpa9xx-i2s.h"

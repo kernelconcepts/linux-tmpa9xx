@@ -35,7 +35,7 @@
 #include <asm/system.h>
 #include <asm/irq.h>
 #include <asm/io.h>
-#include <mach/tmpa910_regs.h>
+#include <mach/regs.h>
 #include <mach/irqs.h>
 
 MODULE_AUTHOR("Michael Hasselberg <mh@open-engineering.de>");
@@ -413,7 +413,7 @@ static struct platform_driver tmpa9xx_rtc_platform_driver = {
 	.suspend	= tmpa9xx_rtc_suspend,
 	.resume		= tmpa9xx_rtc_resume,
 	.driver		= {
-		.name	= "tmpa9xx_rtc",
+		.name	= "tmpa9xx-rtc",
 		.owner	= THIS_MODULE
 	},
 

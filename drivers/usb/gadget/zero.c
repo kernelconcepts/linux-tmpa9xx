@@ -57,8 +57,7 @@
 #include "g_zero.h"
 #include "gadget_chips.h"
 
-#define __DEBUG__
-//#include <linux/debug.h>
+
 /*-------------------------------------------------------------------------*/
 
 /*
@@ -265,7 +264,7 @@ static void zero_resume(struct usb_composite_dev *cdev)
 
 /*-------------------------------------------------------------------------*/
 
-static int __init zero_bind(struct usb_composite_dev *cdev)
+static int __ref zero_bind(struct usb_composite_dev *cdev)
 {
 	int			gcnum;
 	struct usb_gadget	*gadget = cdev->gadget;
@@ -328,7 +327,6 @@ static int __init zero_bind(struct usb_composite_dev *cdev)
 		init_utsname()->sysname, init_utsname()->release,
 		gadget->name);
 
-	printk("success\n");
 	return 0;
 }
 
