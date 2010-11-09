@@ -66,6 +66,11 @@ static struct clk uart_clk = {
 	.rate = 96000000,
 };
 
+/* fixed clock */
+static struct clk clcd_clk = {
+	.rate = 96000000,
+};
+
 static struct clk dummy_apb_pclk;
 
 static struct clk_lookup lookups[] = {
@@ -88,6 +93,9 @@ static struct clk_lookup lookups[] = {
 	}, {	/* SSP1 */
 		.dev_id		= "tmpa9xx-spi1",
 		.clk		= &ssp_clk,
+	}, {	/* CLCD */
+		.dev_id		= "tmpa9xx-clcd",
+		.clk		= &clcd_clk,
 	}
 };
 
