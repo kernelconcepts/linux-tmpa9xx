@@ -458,7 +458,7 @@ enum gpio_bankidx {
 static struct tmpa9xx_gpio_chip tmpa9xx_gpio_banks[] = {
 	TMPA9XX_GPIO_BANK("A", PORTA,   0, 0x0F, 0x00, 0x0F), /* 4 interrupts */
 	TMPA9XX_GPIO_BANK("B", PORTB,   8, 0x00, 0x0F, 0x00), 
-	TMPA9XX_GPIO_BANK("C", PORTC,  16, 0xC0, 0x1C, 0x80), /* 1 interrupts */
+	TMPA9XX_GPIO_BANK("C", PORTC,  16, 0xC0, 0xDC, 0x80), /* 1 interrupts */
 	TMPA9XX_GPIO_BANK("D", PORTD,  24, 0xFF, 0x00, 0xC0), /* 2 interrupts */
 	TMPA9XX_GPIO_BANK("F", PORTF,  40, 0xCF, 0xC0, 0x80), /* 1 interrupt  */
 	TMPA9XX_GPIO_BANK("G", PORTG,  48, 0xFF, 0xFF, 0x00),

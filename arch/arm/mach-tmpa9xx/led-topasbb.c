@@ -45,8 +45,18 @@
 #define GPIO_LED_SEG_G      14
 #define GPIO_LED_SEG_DP     15
 
+
+#ifdef CONFIG_MACH_TOPAS910
+# define NUM_GPIOS  8
 /* Pattern for digits from 0 to 9, "L.", clear, all on, dp on */
 static const unsigned char pattern[] = {0x3F, 0x06/*1*/, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F/*9*/, 0xB8, 0x00, 0xFF, 0x08};
+
+#else   /* CONFIG_MACH_TOPASA900 */
+# define NUM_GPIOS  4
+/* Pattern for digits from 0 to 9, a to f. The a900 can only do this. */
+static const unsigned char pattern[] = { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, };
+#endif
+
 static unsigned int num_pattern = ARRAY_SIZE(pattern);
 
 #ifdef CONFIG_PM
@@ -63,7 +73,7 @@ static void segments_set(int value)
 	if (value < 0)
 		return;
 
-	for (i=0; i<8; i++)
+	for (i=0; i<NUM_GPIOS; i++)
 		gpio_set_value(GPIO_LED_SEG_A + i, (pattern[value] & (1 << i)) ? 0 : 1);
 }
 
@@ -71,7 +81,7 @@ static int segments_get(void)
 {
 	int i, p = 0;
     
-	for (i=0; i<8; i++)
+	for (i=0; i<NUM_GPIOS; i++)
 		p |= (gpio_get_value(GPIO_LED_SEG_A + i) ? 0 : (1 << i));
     
 	for (i=0; i<num_pattern; i++)
@@ -109,10 +119,12 @@ static int __init topas_led_probe(struct platform_device *pdev)
 	ret += gpio_request(GPIO_LED_SEG_B, "LED_SEG_B");
 	ret += gpio_request(GPIO_LED_SEG_C, "LED_SEG_C");
 	ret += gpio_request(GPIO_LED_SEG_D, "LED_SEG_D");
+#ifdef CONFIG_MACH_TOPAS910
 	ret += gpio_request(GPIO_LED_SEG_E, "LED_SEG_E");
 	ret += gpio_request(GPIO_LED_SEG_F, "LED_SEG_F");
 	ret += gpio_request(GPIO_LED_SEG_G, "LED_SEG_G");
 	ret += gpio_request(GPIO_LED_SEG_DP,"LED_SEG_DP");
+#endif
 
 	if (ret < 0) {
 		printk(KERN_ERR "Topas910 LED: Unable to get GPIO for LEDs %i\n", ret);
@@ -134,10 +146,12 @@ static int __devexit topas_led_remove(struct platform_device *pdev)
 	gpio_free(GPIO_LED_SEG_B);
 	gpio_free(GPIO_LED_SEG_C);
 	gpio_free(GPIO_LED_SEG_D);
+#ifdef CONFIG_MACH_TOPAS910
 	gpio_free(GPIO_LED_SEG_E);
 	gpio_free(GPIO_LED_SEG_F);
 	gpio_free(GPIO_LED_SEG_G);
 	gpio_free(GPIO_LED_SEG_DP);
+#endif
 
 	return 0;
 }
@@ -146,7 +160,11 @@ static int __devexit topas_led_remove(struct platform_device *pdev)
 static int topas_led_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	saved_state = segments_get();
+#ifdef CONFIG_MACH_TOPAS910
 	segments_set(11); /* all led off */
+#else
+	segments_set(1); /* most power saving value...  */
+#endif
     
 	return 0;
 }
