@@ -596,7 +596,7 @@ static struct platform_driver tmpa9xx_ts_driver = {
 	.resume		= tmpa9xx_ts_resume,
 
 	.driver		= {
-		.name	= "tmpa9xx_ts",
+		.name	= "tmpa9xx-ts",
 		.owner	= THIS_MODULE,
 	},
 };

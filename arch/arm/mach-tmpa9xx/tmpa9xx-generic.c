@@ -834,6 +834,10 @@ void __init tmpa9xx_init(void)
         /* Port D can be used as general-purpose input.
            Port D can also be used as interrupt (INTB, INTA), ADC (AN7-AN0), and touch screen
            control (PX, PY, MX, MY) pins. */
+        GPIODFR1  = (0x00);
+        GPIODFR2  = (0x00);
+        GPIODIE   = (0x00);
+        
 #if defined CONFIG_TOUCHSCREEN_TMPA9XX || defined CONFIG_TOUCHSCREEN_TMPA9XX_MODULE
         GPIODFR1 |= (0x00);
         GPIODFR2 |= (0xf0);
