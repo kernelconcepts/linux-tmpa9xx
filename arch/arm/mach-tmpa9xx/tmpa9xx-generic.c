@@ -844,18 +844,7 @@ void __init tmpa9xx_init(void)
         GPIODIE   = (0x00);
 #endif
 
-#if defined CONFIG_TMPA9XX_ADC || defined CONFIG_TMPA9XX_ADC_MODULE
-        GPIODFR1 |= (0x0f);
-        GPIODFR2 |= (0x00);
-        GPIODIE   = (0x00);
-#endif
-
-#if  ( defined CONFIG_TMPA9XX_ADC         ||  defined CONFIG_TMPA9XX_ADC_MODULE) \
-   &&(!defined CONFIG_TOUCHSCREEN_TMPA9XX && !defined CONFIG_TOUCHSCREEN_TMPA9XX_MODULE)
-        GPIODFR1 |= (0xf0);
-        GPIODFR2 |= (0x00);
-        GPIODIE   = (0x00);
-#endif
+	/* ADC Multiplex Handling will be done in driver directly */
 
         /* Port F
            The upper 2 bits (bits [7:6]) of Port F can be used as general-purpose input/output pins.
@@ -898,6 +887,8 @@ void __init tmpa9xx_init(void)
         GPIOKFR1 = (0xff);
 #endif
 
+        GPIOLFR1 = (0x00);
+        GPIOLFR2 = (0x00);
         /* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
            In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
            I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins. */
