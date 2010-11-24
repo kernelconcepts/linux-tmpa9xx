@@ -784,6 +784,12 @@ void __init tmpa9xx_init(void)
            output (FSOUT), melody output (MLDALM), PWM output function (PWM0OUT,
            PWM2OUT), and USB Host power supply control function (USBOCn, USBPON). */
 
+        GPIOCODE  = (0x00); 
+        GPIOCDIR  = (0x00);
+        GPIOCFR1  = (0x00);
+        GPIOCFR2  = (0x00);
+        GPIOCDATA = (0x00);
+        
 #if defined CONFIG_USB_OHCI_HCD_TMPA9XX || defined CONFIG_USB_OHCI_HCD_TMPA9XX_MODULE
         /* prepare Port C for USB Host */
         GPIOCDATA  =  (0xcf);
@@ -819,7 +825,7 @@ void __init tmpa9xx_init(void)
         GPIOCDIR  = (0xff);
         GPIOCFR1  = (0x00);
         GPIOCFR2  = (0x00);
-        GPIOCDATA = (0x00;
+        GPIOCDATA = (0x00);
 #endif
 
 #if (defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE) \
