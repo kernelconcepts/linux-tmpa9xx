@@ -932,6 +932,7 @@ void __init tmpa9xx_init(void)
         /* Port T can be used as general-purpose input/output pins.
            Port T can also be used as USB external clock input (X1USB), UART function (U1CTSn,
            U1RXD, U1TXD), and SPI function (SP0DI, SP0DO, SP0CLK, SP0FSS) and pins. */
+        GPIOTFR1 = (0x00);
 #ifdef CONFIG_UART1
         GPIOTFR1 |= (0x07 << 4);
 #endif
