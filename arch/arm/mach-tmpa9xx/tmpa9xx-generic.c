@@ -772,10 +772,21 @@ void __init tmpa9xx_init(void)
         
         /* Port A can be used not only as a general-purpose input pin with pull up but also as key input pin. */
         TMPA9XX_CFG_PORT_GPIO(PORTA); /* All useable for GPIO */
+
+        GPIOADIR  = (0x00);
+        GPIOAFR1  = (0x00);
+        GPIOAFR2  = (0x00);
+        GPIOADATA = (0x00);
         
         /* Port B can be used not only as general-purpose output pins but also as key output pins. */
         TMPA9XX_CFG_PORT_GPIO(PORTB); 
         GPIOBODE = (0x00); /* Disable Open Drain */
+
+        GPIOBODE  = (0x00); 
+        GPIOBDIR  = (0x00);
+        GPIOBFR1  = (0x00);
+        GPIOBFR2  = (0x00);
+        GPIOBDATA = (0x00);
         
         /* Port C
            The upper 2 bits (bits [7:6]) of Port C can be used as general-purpose input/output pins
@@ -821,11 +832,6 @@ void __init tmpa9xx_init(void)
  && !defined CONFIG_TMPA9XX_MLDALM       && !defined CONFIG_TMPA9XX_MLDALM_MODULE \
  && !defined CONFIG_I2C_TMPA9XX          && !defined CONFIG_I2C_TMPA9XX_MODULE
        TMPA9XX_CFG_PORT_GPIO(PORTC);
-        GPIOCODE  = (0x00); 
-        GPIOCDIR  = (0xff);
-        GPIOCFR1  = (0x00);
-        GPIOCFR2  = (0x00);
-        GPIOCDATA = (0x00);
 #endif
 
 #if (defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE) \
@@ -840,6 +846,8 @@ void __init tmpa9xx_init(void)
         /* Port D can be used as general-purpose input.
            Port D can also be used as interrupt (INTB, INTA), ADC (AN7-AN0), and touch screen
            control (PX, PY, MX, MY) pins. */
+        GPIODDIR  = (0x00);
+        GPIODDATA = (0x00);
         GPIODFR1  = (0x00);
         GPIODFR2  = (0x00);
         GPIODIE   = (0x00);
@@ -856,6 +864,13 @@ void __init tmpa9xx_init(void)
            The upper 2 bits (bits [7:6]) of Port F can be used as general-purpose input/output pins.
            Port F can also be used as interrupt (INTC), UART (U2RXD, U2TXD) and I2C (I2C1DA,
            I2C1CL) pins. */
+
+        GPIOFDIR  = (0x00);
+        GPIOFDATA = (0x00);
+        GPIOFFR1  = (0x00);
+        GPIOFFR2  = (0x00);
+        GPIOFIE   = (0x00);
+
 #if defined CONFIG_UART2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1
         GPIOFFR1 &= ~(0xc0);  /* UART 2 */
         GPIOFFR2 |=  (0xc0);
@@ -874,6 +889,12 @@ void __init tmpa9xx_init(void)
         /* Port G can be used as general-purpose input/output pins.
            Port G can also be used as SD host controller function pins (SDC0CLK, SDC0CD,
            SDC0WP, SDC0CMD, SDC0DAT3, SDC0DAT2, SDC0DAT1 and SDC0DAT0). */
+
+        GPIOGDIR  = (0x00);
+        GPIOGDATA = (0x00);
+        GPIOGFR1  = (0x00);
+        GPIOGFR2  = (0x00);
+
 #if defined CONFIG_MMC_TMPA9XX_SDHC || !defined CONFIG_MMC_TMPA9XX_SDHC_MODULE
         GPIOGFR1 = (0xff);
 #else
@@ -886,6 +907,17 @@ void __init tmpa9xx_init(void)
         /* Port K can be used as general-purpose input/output pins.
            Port K can also be used as LCD controller function pins (LD23 to LD16) and CMOS image
            sensor control (CMSD7 toCMSD0) pins. */
+
+        GPIOJDIR  = (0x00);
+        GPIOJDATA = (0x00);
+        GPIOJFR1  = (0x00);
+        GPIOJFR2  = (0x00);
+        
+        GPIOJDIR  = (0x00);
+        GPIOJDATA = (0x00);
+        GPIOJFR1  = (0x00);
+        GPIOJFR2  = (0x00);
+        
 #if defined CONFIG_FB_ARMCLCD || defined CONFIG_FB_ARMCLCD_MODULE
         GPIOJFR2 = (0x00);
         GPIOJFR1 = (0xff);
@@ -893,11 +925,14 @@ void __init tmpa9xx_init(void)
         GPIOKFR1 = (0xff);
 #endif
 
-        GPIOLFR1 = (0x00);
-        GPIOLFR2 = (0x00);
         /* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
            In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
            I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins. */
+        GPIOLDIR  = (0x00);
+        GPIOLDATA = (0x00);
+        GPIOLFR1  = (0x00);
+        GPIOLFR2  = (0x00);
+        
 #if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
         GPIOLFR1 |= (0x1f); /* bits 4:0 for I2S */
 #endif        
@@ -907,7 +942,11 @@ void __init tmpa9xx_init(void)
         /* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
            Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
            I2S1WS).*/
-        GPIOMDIR |=  (0x03); /* M0, MI GPIO OUT */
+        GPIOMDIR  = (0x00);
+        GPIOMDATA = (0x00);
+        GPIOMFR1  = (0x00);
+        GPIOMFR2  = (0x00);
+        
 #if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
         GPIOMFR1 &= ~(0x03);
         GPIOMFR1 |=  (0x04); /* M2 I2S1DAT0 */
@@ -925,6 +964,13 @@ void __init tmpa9xx_init(void)
            used as general-purpose output pins. (Bits [7:3] are not used.)
            Port R can also be used as reset output (RESETOUTn), high-frequency clock output
            (FCOUT), interrupt function (INTH) and Oscillation Frequency Detection (OFDOUTn). */
+           
+        GPIORDIR  = (0x00);
+        GPIORDATA = (0x00);
+        GPIORFR1  = (0x00);
+        GPIORFR2  = (0x00);
+        GPIORIE   = (0x00);
+
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
         GPIORDIR &= ~(1 << 2); /* Eth IRQ */
 #endif
@@ -932,7 +978,12 @@ void __init tmpa9xx_init(void)
         /* Port T can be used as general-purpose input/output pins.
            Port T can also be used as USB external clock input (X1USB), UART function (U1CTSn,
            U1RXD, U1TXD), and SPI function (SP0DI, SP0DO, SP0CLK, SP0FSS) and pins. */
-        GPIOTFR1 = (0x00);
+
+        GPIOTDIR  = (0x00);
+        GPIOTDATA = (0x00);
+        GPIOTFR1  = (0x00);
+        GPIOTFR2  = (0x00);
+
 #ifdef CONFIG_UART1
         GPIOTFR1 |= (0x07 << 4);
 #endif
