@@ -828,12 +828,6 @@ void __init tmpa9xx_init(void)
         GPIOCODE &= ~(0x1<<3);
 #endif
         
-#if !defined CONFIG_USB_OHCI_HCD_TMPA9XX && !defined CONFIG_USB_OHCI_HCD_TMPA9XX_MODULE \
- && !defined CONFIG_TMPA9XX_MLDALM       && !defined CONFIG_TMPA9XX_MLDALM_MODULE \
- && !defined CONFIG_I2C_TMPA9XX          && !defined CONFIG_I2C_TMPA9XX_MODULE
-       TMPA9XX_CFG_PORT_GPIO(PORTC);
-#endif
-
 #if (defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE) \
  && (!defined CONFIG_USB_OHCI_HCD_TMPA9XX && !defined CONFIG_USB_OHCI_HCD_TMPA9XX_MODULE) \
  && defined CONFIG_I2C_TMPA9XX_CHANNEL_0
@@ -841,6 +835,12 @@ void __init tmpa9xx_init(void)
         GPIOCFR1 |=  (0xc0);
         GPIOCFR2 &= ~(0xc0);
         GPIOCODE |=  (0xc0);
+#endif
+
+#if !defined CONFIG_USB_OHCI_HCD_TMPA9XX && !defined CONFIG_USB_OHCI_HCD_TMPA9XX_MODULE \
+ && !defined CONFIG_TMPA9XX_MLDALM       && !defined CONFIG_TMPA9XX_MLDALM_MODULE \
+ && !defined CONFIG_I2C_TMPA9XX          && !defined CONFIG_I2C_TMPA9XX_MODULE
+        TMPA9XX_CFG_PORT_GPIO(PORTC);
 #endif
 
         /* Port D can be used as general-purpose input.
@@ -856,6 +856,8 @@ void __init tmpa9xx_init(void)
         GPIODFR1 |= (0x00);
         GPIODFR2 |= (0xf0);
         GPIODIE   = (0x00);
+#else
+        TMPA9XX_CFG_PORT_GPIO(PORTD);
 #endif
 
 	/* ADC Multiplex Handling will be done in driver directly */
@@ -886,6 +888,11 @@ void __init tmpa9xx_init(void)
         GPIOFODE |=  (0xc0);
 #endif
 
+#if (!defined CONFIG_UART2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1 ) \
+ && (!defined CONFIG_I2C_TMPA9XX && !defined CONFIG_I2C_TMPA9XX_MODULE) && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1)
+        TMPA9XX_CFG_PORT_GPIO(PORTF);
+#endif
+
         /* Port G can be used as general-purpose input/output pins.
            Port G can also be used as SD host controller function pins (SDC0CLK, SDC0CD,
            SDC0WP, SDC0CMD, SDC0DAT3, SDC0DAT2, SDC0DAT1 and SDC0DAT0). */
@@ -898,7 +905,7 @@ void __init tmpa9xx_init(void)
 #if defined CONFIG_MMC_TMPA9XX_SDHC || !defined CONFIG_MMC_TMPA9XX_SDHC_MODULE
         GPIOGFR1 = (0xff);
 #else
-        TMPA9XX_CFG_PORT_GPIO(PORTG); /* SDIO0 or GPIO */
+        TMPA9XX_CFG_PORT_GPIO(PORTG)
 #endif
 
         /* Port J can be used as general-purpose input/output pins.
@@ -923,6 +930,9 @@ void __init tmpa9xx_init(void)
         GPIOJFR1 = (0xff);
         GPIOKFR2 = (0x00);
         GPIOKFR1 = (0xff);
+#else
+        TMPA9XX_CFG_PORT_GPIO(PORTJ);
+        TMPA9XX_CFG_PORT_GPIO(PORTK);
 #endif
 
         /* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
@@ -939,6 +949,12 @@ void __init tmpa9xx_init(void)
 #ifdef CONFIG_SPI_PL022_CHANNEL_1
         GPIOLFR2 |= (0x0f);
 #endif
+
+#if (!defined CONFIG_SND_TMPA9XX_WM8983  && !defined CONFIG_SND_TMPA9XX_WM8983_MODULE \
+  && !defined CONFIG_SND_SOC_TMPA9XX_I2S && !defined CONFIG_SPI_PL022_CHANNEL_1)
+        TMPA9XX_CFG_PORT_GPIO(PORTL)
+#endif        
+  
         /* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
            Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
            I2S1WS).*/
@@ -950,6 +966,8 @@ void __init tmpa9xx_init(void)
 #if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
         GPIOMFR1 &= ~(0x03);
         GPIOMFR1 |=  (0x04); /* M2 I2S1DAT0 */
+#else
+        TMPA9XX_CFG_PORT_GPIO(PORTM)
 #endif
            
         /* Port N can be used as general-purpose input/output pins.
@@ -973,6 +991,8 @@ void __init tmpa9xx_init(void)
 
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
         GPIORDIR &= ~(1 << 2); /* Eth IRQ */
+#else
+        TMPA9XX_CFG_PORT_GPIO(PORTR)
 #endif
     
         /* Port T can be used as general-purpose input/output pins.
@@ -990,6 +1010,8 @@ void __init tmpa9xx_init(void)
 #ifdef CONFIG_SPI_PL022_CHANNEL_0
         GPIOTFR1 |= (0x0f);
 #endif
+
+#if !defined CONFIG_UART1
    
         /* NAND Controller */
         NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
