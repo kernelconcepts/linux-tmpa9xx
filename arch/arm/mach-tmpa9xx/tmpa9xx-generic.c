@@ -889,7 +889,7 @@ void __init tmpa9xx_init(void)
 #endif
 
 #if (!defined CONFIG_UART2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1 ) \
- && (!defined CONFIG_I2C_TMPA9XX && !defined CONFIG_I2C_TMPA9XX_MODULE) && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1)
+ && (!defined CONFIG_I2C_TMPA9XX && !defined CONFIG_I2C_TMPA9XX_MODULE) && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1
         TMPA9XX_CFG_PORT_GPIO(PORTF);
 #endif
 
@@ -1011,8 +1011,6 @@ void __init tmpa9xx_init(void)
         GPIOTFR1 |= (0x0f);
 #endif
 
-#if !defined CONFIG_UART1
-   
         /* NAND Controller */
         NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
         NDFMCR1 = 0x00000000; // ECC = Hamming
