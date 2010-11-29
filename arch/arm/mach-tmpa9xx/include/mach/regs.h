@@ -575,6 +575,38 @@
 
 /* ADC */
 #define ADC_BASE                (0xf0080000)
+#define ADC_ADREG0L             __REG(ADC_BASE + 0x0000) /* A/D conversion result lower-order register 0 */
+#define ADC_ADREG0H             __REG(ADC_BASE + 0x0004) /* A/D conversion result higher-order register 0 */
+#define ADC_ADREG1L             __REG(ADC_BASE + 0x0008) /* A/D conversion result lower-order register 1 */
+#define ADC_ADREG1H             __REG(ADC_BASE + 0x000c) /* A/D conversion result higher-order register 1 */
+#define ADC_ADREG2L             __REG(ADC_BASE + 0x0010) /* A/D conversion result lower-order register 2 */
+#define ADC_ADREG2H             __REG(ADC_BASE + 0x0014) /* A/D conversion result higher-order register 2 */
+#define ADC_ADREG3L             __REG(ADC_BASE + 0x0018) /* A/D conversion result lower-order register 3 */
+#define ADC_ADREG3H             __REG(ADC_BASE + 0x001c) /* A/D conversion result higher-order register 3 */
+#define ADC_ADREG4L             __REG(ADC_BASE + 0x0020) /* A/D conversion result lower-order register 4 */
+#define ADC_ADREG4H             __REG(ADC_BASE + 0x0024) /* A/D conversion result higher-order register 4 */
+#define ADC_ADREG5L             __REG(ADC_BASE + 0x0028) /* A/D conversion result lower-order register 5 */
+#define ADC_ADREG5H             __REG(ADC_BASE + 0x002c) /* A/D conversion result higher-order register 5 */
+#define ADC_ADREG6L             __REG(ADC_BASE + 0x0030) /* A/D conversion result lower-order register 6 */
+#define ADC_ADREG6H             __REG(ADC_BASE + 0x0034) /* A/D conversion result higher-order register 6 */
+#define ADC_ADREG7L             __REG(ADC_BASE + 0x0038) /* A/D conversion result lower-order register 7 */
+#define ADC_ADREG7H             __REG(ADC_BASE + 0x003c) /* A/D conversion result higher-order register 7 */
+#define ADC_ADREGSPL            __REG(ADC_BASE + 0x0040) /* Top-priority A/D conversion result lower-order register */
+#define ADC_ADREGSPH            __REG(ADC_BASE + 0x0044) /* Top-priority A/D conversion result higher-order register */
+#define ADC_ADCOMREGL           __REG(ADC_BASE + 0x0048) /* A/D conversion result comparison lower-order register */
+#define ADC_ADCOMREGH           __REG(ADC_BASE + 0x004c) /* A/D conversion result comparison lower-order register */
+#define ADC_ADMOD0              __REG(ADC_BASE + 0x0050) /* A/D mode control register 0 */
+#define ADC_ADMOD1              __REG(ADC_BASE + 0x0054) /* A/D mode control register 1 */
+#define ADC_ADMOD2              __REG(ADC_BASE + 0x0058) /* A/D mode control register 2 */
+#define ADC_ADMOD3              __REG(ADC_BASE + 0x005c) /* A/D mode control register 3 */
+#define ADC_ADMOD4              __REG(ADC_BASE + 0x0060) /* A/D mode control register 4 */
+#define ADC_ADCLK               __REG(ADC_BASE + 0x0070) /* A/D conversion clock setting register */
+#define ADC_ADIE                __REG(ADC_BASE + 0x0074) /* A/D interrupt enable register */
+#define ADC_ADIS                __REG(ADC_BASE + 0x0078) /* A/D interrupt status register */
+#define ADC_ADIC                __REG(ADC_BASE + 0x007c) /* A/D interrupt clear register */
+
+#define ADC_ADREGxL(X)          __REG(ADC_BASE + X*0x08) 
+#define ADC_ADREGxH(X)          __REG(ADC_BASE + X*0x08 + 0x04) 
 
 /* SDRAM */
 #define SRAM_BASE               (0xF8002000)
