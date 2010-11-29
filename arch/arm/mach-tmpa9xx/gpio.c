@@ -348,13 +348,13 @@ static int tmpa9xx_gpio_irq_type(unsigned int irq, unsigned int type)
 		desc->handle_irq = handle_edge_irq;
 		break;
 	case IRQ_TYPE_LEVEL_HIGH:
-		reg_level_sel |= ~port_mask;
+		reg_level_sel |= port_mask;
 		reg_edge_both &= ~port_mask;
 		reg_raise_high |= port_mask;
 		desc->handle_irq = handle_level_irq;
 		break;
 	case IRQ_TYPE_LEVEL_LOW:
-		reg_level_sel |= ~port_mask;
+		reg_level_sel |= port_mask;
 		reg_edge_both &= ~port_mask;
 		reg_raise_high &= ~port_mask;
 		desc->handle_irq = handle_level_irq;
