@@ -23,7 +23,12 @@ config MACH_TOPASA900
 	depends on CPU_TMPA900
 
 config MACH_TONGA
-        bool "Glyn ARM9 / Tonga board"
+        bool "Glyn ARM9 / Tonga2 board"
+	depends on CPU_TMPA900
+	select HAVE_PWM
+
+config MACH_TONGA2_TFTTIMER
+        bool "TFTTimer / Tonga2 board"
 	depends on CPU_TMPA900
 	select HAVE_PWM
 

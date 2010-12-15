@@ -697,6 +697,8 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
 
 #if defined CONFIG_MACH_TONGA
 static unsigned int videoparams[4]={0x19211e4c,0x10040cef,0x013f380d,0x00010828};
+#elif defined CONFIG_MACH_TONGA2_TFTTIMER
+static unsigned int videoparams[4]={0x28050a74,0x0808290f,0x01df000b,0x00010828};
 #else
 static unsigned int videoparams[4]={0x0707074c,0x020204ef,0x013f200e,0x0001082A};
 #endif
