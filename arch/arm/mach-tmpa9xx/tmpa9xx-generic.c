@@ -963,7 +963,6 @@ void __init tmpa9xx_init(void)
         GPIOMDIR  = (0x00);
         GPIOMDATA = (0x00);
         GPIOMFR1  = (0x00);
-        GPIOMFR2  = (0x00);
         
 #if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
         GPIOMFR1 &= ~(0x03);

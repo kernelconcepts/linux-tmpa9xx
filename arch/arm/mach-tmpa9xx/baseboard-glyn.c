@@ -290,6 +290,18 @@ void __init baseboard_init(void)
         /* Add devices */
         platform_add_devices(devices_baseboard, ARRAY_SIZE(devices_baseboard));
 
+	/* Configure Pins and reset LCD */
+        GPIOMDIR=3;
+        GPIOMFR1=0;
+	/* Reset */
+	GPIOMDATA=0;
+    	udelay(1000);
+	GPIOMDATA|=(1<<0);
+	/* Enable */
+	GPIOMDATA|=(1<<1);
+	/* Light */
+	GPIOCDATA=0;
+
         LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
         PMCCTL &= ~PMCCTL_PMCPWE;
         PMCWV1 |= PMCWV1_PMCCTLV;

@@ -135,8 +135,8 @@ static void __init tonga_init(void)
         /* Add devices */
         platform_add_devices(devices, ARRAY_SIZE(devices));
 
-	baseboard_init();
 	tmpa9xx_init();
+	baseboard_init();
 }
 
 MACHINE_START(TONGA, "Tonga 2")
