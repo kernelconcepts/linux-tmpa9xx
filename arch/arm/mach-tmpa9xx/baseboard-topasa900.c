@@ -204,7 +204,7 @@ static struct spi_board_info spi_board_info[] = {
 }
 #endif
 };
-#elif defined(CONFIG_SPI_SPIDEV)
+#elif defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_SPI_SPIDEV_MODULE)
 static struct spi_board_info spi_board_info[] = {
 #ifdef CONFIG_SPI_PL022_CHANNEL_0
 {
@@ -318,7 +318,7 @@ void __init baseboard_init(void)
         i2c_register_board_info(1, baseboard_i2c_1_devices,
                         ARRAY_SIZE(baseboard_i2c_1_devices));
 #endif
-#if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
+#if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_SPI_SPIDEV_MODULE) || defined(CONFIG_MMC_SPI)
         spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
 
