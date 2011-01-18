@@ -627,7 +627,28 @@ static struct platform_device tmpa9xx_device_lcdda = {
         }
 };
 
-static struct resource tmpa9xx_pwm_resource[] = {
+#if defined CONFIG_TMPA9XX_PWM_CANNEL_0 || defined CONFIG_TMPA9XX_PWM_CANNEL_0_MODULE
+static struct resource tmpa9xx_pwm0_resource[] = {
+        [0] = {
+                .start = TMPA9XX_TIMER0,
+                .end   = TMPA9XX_TIMER0 + 0x0fff,
+                .flags = IORESOURCE_MEM
+        },
+};
+
+static struct platform_device tmpa9xx_pwm0_device = {
+        .name          = "tmpa9xx-pwm",
+        .id            = 0,
+        .num_resources = ARRAY_SIZE(tmpa9xx_pwm0_resource),
+        .resource      = tmpa9xx_pwm0_resource,
+        .dev           = {
+                          .platform_data = NULL,
+        }
+};
+#endif
+
+#if defined CONFIG_TMPA9XX_PWM_CANNEL_1 || defined CONFIG_TMPA9XX_PWM_CANNEL_1_MODULE
+static struct resource tmpa9xx_pwm2_resource[] = {
         [0] = {
                 .start = TMPA9XX_TIMER2,
                 .end   = TMPA9XX_TIMER2 + 0x0fff,
@@ -635,16 +656,16 @@ static struct resource tmpa9xx_pwm_resource[] = {
         },
 };
 
-static struct platform_device tmpa9xx_pwm_device = {
+static struct platform_device tmpa9xx_pwm1_device = {
         .name          = "tmpa9xx-pwm",
-        .id            = 0,
-        .num_resources = ARRAY_SIZE(tmpa9xx_pwm_resource),
-        .resource      = tmpa9xx_pwm_resource,
+        .id            = 1,
+        .num_resources = ARRAY_SIZE(tmpa9xx_pwm2_resource),
+        .resource      = tmpa9xx_pwm2_resource,
         .dev           = {
                           .platform_data = NULL,
         }
 };
-
+#endif
 
 static struct platform_device *devices_tmpa9xx[] __initdata = {
 #if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
@@ -686,8 +707,16 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
         &tmpa9xx_adc_device,
 #endif
 
-        &tmpa9xx_device_lcdda,
-        &tmpa9xx_pwm_device,
+#if defined CONFIG_FB_ACCELERATOR_TOSHIBA || defined CONFIG_FB_ACCELERATOR_ALTIA
+       &tmpa9xx_device_lcdda,
+#endif       
+
+#if defined CONFIG_TMPA9XX_PWM_CANNEL_0 || defined CONFIG_TMPA9XX_PWM_CANNEL_0_MODULE
+        &tmpa9xx_pwm0_device,
+#endif        
+#if defined CONFIG_TMPA9XX_PWM_CANNEL_1 || defined CONFIG_TMPA9XX_PWM_CANNEL_1_MODULE
+        &tmpa9xx_pwm1_device,
+#endif        
 };
 
 /*
@@ -829,6 +858,22 @@ void __init tmpa9xx_init(void)
         GPIOCIE  &= ~(0x1<<3);
         GPIOCODE &= ~(0x1<<3);
 #endif
+
+#if (defined CONFIG_TMPA9XX_PWM_CANNEL_0 || defined CONFIG_TMPA9XX_PWM_CANNEL_0_MODULE) \
+ && (!defined CONFIG_TMPA9XX_MLDALM && !defined CONFIG_TMPA9XX_MLDALM_MODULE)
+        GPIOCFR1 &= ~(0x1<<3);
+        GPIOCFR2 |=  (0x1<<3);
+        GPIOCIE  &= ~(0x1<<3);
+        GPIOCODE &= ~(0x1<<3);
+#endif
+
+#if (defined CONFIG_TMPA9XX_PWM_CANNEL_1 || defined CONFIG_TMPA9XX_PWM_CANNEL_1_MODULE)
+        GPIOCFR1 &= ~(0x1<<4);
+        GPIOCFR2 |=  (0x1<<4);
+        GPIOCIE  &= ~(0x1<<4);
+        GPIOCODE &= ~(0x1<<4);
+#endif
+
         
 #if (defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE) \
  && (!defined CONFIG_USB_OHCI_HCD_TMPA9XX && !defined CONFIG_USB_OHCI_HCD_TMPA9XX_MODULE) \

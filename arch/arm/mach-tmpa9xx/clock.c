@@ -71,6 +71,11 @@ static struct clk clcd_clk = {
 	.rate = 96000000,
 };
 
+/* fixed clock */
+static struct clk tim_clk = {
+	.rate = 96000000,
+};
+
 static struct clk dummy_apb_pclk;
 
 static struct clk_lookup lookups[] = {
@@ -96,6 +101,12 @@ static struct clk_lookup lookups[] = {
 	}, {	/* CLCD */
 		.dev_id		= "tmpa9xx-clcd",
 		.clk		= &clcd_clk,
+	}, {	/* PWM */
+		.dev_id		= "tmpa9xx-pwm.0",
+		.clk		= &tim_clk,
+	}, {	/* PWM */
+		.dev_id		= "tmpa9xx-pwm.1",
+		.clk		= &tim_clk,
 	}
 };
 
