@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.36
-# Mon Jan 17 11:18:33 2011
+# Fri Jan 21 12:22:16 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -818,19 +818,18 @@ CONFIG_I2C_COMPAT=y
 CONFIG_I2C_CHARDEV=y
 # CONFIG_I2C_MUX is not set
 CONFIG_I2C_HELPER_AUTO=y
+CONFIG_I2C_ALGOBIT=y
 
 #
 # I2C Hardware Bus support
 #
-CONFIG_I2C_TMPA9XX=y
-# CONFIG_I2C_TMPA9XX_CHANNEL_0 is not set
-CONFIG_I2C_TMPA9XX_CHANNEL_1=y
+# CONFIG_I2C_TMPA9XX is not set
 
 #
 # I2C system bus drivers (mostly embedded / system-on-chip)
 #
 # CONFIG_I2C_DESIGNWARE is not set
-# CONFIG_I2C_GPIO is not set
+CONFIG_I2C_GPIO=y
 # CONFIG_I2C_OCORES is not set
 # CONFIG_I2C_PCA_PLATFORM is not set
 # CONFIG_I2C_SIMTEC is not set

@@ -47,11 +47,44 @@
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
+#include <linux/i2c-gpio.h>
 
 /*
  * I2C
  */
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
+
+#if defined CONFIG_I2C_GPIO || defined CONFIG_I2C_GPIO_MODULE
+static struct i2c_gpio_platform_data i2c0_gpio_data = {
+	.sda_pin        = 23,
+	.scl_pin        = 22,
+	.udelay         = 20,
+};
+
+static struct platform_device i2c0_gpio_device = {
+	.name           = "i2c-gpio",
+	.id             = 0,
+	.dev            = {
+		.platform_data  = &i2c0_gpio_data,
+	},
+};
+
+static struct i2c_gpio_platform_data i2c1_gpio_data = {
+	.sda_pin        = 47,
+	.scl_pin        = 46,
+	.udelay         = 20,
+};
+
+static struct platform_device i2c1_gpio_device = {
+	.name           = "i2c-gpio",
+	.id             = 1,
+	.dev            = {
+		.platform_data  = &i2c1_gpio_data,
+	},
+};
+#endif
+
+#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE \
+ || defined CONFIG_I2C_GPIO || defined CONFIG_I2C_GPIO_MODULE 
 static struct i2c_board_info baseboard_i2c_0_devices[] = {
         {
         },
@@ -178,11 +211,16 @@ static struct platform_device *devices_baseboard[] __initdata = {
 #if defined CONFIG_SND_TMPA910_WM8974 || defined CONFIG_SND_TMPA910_WM8974_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
         &baseboard_i2s_device,    
 #endif
+#if defined CONFIG_I2C_GPIO || defined CONFIG_I2C_GPIO_MODULE
+	&i2c0_gpio_device,
+	&i2c1_gpio_device,
+#endif        
 };
 
 void __init baseboard_init(void)
 {
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
+#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE \
+ || defined CONFIG_I2C_GPIO    || defined CONFIG_I2C_GPIO_MODULE
         i2c_register_board_info(0, baseboard_i2c_0_devices,
                         ARRAY_SIZE(baseboard_i2c_0_devices));
 
@@ -196,9 +234,32 @@ void __init baseboard_init(void)
         /* Add devices */
         platform_add_devices(devices_baseboard, ARRAY_SIZE(devices_baseboard));
 
-        LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
-        PMCCTL &= ~PMCCTL_PMCPWE;
-        PMCWV1 |= PMCWV1_PMCCTLV;
-        udelay(200);
+	/* Configure Pins and reset LCD */
+        GPIOMDIR=3;
+        GPIOMFR1=0;
+	/* Reset */
+	GPIOMDATA=0;
+    	udelay(1000);
+	GPIOMDATA|=(1<<0);
+	/* Enable */
+	GPIOMDATA|=(1<<1);
+	/* Light */
+	GPIOCDATA=0;
+
+        /* DE (Display Enable) Pin on Tonga2 board enable */
+        GPIOVDIR =(1<<7);
+        GPIOVDATA=(1<<7);
+
+	LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
+	PMCCTL &= ~PMCCTL_PMCPWE;
+	PMCWV1 |= PMCWV1_PMCCTLV;
+	udelay(200);
+
+	/* Free Port N for other usage than TxD RxD */
+        GPIONDIR  = (0x00);
+        GPIONDATA = (0x00);
+        GPIONFR1  = (0x01);
+        GPIONFR2  = (0x02);
+        GPIONIE   = (0x00);
 
 }
