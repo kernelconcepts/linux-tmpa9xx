@@ -127,9 +127,9 @@ static void __init tonga2_tfttimer_init(void)
                 memcpy(&eth_mac_ascii,p + MAC_OFFSET, ETHERNET_MAC_ASCII_LENGTH);
                 parse_enetaddr (eth_mac_ascii, tonga_smsc911x_pdata.mac);
         }
-#endif
         /* Add devices */
         platform_add_devices(devices, ARRAY_SIZE(devices));
+#endif
 
 	baseboard_init();
 	tmpa9xx_init();
