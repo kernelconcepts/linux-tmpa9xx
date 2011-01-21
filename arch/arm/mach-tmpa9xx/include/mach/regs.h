@@ -281,8 +281,12 @@
 
 /* Port U and V TMPA900 only */
 #ifdef CONFIG_CPU_TMPA900
+#define GPIOUDATA                 __REG(GPIO_U_BASE + 0x3FC)
+#define GPIOUDIR                  __REG(GPIO_U_BASE + 0x400)
 #define GPIOUFR1                  __REG(GPIO_U_BASE + 0x424)
 #define GPIOUFR2                  __REG(GPIO_U_BASE + 0x428)
+#define GPIOVDATA                 __REG(GPIO_U_BASE + 0x3FC)
+#define GPIOVDIR                  __REG(GPIO_U_BASE + 0x400)
 #define GPIOVFR1                  __REG(GPIO_V_BASE + 0x424)
 #define GPIOVFR2                  __REG(GPIO_V_BASE + 0x428)
 #endif
