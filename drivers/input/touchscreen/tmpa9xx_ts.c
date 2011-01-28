@@ -381,7 +381,7 @@ static void ts_free_priv(struct tmpa9xx_ts_priv *tmpa9xx_ts_priv)
 	kfree(tmpa9xx_ts_priv);
 }
 
-static int __init tmpa9xx_ts_probe(struct platform_device *pdev)
+static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct tmpa9xx_ts_priv *tmpa9xx_ts_priv = NULL;
@@ -540,7 +540,7 @@ static int __init tmpa9xx_ts_probe(struct platform_device *pdev)
 
 }
 
-static int __exit tmpa9xx_ts_remove(struct platform_device *pdev)
+static int __devexit tmpa9xx_ts_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct tmpa9xx_ts_priv *tmpa9xx_ts_priv;
@@ -591,7 +591,8 @@ static int tmpa9xx_ts_resume(struct platform_device *pdev)
 #endif
 
 static struct platform_driver tmpa9xx_ts_driver = {
-	.remove		= __exit_p(tmpa9xx_ts_exit),
+	.probe		= tmpa9xx_ts_probe,
+	.remove		= __devexit_p(tmpa9xx_ts_remove),
 	.suspend	= tmpa9xx_ts_suspend,
 	.resume		= tmpa9xx_ts_resume,
 
@@ -603,7 +604,7 @@ static struct platform_driver tmpa9xx_ts_driver = {
 
 static int __init tmpa9xx_ts_init(void)
 {
-	return platform_driver_probe(&tmpa9xx_ts_driver, tmpa9xx_ts_probe);
+	return platform_driver_register(&tmpa9xx_ts_driver);
 }
 
 static void __exit tmpa9xx_ts_exit(void)

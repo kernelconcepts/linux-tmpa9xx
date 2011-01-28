@@ -849,7 +849,7 @@ static void tmpa9xx_nand_get_internal_structure(struct tmpa9xx_nand_private *pri
         }
 }	
 
-static int __init tmpa9xx_nand_probe(struct platform_device *pdev)
+static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 {	
 	struct tmpa9xx_nand_private * priv;
 	struct mtd_info *mtd;
@@ -1002,7 +1002,7 @@ error:
 }
 
 
-static int __exit tmpa9xx_nand_remove(struct platform_device *pdev)
+static int __devexit tmpa9xx_nand_remove(struct platform_device *pdev)
 {
 	struct mtd_info *mtd;
 	struct tmpa9xx_nand_private * priv;
@@ -1027,7 +1027,7 @@ static int tmpa9xx_nand_resume(struct platform_device *dev)
 
 static struct platform_driver tmpa9xx_nand_driver = {
 	.probe = tmpa9xx_nand_probe,
-	.remove = __exit_p(tmpa9xx_nand_remove),
+	.remove = __devexit_p(tmpa9xx_nand_remove),
 	.suspend = tmpa9xx_nand_suspend,
 	.resume = tmpa9xx_nand_resume,
 	.driver	= {

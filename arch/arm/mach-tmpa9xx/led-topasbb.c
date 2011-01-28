@@ -108,7 +108,7 @@ ssize_t led_segment_store(struct device *pdev, struct device_attribute *attr, co
 
 DEVICE_ATTR(led_segment, 0644, led_segment_show, led_segment_store);
 
-static int __init topas_led_probe(struct platform_device *pdev)
+static int __devinit topas_led_probe(struct platform_device *pdev)
 {
 	int ret = 0;
     
@@ -184,7 +184,7 @@ static int topas_led_resume(struct platform_device *pdev)
 
 static struct platform_driver topas_led_driver = {
 	.probe		= topas_led_probe,
-	.remove		= __exit_p(topas_led_remove),
+	.remove		= __devexit_p(topas_led_remove),
 	.suspend	= topas_led_suspend,
 	.resume		= topas_led_resume,
 	.driver		= {
