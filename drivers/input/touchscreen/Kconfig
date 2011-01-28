@@ -329,7 +329,7 @@ config TOUCHSCREEN_MIGOR
 	  module will be called migor_ts.
 
 config TOUCHSCREEN_TMPA9XX
-	bool "TMPA9xx Touchscreen interface support"
+	tristate "TMPA9xx Touchscreen interface support"
 	depends on ARCH_TMPA9XX
 	help
 	  Say Y here if you have a TMPA9xx-based board with a touchscreen
