@@ -398,7 +398,7 @@ static struct resource tmpa9xx_resource_ts[] = {
          .flags = IORESOURCE_MEM,
         }, {
          .start = ADC_BASE,
-         .end   = ADC_BASE + 0x100,
+         .end   = ADC_BASE + 0x80,
          .flags = IORESOURCE_MEM,
         }, {
          .start = INTR_VECT_GPIOD,
@@ -581,7 +581,7 @@ static struct platform_device tmpa9xx_wdt_device = {
 static struct resource tmpa9xx_adc_resource[] = {
         [0] = {
                .start = ADC_BASE,
-               .end   = ADC_BASE + 0x0FFF,
+               .end   = ADC_BASE + 0x80,
                .flags = IORESOURCE_MEM
         },
         [1] = {
