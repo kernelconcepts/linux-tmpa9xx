@@ -1,9 +1,9 @@
 /*
- *  Header file for TMPA9xx TS Controller
+ *  Header file for TMPA9xx ADC Controller
  *
  *  Data structure and register user interface
  *
- *  Copyright (C) 2008 bplam GmbH
+ *  Copyright (C) 2008 bplan GmbH
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@
  */
 #ifndef __TMPA9XX_ADC_H__
 #define __TMPA9XX_ADC_H__
-
 
 struct tmpa9xx_adc
 {
@@ -58,5 +57,7 @@ struct tmpa9xx_adc
 	uint32_t adis; //      0x0078 a/d interrupt status register
 	uint32_t adic; //      0x007c a/d interrupt clear register
 };
+
+int tmpa9xx_adc_read(int num, int delay);
 
 #endif /* __TMPA9XX_ADC_H__ */

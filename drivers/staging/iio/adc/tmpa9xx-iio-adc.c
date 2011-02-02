@@ -20,10 +20,11 @@
 #include <linux/sysfs.h>
 #include <linux/semaphore.h>
 #include <mach/regs.h>
+#include <mach/adc.h>
 
 #include "../iio.h"
 
-#define DRIVER_NAME 	"tmpa9xx-adc"
+#define DRIVER_NAME 	"tmpa9xx-iio-adc"
 
 #if defined CONFIG_TOUCHSCREEN_TMPA9XX || defined CONFIG_TOUCHSCREEN_TMPA9XX_MODULE
 #define ADC_MAX_CHANNEL 4
@@ -32,8 +33,6 @@
 #endif
 
 #define dprintk(...) // do {printk("%s(): ", __func__); printk(__VA_ARGS__);}  while(0);
-
-#define FIXED_ADC_PRESCALER 0x2
 
 struct tmpa9xx_adc_info;
 
@@ -59,24 +58,6 @@ struct tmpa9xx_adc_info {
 	int should_exit;
 	int irq;
 };
-
-irqreturn_t interrupt_handler(int irq, void *dev)
-{
-	struct tmpa9xx_adc_info *chip = dev;
-	struct tmpa9xx_adc_channel *ch;
-	int num;
-
-	/* clear interrupt */
-	ADC_ADIC = (1 << 0);
-
-	num = ADC_ADMOD1 & 0xf;
-	ch = &chip->ch[num];
-
-	ch->value = ((ADC_ADREGxH(num) & 0xff) << 2) | ((ADC_ADREGxL(num) >> 6) & 0x3);
-	complete(&ch->complete);
-
-	return IRQ_HANDLED;
-}
 
 static ssize_t tmpa9xx_show_repeat(struct device *dev,
 		struct device_attribute *attr,
@@ -140,14 +121,12 @@ static ssize_t tmpa9xx_show_value(struct device *dev,
 	struct iio_dev *dev_info = dev_get_drvdata(dev);
 	struct tmpa9xx_adc_channel *ch = dev_info->dev_data;
 	struct tmpa9xx_adc_info *chip = ch->parent;
+	int delay = 0;
 	int ret;
 
 	down(&chip->sema);
 
-	ADC_ADMOD1  = (1 << 7) | (1 << 5) | ch->num;
-	init_completion(&ch->complete);
- 	ADC_ADMOD0 |= (1 << 0);
-	wait_for_completion(&ch->complete);
+	ch->value = tmpa9xx_adc_read(ch->num, delay);
 
 	up(&chip->sema);
 
@@ -217,11 +196,9 @@ static int adc_thread(void *c)
 	return 0;
 }
 
-static int iio_tmpa9xx_adc_probe(struct platform_device *pdev)
+static int tmpa9xx_iio_adc_probe(struct platform_device *pdev)
 {
 	struct tmpa9xx_adc_info *chip;
-	struct resource	*res;
-	struct resource	*mem;
 	int i;
 	int ret;
 
@@ -236,38 +213,6 @@ static int iio_tmpa9xx_adc_probe(struct platform_device *pdev)
 	sema_init(&chip->sema, 1);
 	chip->dev = &pdev->dev;
 
-	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (mem == NULL) {
-		dev_err(chip->dev, "platform_get_resource() @ IORESOURCE_MEM failed\n");
-		ret = -ENOENT;
-		goto err0;
-	}
-
-	if (!request_mem_region(mem->start, mem->end - mem->start + 1, pdev->name)) {
-		dev_err(chip->dev, "request_mem_region() failed\n");
-		ret = -EBUSY;
-		goto err1;
-	}
-
-	/* reset */
-	ADC_ADMOD4 = 0x2;
-	udelay(10);
-	ADC_ADMOD4 = 0x1;
-
-	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
-	if (!res) {
-		dev_err(chip->dev, "platform_get_resource() @ IORESOURCE_IRQ failed\n");
-		ret = -ENOMEM;
-		goto err2;
-	}
-
-	ret = request_irq(res->start, interrupt_handler, 0, DRIVER_NAME, chip );
-	if (ret) {
-		dev_err(chip->dev, "request_irq() failed\n");
-		ret = -ENOMEM;
-		goto err3;
-	}
-
 	for (i = 0; i < ADC_MAX_CHANNEL; i++) {
 		struct tmpa9xx_adc_channel *ch = &chip->ch[i];
 
@@ -279,7 +224,7 @@ static int iio_tmpa9xx_adc_probe(struct platform_device *pdev)
 		if (!ch->indio_dev) {
 			dev_err(chip->dev, "iio_allocate_device() failed\n");
 			ret = -ENOMEM;
-			goto err4;
+			goto err0;
 		}
 	}
 
@@ -296,7 +241,7 @@ static int iio_tmpa9xx_adc_probe(struct platform_device *pdev)
 		if (ret) {
 			dev_err(chip->dev, "iio_device_register() failed\n");
 			ret = -ENOENT;
-			goto err5;
+			goto err1;
 		}
 
 	        ch->dirent = sysfs_get_dirent(ch->indio_dev->dev.kobj.sd, NULL, "value");
@@ -306,70 +251,42 @@ static int iio_tmpa9xx_adc_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, chip);
 	dev_info(chip->dev, "tmpa9xx adc driver registered\n");
 
-	/* Setup Port Multiplexing */
-	if (ADC_MAX_CHANNEL == 4)
-	        GPIODFR1 = 0x0f;
-	else
-	        GPIODFR1 = 0xff;
-        GPIODFR2 = 0x00;
-        GPIODIE  = 0x00;
-
-        /* Setup ADCCLK */
-        ADC_ADCLK = (0x01 << 7) | FIXED_ADC_PRESCALER;
-
 	chip->tsk = kthread_run(adc_thread, chip, "adc");
 	if (IS_ERR(chip->tsk)) {
 		dev_err(chip->dev, "kthread_run() failed\n");
 		ret = PTR_ERR(chip->tsk);
-		goto err6;
+		goto err2;
 	}
 
-	/* Enable IRQ generation */
-	ADC_ADIE = (0x01 << 0);
-
 	return 0;
-
-err6:
+/*
+err3:
 	kthread_stop(chip->tsk);
 	i = 1;
-err5:
+*/
+err2:
 	for (--i; i >= 0; i --) {
 		struct tmpa9xx_adc_channel *ch = &chip->ch[i];
 		iio_device_unregister(ch->indio_dev);
 	}
-err4:
-	free_irq(res->start, &pdev->dev);
-
+err1:
 	for (i = 0; i < ADC_MAX_CHANNEL; i++) {
 		struct tmpa9xx_adc_channel *ch = &chip->ch[i];
 		if (ch->indio_dev)
 			iio_free_device(ch->indio_dev);
 	}
-err3:
-err2:
-        release_mem_region(mem->start, resource_size(mem));
-err1:
 err0:
 	kfree(chip);
 
 	return ret;
 }
 
-static int __devexit iio_tmpa9xx_adc_remove(struct platform_device *pdev)
+static int __devexit tmpa9xx_iio_adc_remove(struct platform_device *pdev)
 {
 	struct tmpa9xx_adc_info *chip = platform_get_drvdata(pdev);
-	struct resource	*res;
 	int i;
 
 	kthread_stop(chip->tsk);
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	BUG_ON(!res);
-        release_mem_region(res->start, resource_size(res));
-
-	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
-	BUG_ON(!res);
-	free_irq(res->start, chip);
 
 	for (i = 0; i < ADC_MAX_CHANNEL; i++) {
 		struct tmpa9xx_adc_channel *ch = &chip->ch[i];
@@ -378,33 +295,33 @@ static int __devexit iio_tmpa9xx_adc_remove(struct platform_device *pdev)
 	}
 
 	kfree(chip);
-	
+
 	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }
 
-static struct platform_driver iio_tmpa9xx_adc_driver = {
-	.probe = iio_tmpa9xx_adc_probe,
-	.remove = __devexit_p(iio_tmpa9xx_adc_remove),
+static struct platform_driver tmpa9xx_iio_adc_driver = {
+	.probe = tmpa9xx_iio_adc_probe,
+	.remove = __devexit_p(tmpa9xx_iio_adc_remove),
 	.driver = {
 		.name  = DRIVER_NAME,
 		.owner = THIS_MODULE,
 	},
 };
 
-static int __init iio_tmpa9xx_adc_init(void)
+static int __init tmpa9xx_iio_adc_init(void)
 {
-	return platform_driver_register(&iio_tmpa9xx_adc_driver);
+	return platform_driver_register(&tmpa9xx_iio_adc_driver);
 }
 
-static void __exit iio_tmpa9xx_adc_exit(void)
+static void __exit tmpa9xx_iio_adc_exit(void)
 {
-	platform_driver_unregister(&iio_tmpa9xx_adc_driver);
+	platform_driver_unregister(&tmpa9xx_iio_adc_driver);
 }
 
-module_init(iio_tmpa9xx_adc_init);
-module_exit(iio_tmpa9xx_adc_exit);
+module_init(tmpa9xx_iio_adc_init);
+module_exit(tmpa9xx_iio_adc_exit);
 
 MODULE_AUTHOR("Thomas Haase <Thomas.Haase@web.de>, Michael Hunold <michael@mihu.de>");
 MODULE_DESCRIPTION("TMPA9xx ADC driver for the iio subsystem");

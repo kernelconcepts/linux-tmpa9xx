@@ -13,3 +13,5 @@ obj-$(CONFIG_MACH_TOPAS910)	        += topas910.o baseboard-topas910.o led-topas
 obj-$(CONFIG_MACH_TOPASA900)	        += topasa900.o baseboard-topasa900.o led-topasbb.o 
 obj-$(CONFIG_MACH_TONGA)	        += tonga.o baseboard-glyn.o
 obj-$(CONFIG_MACH_TONGA2_TFTTIMER)	+= tfttimer.o baseboard-tfttimer.o
+obj-$(CONFIG_TMPA9XX_ADC)		+= tmpa9xx-adc.o
+

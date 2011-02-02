@@ -602,6 +602,17 @@ static struct platform_device tmpa9xx_adc_device = {
 };
 #endif
 
+#if defined CONFIG_TMPA9XX_IIO_ADC || defined CONFIG_TMPA9XX_IIO_ADC_MODULE
+static struct platform_device tmpa9xx_iio_adc_device = {
+        .name          = "tmpa9xx-iio-adc",
+        .id            = -1,
+        .num_resources = 0,
+        .dev           = {
+                          .platform_data        = NULL,
+        }
+};
+#endif
+
 static struct resource tmpa9xx_lcdda_resource[] = {
         [0] = {
                 .start = 0xF2050000,
@@ -705,6 +716,9 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
 
 #if defined CONFIG_TMPA9XX_ADC || defined CONFIG_TMPA9XX_ADC_MODULE
         &tmpa9xx_adc_device,
+#endif
+#if defined CONFIG_TMPA9XX_IIO_ADC || defined CONFIG_TMPA9XX_IIO_ADC_MODULE
+        &tmpa9xx_iio_adc_device,
 #endif
 
 #if defined CONFIG_FB_ACCELERATOR_TOSHIBA || defined CONFIG_FB_ACCELERATOR_ALTIA
@@ -895,19 +909,22 @@ void __init tmpa9xx_init(void)
            control (PX, PY, MX, MY) pins. */
         GPIODDIR  = (0x00);
         GPIODDATA = (0x00);
-        GPIODFR1  = (0x00);
-        GPIODFR2  = (0x00);
         GPIODIE   = (0x00);
+
+        TMPA9XX_CFG_PORT_GPIO(PORTD);
         
 #if defined CONFIG_TOUCHSCREEN_TMPA9XX || defined CONFIG_TOUCHSCREEN_TMPA9XX_MODULE
-        GPIODFR1 |= (0x00);
         GPIODFR2 |= (0xf0);
-        GPIODIE   = (0x00);
-#else
-        TMPA9XX_CFG_PORT_GPIO(PORTD);
 #endif
 
-	/* ADC Multiplex Handling will be done in driver directly */
+#if defined CONFIG_TMPA9XX_ADC || defined CONFIG_TMPA9XX_ADC_MODULE
+#if defined CONFIG_TOUCHSCREEN_TMPA9XX || defined CONFIG_TOUCHSCREEN_TMPA9XX_MODULE
+        GPIODFR1 |= 0x0f;
+#else
+        GPIODFR2  = 0x00;
+        GPIODFR1 |= 0xff;
+#endif
+#endif
 
         /* Port F
            The upper 2 bits (bits [7:6]) of Port F can be used as general-purpose input/output pins.

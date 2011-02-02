@@ -27,9 +27,10 @@ config MAX1363_RING_BUFFER
 	  Say yes here to include ring buffer support in the MAX1363
 	  ADC driver.
 
-config TMPA9XX_ADC
-	tristate "TMPA9xx ADC driver"
+config TMPA9XX_IIO_ADC
+	tristate "TMPA9xx IIO ADC driver"
 	select IIO_TRIGGER if IIO_RING_BUFFER
+	select TMPA9XX_ADC
 	help
 	  Say yes here to build support for the TMPA9xx ADC
           Provides direct access via sysfs.

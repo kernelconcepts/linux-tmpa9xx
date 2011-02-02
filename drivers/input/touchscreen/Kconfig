@@ -331,6 +331,7 @@ config TOUCHSCREEN_MIGOR
 config TOUCHSCREEN_TMPA9XX
 	tristate "TMPA9xx Touchscreen interface support"
 	depends on ARCH_TMPA9XX
+	select TMPA9XX_ADC
 	help
 	  Say Y here if you have a TMPA9xx-based board with a touchscreen
 	  If unsure, say N.

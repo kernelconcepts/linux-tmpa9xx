@@ -39,3 +39,7 @@ config MACH_TOPAS910
 	depends on CPU_TMPA910
 
 endif
+
+config TMPA9XX_ADC
+	tristate
+	default n
