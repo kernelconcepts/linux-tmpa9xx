@@ -789,7 +789,7 @@ static void setup_display(void)
 		sync |= FB_SYNC_HOR_HIGH_ACT;
         if (!(videoparams[2] & (1<<12)))
 		sync |= FB_SYNC_VERT_HIGH_ACT;
-        if (!(videoparams[2] &&(1<<13)))
+        if ((videoparams[2] & (1<<13)))
 		timer2 |= TIM2_IPC;
 
 	timer2 |= (videoparams[2])&0x1f;
