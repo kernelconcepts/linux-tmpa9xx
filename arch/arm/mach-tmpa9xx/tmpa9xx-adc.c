@@ -70,7 +70,7 @@ int tmpa9xx_adc_read(int num, int delay)
 	return ret;
 }
 
-irqreturn_t interrupt_handler(int irq, void *dev)
+static irqreturn_t interrupt_handler(int irq, void *dev)
 {
 	struct tmpa9xx_adc_core *t = dev;
 	int num;
