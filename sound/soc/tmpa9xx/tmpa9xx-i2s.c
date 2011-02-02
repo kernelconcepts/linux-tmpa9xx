@@ -200,7 +200,7 @@ struct snd_soc_dai tmpa_i2s_dai = {
 
 EXPORT_SYMBOL_GPL(tmpa_i2s_dai);
 
-static int __init tmpa9xx_i2s_probe(struct platform_device *dev)
+static int __devinit tmpa9xx_i2s_probe(struct platform_device *dev)
 {
 	int ret;
 

@@ -441,7 +441,7 @@ static struct i2c_algorithm tmpa9xx_algorithm = {
 	.functionality = tmpa9xx_i2c_func,
 };
 
-static int __init tmpa9xx_i2c_probe(struct platform_device *pdev)
+static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 {
 	struct resource *r;
 	int ret = 0;
@@ -594,7 +594,7 @@ static int __init tmpa9xx_i2c_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int tmpa9xx_i2c_remove(struct platform_device *pdev)
+static int __devexit tmpa9xx_i2c_remove(struct platform_device *pdev)
 {
 	struct tmpa9xx_i2c_priv *priv = platform_get_drvdata(pdev);
 	struct i2c_adapter *adap;
@@ -642,7 +642,7 @@ static int tmpa9xx_i2c_resume(struct platform_device *pdev)
 
 static struct platform_driver tmpa9xx_i2c_driver = {
 	.probe = tmpa9xx_i2c_probe,
-	.remove = tmpa9xx_i2c_remove,
+	.remove = __devexit_p(tmpa9xx_i2c_remove),
 	.suspend = tmpa9xx_i2c_suspend,
 	.resume = tmpa9xx_i2c_resume,
 	.driver = {

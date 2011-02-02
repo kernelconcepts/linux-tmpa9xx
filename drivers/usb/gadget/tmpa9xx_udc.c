@@ -1690,7 +1690,7 @@ static void tmpa9xx_udc_dma_error_handler(int dma_ch, void *data)
 	return;
 }
 
-static int __init tmpa9xx_udc_probe(struct platform_device *pdev)
+static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct tmpa9xx_udc *udc;
@@ -1786,7 +1786,7 @@ fail0:
 	return retval;
 }
 
-static int __exit tmpa9xx_udc_remove(struct platform_device *pdev)
+static int __devexit tmpa9xx_udc_remove(struct platform_device *pdev)
 {
 	struct tmpa9xx_udc *udc = platform_get_drvdata(pdev);
 	struct resource *res;
@@ -1861,7 +1861,7 @@ static int tmpa9xx_udc_resume(struct platform_device *pdev)
 
 static struct platform_driver tmpa9xx_udc_driver = {
 	.probe = tmpa9xx_udc_probe,
-	.remove = __exit_p(tmpa9xx_udc_remove),
+	.remove = __devexit_p(tmpa9xx_udc_remove),
 	.suspend = tmpa9xx_udc_suspend,
 	.resume = tmpa9xx_udc_resume,
 	.driver = {
