@@ -182,7 +182,7 @@ void tmpa9xx_sram_free(void *virt)
 }
 
 #ifdef CONFIG_MAGIC_SYSRQ
-static void sysrq_handle_tmpa(int key, struct tty_struct *tty)
+static void sysrq_handle_tmpa(int key)
 {
 	tmpa9xx_sram_print_stats();
 }
