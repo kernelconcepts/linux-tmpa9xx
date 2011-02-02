@@ -296,7 +296,7 @@ static struct platform_device topas_keys_device = {
 };
 
 static struct platform_device baseboard_i2s_device = {
-        .name = "WM8976-I2S",
+        .name = "WM8983-I2S",
         .id   = -1,
 };
 
