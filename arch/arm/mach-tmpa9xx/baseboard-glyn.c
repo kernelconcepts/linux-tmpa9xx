@@ -53,8 +53,7 @@
  */
 #if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
 static struct i2c_board_info baseboard_i2c_0_devices[] = {
-        {
-        },
+	/* no devices */
 };
 
 #if defined CONFIG_SND_SOC_TMPA9XX_I2S
@@ -65,8 +64,7 @@ static struct i2c_board_info baseboard_i2c_1_devices[] = {
 };
 #else
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
-        {
-        },
+	/* no devices */
 };
 #endif
 #endif // CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
