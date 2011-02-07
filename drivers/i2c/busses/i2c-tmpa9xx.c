@@ -549,14 +549,14 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, priv);
 
+	tmpa9xx_i2c_setup(adapter);
+
 	ret = i2c_add_numbered_adapter(priv->i2c_adapter[0]);
 	if (ret) {
 		dev_err(&pdev->dev, "Adapter %s registration failed\n",
 			priv->i2c_adapter[0]->name);
 		goto fail;
 	}
-
-	tmpa9xx_i2c_setup(adapter);
 
 	adapter = kzalloc(sizeof(struct i2c_adapter), GFP_KERNEL);
 	if (adapter == NULL) {
@@ -575,14 +575,14 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	adapter->nr = 1;
 	priv->i2c_adapter[1] = adapter;
 
+	tmpa9xx_i2c_setup(adapter);
+
 	ret = i2c_add_numbered_adapter(priv->i2c_adapter[1]);
 	if (ret) {
 		dev_err(&pdev->dev, "Adapter %s registration failed\n",
 			priv->i2c_adapter[1]->name);
 		goto fail;
 	}
-
-	tmpa9xx_i2c_setup(adapter);
 
 	printk
 	    ("TMPA9xx I2C: driver ready (ch0: irq=%d IO@%p ch1: irq=%d IO@%p)\n",
