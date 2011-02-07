@@ -37,7 +37,8 @@
 #ifdef WM8976_DEBUG
 #define wm_printd(level, format, arg...) \
 	printk(level "i2s: " format, ## arg)
-#define snd_printk_marker() printk(KERN_DEBUG "->\n");
+#define snd_printk_marker() \
+	printk(KERN_DEBUG "->\n");
 #else
 #define wm_printd(level, format, arg...)
 #define snd_printk_marker()
@@ -55,52 +56,39 @@
 #define WM8976_BUF_SZ 	0x10000  /* 64kb */
 #define PCM_BUFFER_MAX	(WM8976_BUF_SZ / 2)
 
-#define CHANNELS_OUTPUT	2
-#define CHANNELS_INPUT	2
 #define FRAGMENTS_MIN	2
 #define FRAGMENTS_MAX	32
 
-#define AUDIO_RATE_DEFAULT  44100
-
-static unsigned char wm8976_for_samplerate[7][6]={
-	{0x00,0x08,0x0C,0x93,0xE9,0x49}, 	/* 48000HZ */
-	{0x00,0x07,0x21,0x61,0x27,0x49}, 	/* 44100HZ */
-	{0x02,0x08,0x0C,0x93,0xE9,0x69}, 	/* 32000HZ */
-	{0x04,0x07,0x21,0x61,0x27,0x89}, 	/* 22050HZ */
-	{0x05,0x07,0x21,0x61,0x27,0xa9}, 	/* 16000HZ */
-	{0x08,0x07,0x21,0x61,0x27,0xC9}, 	/* 12000HZ */
-	{0x0a,0x08,0x0C,0x93,0xE9,0xE9}, 	/* 8000HZ  */
+static unsigned char wm8976_for_samplerate[7][6] = 
+{
+	{0x00,0x08,0x0C,0x93,0xE9,0x49}, 	/* 48000 Hz */
+	{0x00,0x07,0x21,0x61,0x27,0x49}, 	/* 44100 Hz */
+	{0x02,0x08,0x0C,0x93,0xE9,0x69}, 	/* 32000 Hz */
+	{0x04,0x07,0x21,0x61,0x27,0x89}, 	/* 22050 Hz */
+	{0x05,0x07,0x21,0x61,0x27,0xa9}, 	/* 16000 Hz */
+	{0x08,0x07,0x21,0x61,0x27,0xC9}, 	/* 12000 Hz */
+	{0x0a,0x08,0x0C,0x93,0xE9,0xE9}, 	/* 8000 Hz */
 };
 
-typedef struct snd_wm8976 wm8976_t;
-typedef struct snd_pcm_substream snd_pcm_substream_t;
-typedef struct snd_pcm_hardware snd_pcm_hardware_t;
-typedef struct snd_pcm_hw_params snd_pcm_hw_params_t;
-typedef struct snd_pcm_runtime snd_pcm_runtime_t;
-typedef struct snd_pcm_ops snd_pcm_ops_t;
-
-struct snd_wm8976 {
-	struct snd_card    *card;
+struct snd_wm8976
+{
+	struct snd_card *card;
 	struct tmpa9xx_i2s *i2s;
-	spinlock_t    wm8976_lock;
+	spinlock_t wm8976_lock;
 	struct i2c_client *i2c_client;
-
 	struct snd_pcm *pcm;
 
-	int poll_reg;  /* index of the wm8976 register last queried */
-
 	/* if non-null, current subtream running */
-	snd_pcm_substream_t *rx_substream;
+	struct snd_pcm_substream *rx_substream;
 	/* if non-null, current subtream running */
-	snd_pcm_substream_t *tx_substream;
+	struct snd_pcm_substream *tx_substream;
 };
-
 
 /* this must be moved into tmpa9xx_i2s.c */
 static void init_wm8976_i2c_hw(void)
 {
 	I2SCOMMON = 0x19;		/* IISSCLK = Fosch(X1),       Set SCK/WS/CLKO of Tx and Rx as Common */
-	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896MHz */
+	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896M Hz */
 	I2SRMCON = 0x04;
 	I2STCON = 0x00;			/* IIS Standard Format */
 	I2STFCLR = 0x01;		/* Clear FIFO */
@@ -188,7 +176,7 @@ static void disable_audio_sysclk(void)
  *                pcm methods
  *************************************************************/
 
-static snd_pcm_hardware_t snd_wm8976_playback_hw = {
+static struct snd_pcm_hardware snd_wm8976_playback_hw = {
 	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
 	.formats =      SNDRV_PCM_FMTBIT_S16_LE,
 	.rates =            (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
@@ -206,7 +194,7 @@ static snd_pcm_hardware_t snd_wm8976_playback_hw = {
 	.periods_max =      FRAGMENTS_MAX,
 };
 
-static snd_pcm_hardware_t snd_wm8976_capture_hw = {
+static struct snd_pcm_hardware snd_wm8976_capture_hw = {
 	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
 	.formats =          SNDRV_PCM_FMTBIT_S16_LE,
 	.rates =            (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
@@ -224,9 +212,9 @@ static snd_pcm_hardware_t snd_wm8976_capture_hw = {
 	.periods_max =      FRAGMENTS_MAX,
 };
 
-static int snd_wm8976_playback_open(snd_pcm_substream_t *substream)
+static int snd_wm8976_playback_open(struct snd_pcm_substream *substream)
 {
-	wm8976_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	chip->tx_substream = substream;
@@ -235,9 +223,9 @@ static int snd_wm8976_playback_open(snd_pcm_substream_t *substream)
 	return 0;
 }
 
-static int snd_wm8976_capture_open(snd_pcm_substream_t *substream)
+static int snd_wm8976_capture_open(struct snd_pcm_substream *substream)
 {
-	wm8976_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	substream->runtime->hw = snd_wm8976_capture_hw;
@@ -246,9 +234,9 @@ static int snd_wm8976_capture_open(snd_pcm_substream_t *substream)
 	return 0;
 }
 
-static int snd_wm8976_playback_close(snd_pcm_substream_t *substream)
+static int snd_wm8976_playback_close(struct snd_pcm_substream *substream)
 {
-	wm8976_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	chip->tx_substream = NULL;
@@ -256,9 +244,9 @@ static int snd_wm8976_playback_close(snd_pcm_substream_t *substream)
 	return 0;
 }
 
-static int snd_wm8976_capture_close(snd_pcm_substream_t *substream)
+static int snd_wm8976_capture_close(struct snd_pcm_substream *substream)
 {
-	wm8976_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	chip->rx_substream = NULL;
@@ -266,8 +254,8 @@ static int snd_wm8976_capture_close(snd_pcm_substream_t *substream)
 }
 
 /* I2S in following */
-static int snd_wm8976_hw_params(snd_pcm_substream_t *substream,
-					snd_pcm_hw_params_t *hwparams)
+static int snd_wm8976_hw_params(struct snd_pcm_substream *substream,
+					struct snd_pcm_hw_params *hwparams)
 {
 	snd_printk_marker();
 
@@ -285,7 +273,7 @@ static int snd_wm8976_hw_params(snd_pcm_substream_t *substream,
 	return 0;
 }
 
-static int snd_wm8976_hw_free(snd_pcm_substream_t * substream)
+static int snd_wm8976_hw_free(struct snd_pcm_substream * substream)
 {
 	snd_printk_marker();
 	snd_pcm_lib_free_pages(substream);
@@ -293,13 +281,13 @@ static int snd_wm8976_hw_free(snd_pcm_substream_t * substream)
 	return 0;
 }
 
-static int snd_wm8976_playback_prepare(snd_pcm_substream_t *substream)
+static int snd_wm8976_playback_prepare(struct snd_pcm_substream *substream)
 {
         int err = 0;
         int word_len = 4;
 
-	wm8976_t *chip = snd_pcm_substream_chip(substream);
-	snd_pcm_runtime_t *runtime = substream->runtime;
+	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_pcm_runtime *runtime = substream->runtime;
 
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
 	wm_printd(KERN_ERR, "Playback sample rate = %d.\n",runtime->rate);
@@ -321,13 +309,13 @@ static int snd_wm8976_playback_prepare(snd_pcm_substream_t *substream)
 	return err;
 }
 
-static int snd_wm8976_capture_prepare(snd_pcm_substream_t *substream)
+static int snd_wm8976_capture_prepare(struct snd_pcm_substream *substream)
 {
         int err = 0;
         int word_len = 4;
 
-	wm8976_t *chip = snd_pcm_substream_chip(substream);
-	snd_pcm_runtime_t *runtime = substream->runtime;
+	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_pcm_runtime *runtime = substream->runtime;
 
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
 
@@ -350,10 +338,10 @@ static int snd_wm8976_capture_prepare(snd_pcm_substream_t *substream)
 	return err;
 }
 
-static int snd_wm8976_playback_trigger(snd_pcm_substream_t *substream, int cmd)
+static int snd_wm8976_playback_trigger(struct snd_pcm_substream *substream, int cmd)
 {
 	int ret;
-	wm8976_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 
@@ -381,9 +369,9 @@ static int snd_wm8976_playback_trigger(snd_pcm_substream_t *substream, int cmd)
 	return 0;
 }
 
-static int snd_wm8976_capture_trigger(snd_pcm_substream_t *substream, int cmd)
+static int snd_wm8976_capture_trigger(struct snd_pcm_substream *substream, int cmd)
 {
-	wm8976_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 
@@ -413,10 +401,10 @@ static int snd_wm8976_capture_trigger(snd_pcm_substream_t *substream, int cmd)
 	return 0;
 }
 
-static snd_pcm_uframes_t snd_wm8976_playback_pointer(snd_pcm_substream_t *substream)
+static snd_pcm_uframes_t snd_wm8976_playback_pointer(struct snd_pcm_substream *substream)
 {
-	wm8976_t *chip = snd_pcm_substream_chip(substream);
-	snd_pcm_runtime_t *runtime = substream->runtime;
+	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_pcm_runtime *runtime = substream->runtime;
 	unsigned int offset;
 
 	offset = tmpa9xx_i2s_curr_offset_tx(chip->i2s);
@@ -428,10 +416,10 @@ static snd_pcm_uframes_t snd_wm8976_playback_pointer(snd_pcm_substream_t *substr
 	return offset;
 }
 
-static snd_pcm_uframes_t snd_wm8976_capture_pointer(snd_pcm_substream_t *substream)
+static snd_pcm_uframes_t snd_wm8976_capture_pointer(struct snd_pcm_substream *substream)
 {
-	wm8976_t *chip = snd_pcm_substream_chip(substream);
-	snd_pcm_runtime_t *runtime = substream->runtime;
+	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_pcm_runtime *runtime = substream->runtime;
 	unsigned int offset;
 
 	offset = tmpa9xx_i2s_curr_offset_rx(chip->i2s);
@@ -451,7 +439,7 @@ static snd_pcm_uframes_t snd_wm8976_capture_pointer(snd_pcm_substream_t *substre
 }
 
 /* pcm method tables */
-static snd_pcm_ops_t snd_wm8976_playback_ops = {
+static struct snd_pcm_ops snd_wm8976_playback_ops = {
 	.open      = snd_wm8976_playback_open,
 	.close     = snd_wm8976_playback_close,
 	.ioctl     = snd_pcm_lib_ioctl,
@@ -462,7 +450,7 @@ static snd_pcm_ops_t snd_wm8976_playback_ops = {
 	.pointer   = snd_wm8976_playback_pointer,
 };
 
-static snd_pcm_ops_t snd_wm8976_capture_ops = {
+static struct snd_pcm_ops snd_wm8976_capture_ops = {
 	.open  = snd_wm8976_capture_open,
 	.close = snd_wm8976_capture_close,
 	.ioctl = snd_pcm_lib_ioctl,
@@ -485,7 +473,7 @@ static int snd_wm8976_stop(struct snd_wm8976 *chip)
 
 static int snd_wm8976_dev_free(struct snd_device *device)
 {
-	struct snd_wm8976 *chip = (wm8976_t *)device->device_data;
+	struct snd_wm8976 *chip = (struct snd_wm8976 *)device->device_data;
 
 	snd_printk_marker();
 
