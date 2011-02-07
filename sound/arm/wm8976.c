@@ -59,7 +59,7 @@
 #define FRAGMENTS_MIN	2
 #define FRAGMENTS_MAX	32
 
-static unsigned char wm8976_for_samplerate[7][6] = 
+static unsigned char wm8976_for_samplerate[7][6] =
 {
 	{0x00,0x08,0x0C,0x93,0xE9,0x49}, 	/* 48000 Hz */
 	{0x00,0x07,0x21,0x61,0x27,0x49}, 	/* 44100 Hz */
@@ -100,7 +100,7 @@ static void init_wm8976_i2c_hw(void)
 	{ \
 	int ret = i2c_smbus_write_byte_data(i2c_client, reg, val); \
 	if (ret) \
-		printk("i2c_smbus_write_byte_data() failed, ret %d\n", ret); \
+		dev_err(&i2c_client->dev, "i2c_smbus_write_byte_data() failed, ret %d\n", ret); \
 	}
 
 static void init_wm8976_i2c(struct i2c_client *i2c_client)
@@ -158,9 +158,7 @@ static void snd_wm8976_set_samplerate(struct i2c_client *i2c_client, long rate)
 	i2c_packet_send(0x4e, wm8976_for_samplerate[rate][4]);    /* R39 */
 }
 
-/*************************************************************
- *                pcm methods
- *************************************************************/
+/* pcm methods */
 static struct snd_pcm_hardware snd_wm8976_playback_hw = {
 	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
 	.formats =      SNDRV_PCM_FMTBIT_S16_LE,
@@ -251,7 +249,6 @@ static int snd_wm8976_hw_params(struct snd_pcm_substream *substream,
 	*  We're relying on the driver not supporting full duplex mode
 	*  to allow us to grab all the memory.
 	*/
-	/* printk("params_buffer_bytes return %d\n", params_buffer_bytes(hwparams)); */
 	if (snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(hwparams)) < 0 )
 		return -ENOMEM;
 
@@ -268,11 +265,10 @@ static int snd_wm8976_hw_free(struct snd_pcm_substream * substream)
 
 static int snd_wm8976_playback_prepare(struct snd_pcm_substream *substream)
 {
-        int err = 0;
-        int word_len = 4;
-
 	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
+        int word_len = 4;
+	int ret;
 
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
 	wm_printd(KERN_ERR, "Playback sample rate = %d.\n",runtime->rate);
@@ -288,19 +284,18 @@ static int snd_wm8976_playback_prepare(struct snd_pcm_substream *substream)
 			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
-	err = tmpa9xx_i2s_config_tx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
+	ret = tmpa9xx_i2s_config_tx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
 			runtime->periods, fragsize_bytes, word_len);
 
-	return err;
+	return ret;
 }
 
 static int snd_wm8976_capture_prepare(struct snd_pcm_substream *substream)
 {
-        int err = 0;
-        int word_len = 4;
-
 	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
+        int word_len = 4;
+	int ret;
 
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
 
@@ -317,16 +312,16 @@ static int snd_wm8976_capture_prepare(struct snd_pcm_substream *substream)
 			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
-	err = tmpa9xx_i2s_config_rx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
+	ret = tmpa9xx_i2s_config_rx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
 			runtime->periods, fragsize_bytes, word_len);
 
-	return err;
+	return ret;
 }
 
 static int snd_wm8976_playback_trigger(struct snd_pcm_substream *substream, int cmd)
 {
-	int ret;
 	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	int ret;
 
 	snd_printk_marker();
 
@@ -342,10 +337,8 @@ static int snd_wm8976_playback_trigger(struct snd_pcm_substream *substream, int 
 			ret = tmpa9xx_i2s_tx_stop(chip->i2s);
 			break;
 		default:
-			ret = -1;
 			spin_unlock(&chip->wm8976_lock);
 			return -EINVAL;
-			break;
 	}
 	spin_unlock(&chip->wm8976_lock);
 
@@ -446,9 +439,7 @@ static struct snd_pcm_ops snd_wm8976_capture_ops = {
 	.pointer   = snd_wm8976_capture_pointer,
 };
 
-/*************************************************************
- *      card and device
- *************************************************************/
+/* card and device */
 static int snd_wm8976_stop(struct snd_wm8976 *chip)
 {
 	snd_printk_marker();
@@ -504,20 +495,22 @@ static void snd_wm8976_dma_tx(void *data)
 
 static void snd_wm8976_i2s_err(void *data)
 {
-	printk(KERN_ERR DRIVER_NAME ":%s: err happened on i2s\n", __FUNCTION__);
+	struct snd_wm8976 *wm8976 = data;
+	dev_err(&wm8976->i2c_client->dev, "I2S error\n");
 }
 
 static int __devinit snd_wm8976_pcm(struct snd_wm8976 *wm8976)
 {
 	struct snd_pcm *pcm;
-	int err = 0;
+	int ret;
 
 	snd_printk_marker();
 
 	/* 1 playback and 1 capture substream, of 2-8 channels each */
-	if ((err = snd_pcm_new(wm8976->card, PCM_NAME, 0, 1, 1, &pcm)) < 0)
-	{
-		return err;
+	ret = snd_pcm_new(wm8976->card, PCM_NAME, 0, 1, 1, &pcm);
+	if (ret < 0) {
+		dev_err(&wm8976->i2c_client->dev, "snd_pcm_new() failed\n");
+		return ret;
 	}
 
 	/*
@@ -545,7 +538,7 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 	struct snd_card *card;
 	char *id = "ID string for TMPA9XX + wm8976 soundcard.";
 	int ret = 0;
-		
+
 	init_wm8976_i2c(i2c_client);
 
 	snd_printk_marker();
@@ -597,7 +590,7 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 	}
 
 	snd_card_set_dev(card, &i2c_client->dev);
-	
+
 	i2c_set_clientdata(i2c_client, card);
 
 	return 0;
@@ -621,7 +614,7 @@ static int wm8976_i2c_remove(struct i2c_client *i2c_client)
 	tmpa9xx_i2s_free(wm8976->i2s);
 
 	snd_card_free(card);
-	
+
 	i2c_set_clientdata(i2c_client, NULL);
 
 	return 0;
