@@ -51,14 +51,6 @@ struct tmpa9xx_i2s* tmpa9xx_i2s_init(
 
 void tmpa9xx_i2s_free(struct tmpa9xx_i2s* i2s);
 
-/* first use these ...*/
-
-int tmpa9xx_i2s_config_rx(struct tmpa9xx_i2s* i2s);
-
-int tmpa9xx_i2s_config_tx(struct tmpa9xx_i2s* i2s);
-
-/* ... then these: */
-
 /* buffer size (in bytes) == fragcount * fragsize_bytes */
 
 /* this is not a very general api, it sets the dma to 2d autobuffer mode */

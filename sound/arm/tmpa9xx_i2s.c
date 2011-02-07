@@ -34,12 +34,6 @@
 #define I2S_ASSERT(expr)
 #endif
 
-
-int tmpa9xx_i2s_config_tx(struct tmpa9xx_i2s *i2s)
-{
-	return 0;
-}
-
 static void setup_tx_desc(struct scatter_dma_t *desc, unsigned int phydesc, 
             unsigned int phy_buf, int fragcount, size_t fragsize)
 {

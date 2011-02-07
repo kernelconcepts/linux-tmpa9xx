@@ -533,29 +533,6 @@ static struct snd_device_ops snd_wm8983_ops = {
 	.dev_free = snd_wm8983_dev_free,
 };
 
-static int snd_bf53x_wm8983_reset(wm8983_t *chip)
-{
-	return 0;
-}
-
-static int snd_wm8983_configure(wm8983_t *chip)
-{
-	int err = 0;
-	struct tmpa9xx_i2s *i2s= chip->i2s;
-
-	snd_printk_marker();
-
-	snd_bf53x_wm8983_reset(chip);
-
-	err = err || tmpa9xx_i2s_config_tx(i2s);
-	
-	if (err) {
-		snd_printk(KERN_ERR "Unable to set i2s configuration\n");
-	}
-
-	return err;
-}
-
 static void snd_wm8983_dma_rx(void *data)
 {
 	struct snd_wm8983 *wm8983 = data;
@@ -668,11 +645,6 @@ static int __devinit snd_wm8983_probe(struct platform_device *pdev)
 		goto __nodev;
 	}
 
-	if ((err = snd_wm8983_configure(wm8983)) < 0) {
-		printk(KERN_ERR "snd_wm8983_configure faild.\n");
-		goto __nodev;
-	}
-	
 	strcpy(card->driver, DRIVER_NAME);
 	strcpy(card->shortname, CHIP_NAME);
 	sprintf(card->longname, "%s at I2S rx/tx dma %d/%d err irq %d",
