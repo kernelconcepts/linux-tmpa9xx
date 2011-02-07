@@ -27,7 +27,6 @@
 #include <mach/regs.h>
 
 #include "tmpa9xx_i2s.h"
-#include "wm8983.h"
 
 #define I2S_DMA_RX   I2S0
 #define I2S_DMA_TX   I2S1

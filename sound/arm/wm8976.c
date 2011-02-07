@@ -1,3 +1,11 @@
+/*
+ * Wolfson WM8976 codec driver for Toshiba TMPA900 SoC
+ * based on WM8976 driver (c) Toshiba
+ *
+ * (c) 2010 Nils Faerber <nils.faerber@kernelconcepts.de>
+ * GPLv2
+ *
+ */
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
@@ -19,20 +27,25 @@
 #include <mach/regs.h>
 
 #include "tmpa9xx_i2s.h"
-#include "wm8976.h"
 
 #define I2S_DMA_RX   I2S0
 #define I2S_DMA_TX   I2S1
 #define I2S_IRQ_ERR  I2S_INT
 
 
-#define snd_printk_marker() printk(KERN_DEBUG "->\n");
-#define i2s_printd(level, format, arg...) printk(level format, arg)
 
-#undef snd_printd
-#define snd_printd printk
+#undef WM8976_DEBUG
+
+#ifdef WM8976_DEBUG
+#define wm_printd(level, format, arg...) \
+	printk(level "i2s: " format, ## arg)
+#define snd_printk_marker() printk(KERN_DEBUG "->\n");
+#else
+#define wm_printd(level, format, arg...)
+#define snd_printk_marker()
+#endif
+
 #undef CONFIG_SND_DEBUG_CURRPTR  /* causes output every frame! */
-//#define CONFIG_SND_DEBUG_CURRPTR
 
 #undef NOCONTROLS  /* define this to omit all the ALSA controls */
 
@@ -57,13 +70,13 @@ static struct platform_device *g_device = NULL;
 
 
 static unsigned char wm8976_for_samplerate[7][6]={
-	{0x00,0x08,0x0C,0x93,0xE9,0x49}, 	//48000HZ
-	{0x00,0x07,0x21,0x61,0x27,0x49}, 	//44100HZ
-	{0x02,0x08,0x0C,0x93,0xE9,0x69}, 	//32000HZ	
-	{0x04,0x07,0x21,0x61,0x27,0x89}, 	//22050HZ
-	{0x05,0x07,0x21,0x61,0x27,0xa9}, 	//16000HZ
-	{0x08,0x07,0x21,0x61,0x27,0xC9}, 	//12000HZ
-	{0x0a,0x08,0x0C,0x93,0xE9,0xE9}, 	//8000HZ						
+	{0x00,0x08,0x0C,0x93,0xE9,0x49}, 	/* 48000HZ */
+	{0x00,0x07,0x21,0x61,0x27,0x49}, 	/* 44100HZ */
+	{0x02,0x08,0x0C,0x93,0xE9,0x69}, 	/* 32000HZ */	
+	{0x04,0x07,0x21,0x61,0x27,0x89}, 	/* 22050HZ */
+	{0x05,0x07,0x21,0x61,0x27,0xa9}, 	/* 16000HZ */
+	{0x08,0x07,0x21,0x61,0x27,0xC9}, 	/* 12000HZ */
+	{0x0a,0x08,0x0C,0x93,0xE9,0xE9}, 	/* 8000HZ  */						
 };
 	
 
@@ -75,7 +88,6 @@ typedef struct snd_pcm_runtime snd_pcm_runtime_t;
 typedef struct snd_pcm_ops snd_pcm_ops_t;
 
 struct snd_wm8976 {
-
 	struct snd_card    *card;
 	struct tmpa9xx_i2s *i2s;
 	spinlock_t    wm8976_lock;
@@ -103,24 +115,22 @@ static void snd_wm8976_set_samplerate(long rate);
 static void i2c_bus_free_chk(void)
 {
 	u32 reg_data;
-	do
-	{
+	do {
 		reg_data = I2C1SR;
-	}while( (reg_data & I2C1SR_BUS_CHECK) != I2C1SR_BUS_FREE );
+	} while ((reg_data & I2C1SR_BUS_CHECK) != I2C1SR_BUS_FREE );
 }
 
 static void i2c_ack_wait(void)
 {
 	u32 reg_data;
-	do
-	{
+	do {
 		reg_data = I2C1SR;
-	}while( (reg_data & I2C1SR_ACK_CHECK) != I2C1SR_ACK_ENABLE );
+	} while ((reg_data & I2C1SR_ACK_CHECK) != I2C1SR_ACK_ENABLE );
 }
 
 static void i2c_packet_send(u8 sub_addr, u8 data)
 {
-	//printk("[0x%x] <- 0x%3x\n", sub_addr >> 1, data | ((sub_addr&1) << 8) );
+	wm_printd(KERN_ERR, "[0x%x] <- 0x%3x\n", sub_addr >> 1, data | ((sub_addr&1) << 8) );
 
 	I2C1DBR = 0x34;
 	I2C1CR2 = 0xf8;
@@ -139,77 +149,60 @@ static void i2c_packet_send(u8 sub_addr, u8 data)
 
 static void init_wm8976_i2c(void)
 {
-    unsigned long flags;
+	unsigned long flags;
 
 	local_irq_save(flags);
 
- //   GPIOMFR1 = 0x0F;           // Config IIS Function Port: I2S1DATO
-    I2SCOMMON = 0x19;           // IISSCLK = Fosch(X1),       Set SCK/WS/CLKO of Tx and Rx as Common
-    I2STMCON = 0x04;           // I2SMCLK = Fosch/4 = 11.2896MHz
+	I2SCOMMON = 0x19;		/* IISSCLK = Fosch(X1),       Set SCK/WS/CLKO of Tx and Rx as Common */
+	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896MHz */
                                                       
-    I2SRMCON = 0x04;
+	I2SRMCON = 0x04;
 		
-    I2STCON = 0x00;         // IIS Standard Format
-    I2STFCLR = 0x01;           // Clear FIFO
-	I2SRMS = 0x00;           // Slave
-	I2STMS = 0x00;           // Slave
-/*
-	GPIORDIR |= 0X02;
-	GPIORFR1 &= 0Xfd;
-	GPIORFR2 &= 0Xfd;
-	GPIORDATA &= 0Xfd;
-	GPIOCODE = 0xc0;
-	GPIOCFR1 = 0xc0;
-	GPIOCFR2 = 0x00;
-	GPIOCIE = 0x00;
+	I2STCON = 0x00;			/* IIS Standard Format */
+	I2STFCLR = 0x01;		/* Clear FIFO */
+	I2SRMS = 0x00;			/* Slave */
+	I2STMS = 0x00;			/* Slave */
 
-	GPIOFODE = 0xc0;
-	GPIOFFR1 = 0xc0;
-	GPIOFFR2 = 0x00;
-	GPIOFIE = 0x00;
-*/
 	local_irq_restore(flags);	
 	i2c_bus_free_chk();
 	I2C1CR2 = 0xc8;
 	I2C1PRS = 0x19;
 	I2C1CR1 = 0x13;
 
-    i2c_packet_send(0x00,0x00);//R0  0X000             
-    i2c_packet_send(0x02,0x3d);//R1  0X02D  
-//    i2c_packet_send(0x05,0x91);//R2  0X191 
-    i2c_packet_send(0x05,0x95);//R2  0X195 
-    i2c_packet_send(0x06,0x6F);//R3  0X00F
-    i2c_packet_send(0x08,0x10);//R4  0X010
-    i2c_packet_send(0x0a,0x00);//R5  0X000
-//    i2c_packet_send(0x0d,0x49);//R6  0X14d
+	i2c_packet_send(0x00,0x00);	/* R0  0x000 */
+	i2c_packet_send(0x02,0x3d);	/* R1  0x02D */
+	/*i2c_packet_send(0x05,0x91);*/	/* R2  0x191 */
+	i2c_packet_send(0x05,0x95);	/* R2  0x195 */
+	i2c_packet_send(0x06,0x6F);	/* R3  0x00F */
+	i2c_packet_send(0x08,0x10);	/* R4  0X010 */
+	i2c_packet_send(0x0a,0x00);	/* R5  0X000 */
+	/*i2c_packet_send(0x0d,0x49);*/	/* R6  0x14d */
  
- 
-//    i2c_packet_send(0x0e,0x00);//R7  0X00A     //set sample rate 48khz
+	/*i2c_packet_send(0x0e,0x00);*/	/* R7  0x00A  set sample rate 48khz */
         
-    i2c_packet_send(0x14, 0x80);    //R10 = 0x080        
-    i2c_packet_send(0x17,0xff);//R11 0X1ff
-    i2c_packet_send(0x19,0xff);//R12 0X1ff
-    i2c_packet_send(0x1c,0x00);    //R14 = 0x1c01   
-    i2c_packet_send(0x1F,0xff);//R15 0X1FF
-    i2c_packet_send(0x30, 0x32);    //R24 = 0x032        
-//    i2c_packet_send(0x48,0x07);//R36 0X017
-//    i2c_packet_send(0x4A,0x21);//R37 0X012
-//    i2c_packet_send(0x4C,0x61);//R38 0X011
-//    i2c_packet_send(0x4E,0x27);//R39 0X096  //set pll 12.288Mhz
-//    i2c_packet_send(0x58,0x00);//R44 0X000
-    i2c_packet_send(0x5b,0x3f);//R45 0X000   
-    i2c_packet_send(0x56,0x10);//R43 0X010  //add for WM8976 8 ohm speaker                              
+	i2c_packet_send(0x14, 0x80);	/* R10 = 0x080 */
+	i2c_packet_send(0x17,0xff);	/* R11 0X1ff */
+	i2c_packet_send(0x19,0xff);	/* R12 0X1ff */
+	i2c_packet_send(0x1c,0x00);	/* R14 = 0x1c01 */
+	i2c_packet_send(0x1F,0xff);	/* R15 0X1FF */
+	i2c_packet_send(0x30, 0x32);	/* R24 = 0x032 */
+	/*i2c_packet_send(0x48,0x07);*/	/* R36 0X017 */
+	/*i2c_packet_send(0x4A,0x21);*/	/* R37 0X012 */
+	/*i2c_packet_send(0x4C,0x61);*/	/* R38 0X011 */
+	/*i2c_packet_send(0x4E,0x27);*/	/* R39 0X096  set pll 12.288Mhz */
+	/*i2c_packet_send(0x58,0x00);*/	/* R44 0X000 */
+	i2c_packet_send(0x5b,0x3f);	/* R45 0X000 */
+	i2c_packet_send(0x56,0x10);	/* R43 0X010   add for WM8976 8 ohm speaker */
     
-    i2c_packet_send(0x5f,0x55);//R47 0X005
+	i2c_packet_send(0x5f,0x55);	/* R47 0X005 */
 
-    i2c_packet_send(47<<1 | 1,0xff);//R47 0X1ff
+	i2c_packet_send(47<<1 | 1,0xff);	/* R47 0X1ff */
 
-    i2c_packet_send(0x62,0x02);//R49 0X002
-    i2c_packet_send(0x64,0x01);//R50 0X001
-    i2c_packet_send(0x66,0x01);//R51 0X001
-    i2c_packet_send(0x69,0x3f);//R52 0X13f
-    i2c_packet_send(0x6b,0x3f);//R53 0X13f
-                                
+	i2c_packet_send(0x62,0x02);	/* R49 0X002 */
+	i2c_packet_send(0x64,0x01);	/* R50 0X001 */
+	i2c_packet_send(0x66,0x01);	/* R51 0X001 */
+	i2c_packet_send(0x69,0x3f);	/* R52 0X13f */
+	i2c_packet_send(0x6b,0x3f);	/* R53 0X13f */
 }
 
 static void release_wm8976_i2c(void)
@@ -234,7 +227,6 @@ static void disable_audio_sysclk(void)
 static snd_pcm_hardware_t snd_wm8976_playback_hw = {
 	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
 	.formats =      SNDRV_PCM_FMTBIT_S16_LE,
-//	.rates =	    SNDRV_PCM_RATE_44100,
 	.rates =            (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
 				   SNDRV_PCM_RATE_22050 | SNDRV_PCM_RATE_32000 |\
 				   SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_48000 |\
@@ -244,8 +236,8 @@ static snd_pcm_hardware_t snd_wm8976_playback_hw = {
 	.channels_min =	    2,
 	.channels_max =     2,
 	.buffer_bytes_max = PCM_BUFFER_MAX,
-	.period_bytes_min = 0x1000,     //4KB
-	.period_bytes_max = 0x3000,     //8KB
+	.period_bytes_min = 0x1000,     /* 4KB */
+	.period_bytes_max = 0x3000,     /* 8KB */
 	.periods_min =      FRAGMENTS_MIN,
 	.periods_max =      FRAGMENTS_MAX,
 };
@@ -253,7 +245,6 @@ static snd_pcm_hardware_t snd_wm8976_playback_hw = {
 static snd_pcm_hardware_t snd_wm8976_capture_hw = {
 	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
 	.formats =          SNDRV_PCM_FMTBIT_S16_LE,
-//	.rates =            SNDRV_PCM_RATE_44100,
 	.rates =            (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
 				   SNDRV_PCM_RATE_22050 | SNDRV_PCM_RATE_32000 |\
 				   SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_48000 |\
@@ -263,22 +254,10 @@ static snd_pcm_hardware_t snd_wm8976_capture_hw = {
 	.channels_min =     1,
 	.channels_max =     2,
 	.buffer_bytes_max = PCM_BUFFER_MAX,
-	.period_bytes_min = 0x1000,     //4KB
-	.period_bytes_max = 0x3000,     //8KB
+	.period_bytes_min = 0x1000,     /* 4KB */
+	.period_bytes_max = 0x3000,     /* 8KB */
 	.periods_min =      FRAGMENTS_MIN,
 	.periods_max =      FRAGMENTS_MAX,
-/*
-	.rate_min		= 44100,
-	.rate_max		= 44100,
-	.channels_min		= 2,
-	.channels_max		= 2,
-	.buffer_bytes_max	= 64*1024,
-	.period_bytes_min	= 64,
-	.period_bytes_max	= 4096,
-	.periods_min		= 2,
-	.periods_max		= 255,
-*/	
-
 };
 
 static int snd_wm8976_playback_open(snd_pcm_substream_t *substream)
@@ -322,7 +301,7 @@ static int snd_wm8976_capture_close(snd_pcm_substream_t *substream)
 	return 0;
 }
 
-//I2S in following
+/* I2S in following */
 static int snd_wm8976_hw_params(snd_pcm_substream_t *substream,
 					snd_pcm_hw_params_t *hwparams)
 {
@@ -335,9 +314,10 @@ static int snd_wm8976_hw_params(snd_pcm_substream_t *substream,
 	*  We're relying on the driver not supporting full duplex mode
 	*  to allow us to grab all the memory.
 	*/
-	//printk("params_buffer_bytes return %d\n", params_buffer_bytes(hwparams));
-	if( snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(hwparams)) < 0 )
+	/* printk("params_buffer_bytes return %d\n", params_buffer_bytes(hwparams)); */
+	if (snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(hwparams)) < 0 )
 		return -ENOMEM;
+
 	return 0;
 }
 
@@ -345,6 +325,7 @@ static int snd_wm8976_hw_free(snd_pcm_substream_t * substream)
 {
 	snd_printk_marker();
 	snd_pcm_lib_free_pages(substream);
+
 	return 0;
 }
 
@@ -357,7 +338,7 @@ static int snd_wm8976_playback_prepare(snd_pcm_substream_t *substream)
 	snd_pcm_runtime_t *runtime = substream->runtime;
 
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
-        //printk("Playback sample rate = %d.\n",runtime->rate);
+	wm_printd(KERN_ERR, "Playback sample rate = %d.\n",runtime->rate);
 
 	/* set requested samplerate */
 	snd_wm8976_set_samplerate(runtime->rate);
@@ -368,7 +349,7 @@ static int snd_wm8976_playback_prepare(snd_pcm_substream_t *substream)
 
 	snd_printd(KERN_INFO "%s channels:%d, period_bytes:0x%lx, periods:%d\n",
 			__FUNCTION__, runtime->channels,
-			frames_to_bytes(runtime, runtime->period_size),
+			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
 	err = tmpa9xx_i2s_config_tx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
@@ -387,7 +368,7 @@ static int snd_wm8976_capture_prepare(snd_pcm_substream_t *substream)
 
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
 
-        //printk("Record sample rate = %d.\n",runtime->rate);
+	wm_printd(KERN_ERR, "Record sample rate = %d.\n",runtime->rate);
 
 	/* set requested samplerate */
 	snd_wm8976_set_samplerate(runtime->rate);	
@@ -397,7 +378,7 @@ static int snd_wm8976_capture_prepare(snd_pcm_substream_t *substream)
 
 	snd_printd(KERN_INFO "%s channels:%d, period_bytes:0x%lx, periods:%d\n",
 			__FUNCTION__, runtime->channels,
-			frames_to_bytes(runtime, runtime->period_size),
+			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
 	err = tmpa9xx_i2s_config_rx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
@@ -414,24 +395,25 @@ static int snd_wm8976_playback_trigger(snd_pcm_substream_t *substream, int cmd)
 	snd_printk_marker();
 
 	spin_lock(&chip->wm8976_lock);
-	switch (cmd)
-	{
-	case SNDRV_PCM_TRIGGER_START:
-	    //printk("  SNDRV_PCM_TRIGGER_START\n");
-		ret = tmpa9xx_i2s_tx_start(chip->i2s);
-		break;
-	case SNDRV_PCM_TRIGGER_STOP:
-	    //printk("  SNDRV_PCM_TRIGGER_STOP\n");
-	    ret = tmpa9xx_i2s_tx_stop(chip->i2s);
-		break;
-	default:
-		ret = -1;
-		spin_unlock(&chip->wm8976_lock);
-		return -EINVAL;
+
+	switch (cmd) {
+		case SNDRV_PCM_TRIGGER_START:
+			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_START\n");
+			ret = tmpa9xx_i2s_tx_start(chip->i2s);
+			break;
+		case SNDRV_PCM_TRIGGER_STOP:
+			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_STOP\n");
+			ret = tmpa9xx_i2s_tx_stop(chip->i2s);
+			break;
+		default:
+			ret = -1;
+			spin_unlock(&chip->wm8976_lock);
+			return -EINVAL;
+			break;
 	}
 	spin_unlock(&chip->wm8976_lock);
 
-	snd_printd(KERN_INFO"playback cmd:%s. ret=%d\n", cmd?"start":"stop", ret);
+	snd_printd(KERN_INFO "playback cmd:%s. ret=%d\n", cmd?"start":"stop", ret);
 
 	return 0;
 }
@@ -448,21 +430,22 @@ static int snd_wm8976_capture_trigger(snd_pcm_substream_t *substream, int cmd)
 		return -EINVAL;
 
 	switch (cmd) {
-	case SNDRV_PCM_TRIGGER_START:
-		//printk("  SNDRV_PCM_TRIGGER_START\n");
-		tmpa9xx_i2s_rx_start(chip->i2s);
-		break;
-	case SNDRV_PCM_TRIGGER_STOP:
-	    //printk("  SNDRV_PCM_TRIGGER_STOP\n");
-	    tmpa9xx_i2s_rx_stop(chip->i2s);
-		break;
-	default:
-		spin_unlock(&chip->wm8976_lock);
-		return -EINVAL;
+		case SNDRV_PCM_TRIGGER_START:
+			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_START\n");
+			tmpa9xx_i2s_rx_start(chip->i2s);
+			break;
+		case SNDRV_PCM_TRIGGER_STOP:
+			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_STOP\n");
+			tmpa9xx_i2s_rx_stop(chip->i2s);
+			break;
+		default:
+			spin_unlock(&chip->wm8976_lock);
+			return -EINVAL;
+			break;
 	}
 	spin_unlock(&chip->wm8976_lock);
 
-	//snd_printd(KERN_ERR"capture cmd:%s\n", cmd ? "start" : "stop");
+	snd_printd(KERN_ERR"capture cmd:%s\n", cmd ? "start" : "stop");
 
 	return 0;
 }
@@ -492,14 +475,12 @@ static snd_pcm_uframes_t snd_wm8976_capture_pointer(snd_pcm_substream_t *substre
 	
 	offset = bytes_to_frames(runtime, offset);
 
-//	printk("offset=0x%02x\n",offset);		//wym
-//        printk("handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(2));
-//        printk("handler dest addr = 0x%02x\n", DMA_DEST_ADDR(2));
-//        printk("handler lli addr = 0x%02x\n", DMA_LLI(2));
-//        printk("handler control = 0x%02x\n", DMA_CONTROL(2));
+	wm_printd(KERN_ERR, "offset=0x%02x\n",offset);		/* wym */
+	wm_printd(KERN_ERR, "handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(2));
+	wm_printd(KERN_ERR, "handler dest addr = 0x%02x\n", DMA_DEST_ADDR(2));
+	wm_printd(KERN_ERR, "handler lli addr = 0x%02x\n", DMA_LLI(2));
+	wm_printd(KERN_ERR, "handler control = 0x%02x\n", DMA_CONTROL(2));
 
-//                printk("VICIRQSTATUS is 0x%02x.\n",VICIRQSTATUS);
-//                printk("VICINTENABLE is 0x%02x.\n",VICINTENABLE);
 	if (offset >= runtime->buffer_size)
 		offset = 0;
 		
@@ -568,8 +549,7 @@ static int snd_wm8976_configure(wm8976_t *chip)
 
 	err = err || tmpa9xx_i2s_config_tx(i2s);
 	
-	if (err)
-	{
+	if (err) {
 		snd_printk(KERN_ERR "Unable to set i2s configuration\n");
 	}
 
@@ -586,15 +566,12 @@ static void snd_wm8976_dma_rx(void *data)
 	if (wm8976->rx_substream) {
 		snd_pcm_period_elapsed(wm8976->rx_substream);
 	        
-/*		printk("WM8976->rx_substream=0x%02x\n",wm8976->rx_substream);               //wym
-		printk("handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(2));
-        	printk("handler dest addr = 0x%02x\n", DMA_DEST_ADDR(2));
-		printk("handler lli addr = 0x%02x\n", DMA_LLI(2));
-        	printk("handler control = 0x%02x\n", DMA_CONTROL(2));
-		printk("VICIRQSTATUS is 0x%02x.\n",VICIRQSTATUS);
-		printk("VICINTENABLE is 0x%02x.\n",VICINTENABLE);
-*/	}
-//	VICINTENABLE |= 0x20000;
+		wm_printd(KERN_ERR, "WM8976->rx_substream=0x%02x\n", (unsigned int)wm8976->rx_substream);
+		wm_printd(KERN_ERR, "handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(2));
+	       	wm_printd(KERN_ERR, "handler dest addr = 0x%02x\n", DMA_DEST_ADDR(2));
+		wm_printd(KERN_ERR, "handler lli addr = 0x%02x\n", DMA_LLI(2));
+	       	wm_printd(KERN_ERR, "handler control = 0x%02x\n", DMA_CONTROL(2));
+	}
 }
 
 static void snd_wm8976_dma_tx(void *data)
@@ -605,14 +582,12 @@ static void snd_wm8976_dma_tx(void *data)
 
 	if (wm8976->tx_substream) {
 		snd_pcm_period_elapsed(wm8976->tx_substream);
-/*
-                printk("handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(1));
-                printk("handler dest addr = 0x%02x\n", DMA_DEST_ADDR(1));
-                printk("handler lli addr = 0x%02x\n", DMA_LLI(1));
-                printk("handler control = 0x%02x\n", DMA_CONTROL(1));
-                printk("VICIRQSTATUS is 0x%02x.\n",VICIRQSTATUS);
-                printk("VICINTENABLE is 0x%02x.\n",VICINTENABLE);
-*/	}
+
+                wm_printd(KERN_ERR, "handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(1));
+                wm_printd(KERN_ERR, "handler dest addr = 0x%02x\n", DMA_DEST_ADDR(1));
+                wm_printd(KERN_ERR, "handler lli addr = 0x%02x\n", DMA_LLI(1));
+                wm_printd(KERN_ERR, "handler control = 0x%02x\n", DMA_CONTROL(1));
+	}
 }
 
 static void snd_wm8976_i2s_err(void *data)
@@ -628,7 +603,7 @@ static int __devinit snd_wm8976_pcm(struct snd_wm8976 *wm8976)
 	snd_printk_marker();
 
 	/* 1 playback and 1 capture substream, of 2-8 channels each */
-	if((err = snd_pcm_new(wm8976->card, PCM_NAME, 0, 1, 1, &pcm)) < 0)
+	if ((err = snd_pcm_new(wm8976->card, PCM_NAME, 0, 1, 1, &pcm)) < 0)
 	{
 		return err;
 	}
@@ -674,10 +649,9 @@ static int __devinit snd_wm8976_probe(struct platform_device *pdev)
 
 	wm8976 = card->private_data;
 	wm8976->card = card;
-	//wm8976->samplerate = AUDIO_RATE_DEFAULT;
+
 	if ((i2s = tmpa9xx_i2s_init(I2S_DMA_RX, snd_wm8976_dma_rx, I2S_DMA_TX, snd_wm8976_dma_tx,
-			    I2S_IRQ_ERR, snd_wm8976_i2s_err, wm8976)) == NULL)
-	{
+			    I2S_IRQ_ERR, snd_wm8976_i2s_err, wm8976)) == NULL) {
 		printk(KERN_ERR DRIVER_NAME ": Failed to find device on i2s\n");
 		err = -ENODEV;
 		goto __i2s_err;
@@ -686,19 +660,16 @@ static int __devinit snd_wm8976_probe(struct platform_device *pdev)
 	wm8976->i2s = i2s;
 
 	err = snd_device_new(card, SNDRV_DEV_LOWLEVEL, wm8976, &snd_wm8976_ops);
-	if (err)
-	{
+	if (err) {
 		goto __nodev;
 	}
 
-	if ((err = snd_wm8976_pcm(wm8976)) < 0)
-	{
+	if ((err = snd_wm8976_pcm(wm8976)) < 0) {
 		goto __nodev;
 	}
 
-	if ((err = snd_wm8976_configure(wm8976)) < 0)
-	{
-	    printk("snd_wm8976_configure faild.\n");
+	if ((err = snd_wm8976_configure(wm8976)) < 0) {
+		printk(KERN_ERR "snd_wm8976_configure faild.\n");
 		goto __nodev;
 	}
 	
@@ -710,13 +681,11 @@ static int __devinit snd_wm8976_probe(struct platform_device *pdev)
 		  
 	snd_card_set_dev(card, &pdev->dev);
 
-	if ((err = snd_card_register(card)) < 0)
-	{
-	    printk("snd_card_register faild.\n");
+	if ((err = snd_card_register(card)) < 0) {
+		printk(KERN_ERR "snd_card_register failed.\n");
 		goto __nodev;
 	}
 
-    //printk("platform_set_drvdata card=%p\n", card);
 	platform_set_drvdata(pdev, card);
 
 	g_device = pdev;
@@ -764,7 +733,7 @@ static int __init snd_wm8976_init(void)
 	enable_audio_sysclk();
 
 	if ((err = platform_driver_register(&snd_wm8976_driver)) < 0) {
-		printk("platform_driver_register failed. ret=%d\n", err);
+		printk(KERN_ERR "platform_driver_register failed. ret=%d\n", err);
 		return err;
 	}
 
@@ -773,8 +742,7 @@ static int __init snd_wm8976_init(void)
 
 static void __exit snd_wm8976_exit(void)
 {
-	if (g_device)
-	{
+	if (g_device) {
 		platform_device_unregister(g_device);
 		platform_driver_unregister(&snd_wm8976_driver);
 		release_wm8976_i2c();
@@ -791,31 +759,31 @@ static void snd_wm8976_set_samplerate(long rate)
 	udelay(125);
 	
 	if (rate >= 48000)
-				rate = 0;
+		rate = 0;
 	else if (rate >= 44100)
-				rate = 1;
+		rate = 1;
 	else if (rate >= 32000)
-				rate = 2;
+		rate = 2;
 	else if (rate >= 22050)
-				rate = 3;	
+		rate = 3;	
 	else if (rate >= 16000)
-				rate = 4;	
+		rate = 4;	
 	else if (rate >= 12000)
-				rate = 5;
+		rate = 5;
 	else
-				rate = 6;
+		rate = 6;
 
-  i2c_packet_send(0x0d, wm8976_for_samplerate[rate][5]);    //R6
-  i2c_packet_send(0x0e, wm8976_for_samplerate[rate][0]);    //R7
-  i2c_packet_send(0x48, wm8976_for_samplerate[rate][1]);    //R36 
-  i2c_packet_send(0x4a, wm8976_for_samplerate[rate][2]);    //R37 
-  i2c_packet_send(0x4d, wm8976_for_samplerate[rate][3]);    //R38
-  i2c_packet_send(0x4e, wm8976_for_samplerate[rate][4]);    //R39	
+	i2c_packet_send(0x0d, wm8976_for_samplerate[rate][5]);    /* R6  */
+	i2c_packet_send(0x0e, wm8976_for_samplerate[rate][0]);    /* R7  */
+	i2c_packet_send(0x48, wm8976_for_samplerate[rate][1]);    /* R36 */
+	i2c_packet_send(0x4a, wm8976_for_samplerate[rate][2]);    /* R37 */
+	i2c_packet_send(0x4d, wm8976_for_samplerate[rate][3]);    /* R38 */
+	i2c_packet_send(0x4e, wm8976_for_samplerate[rate][4]);    /* R39 */	
 }	
 
 
-MODULE_AUTHOR("TOSHIBA <tmpa9xx@toshiba.com>");
-MODULE_DESCRIPTION("TMPA9XX/WM8976");
+MODULE_AUTHOR("Nils Faerber <nils.faerber@kernelconcepts.de>");
+MODULE_DESCRIPTION("TMPA900/WM8976");
 MODULE_LICENSE("GPL");
 
 module_init(snd_wm8976_init);
