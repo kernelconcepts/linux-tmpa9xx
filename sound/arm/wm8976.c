@@ -8,6 +8,7 @@
  */
 #include <linux/init.h>
 #include <linux/slab.h>
+#include <linux/i2c.h>
 #include <linux/spinlock.h>
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
@@ -52,10 +53,6 @@
 #define DRIVER_NAME	"WM8976-I2S"
 #define CHIP_NAME	"Wolfson WM8976"
 #define PCM_NAME	"WM8976_PCM"
-
-/* Only one WM8976 soundcard is supported */
-static struct platform_device *g_device = NULL;
-
 
 /* Chip level */
 #define WM8976_BUF_SZ 	0x10000  /* 64kb */
@@ -204,6 +201,34 @@ static void init_wm8976_i2c(void)
 	i2c_packet_send(0x69,0x3f);	/* R52 0X13f */
 	i2c_packet_send(0x6b,0x3f);	/* R53 0X13f */
 }
+
+static void snd_wm8976_set_samplerate(long rate)
+{
+	/* wait for any frame to complete */
+	udelay(125);
+	
+	if (rate >= 48000)
+		rate = 0;
+	else if (rate >= 44100)
+		rate = 1;
+	else if (rate >= 32000)
+		rate = 2;
+	else if (rate >= 22050)
+		rate = 3;	
+	else if (rate >= 16000)
+		rate = 4;	
+	else if (rate >= 12000)
+		rate = 5;
+	else
+		rate = 6;
+
+	i2c_packet_send(0x0d, wm8976_for_samplerate[rate][5]);    /* R6  */
+	i2c_packet_send(0x0e, wm8976_for_samplerate[rate][0]);    /* R7  */
+	i2c_packet_send(0x48, wm8976_for_samplerate[rate][1]);    /* R36 */
+	i2c_packet_send(0x4a, wm8976_for_samplerate[rate][2]);    /* R37 */
+	i2c_packet_send(0x4d, wm8976_for_samplerate[rate][3]);    /* R38 */
+	i2c_packet_send(0x4e, wm8976_for_samplerate[rate][4]);    /* R39 */	
+}	
 
 static void release_wm8976_i2c(void)
 {
@@ -605,7 +630,7 @@ static int __devinit snd_wm8976_pcm(struct snd_wm8976 *wm8976)
 	return 0;
 }
 
-static int __devinit snd_wm8976_probe(struct platform_device *pdev)
+static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_device_id *iid)
 {
 	int err = 0;
 	struct snd_card *card = NULL;
@@ -614,10 +639,10 @@ static int __devinit snd_wm8976_probe(struct platform_device *pdev)
 	char *id = "ID string for TMPA9XX + WM8976 soundcard.";
 	
 	snd_printk_marker();
-	
-	if (g_device != NULL)
-		return -ENOENT;
 
+	init_wm8976_i2c();
+	enable_audio_sysclk();
+	
 	snd_card_create(-1, id, THIS_MODULE, sizeof(struct snd_wm8976), &card);
 	if (card == NULL) {
 		snd_printdd(KERN_DEBUG "%s: snd_card_new() failed\n", __FUNCTION__);
@@ -651,16 +676,14 @@ static int __devinit snd_wm8976_probe(struct platform_device *pdev)
 		  card->shortname,
 		  I2S_DMA_RX, I2S_DMA_TX, I2S_IRQ_ERR);
 		  
-	snd_card_set_dev(card, &pdev->dev);
+	snd_card_set_dev(card, &i2c_client->dev);
 
 	if ((err = snd_card_register(card)) < 0) {
 		printk(KERN_ERR "snd_card_register failed.\n");
 		goto __nodev;
 	}
 
-	platform_set_drvdata(pdev, card);
-
-	g_device = pdev;
+	i2c_set_clientdata(i2c_client, card);
 
 	return 0;
 
@@ -671,92 +694,52 @@ __i2s_err:
 	return err;
 }
 
-static int __devexit snd_wm8976_remove(struct platform_device *pdev)
+static int wm8976_i2c_remove(struct i2c_client *i2c_client)
 {
-	struct snd_card *card;
+	struct snd_card *card = i2c_get_clientdata(i2c_client);
 	struct snd_wm8976 *wm8976;
 	
-	card = platform_get_drvdata(pdev);
 	wm8976 = card->private_data;
 
 	snd_wm8976_stop(wm8976);
 	tmpa9xx_i2s_free(wm8976->i2s);
 
 	snd_card_free(card);
-	platform_set_drvdata(pdev, NULL);
+
+	release_wm8976_i2c();
+	disable_audio_sysclk();
 
 	return 0;
 }
 
-#define TMPA9XX_WM8976_DRIVER	"tmpa9xx_wm8976"
-static struct platform_driver snd_wm8976_driver = {
-	.probe		= snd_wm8976_probe,
-	.remove		= __devexit_p(snd_wm8976_remove),
-	.driver		= {
-		.name	= DRIVER_NAME,
+static struct i2c_device_id wm8976_id[] = {
+	{"wm8976", 0},
+	{}, /* mandatory */
+};
+MODULE_DEVICE_TABLE(i2c, wm8976_id);
+
+static struct i2c_driver wm8976_i2c_driver = {
+	.driver = {
+		.name = "wm8976",
+		.owner = THIS_MODULE,
 	},
+	.id_table = wm8976_id,
+	.probe = wm8976_i2c_probe,
+	.remove = wm8976_i2c_remove,
 };
 
-static int __init snd_wm8976_init(void)
+static int __init wm8976_init(void)
 {
-	int err;
-
-	init_wm8976_i2c();
-	enable_audio_sysclk();
-
-	if ((err = platform_driver_register(&snd_wm8976_driver)) < 0) {
-		printk(KERN_ERR "platform_driver_register failed. ret=%d\n", err);
-		return err;
-	}
-
-	return 0;
+	return i2c_add_driver(&wm8976_i2c_driver);
 }
+module_init(wm8976_init);
 
-static void __exit snd_wm8976_exit(void)
+static void __exit wm8976_exit(void)
 {
-	if (g_device) {
-		platform_device_unregister(g_device);
-		platform_driver_unregister(&snd_wm8976_driver);
-		release_wm8976_i2c();
-		disable_audio_sysclk();
-	}
-
-	g_device = NULL;
+	i2c_del_driver(&wm8976_i2c_driver);
 }
-
-	
-static void snd_wm8976_set_samplerate(long rate)
-{
-	/* wait for any frame to complete */
-	udelay(125);
-	
-	if (rate >= 48000)
-		rate = 0;
-	else if (rate >= 44100)
-		rate = 1;
-	else if (rate >= 32000)
-		rate = 2;
-	else if (rate >= 22050)
-		rate = 3;	
-	else if (rate >= 16000)
-		rate = 4;	
-	else if (rate >= 12000)
-		rate = 5;
-	else
-		rate = 6;
-
-	i2c_packet_send(0x0d, wm8976_for_samplerate[rate][5]);    /* R6  */
-	i2c_packet_send(0x0e, wm8976_for_samplerate[rate][0]);    /* R7  */
-	i2c_packet_send(0x48, wm8976_for_samplerate[rate][1]);    /* R36 */
-	i2c_packet_send(0x4a, wm8976_for_samplerate[rate][2]);    /* R37 */
-	i2c_packet_send(0x4d, wm8976_for_samplerate[rate][3]);    /* R38 */
-	i2c_packet_send(0x4e, wm8976_for_samplerate[rate][4]);    /* R39 */	
-}	
-
+module_exit(wm8976_exit);
 
 MODULE_AUTHOR("Nils Faerber <nils.faerber@kernelconcepts.de>");
 MODULE_DESCRIPTION("TMPA900/WM8976");
 MODULE_LICENSE("GPL");
-
-module_init(snd_wm8976_init);
-module_exit(snd_wm8976_exit);

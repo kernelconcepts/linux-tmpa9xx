@@ -91,7 +91,7 @@ static struct i2c_board_info baseboard_i2c_0_devices[] = {
 };
 
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
-	/* no devices */
+	{I2C_BOARD_INFO("wm8976", 0x1a),},
 };
 #endif
 
@@ -293,18 +293,12 @@ static struct platform_device topas_keys_device = {
         },
 };
 
-static struct platform_device baseboard_i2s_device = {
-        .name = "WM8976-I2S",
-        .id   = -1,
-};
-
 static struct platform_device *devices_baseboard[] __initdata = {
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
         &topas_dm9000_device,
 #endif
         &topas_led_device,
         &topas_keys_device,
-        &baseboard_i2s_device,    
 };
 
 void __init baseboard_init(void)
