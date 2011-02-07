@@ -937,7 +937,7 @@ void __init tmpa9xx_init(void)
         GPIOFFR2  = (0x00);
         GPIOFIE   = (0x00);
 
-#if defined CONFIG_UART2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1
+#if defined CONFIG_SERIAL_AMBA_PL011_CHANNEL_2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1
         GPIOFFR1 &= ~(0xc0);  /* UART 2 */
         GPIOFFR2 |=  (0xc0);
         GPIOFIE  &= ~(0xc0);
@@ -952,7 +952,7 @@ void __init tmpa9xx_init(void)
         GPIOFODE |=  (0xc0);
 #endif
 
-#if (!defined CONFIG_UART2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1 ) \
+#if (!defined CONFIG_SERIAL_AMBA_PL011_CHANNEL_2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1 ) \
  && (!defined CONFIG_I2C_TMPA9XX && !defined CONFIG_I2C_TMPA9XX_MODULE) && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1
         TMPA9XX_CFG_PORT_GPIO(PORTF);
 #endif
@@ -964,9 +964,8 @@ void __init tmpa9xx_init(void)
         GPIOGDIR  = (0x00);
         GPIOGDATA = (0x00);
         GPIOGFR1  = (0x00);
-        GPIOGFR2  = (0x00);
 
-#if defined CONFIG_MMC_TMPA9XX_SDHC || !defined CONFIG_MMC_TMPA9XX_SDHC_MODULE
+#if defined CONFIG_MMC_TMPA9XX_SDHC || defined CONFIG_MMC_TMPA9XX_SDHC_MODULE
         GPIOGFR1 = (0xff);
 #else
         TMPA9XX_CFG_PORT_GPIO(PORTG)
@@ -1067,7 +1066,7 @@ void __init tmpa9xx_init(void)
         GPIOTFR1  = (0x00);
         GPIOTFR2  = (0x00);
 
-#ifdef CONFIG_UART1
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_1
         GPIOTFR1 |= (0x07 << 4);
 #endif
 #ifdef CONFIG_SPI_PL022_CHANNEL_0
