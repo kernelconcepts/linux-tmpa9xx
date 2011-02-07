@@ -1,5 +1,5 @@
 /*
- * Wolfson wm8983 codec driver for Toshiba TMPA900 SoC
+ * Wolfson wm8976 codec driver for Toshiba TMPA900 SoC
  *
  * Copyright (c) Toshiba
  * Copyright (c) 2011 Michael Hunold (michael@mihu.de)
@@ -83,6 +83,7 @@ struct snd_wm8976 {
 	struct snd_card    *card;
 	struct tmpa9xx_i2s *i2s;
 	spinlock_t    wm8976_lock;
+	struct i2c_client *i2c_client;
 
 	struct snd_pcm *pcm;
 
@@ -94,102 +95,46 @@ struct snd_wm8976 {
 	snd_pcm_substream_t *tx_substream;
 };
 
-/*======================================================*/
-/*     WM8976 I2C INTERFACE DEFINE                      */
-/*======================================================*/
-#define I2C1SR_BUS_CHECK	0x00000020
-#define I2C1SR_BUS_FREE		0x00000000
 
-#define I2C1SR_ACK_CHECK	0x00000010
-#define I2C1SR_ACK_ENABLE	0x00000000
-static void snd_wm8976_set_samplerate(long rate);
-
-static void i2c_bus_free_chk(void)
+/* this must be moved into tmpa9xx_i2s.c */
+static void init_wm8976_i2c_hw(void)
 {
-	u32 reg_data;
-	do {
-		reg_data = I2C1SR;
-	} while ((reg_data & I2C1SR_BUS_CHECK) != I2C1SR_BUS_FREE );
-}
-
-static void i2c_ack_wait(void)
-{
-	u32 reg_data;
-	do {
-		reg_data = I2C1SR;
-	} while ((reg_data & I2C1SR_ACK_CHECK) != I2C1SR_ACK_ENABLE );
-}
-
-static void i2c_packet_send(u8 sub_addr, u8 data)
-{
-	wm_printd(KERN_ERR, "[0x%x] <- 0x%3x\n", sub_addr >> 1, data | ((sub_addr&1) << 8) );
-
-	I2C1DBR = 0x34;
-	I2C1CR2 = 0xf8;
-
-	i2c_ack_wait();
-
-	I2C1DBR = sub_addr;
-	i2c_ack_wait();
-
-	I2C1DBR = data;
-	i2c_ack_wait();
-
-	I2C1CR2 = 0xd8;
-	i2c_bus_free_chk();
-}
-
-static void init_wm8976_i2c(void)
-{
-	unsigned long flags;
-
-	local_irq_save(flags);
-
 	I2SCOMMON = 0x19;		/* IISSCLK = Fosch(X1),       Set SCK/WS/CLKO of Tx and Rx as Common */
 	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896MHz */
-
 	I2SRMCON = 0x04;
-
 	I2STCON = 0x00;			/* IIS Standard Format */
 	I2STFCLR = 0x01;		/* Clear FIFO */
 	I2SRMS = 0x00;			/* Slave */
 	I2STMS = 0x00;			/* Slave */
+}
 
-	local_irq_restore(flags);
-	i2c_bus_free_chk();
-	I2C1CR2 = 0xc8;
-	I2C1PRS = 0x19;
-	I2C1CR1 = 0x13;
+#define i2c_packet_send(reg, val) \
+	{ \
+	int ret = i2c_smbus_write_byte_data(i2c_client, reg, val); \
+	if (ret) \
+		printk("i2c_smbus_write_byte_data() failed, ret %d\n", ret); \
+	}
+
+static void init_wm8976_i2c(struct i2c_client *i2c_client)
+{
+	init_wm8976_i2c_hw();
 
 	i2c_packet_send(0x00,0x00);	/* R0  0x000 */
 	i2c_packet_send(0x02,0x3d);	/* R1  0x02D */
-	/*i2c_packet_send(0x05,0x91);*/	/* R2  0x191 */
 	i2c_packet_send(0x05,0x95);	/* R2  0x195 */
 	i2c_packet_send(0x06,0x6F);	/* R3  0x00F */
 	i2c_packet_send(0x08,0x10);	/* R4  0X010 */
 	i2c_packet_send(0x0a,0x00);	/* R5  0X000 */
-	/*i2c_packet_send(0x0d,0x49);*/	/* R6  0x14d */
-
-	/*i2c_packet_send(0x0e,0x00);*/	/* R7  0x00A  set sample rate 48khz */
-
 	i2c_packet_send(0x14, 0x80);	/* R10 = 0x080 */
 	i2c_packet_send(0x17,0xff);	/* R11 0X1ff */
 	i2c_packet_send(0x19,0xff);	/* R12 0X1ff */
 	i2c_packet_send(0x1c,0x00);	/* R14 = 0x1c01 */
 	i2c_packet_send(0x1F,0xff);	/* R15 0X1FF */
 	i2c_packet_send(0x30, 0x32);	/* R24 = 0x032 */
-	/*i2c_packet_send(0x48,0x07);*/	/* R36 0X017 */
-	/*i2c_packet_send(0x4A,0x21);*/	/* R37 0X012 */
-	/*i2c_packet_send(0x4C,0x61);*/	/* R38 0X011 */
-	/*i2c_packet_send(0x4E,0x27);*/	/* R39 0X096  set pll 12.288Mhz */
-	/*i2c_packet_send(0x58,0x00);*/	/* R44 0X000 */
 	i2c_packet_send(0x5b,0x3f);	/* R45 0X000 */
-	i2c_packet_send(0x56,0x10);	/* R43 0X010   add for WM8976 8 ohm speaker */
-
+	i2c_packet_send(0x56,0x10);	/* R43 0X010   add for wm8976 8 ohm speaker */
 	i2c_packet_send(0x5f,0x55);	/* R47 0X005 */
-
 	i2c_packet_send(47<<1 | 1,0xff);	/* R47 0X1ff */
-
 	i2c_packet_send(0x62,0x02);	/* R49 0X002 */
 	i2c_packet_send(0x64,0x01);	/* R50 0X001 */
 	i2c_packet_send(0x66,0x01);	/* R51 0X001 */
@@ -197,7 +142,7 @@ static void init_wm8976_i2c(void)
 	i2c_packet_send(0x6b,0x3f);	/* R53 0X13f */
 }
 
-static void snd_wm8976_set_samplerate(long rate)
+static void snd_wm8976_set_samplerate(struct i2c_client *i2c_client, long rate)
 {
 	/* wait for any frame to complete */
 	udelay(125);
@@ -360,7 +305,7 @@ static int snd_wm8976_playback_prepare(snd_pcm_substream_t *substream)
 	wm_printd(KERN_ERR, "Playback sample rate = %d.\n",runtime->rate);
 
 	/* set requested samplerate */
-	snd_wm8976_set_samplerate(runtime->rate);
+	snd_wm8976_set_samplerate(chip->i2c_client, runtime->rate);
 
 	if (substream != chip->tx_substream)
 		return -EINVAL;
@@ -389,7 +334,7 @@ static int snd_wm8976_capture_prepare(snd_pcm_substream_t *substream)
 	wm_printd(KERN_ERR, "Record sample rate = %d.\n",runtime->rate);
 
 	/* set requested samplerate */
-	snd_wm8976_set_samplerate(runtime->rate);
+	snd_wm8976_set_samplerate(chip->i2c_client, runtime->rate);
 
 	if (substream != chip->tx_substream)
 		return -EINVAL;
@@ -631,7 +576,7 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 
 	snd_printk_marker();
 
-	init_wm8976_i2c();
+	init_wm8976_i2c(i2c_client);
 	enable_audio_sysclk();
 
 	snd_card_create(-1, id, THIS_MODULE, sizeof(struct snd_wm8976), &card);
@@ -642,7 +587,8 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 
 	wm8976 = card->private_data;
 	wm8976->card = card;
-
+	wm8976->i2c_client = i2c_client;
+	
 	if ((i2s = tmpa9xx_i2s_init(I2S_DMA_RX, snd_wm8976_dma_rx, I2S_DMA_TX, snd_wm8976_dma_tx,
 			    I2S_IRQ_ERR, snd_wm8976_i2s_err, wm8976)) == NULL) {
 		printk(KERN_ERR DRIVER_NAME ": Failed to find device on i2s\n");
@@ -732,5 +678,5 @@ static void __exit wm8976_exit(void)
 module_exit(wm8976_exit);
 
 MODULE_AUTHOR("Michael Hunold <michael@mihu.de>");
-MODULE_DESCRIPTION("wm8983 driver for TMPA900");
+MODULE_DESCRIPTION("wm8976 driver for TMPA900");
 MODULE_LICENSE("GPL");
