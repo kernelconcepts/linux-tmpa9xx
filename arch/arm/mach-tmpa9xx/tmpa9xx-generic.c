@@ -219,7 +219,7 @@ struct clcd_panel tmpa9xx_panel = {
 	.width		= -1,
 	.height		= -1,
 	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER,
-	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK,
+	.cntl		= CNTL_BGR | CNTL_LCDTFT | CNTL_WATERMARK,
 	.bpp		= 32,
 	.grayscale	= 0,
 };
