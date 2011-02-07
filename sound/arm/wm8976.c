@@ -158,24 +158,9 @@ static void snd_wm8976_set_samplerate(struct i2c_client *i2c_client, long rate)
 	i2c_packet_send(0x4e, wm8976_for_samplerate[rate][4]);    /* R39 */
 }
 
-static void release_wm8976_i2c(void)
-{
-}
-
-/*======================================*/
-/* AUDIO CLOCK INTERFACE                */
-static void enable_audio_sysclk(void)
-{
-}
-
-static void disable_audio_sysclk(void)
-{
-}
-
 /*************************************************************
  *                pcm methods
  *************************************************************/
-
 static struct snd_pcm_hardware snd_wm8976_playback_hw = {
 	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
 	.formats =      SNDRV_PCM_FMTBIT_S16_LE,
@@ -556,43 +541,19 @@ static int __devinit snd_wm8976_pcm(struct snd_wm8976 *wm8976)
 
 static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_device_id *iid)
 {
-	int err = 0;
-	struct snd_card *card = NULL;
 	struct snd_wm8976 *wm8976;
-	struct tmpa9xx_i2s *i2s;
-	char *id = "ID string for TMPA9XX + WM8976 soundcard.";
+	struct snd_card *card;
+	char *id = "ID string for TMPA9XX + wm8976 soundcard.";
+	int ret = 0;
+		
+	init_wm8976_i2c(i2c_client);
 
 	snd_printk_marker();
 
-	init_wm8976_i2c(i2c_client);
-	enable_audio_sysclk();
-
 	snd_card_create(-1, id, THIS_MODULE, sizeof(struct snd_wm8976), &card);
-	if (card == NULL) {
-		snd_printdd(KERN_DEBUG "%s: snd_card_new() failed\n", __FUNCTION__);
+	if (!card) {
+		dev_err(&i2c_client->dev, "snd_card_create() failed\n");
 		return -ENOMEM;
-	}
-
-	wm8976 = card->private_data;
-	wm8976->card = card;
-	wm8976->i2c_client = i2c_client;
-	
-	if ((i2s = tmpa9xx_i2s_init(I2S_DMA_RX, snd_wm8976_dma_rx, I2S_DMA_TX, snd_wm8976_dma_tx,
-			    I2S_IRQ_ERR, snd_wm8976_i2s_err, wm8976)) == NULL) {
-		printk(KERN_ERR DRIVER_NAME ": Failed to find device on i2s\n");
-		err = -ENODEV;
-		goto __i2s_err;
-	}
-
-	wm8976->i2s = i2s;
-
-	err = snd_device_new(card, SNDRV_DEV_LOWLEVEL, wm8976, &snd_wm8976_ops);
-	if (err) {
-		goto __nodev;
-	}
-
-	if ((err = snd_wm8976_pcm(wm8976)) < 0) {
-		goto __nodev;
 	}
 
 	strcpy(card->driver, DRIVER_NAME);
@@ -601,42 +562,70 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 		  card->shortname,
 		  I2S_DMA_RX, I2S_DMA_TX, I2S_IRQ_ERR);
 
-	snd_card_set_dev(card, &i2c_client->dev);
+	wm8976 = card->private_data;
 
-	if ((err = snd_card_register(card)) < 0) {
-		printk(KERN_ERR "snd_card_register failed.\n");
-		goto __nodev;
+	wm8976->card = card;
+	wm8976->i2c_client = i2c_client;
+
+	wm8976->i2s = tmpa9xx_i2s_init(I2S_DMA_RX, snd_wm8976_dma_rx, I2S_DMA_TX, snd_wm8976_dma_tx,
+			    I2S_IRQ_ERR, snd_wm8976_i2s_err, wm8976);
+	if (!wm8976->i2s) {
+		dev_err(&i2c_client->dev, "tmpa9xx_i2s_init() failed\n");
+		ret = -ENODEV;
+		goto err0;
 	}
 
+	ret = snd_device_new(card, SNDRV_DEV_LOWLEVEL, wm8976, &snd_wm8976_ops);
+	if (ret) {
+		dev_err(&i2c_client->dev, "snd_device_new() failed\n");
+		ret = -ENODEV;
+		goto err1;
+	}
+
+	ret = snd_wm8976_pcm(wm8976);
+	if (ret) {
+		dev_err(&i2c_client->dev, "snd_wm8976_pcm() failed\n");
+		ret = -ENODEV;
+		goto err2;
+	}
+
+	ret = snd_card_register(card);
+	if (ret) {
+		dev_err(&i2c_client->dev, "snd_card_register() failed\n");
+		ret = -ENODEV;
+		goto err3;
+	}
+
+	snd_card_set_dev(card, &i2c_client->dev);
+	
 	i2c_set_clientdata(i2c_client, card);
 
 	return 0;
 
-__nodev:
-	tmpa9xx_i2s_free(i2s);
-__i2s_err:
+err3:
+err2:
+err1:
+	tmpa9xx_i2s_free(wm8976->i2s);
+err0:
 	snd_card_free(card);
-	return err;
+	return ret;
+
+	return 0;
 }
 
 static int wm8976_i2c_remove(struct i2c_client *i2c_client)
 {
 	struct snd_card *card = i2c_get_clientdata(i2c_client);
-	struct snd_wm8976 *wm8976;
+	struct snd_wm8976 *wm8976 = card->private_data;
 
-	wm8976 = card->private_data;
-
-	snd_wm8976_stop(wm8976);
 	tmpa9xx_i2s_free(wm8976->i2s);
 
 	snd_card_free(card);
-
-	release_wm8976_i2c();
-	disable_audio_sysclk();
+	
+	i2c_set_clientdata(i2c_client, NULL);
 
 	return 0;
 }
-
 static struct i2c_device_id wm8976_id[] = {
 	{"wm8976", 0},
 	{}, /* mandatory */
