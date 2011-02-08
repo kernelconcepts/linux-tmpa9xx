@@ -1006,15 +1006,18 @@ void __init tmpa9xx_init(void)
         GPIOLFR1  = (0x00);
         GPIOLFR2  = (0x00);
         
-#if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
+#if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE \
+ || defined CONFIG_SND_TMPA9XX_WM8976 || defined CONFIG_SND_TMPA9XX_WM8976_MODULE \
+ || defined CONFIG_SND_SOC_TMPA9XX_I2S
         GPIOLFR1 |= (0x1f); /* bits 4:0 for I2S */
 #endif        
 #ifdef CONFIG_SPI_PL022_CHANNEL_1
         GPIOLFR2 |= (0x0f);
 #endif
 
-#if (!defined CONFIG_SND_TMPA9XX_WM8983  && !defined CONFIG_SND_TMPA9XX_WM8983_MODULE \
-  && !defined CONFIG_SND_SOC_TMPA9XX_I2S && !defined CONFIG_SPI_PL022_CHANNEL_1)
+#if !defined CONFIG_SND_TMPA9XX_WM8983  && !defined CONFIG_SND_TMPA9XX_WM8983_MODULE \
+ && !defined CONFIG_SND_TMPA9XX_WM8976  && !defined CONFIG_SND_TMPA9XX_WM8976_MODULE \
+ && !defined CONFIG_SND_SOC_TMPA9XX_I2S && !defined CONFIG_SPI_PL022_CHANNEL_1 
         TMPA9XX_CFG_PORT_GPIO(PORTL)
 #endif        
   
@@ -1025,7 +1028,9 @@ void __init tmpa9xx_init(void)
         GPIOMDATA = (0x00);
         GPIOMFR1  = (0x00);
         
-#if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
+#if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE \
+ || defined CONFIG_SND_TMPA9XX_WM8976 || defined CONFIG_SND_TMPA9XX_WM8976_MODULE \
+ || defined CONFIG_SND_SOC_TMPA9XX_I2S
         GPIOMFR1 &= ~(0x03);
         GPIOMFR1 |=  (0x04); /* M2 I2S1DAT0 */
 #else
