@@ -13,12 +13,12 @@ if SND_ARM
 
 config SND_TMPA9XX_WM8976
 	tristate "TMPA9xx WM8976 driver"
-	depends on MACH_TOPASA900 && SND
+	depends on MACH_TOPASA900 && SND && I2C_TMPA9XX
 	select SND_PCM
 	help
 	  Say Y here if you have a Toshiba TopasA900
 	  TMPA900 development board and
-	  and want to use its WM8976 audio chip.
+	  want to use its WM8976 audio chip.
 
 config SND_TMPA9XX_WM8983
 	tristate "TMPA9xx WM8983 driver"
