@@ -169,7 +169,8 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	data = msg->buf;
 
-	if ((ret = tmpa9xx_i2c_start(adap, (msg->addr << 1))) < 0) {
+	ret = tmpa9xx_i2c_start(adap, (msg->addr << 1));
+	if (ret < 0) {
 		dev_err(&adap->dev, "tmpa9xx_i2c_start() failed\n");
 		return ret;
 	}
@@ -208,7 +209,8 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	}
 
-	if ((ret = tmpa9xx_i2c_stop(adap)) < 0) {
+	ret = tmpa9xx_i2c_stop(adap);
+	if (ret < 0) {
 		dev_err(&adap->dev, "tmpa9xx_i2c_stop() failed\n");
 		return ret;
 	}
@@ -227,7 +229,8 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	data = msg->buf;
 
-	if ((ret = tmpa9xx_i2c_start(adap, (msg->addr << 1) | 1)) < 0) {
+	ret = tmpa9xx_i2c_start(adap, (msg->addr << 1) | 1);
+	if (ret < 0) {
 		dev_err(&adap->dev, "tmpa9xx_i2c_start() failed\n");
 		return ret;
 	}
@@ -291,7 +294,8 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 		}
 	}
 
-	if ((ret = tmpa9xx_i2c_stop(adap)) < 0) {
+	ret = tmpa9xx_i2c_stop(adap);
+	if (ret < 0) {
 		dev_err(&adap->dev, "tmpa9xx_i2c_stop() failed\n");
 		return ret;
 	}
