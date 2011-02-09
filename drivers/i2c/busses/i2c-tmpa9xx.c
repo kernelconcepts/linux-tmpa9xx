@@ -169,18 +169,6 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	data = msg->buf;
 
-	ret = tmpa9xx_i2c_start(adap, msg->addr, msg->flags & I2C_M_RD);
-	if (ret < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_start() failed\n", __func__);
-		return ret;
-	}
-	
-	if (tmpa9xx_i2c_wait_done(adap) < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
-		return -ETIMEDOUT;
-	}
-
-
 	sr = regs->i2c_sr;
 
 	if (sr & (1UL << 0)) {	/* check last received bit (should be low for ACK) */
@@ -215,12 +203,6 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	}
 
-	ret = tmpa9xx_i2c_stop(adap);
-	if (ret < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_stop() failed\n", __func__);
-		return ret;
-	}
-
 	return ret;
 }
 
@@ -234,17 +216,6 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 	u8 *data;
 
 	data = msg->buf;
-
-	ret = tmpa9xx_i2c_start(adap, msg->addr, msg->flags & I2C_M_RD);
-	if (ret < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_start() failed\n", __func__);
-		return ret;
-	}
-
-	if (tmpa9xx_i2c_wait_done(adap) < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
-		return -ETIMEDOUT;
-	}
 
 	sr = regs->i2c_sr;
 
@@ -300,12 +271,6 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 		}
 	}
 
-	ret = tmpa9xx_i2c_stop(adap);
-	if (ret < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_stop() failed\n", __func__);
-		return ret;
-	}
-
 	return ret;
 }
 
@@ -317,9 +282,10 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 			    int num)
 {
 	int i;
-	struct i2c_msg *msg;
-	int err = 0, msgcnt = 0;
-
+	int msgcnt = 0;
+	int rw_direction = -1;
+	int ret;
+	
 	dev_dbg(&adap->dev, "%s(): num %d\n", __func__, num);
 
 	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
@@ -328,27 +294,53 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	}
 
 	for (i = 0; i < num; i++) {
-		msg = &msgs[i];
+		struct i2c_msg *msg = &msgs[i];
+		int is_read = !!(msg->flags & I2C_M_RD);
+
 		dev_dbg(&adap->dev, "%s(): msg %p, msg->buf 0x%x, msg->len 0x%x, msg->flags 0x%x\n", __func__, msg, (unsigned int)msg->buf, msg->len, msg->flags);
 
 		if (msg->len == 0)
 			continue;
 
-		if (msg->flags & I2C_M_RD)
-			err = tmpa9xx_i2c_rcv(adap, msg);
-		else
-			err = tmpa9xx_i2c_xmit(adap, msg);
+		if (rw_direction != is_read) {
+			dev_dbg(&adap->dev, "%s(): (re)sending start condition\n", __func__);
 
-		if (err)
-			break;
+			ret = tmpa9xx_i2c_start(adap, msg->addr, msg->flags & I2C_M_RD);
+			if (ret < 0) {
+				dev_err(&adap->dev, "%s(): tmpa9xx_i2c_start() failed\n", __func__);
+				/* keep ret */
+				goto out;
+			}
+
+			if (tmpa9xx_i2c_wait_done(adap) < 0) {
+				dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
+				ret = -ETIMEDOUT;
+				goto out;
+			}
+		}
+		rw_direction = is_read;
+
+		if (is_read)
+			ret = tmpa9xx_i2c_rcv(adap, msg);
+		else
+			ret = tmpa9xx_i2c_xmit(adap, msg);
+
+		if (ret) {
+			/* keep ret */
+			goto out;
+		}
 
 		msgcnt++;
-	};
+	}
 
-	if (err == 0)
-		return msgcnt;
-	else
-		return err;
+out:
+	ret = tmpa9xx_i2c_stop(adap);
+	if (ret < 0) {
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_stop() failed\n", __func__);
+		return ret;
+	}
+
+	return ret ? ret : msgcnt;
 }
 
 /*
