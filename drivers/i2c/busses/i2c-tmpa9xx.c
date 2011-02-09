@@ -109,6 +109,38 @@ static int tmpa9xx_i2c_wait_done(struct i2c_adapter *adap)
 	return tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 4), 0);	// SCL line == low ?
 }
 
+static int tmpa9xx_i2c_wait_lrb_set(struct i2c_adapter *adap)
+{
+	return tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 0), 1);	// last received bit == high ?
+}
+
+static int tmpa9xx_i2c_restart(struct i2c_adapter *adap)
+{
+	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+
+	regs->i2c_cr2 = 0
+	    | (1UL << 4)		/* clear service request */
+	    | (1UL << 3)		/* enable I2C operation */
+	    ;
+
+	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
+		return -EBUSY;
+	}
+
+	if (tmpa9xx_i2c_wait_lrb_set(adap) < 0) {
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_lrb_set() failed\n", __func__);
+		return -EBUSY;
+	}
+	
+	/* see specification, "Data Transfer Procedure in I2C Bus Mode",
+	   section 5 "Restart procedure" */
+	udelay(5);
+
+	return 0;
+}
+
 static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr, int is_read)
 {
 	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
@@ -303,7 +335,16 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 			continue;
 
 		if (rw_direction != is_read) {
-			dev_dbg(&adap->dev, "%s(): (re)sending start condition\n", __func__);
+			if (i) {
+				dev_dbg(&adap->dev, "%s(): sending restart condition\n", __func__);
+	
+				ret = tmpa9xx_i2c_restart(adap);
+				if (ret < 0) {
+					dev_err(&adap->dev, "%s(): tmpa9xx_i2c_restart() failed\n", __func__);
+					/* keep ret */
+					goto out;
+				}
+			}
 
 			ret = tmpa9xx_i2c_start(adap, msg->addr, msg->flags & I2C_M_RD);
 			if (ret < 0) {
@@ -317,8 +358,9 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 				ret = -ETIMEDOUT;
 				goto out;
 			}
+	
+			rw_direction = is_read;
 		}
-		rw_direction = is_read;
 
 		if (is_read)
 			ret = tmpa9xx_i2c_rcv(adap, msg);
@@ -334,10 +376,10 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	}
 
 out:
-	ret = tmpa9xx_i2c_stop(adap);
-	if (ret < 0) {
+	i = tmpa9xx_i2c_stop(adap);
+	if (i < 0) {
 		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_stop() failed\n", __func__);
-		return ret;
+		return i;
 	}
 
 	return ret ? ret : msgcnt;
