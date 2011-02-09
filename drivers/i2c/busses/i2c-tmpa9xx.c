@@ -174,6 +174,12 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_start() failed\n", __func__);
 		return ret;
 	}
+	
+	if (tmpa9xx_i2c_wait_done(adap) < 0) {
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
+		return -ETIMEDOUT;
+	}
+
 
 	sr = regs->i2c_sr;
 
