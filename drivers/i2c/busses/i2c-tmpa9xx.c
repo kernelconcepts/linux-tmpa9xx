@@ -115,7 +115,7 @@ static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr)
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
 	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_wait_free_bus() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
 		return -EBUSY;
 	}
 
@@ -131,7 +131,7 @@ static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr)
 	    ;
 
 	if (tmpa9xx_i2c_wait_done(adap) < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_wait_done() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
 		return -ETIMEDOUT;
 	}
 	return 0;
@@ -150,7 +150,7 @@ static int tmpa9xx_i2c_stop(struct i2c_adapter *adap)
 	    ;
 
 	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_wait_free_bus() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
 		return -EBUSY;
 	}
 
@@ -171,20 +171,20 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	ret = tmpa9xx_i2c_start(adap, (msg->addr << 1));
 	if (ret < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_start() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_start() failed\n", __func__);
 		return ret;
 	}
 
 	sr = regs->i2c_sr;
 
 	if (sr & (1UL << 0)) {	/* check last received bit (should be low for ACK) */
-		dev_err(&adap->dev, "ack check failed\n");
+		dev_err(&adap->dev, "%s(): ack check failed\n", __func__);
 		tmpa9xx_i2c_dump_regs(adap);
 		return -EIO;
 	}
 
 	if ((sr & (1UL << 6)) == 0) {	/* check xmit/rcv selection state (should be xmit) */
-		dev_err(&adap->dev, "wrong transfer state\n");
+		dev_err(&adap->dev, "%s(): wrong transfer state\n", __func__);
 		return -EIO;
 	}
 
@@ -194,7 +194,7 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 		cr1 |= (1UL << 4);	/* acknowledge */
 
 		if (tmpa9xx_i2c_wait_done(adap) < 0) {
-			dev_dbg(&adap->dev, "timeout !\n");
+			dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
 			return -ETIMEDOUT;
 		}
 
@@ -203,7 +203,7 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 		regs->i2c_dbr = data[i] & 0xFF;	/* put 8bits into xmit FIFO */
 
 		if (tmpa9xx_i2c_wait_done(adap) < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_wait_done() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
 			return -ETIMEDOUT;
 		}
 
@@ -211,7 +211,7 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	ret = tmpa9xx_i2c_stop(adap);
 	if (ret < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_stop() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_stop() failed\n", __func__);
 		return ret;
 	}
 
@@ -231,25 +231,25 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	ret = tmpa9xx_i2c_start(adap, (msg->addr << 1) | 1);
 	if (ret < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_start() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_start() failed\n", __func__);
 		return ret;
 	}
 
 	if (tmpa9xx_i2c_wait_done(adap) < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_wait_done() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
 		return -ETIMEDOUT;
 	}
 
 	sr = regs->i2c_sr;
 
 	if (sr & (1UL << 0)) { /* check last received bit (should be low for ACK) */
-		dev_err(&adap->dev, "no ack from slave\n");
+		dev_err(&adap->dev, "%s(): no ack from slave\n", __func__);
 		/* tmpa9xx_i2c_dump_regs(adap); */
 		return -EIO;
 	}
 
 	if (sr & (1UL << 6)) {	/* check xmit/rcv selection state (should be rcv) */
-		dev_err(&adap->dev, "wrong transfer state\n");
+		dev_err(&adap->dev, "%s(): wrong transfer state\n", __func__);
 		return -EIO;
 	}
 	/* read receive data */
@@ -266,12 +266,12 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 		ret = tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 4), (1UL << 4));	// SCL line = free ? ?
 		if (ret < 0) {
-			dev_err(&adap->dev, "tmpa9xx_i2c_wait_status_timeout() @ initial free failed\n");
+			dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_status_timeout() @ initial free failed\n", __func__);
 			break;
 		}
 
 		if (tmpa9xx_i2c_wait_done(adap) < 0) {
-			dev_err(&adap->dev, "tmpa9xx_i2c_wait_done() failed\n");
+			dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
 			return -ETIMEDOUT;
 		}
 
@@ -289,14 +289,14 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 		/* wait until 1bit xfer is complete */
 		ret = tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 4), (1UL << 4));	// SCL line = free ? ?
 		if (ret < 0) {
-			dev_err(&adap->dev, "tmpa9xx_i2c_wait_status_timeout() @ wait 1bit xfer failed\n");
+			dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_status_timeout() @ wait 1bit xfer failed\n", __func__);
 			break;
 		}
 	}
 
 	ret = tmpa9xx_i2c_stop(adap);
 	if (ret < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_stop() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_stop() failed\n", __func__);
 		return ret;
 	}
 
@@ -314,16 +314,16 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	struct i2c_msg *msg;
 	int err = 0, msgcnt = 0;
 
-	dev_dbg(&adap->dev, "num %d\n", num);
+	dev_dbg(&adap->dev, "%s(): num %d\n", __func__, num);
 
 	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_wait_free_bus() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
 		tmpa9xx_i2c_setup(adap);
 	}
 
 	for (i = 0; i < num; i++) {
 		msg = &msgs[i];
-		dev_dbg(&adap->dev, "msg %p, msg->buf 0x%x, msg->len 0x%x, msg->flags 0x%x\n", msg, (unsigned int)msg->buf, msg->len, msg->flags);
+		dev_dbg(&adap->dev, "%s(): msg %p, msg->buf 0x%x, msg->len 0x%x, msg->flags 0x%x\n", __func__, msg, (unsigned int)msg->buf, msg->len, msg->flags);
 
 		if (msg->len == 0)
 			continue;
@@ -389,7 +389,7 @@ static int tmpa9xx_i2c_shutdown(struct i2c_adapter *adap)
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
 	if(tmpa9xx_i2c_wait_free_bus(adap) < 0) {
-		dev_err(&adap->dev, "tmpa9xx_i2c_wait_free_bus() failed\n");
+		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
 	}
 
 	regs->i2c_prs = 0;
