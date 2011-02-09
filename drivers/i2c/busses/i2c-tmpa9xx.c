@@ -21,7 +21,6 @@
 #include <linux/irq.h>
 #include <linux/slab.h>
 
-
 struct tmpa9xx_i2c_regs {
 	uint32_t i2c_cr1;	// 0x0000 I2C Control Register 1
 	uint32_t i2c_dbr;	// 0x0004 I2C Data Buffer Register
@@ -49,7 +48,6 @@ struct tmpa9xx_i2c_priv {
 	unsigned long io_start[2];
 	unsigned long io_lenght[2];
 };
-
 
 #ifdef __DEBUG__
 void tmpa9xx_i2c_dump_regs(struct tmpa9xx_i2c_algo_data *algo)
@@ -231,7 +229,6 @@ int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 	unsigned int sr, cr1;
 	int i, dummy;
 	u8 *data;
-
 
 	data = msg->buf;
 
@@ -478,7 +475,6 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	priv->io_start[0] = r->start;
 	priv->io_lenght[0] = r->end - r->start + 1;
 
-
 	priv->i2c_algo_data[0].regs = ioremap(r->start, r->end - r->start + 1);
 	if (priv->i2c_algo_data[0].regs == NULL) {
 		dev_err(&pdev->dev, "ioremap() failed\n");
@@ -486,14 +482,12 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 		goto fail;
 	}
 
-
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	if (r == NULL) {
 		dev_err(&pdev->dev, "No IO memory resource for I2C1\n");
 		ret = -ENODEV;
 		goto fail;
 	}
-
 
 	r = request_mem_region(r->start, r->end - r->start + 1, pdev->name);
 	if (r == NULL) {
