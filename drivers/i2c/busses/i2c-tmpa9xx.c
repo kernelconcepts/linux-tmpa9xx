@@ -109,7 +109,7 @@ static int tmpa9xx_i2c_wait_done(struct i2c_adapter *adap)
 	return tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 4), 0);	// SCL line == low ?
 }
 
-static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr)
+static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr, int is_read)
 {
 	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
@@ -121,7 +121,7 @@ static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr)
 
 	regs->i2c_cr1 |= (1UL << 4);	/* enable acknowledge clock */
 
-	regs->i2c_dbr = slave_adr;	/* send slave address */
+	regs->i2c_dbr = (slave_adr << 1) | !!is_read;	/* send slave address */
 
 	regs->i2c_cr2 = (1UL << 7)	/* select master mode */
 	    | (1UL << 6)		/* transmit operation */
@@ -169,7 +169,7 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	data = msg->buf;
 
-	ret = tmpa9xx_i2c_start(adap, (msg->addr << 1));
+	ret = tmpa9xx_i2c_start(adap, msg->addr, msg->flags & I2C_M_RD);
 	if (ret < 0) {
 		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_start() failed\n", __func__);
 		return ret;
@@ -229,7 +229,7 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	data = msg->buf;
 
-	ret = tmpa9xx_i2c_start(adap, (msg->addr << 1) | 1);
+	ret = tmpa9xx_i2c_start(adap, msg->addr, msg->flags & I2C_M_RD);
 	if (ret < 0) {
 		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_start() failed\n", __func__);
 		return ret;
