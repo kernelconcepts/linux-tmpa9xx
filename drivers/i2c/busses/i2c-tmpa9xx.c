@@ -438,184 +438,143 @@ static struct i2c_algorithm tmpa9xx_algorithm = {
 	.functionality = tmpa9xx_i2c_func,
 };
 
-static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
+static int __devinit tmpa9xx_i2c_probe_one(struct platform_device *pdev, struct tmpa9xx_i2c_priv *priv, int offset)
 {
-	struct resource *r;
-	int ret = 0;
-	int irq;
 	struct i2c_adapter *adapter;
-	struct tmpa9xx_i2c_priv *priv;
-
-	printk(KERN_INFO "probe i2c dev!\n");
-
-	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (r == NULL) {
-		dev_err(&pdev->dev, "No IO memory resource for I2C0\n");
-		ret = -ENODEV;
-		goto fail;
+	struct resource *res;
+	int irq;
+	int ret;
+	
+	res = platform_get_resource(pdev, IORESOURCE_MEM, offset);
+	if (!res) {
+		dev_err(&pdev->dev, "platform_get_resource() failed @ offset %d\n", offset);
+		return -ENODEV;
 	}
 
+	res = request_mem_region(res->start, res->end - res->start + 1, pdev->name);
+	if (!res) {
+		dev_err(&pdev->dev, "request_mem_region() failed @ offset %d\n", offset);
+		return -EBUSY;
+	}
+
+	priv->io_start[offset] = res->start;
+	priv->io_lenght[offset] = res->end - res->start + 1;
+
+	priv->i2c_algo_data[offset].regs = ioremap(res->start, res->end - res->start + 1);
+	if (!priv->i2c_algo_data[offset].regs) {
+		dev_err(&pdev->dev, "ioremap() failed @ offset %d\n", offset);
+		release_mem_region(priv->io_start[offset], priv->io_lenght[offset]);
+		return -ENODEV;
+	}
+
+	irq = platform_get_irq(pdev, offset);
+	if (irq < 0) {
+		dev_err(&pdev->dev, "platform_get_irq() failed @ offset %d\n", offset);
+		iounmap(priv->i2c_algo_data[offset].regs);
+		release_mem_region(priv->io_start[offset], priv->io_lenght[offset]);
+		return -ENXIO;
+	}
+
+	priv->i2c_algo_data[offset].irq = irq;
+
+	adapter = kzalloc(sizeof(struct i2c_adapter), GFP_KERNEL);
+	if (!adapter) {
+		dev_err(&pdev->dev, "kzalloc() failed @ offset %d\n", offset);
+		iounmap(priv->i2c_algo_data[offset].regs);
+		release_mem_region(priv->io_start[offset], priv->io_lenght[offset]);
+		return -ENOMEM;
+	}
+
+	sprintf(adapter->name, "tmpa9xx_i2c%d", offset);
+	adapter->algo = &tmpa9xx_algorithm;
+	adapter->algo_data = &priv->i2c_algo_data[offset];
+	priv->i2c_algo_data[offset].channel = offset;
+	adapter->class = I2C_CLASS_HWMON;
+	adapter->dev.parent = &pdev->dev;
+	adapter->id = 0;
+	adapter->nr = offset;
+	priv->i2c_adapter[offset] = adapter;
+
+	tmpa9xx_i2c_setup(adapter);
+
+	ret = i2c_add_numbered_adapter(priv->i2c_adapter[offset]);
+	if (ret) {
+		dev_err(&pdev->dev, "i2c_add_numbered_adapter() failed @ offset %d\n", offset);
+		tmpa9xx_i2c_shutdown(adapter);
+		kfree(adapter);
+		iounmap(priv->i2c_algo_data[offset].regs);
+		release_mem_region(priv->io_start[offset], priv->io_lenght[offset]);
+		return -ENODEV;
+	}
+
+
+	return 0;
+}
+
+static void __devexit tmpa9xx_i2c_remove_one(struct platform_device *pdev, struct tmpa9xx_i2c_priv *priv, int offset)
+{
+	struct i2c_adapter *adapter = priv->i2c_adapter[offset];
+
+	i2c_del_adapter(adapter);
+	tmpa9xx_i2c_shutdown(adapter);
+	kfree(adapter);
+	iounmap(priv->i2c_algo_data[offset].regs);
+	release_mem_region(priv->io_start[offset], priv->io_lenght[offset]);
+}
+
+static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
+{
+	int ret = 0;
+	struct tmpa9xx_i2c_priv *priv;
+
 	priv = kzalloc(sizeof(struct tmpa9xx_i2c_priv), GFP_KERNEL);
-	if (priv == 0) {
-		ret = -ENOMEM;
-		goto fail;
+	if (!priv) {
+		dev_err(&pdev->dev, "kzalloc() failed\n");
+		return -ENOMEM;
 	}
 
 	priv->pdev = pdev;
 	priv->i2c_algo_data[0].irq = NO_IRQ;
 	priv->i2c_algo_data[1].irq = NO_IRQ;
 
-	r = request_mem_region(r->start, r->end - r->start + 1, pdev->name);
-	if (r == NULL) {
-		dev_err(&pdev->dev, "failed to request memory resource\n");
-		ret = -EBUSY;
-		goto fail;
+	ret = tmpa9xx_i2c_probe_one(pdev, priv, 0);
+	if (ret) {
+		dev_err(&pdev->dev, "tmpa9xx_i2c_probe_one() @ 0 failed\n");
+		kfree(priv);
+		return -ENODEV;
 	}
 
-	priv->io_start[0] = r->start;
-	priv->io_lenght[0] = r->end - r->start + 1;
-
-	priv->i2c_algo_data[0].regs = ioremap(r->start, r->end - r->start + 1);
-	if (priv->i2c_algo_data[0].regs == NULL) {
-		dev_err(&pdev->dev, "ioremap() failed\n");
-		ret = -ENODEV;
-		goto fail;
+	ret = tmpa9xx_i2c_probe_one(pdev, priv, 1);
+	if (ret) {
+		dev_err(&pdev->dev, "tmpa9xx_i2c_probe_one() @ 1 failed\n");
+		tmpa9xx_i2c_remove_one(pdev, priv, 0);
+		kfree(priv);
+		return -ENODEV;
 	}
-
-	r = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	if (r == NULL) {
-		dev_err(&pdev->dev, "No IO memory resource for I2C1\n");
-		ret = -ENODEV;
-		goto fail;
-	}
-
-	r = request_mem_region(r->start, r->end - r->start + 1, pdev->name);
-	if (r == NULL) {
-		dev_err(&pdev->dev, "failed to request memory resource\n");
-		ret = -EBUSY;
-		goto fail;
-	}
-
-	priv->io_start[1] = r->start;
-	priv->io_lenght[1] = r->end - r->start + 1;
-
-	priv->i2c_algo_data[1].regs = ioremap(r->start, r->end - r->start + 1);
-	if (priv->i2c_algo_data[1].regs == NULL) {
-		dev_err(&pdev->dev, "ioremap() failed\n");
-		ret = -ENODEV;
-		goto fail;
-	}
-
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
-		dev_err(&pdev->dev, "no IRQ resource defined\n");
-		ret = -ENXIO;
-		goto fail;
-	}
-
-	priv->i2c_algo_data[0].irq = irq;
-
-	irq = platform_get_irq(pdev, 1);
-	if (irq < 0) {
-		dev_err(&pdev->dev, "no IRQ resource defined\n");
-		ret = -ENXIO;
-		goto fail;
-	}
-
-	priv->i2c_algo_data[1].irq = irq;
-
-	adapter = kzalloc(sizeof(struct i2c_adapter), GFP_KERNEL);
-	if (adapter == NULL) {
-		dev_err(&pdev->dev, "can't allocate adapter 0\n");
-		ret = -ENOMEM;
-		goto fail;
-	}
-
-	sprintf(adapter->name, "TMPA9XX_I2C0");
-	adapter->algo = &tmpa9xx_algorithm;
-	adapter->algo_data = &priv->i2c_algo_data[0];
-	priv->i2c_algo_data[0].channel = 0;
-	adapter->class = I2C_CLASS_HWMON;
-	adapter->dev.parent = &pdev->dev;
-	adapter->id = 0;
-	adapter->nr = 0;
-	priv->i2c_adapter[0] = adapter;
 
 	platform_set_drvdata(pdev, priv);
-
-	tmpa9xx_i2c_setup(adapter);
-
-	ret = i2c_add_numbered_adapter(priv->i2c_adapter[0]);
-	if (ret) {
-		dev_err(&pdev->dev, "Adapter %s registration failed\n",
-			priv->i2c_adapter[0]->name);
-		goto fail;
-	}
-
-	adapter = kzalloc(sizeof(struct i2c_adapter), GFP_KERNEL);
-	if (adapter == NULL) {
-		dev_err(&pdev->dev, "can't allocate adapter 1\n");
-		ret = -ENOMEM;
-		goto fail;
-	}
-
-	sprintf(adapter->name, "TMPA9XX_I2C1");
-	adapter->algo = &tmpa9xx_algorithm;
-	adapter->algo_data = &priv->i2c_algo_data[1];
-	priv->i2c_algo_data[1].channel = 1;
-	adapter->class = I2C_CLASS_HWMON;
-	adapter->dev.parent = &pdev->dev;
-	adapter->id = 0;	/* new style drivers don't need those */
-	adapter->nr = 1;
-	priv->i2c_adapter[1] = adapter;
-
-	tmpa9xx_i2c_setup(adapter);
-
-	ret = i2c_add_numbered_adapter(priv->i2c_adapter[1]);
-	if (ret) {
-		dev_err(&pdev->dev, "Adapter %s registration failed\n",
-			priv->i2c_adapter[1]->name);
-		goto fail;
-	}
-
 	printk
 	    ("TMPA9xx I2C: driver ready (ch0: irq=%d IO@%p ch1: irq=%d IO@%p)\n",
 	     priv->i2c_algo_data[0].irq, priv->i2c_algo_data[0].regs,
 	     priv->i2c_algo_data[1].irq, priv->i2c_algo_data[1].regs);
 
 	return 0;
-      fail:
-	return ret;
 }
 
 static int __devexit tmpa9xx_i2c_remove(struct platform_device *pdev)
 {
 	struct tmpa9xx_i2c_priv *priv = platform_get_drvdata(pdev);
-	struct i2c_adapter *adap;
+
+	if (priv->i2c_adapter[0])
+		tmpa9xx_i2c_remove_one(pdev, priv, 0);
+
+	if (priv->i2c_adapter[1])
+		tmpa9xx_i2c_remove_one(pdev, priv, 1);
 
 	platform_set_drvdata(pdev, NULL);
 
-	if ((adap = priv->i2c_adapter[1]) != NULL) {
-		tmpa9xx_i2c_shutdown(adap);
-		i2c_del_adapter(adap);
-		iounmap(priv->i2c_algo_data[1].regs);
-
-		release_mem_region(priv->io_start[0], priv->io_lenght[0]);
-
-		kfree(adap);
-	}
-
-	if ((adap = priv->i2c_adapter[0]) != NULL) {
-		tmpa9xx_i2c_shutdown(adap);
-		i2c_del_adapter(adap);
-		iounmap(priv->i2c_algo_data[0].regs);
-
-		release_mem_region(priv->io_start[1], priv->io_lenght[1]);
-
-		kfree(adap);
-	}
-
 	kfree(priv);
+	
 	return 0;
 }
 
