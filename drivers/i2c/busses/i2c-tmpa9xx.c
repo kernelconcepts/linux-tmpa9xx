@@ -3,7 +3,8 @@
  *
  * Provides I2C support for Toshiba TMPA9xx
  *
- * Copyright © 2009 bplan GmbH
+ * Copyright (c) 2009 bplan GmbH
+ * Copyright (c) 2011 Michael Hunold <michael@mihu.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -49,40 +50,34 @@ struct tmpa9xx_i2c_priv {
 	unsigned long io_lenght[2];
 };
 
-#ifdef __DEBUG__
-static void tmpa9xx_i2c_dump_regs(struct tmpa9xx_i2c_algo_data *algo)
+#ifdef DEBUG
+static void tmpa9xx_i2c_dump_regs(struct i2c_adapter *adap)
 {
+	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
 	printk("I2C controller at %p\n", regs);
-	printk(" I2C%dCR1 (0x%02x) = 0x%02x\n", algo->channel,
-	       offsetof(struct tmpa9xx_i2c_regs, i2c_cr1), regs->i2c_cr1);
-	printk(" I2C%dDBR (0x%02x) = 0xXX\n", algo->channel,
-	       offsetof(struct tmpa9xx_i2c_regs, i2c_dbr));
-	printk(" I2C%dAR  (0x%02x) = 0x%02x\n", algo->channel,
-	       offsetof(struct tmpa9xx_i2c_regs, i2c_ar), regs->i2c_ar);
-	printk(" I2C%dSR  (0x%02x) = 0x%02x\n", algo->channel,
-	       offsetof(struct tmpa9xx_i2c_regs, i2c_sr), regs->i2c_sr);
-	printk(" I2C%dCR2 (0x%02x) = 0xXX\n", algo->channel,
-	       offsetof(struct tmpa9xx_i2c_regs, i2c_cr2));
-	printk(" I2C%dPRS (0x%02x) = 0x%02x\n", algo->channel,
-	       offsetof(struct tmpa9xx_i2c_regs, i2c_prs), regs->i2c_prs);
-	printk(" I2C%dIE  (0x%02x) = 0x%02x\n", algo->channel,
-	       offsetof(struct tmpa9xx_i2c_regs, i2c_ie), regs->i2c_ie);
-	printk(" I2C%dIR  (0x%02x) = 0x%02x\n", algo->channel,
-	       offsetof(struct tmpa9xx_i2c_regs, i2c_ir), regs->i2c_ir);
+	printk(" I2C%dCR1 (0x%02x) = 0x%02x\n", algo->channel, offsetof(struct tmpa9xx_i2c_regs, i2c_cr1), regs->i2c_cr1);
+	printk(" I2C%dDBR (0x%02x) = 0xXX\n", algo->channel,   offsetof(struct tmpa9xx_i2c_regs, i2c_dbr));
+	printk(" I2C%dAR  (0x%02x) = 0x%02x\n", algo->channel, offsetof(struct tmpa9xx_i2c_regs, i2c_ar), regs->i2c_ar);
+	printk(" I2C%dSR  (0x%02x) = 0x%02x\n", algo->channel, offsetof(struct tmpa9xx_i2c_regs, i2c_sr), regs->i2c_sr);
+	printk(" I2C%dCR2 (0x%02x) = 0xXX\n", algo->channel,   offsetof(struct tmpa9xx_i2c_regs, i2c_cr2));
+	printk(" I2C%dPRS (0x%02x) = 0x%02x\n", algo->channel, offsetof(struct tmpa9xx_i2c_regs, i2c_prs), regs->i2c_prs);
+	printk(" I2C%dIE  (0x%02x) = 0x%02x\n", algo->channel, offsetof(struct tmpa9xx_i2c_regs, i2c_ie), regs->i2c_ie);
+	printk(" I2C%dIR  (0x%02x) = 0x%02x\n", algo->channel, offsetof(struct tmpa9xx_i2c_regs, i2c_ir), regs->i2c_ir);
 }
 #else
-static void tmpa9xx_i2c_dump_regs(struct tmpa9xx_i2c_algo_data *algo)
+static void tmpa9xx_i2c_dump_regs(struct i2c_adapter *adap)
 {
 }
 #endif
 
 /* #define USE_UDELAY */
 
-static int tmpa9xx_i2c_wait_status_timeout(struct tmpa9xx_i2c_algo_data *algo,
+static int tmpa9xx_i2c_wait_status_timeout(struct i2c_adapter *adap,
 				    uint32_t mask, uint32_t val)
 {
+	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 #ifdef USE_UDELAY
 	volatile int timeout = 1000;
@@ -96,7 +91,7 @@ static int tmpa9xx_i2c_wait_status_timeout(struct tmpa9xx_i2c_algo_data *algo,
 		udelay(10);
 #endif
 		if (timeout-- < 0) {
-			/* tmpa9xx_i2c_dump_regs(algo); */
+			/* tmpa9xx_i2c_dump_regs(adap); */
 			return -1;
 		}
 	}
@@ -104,24 +99,23 @@ static int tmpa9xx_i2c_wait_status_timeout(struct tmpa9xx_i2c_algo_data *algo,
 	return 0;
 }
 
-static int tmpa9xx_i2c_wait_free_bus(struct tmpa9xx_i2c_algo_data *algo)
+static int tmpa9xx_i2c_wait_free_bus(struct i2c_adapter *adap)
 {
-	return tmpa9xx_i2c_wait_status_timeout(algo, (1UL << 5), 0);	// bus state == free ?
+	return tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 5), 0);	// bus state == free ?
 }
 
-static int tmpa9xx_i2c_wait_done(struct tmpa9xx_i2c_algo_data *algo)
+static int tmpa9xx_i2c_wait_done(struct i2c_adapter *adap)
 {
-	return tmpa9xx_i2c_wait_status_timeout(algo, (1UL << 4), 0);	// SCL line == low ?
+	return tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 4), 0);	// SCL line == low ?
 }
 
-static int tmpa9xx_i2c_start(struct tmpa9xx_i2c_algo_data *algo, int slave_adr)
+static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr)
 {
+	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
-	if (tmpa9xx_i2c_wait_free_bus(algo) < 0) {
-#ifdef __DEBUG
-		printk(KERN_ERR "tmpa9xx i2c bus not free\n");
-#endif
+	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_wait_free_bus() failed\n");
 		return -EBUSY;
 	}
 
@@ -136,17 +130,16 @@ static int tmpa9xx_i2c_start(struct tmpa9xx_i2c_algo_data *algo, int slave_adr)
 	    | (1UL << 3)		/* enable I2C operation */
 	    ;
 
-	if (tmpa9xx_i2c_wait_done(algo) < 0) {
-#ifdef __DEBUG__
-		printk(KERN_ERR "done timeout \n");
-#endif
+	if (tmpa9xx_i2c_wait_done(adap) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_wait_done() failed\n");
 		return -ETIMEDOUT;
 	}
 	return 0;
 }
 
-static int tmpa9xx_i2c_stop(struct tmpa9xx_i2c_algo_data *algo)
+static int tmpa9xx_i2c_stop(struct i2c_adapter *adap)
 {
+	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
 	regs->i2c_cr2 = (1UL << 7)	/* select master mode */
@@ -156,7 +149,8 @@ static int tmpa9xx_i2c_stop(struct tmpa9xx_i2c_algo_data *algo)
 	    | (1UL << 3)	/* enable I2C operation */
 	    ;
 
-	if (tmpa9xx_i2c_wait_free_bus(algo) < 0) {
+	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_wait_free_bus() failed\n");
 		return -EBUSY;
 	}
 
@@ -167,6 +161,7 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 {
 	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+
 	int ret;
 	unsigned int sr, cr1;
 	int i;
@@ -174,21 +169,21 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	data = msg->buf;
 
-	if ((ret = tmpa9xx_i2c_start(algo, (msg->addr << 1))) < 0) {
-		dev_dbg(&adap->dev, "failed to generate start!\n");
+	if ((ret = tmpa9xx_i2c_start(adap, (msg->addr << 1))) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_start() failed\n");
 		return ret;
 	}
 
 	sr = regs->i2c_sr;
 
 	if (sr & (1UL << 0)) {	/* check last received bit (should be low for ACK) */
-		dev_dbg(&adap->dev, "no ack!\n");
-		tmpa9xx_i2c_dump_regs(algo);
+		dev_err(&adap->dev, "ack check failed\n");
+		tmpa9xx_i2c_dump_regs(adap);
 		return -EIO;
 	}
 
 	if ((sr & (1UL << 6)) == 0) {	/* check xmit/rcv selection state (should be xmit) */
-		dev_dbg(&adap->dev, "wrong transfer state!\n");
+		dev_err(&adap->dev, "wrong transfer state\n");
 		return -EIO;
 	}
 
@@ -197,7 +192,7 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 		cr1 &= ~(7UL << 5);	/* 8bit transfer */
 		cr1 |= (1UL << 4);	/* acknowledge */
 
-		if (tmpa9xx_i2c_wait_done(algo) < 0) {
+		if (tmpa9xx_i2c_wait_done(adap) < 0) {
 			dev_dbg(&adap->dev, "timeout !\n");
 			return -ETIMEDOUT;
 		}
@@ -206,15 +201,15 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 		regs->i2c_dbr = data[i] & 0xFF;	/* put 8bits into xmit FIFO */
 
-		if (tmpa9xx_i2c_wait_done(algo) < 0) {
-			dev_dbg(&adap->dev, "timeout !\n");
+		if (tmpa9xx_i2c_wait_done(adap) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_wait_done() failed\n");
 			return -ETIMEDOUT;
 		}
 
 	}
 
-	if ((ret = tmpa9xx_i2c_stop(algo)) < 0) {
-		dev_dbg(&adap->dev, "failed to generate stop!\n");
+	if ((ret = tmpa9xx_i2c_stop(adap)) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_stop() failed\n");
 		return ret;
 	}
 
@@ -232,31 +227,26 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	data = msg->buf;
 
-	if ((ret = tmpa9xx_i2c_start(algo, (msg->addr << 1) | 1)) < 0) {
-#ifdef __DEBUG__
-		printk(KERN_ERR "failed to generate start! ret=%d. addr=0x%x\n", ret,
-			msg->addr);
-#endif
+	if ((ret = tmpa9xx_i2c_start(adap, (msg->addr << 1) | 1)) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_start() failed\n");
 		return ret;
 	}
 
-	if (tmpa9xx_i2c_wait_done(algo) < 0) {
-		printk(KERN_ERR "timeout !\n");
+	if (tmpa9xx_i2c_wait_done(adap) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_wait_done() failed\n");
 		return -ETIMEDOUT;
 	}
 
 	sr = regs->i2c_sr;
 
 	if (sr & (1UL << 0)) { /* check last received bit (should be low for ACK) */
-#ifdef __DEBUG__
-		printk(KERN_ERR "i2c timeout - no ack !\n");
-#endif
-		/* tmpa9xx_i2c_dump_regs(algo); */
+		dev_err(&adap->dev, "no ack from slave\n");
+		/* tmpa9xx_i2c_dump_regs(adap); */
 		return -EIO;
 	}
 
 	if (sr & (1UL << 6)) {	/* check xmit/rcv selection state (should be rcv) */
-		printk(KERN_ERR "wrong transfer state!\n");
+		dev_err(&adap->dev, "wrong transfer state\n");
 		return -EIO;
 	}
 	/* read receive data */
@@ -271,14 +261,14 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	for (i = 0; i < msg->len; i++) {
 
-		ret = tmpa9xx_i2c_wait_status_timeout(algo, (1UL << 4), (1UL << 4));	// SCL line = free ? ?
+		ret = tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 4), (1UL << 4));	// SCL line = free ? ?
 		if (ret < 0) {
-			printk(KERN_ERR "initial SCL line free status failed!\n");
+			dev_err(&adap->dev, "tmpa9xx_i2c_wait_status_timeout() @ initial free failed\n");
 			break;
 		}
 
-		if (tmpa9xx_i2c_wait_done(algo) < 0) {
-			printk(KERN_ERR "i2c timeout !\n");
+		if (tmpa9xx_i2c_wait_done(adap) < 0) {
+			dev_err(&adap->dev, "tmpa9xx_i2c_wait_done() failed\n");
 			return -ETIMEDOUT;
 		}
 
@@ -294,15 +284,15 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 		regs->i2c_dbr = 0;
 
 		/* wait until 1bit xfer is complete */
-		ret = tmpa9xx_i2c_wait_status_timeout(algo, (1UL << 4), (1UL << 4));	// SCL line = free ? ?
+		ret = tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 4), (1UL << 4));	// SCL line = free ? ?
 		if (ret < 0) {
-			dev_dbg(&adap->dev, "wait 1bit xfer failed!\n");
+			dev_err(&adap->dev, "tmpa9xx_i2c_wait_status_timeout() @ wait 1bit xfer failed\n");
 			break;
 		}
 	}
 
-	if ((ret = tmpa9xx_i2c_stop(algo)) < 0) {
-		printk(KERN_ERR "failed to generate stop!\n");
+	if ((ret = tmpa9xx_i2c_stop(adap)) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_stop() failed\n");
 		return ret;
 	}
 
@@ -319,32 +309,17 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	int i;
 	struct i2c_msg *msg;
 	int err = 0, msgcnt = 0;
-	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 
-#ifdef __DEBUG__
-	printk(KERN_DEBUG "tmpa9xx_i2c_xfer(adap %p,msgs %p,num %d)\n",adap,msgs,num);
-#endif
+	dev_dbg(&adap->dev, "num %d\n", num);
 
-	if (tmpa9xx_i2c_wait_free_bus(algo) < 0) {
-#ifdef __DEBUG__
-		printk(KERN_ERR "bus not free ! Reset!\n");
-#endif
+	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_wait_free_bus() failed\n");
 		tmpa9xx_i2c_setup(adap);
 	}
 
-	dev_dbg(&adap->dev, "tmpa9xx_i2c_xfer: processing %d messages:\n", num);
-
 	for (i = 0; i < num; i++) {
 		msg = &msgs[i];
-#ifdef __DEBUG__
-		printk(KERN_DEBUG " msg %p msg->buf 0x%x msg->len 0x%x msg->flags 0x%x\n", msg, (unsigned int)msg->buf, msg->len, msg->flags);
-#endif
-		dev_dbg(&adap->dev, " #%d : %sing %d byte%s %s 0x%02x\n",
-			i,
-			msg->flags & I2C_M_RD ? "Read" : "Writ",
-			msg->len,
-			msg->len > 1 ? "s" : "",
-			msg->flags & I2C_M_RD ? "from" : "to", msg->addr);
+		dev_dbg(&adap->dev, "msg %p, msg->buf 0x%x, msg->len 0x%x, msg->flags 0x%x\n", msg, (unsigned int)msg->buf, msg->len, msg->flags);
 
 		if (msg->len == 0)
 			continue;
@@ -356,8 +331,6 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 
 		if (err)
 			break;
-
-		/* dev_dbg(&adap->dev, "transfer complete\n"); */
 
 		msgcnt++;
 	};
@@ -411,9 +384,8 @@ static int tmpa9xx_i2c_shutdown(struct i2c_adapter *adap)
 	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
-	if(tmpa9xx_i2c_wait_free_bus(algo) < 0)	{
-		printk(KERN_ERR "bus not free !\n");
-		/* return -EBUSY; */
+	if(tmpa9xx_i2c_wait_free_bus(adap) < 0) {
+		dev_err(&adap->dev, "tmpa9xx_i2c_wait_free_bus() failed\n");
 	}
 
 	regs->i2c_prs = 0;
@@ -427,9 +399,6 @@ static int tmpa9xx_i2c_shutdown(struct i2c_adapter *adap)
 
 static u32 tmpa9xx_i2c_func(struct i2c_adapter *adapter)
 {
-#ifdef __DEBUG__
-	printk(KERN_INFO "tmpa9xx_i2c_func adapter %p\n",adapter);
-#endif
 	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
 }
 
@@ -444,7 +413,7 @@ static int __devinit tmpa9xx_i2c_probe_one(struct platform_device *pdev, struct 
 	struct resource *res;
 	int irq;
 	int ret;
-	
+
 	res = platform_get_resource(pdev, IORESOURCE_MEM, offset);
 	if (!res) {
 		dev_err(&pdev->dev, "platform_get_resource() failed @ offset %d\n", offset);
@@ -553,8 +522,8 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, priv);
-	printk
-	    ("TMPA9xx I2C: driver ready (ch0: irq=%d IO@%p ch1: irq=%d IO@%p)\n",
+
+	dev_info(&pdev->dev, "driver ready (ch0: irq=%d IO@%p ch1: irq=%d IO@%p)\n",
 	     priv->i2c_algo_data[0].irq, priv->i2c_algo_data[0].regs,
 	     priv->i2c_algo_data[1].irq, priv->i2c_algo_data[1].regs);
 
@@ -574,7 +543,7 @@ static int __devexit tmpa9xx_i2c_remove(struct platform_device *pdev)
 	platform_set_drvdata(pdev, NULL);
 
 	kfree(priv);
-	
+
 	return 0;
 }
 
@@ -619,5 +588,5 @@ static void __exit tmpa9xx_i2c_exit(void)
 module_exit(tmpa9xx_i2c_exit);
 
 MODULE_DESCRIPTION("Toshiba TMPA9xx I2C Driver");
-MODULE_AUTHOR("bplan GmbH");
+MODULE_AUTHOR("bplan GmbH, Michael Hunold <michael@mihu.de>");
 MODULE_LICENSE("GPL");
