@@ -50,7 +50,7 @@ struct tmpa9xx_i2c_priv {
 };
 
 #ifdef __DEBUG__
-void tmpa9xx_i2c_dump_regs(struct tmpa9xx_i2c_algo_data *algo)
+static void tmpa9xx_i2c_dump_regs(struct tmpa9xx_i2c_algo_data *algo)
 {
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
@@ -73,14 +73,14 @@ void tmpa9xx_i2c_dump_regs(struct tmpa9xx_i2c_algo_data *algo)
 	       offsetof(struct tmpa9xx_i2c_regs, i2c_ir), regs->i2c_ir);
 }
 #else
-void tmpa9xx_i2c_dump_regs(struct tmpa9xx_i2c_algo_data *algo)
+static void tmpa9xx_i2c_dump_regs(struct tmpa9xx_i2c_algo_data *algo)
 {
 }
 #endif
 
 /* #define USE_UDELAY */
 
-int tmpa9xx_i2c_wait_status_timeout(struct tmpa9xx_i2c_algo_data *algo,
+static int tmpa9xx_i2c_wait_status_timeout(struct tmpa9xx_i2c_algo_data *algo,
 				    uint32_t mask, uint32_t val)
 {
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
@@ -104,17 +104,17 @@ int tmpa9xx_i2c_wait_status_timeout(struct tmpa9xx_i2c_algo_data *algo,
 	return 0;
 }
 
-int tmpa9xx_i2c_wait_free_bus(struct tmpa9xx_i2c_algo_data *algo)
+static int tmpa9xx_i2c_wait_free_bus(struct tmpa9xx_i2c_algo_data *algo)
 {
 	return tmpa9xx_i2c_wait_status_timeout(algo, (1UL << 5), 0);	// bus state == free ?
 }
 
-int tmpa9xx_i2c_wait_done(struct tmpa9xx_i2c_algo_data *algo)
+static int tmpa9xx_i2c_wait_done(struct tmpa9xx_i2c_algo_data *algo)
 {
 	return tmpa9xx_i2c_wait_status_timeout(algo, (1UL << 4), 0);	// SCL line == low ?
 }
 
-int tmpa9xx_i2c_start(struct tmpa9xx_i2c_algo_data *algo, int slave_adr)
+static int tmpa9xx_i2c_start(struct tmpa9xx_i2c_algo_data *algo, int slave_adr)
 {
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
@@ -145,7 +145,7 @@ int tmpa9xx_i2c_start(struct tmpa9xx_i2c_algo_data *algo, int slave_adr)
 	return 0;
 }
 
-int tmpa9xx_i2c_stop(struct tmpa9xx_i2c_algo_data *algo)
+static int tmpa9xx_i2c_stop(struct tmpa9xx_i2c_algo_data *algo)
 {
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
@@ -163,7 +163,7 @@ int tmpa9xx_i2c_stop(struct tmpa9xx_i2c_algo_data *algo)
 	return 0;
 }
 
-int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
+static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 {
 	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
@@ -221,7 +221,7 @@ int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 	return ret;
 }
 
-int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
+static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 {
 	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
@@ -309,7 +309,7 @@ int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 	return ret;
 }
 
-int tmpa9xx_i2c_setup(struct i2c_adapter *adap);
+static int tmpa9xx_i2c_setup(struct i2c_adapter *adap);
 /*
  * Generic I2C master transfer entrypoint
  */
@@ -383,7 +383,7 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 #define PRSCK_100KHZ 30
 #define CR1SCK_100KHZ 2
 
-int tmpa9xx_i2c_setup(struct i2c_adapter *adap)
+static int tmpa9xx_i2c_setup(struct i2c_adapter *adap)
 {
 	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
@@ -406,7 +406,7 @@ int tmpa9xx_i2c_setup(struct i2c_adapter *adap)
 	return 0;
 }
 
-int tmpa9xx_i2c_shutdown(struct i2c_adapter *adap)
+static int tmpa9xx_i2c_shutdown(struct i2c_adapter *adap)
 {
 	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
