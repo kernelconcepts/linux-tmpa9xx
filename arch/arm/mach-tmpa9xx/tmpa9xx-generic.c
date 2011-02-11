@@ -1041,8 +1041,19 @@ void __init tmpa9xx_init(void)
            Port N can also be used as UART/IrDA function (U0RTSn, U0DTRn, U0RIn, U0DSRn,
            U0DCDn, U0CTSn, U0RXD, U0TXD, SIR0IN, SIR0OUT) and interrupt function (INTD,
            INTE, INTF, INTG) pins. */
-           
-        /* already set by bootloader */
+
+        GPIONDIR  = (0x00);
+        GPIONDATA = (0x00);
+        GPIONFR1  = (0x00);
+        GPIONFR2  = (0x00);
+        GPIONIE   = (0x00);
+
+#ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_0
+	GPIONFR1 = 0x000000fd; 
+	GPIONFR2 = 0x00000002; 
+#else
+        TMPA9XX_CFG_PORT_GPIO(PORTN)
+#endif           
 
         /* Port R
            Bit 2 of Port R can be used as a general-purpose input/output pin and bits [1:0] can be
