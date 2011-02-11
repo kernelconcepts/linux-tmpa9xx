@@ -184,8 +184,7 @@ static int __devexit tmpa9xx_adc_remove(struct platform_device *pdev)
 
 static int tmpa9xx_adc_suspend(struct platform_device *pdev, pm_message_t mesg)
 {
-	struct device *dev = &pdev->dev;
-	struct tmpa9xx_ts_priv *t = dev_get_drvdata(dev);
+	struct tmpa9xx_adc_core *t = g_h;
 
 	mutex_lock(&t->lock);
 
@@ -198,8 +197,7 @@ static int tmpa9xx_adc_suspend(struct platform_device *pdev, pm_message_t mesg)
 
 static int tmpa9xx_adc_resume(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	struct tmpa9xx_ts_priv *t = dev_get_drvdata(dev);
+	struct tmpa9xx_adc_core *t = g_h;
 
 	mutex_lock(&t->lock);
 

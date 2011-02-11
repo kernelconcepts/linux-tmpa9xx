@@ -16,7 +16,7 @@
  * The TMPA9xx has six timers in three blocks. Each block uses
  * one common input clock, so there are only three independant
  * timers available.
- * Only Block-1 and Block-2 habe PWM option in their first parts, Block-3
+ * Only Block-1 and Block-2 have PWM options in their first parts, Block-3
  * only has pure timers.
  * Block-1 is used as periodic system timer source so we can only use
  * function 1 of Block-2 as PWM output through Port-C4.
@@ -40,7 +40,7 @@
 
 static const struct platform_device_id pwm_id_table[] = {
 	/*   PWM    has_secondary_pwm? */
-	{ "tmpa9xx-pwm", 0 }, /* TMPA9XX have two PWM channels but only one usable */
+	{ "tmpa9xx-pwm", 0 }, /* TMPA9XX has two PWM channels but only one usable */
 	{ },
 };
 MODULE_DEVICE_TABLE(platform, pwm_id_table);
@@ -277,4 +277,4 @@ module_exit(pwm_exit);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Nils Faerber <nils.faerber@kernelconcepts.de>");
-
+MODULE_DESCRIPTION("PWM output driver");
