@@ -219,7 +219,7 @@ struct clcd_panel tmpa9xx_panel = {
 	.width		= -1,
 	.height		= -1,
 	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER,
-	.cntl		= CNTL_BGR | CNTL_LCDTFT | CNTL_WATERMARK,
+	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK,
 	.bpp		= 32,
 	.grayscale	= 0,
 };
@@ -739,11 +739,11 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
 #if defined CONFIG_FB_ARMCLCD || defined CONFIG_FB_ARMCLCD_MODULE
 
 #if defined CONFIG_MACH_TONGA
-static unsigned int videoparams[4]={0x19211e4c,0x10040cef,0x013f380d,0x00010828};
+static unsigned int videoparams[4]={0x19211e4c,0x10040cef,0x013f380d,0x00010928};
 #elif defined CONFIG_MACH_TONGA2_TFTTIMER
-static unsigned int videoparams[4]={0x28050a74,0x0808290f,0x01df000b,0x00010828};
+static unsigned int videoparams[4]={0x28050a74,0x0808290f,0x01df000b,0x00010928};
 #else
-static unsigned int videoparams[4]={0x0707074c,0x020204ef,0x013f200e,0x0001082A};
+static unsigned int videoparams[4]={0x0707074c,0x020204ef,0x013f200e,0x0001092A};
 #endif
 
 static void setup_display(void)
