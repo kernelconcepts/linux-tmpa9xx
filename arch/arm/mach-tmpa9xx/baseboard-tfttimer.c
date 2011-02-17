@@ -19,7 +19,6 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  * 
  */
-
 #include <linux/device.h>
 #include <linux/delay.h>
 #include <linux/init.h>
@@ -86,20 +85,15 @@ static struct platform_device i2c1_gpio_device = {
 #if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE \
  || defined CONFIG_I2C_GPIO || defined CONFIG_I2C_GPIO_MODULE 
 static struct i2c_board_info baseboard_i2c_0_devices[] = {
-	/* no devices */
-};
-
-#if defined CONFIG_SND_SOC_TMPA9XX_I2S
-static struct i2c_board_info baseboard_i2c_1_devices[] = {
         {
                 I2C_BOARD_INFO("wm8974", 0x1a),
         },
+	/* no devices */
 };
-#else
+
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
 	/* no devices */
 };
-#endif
 #endif // CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
 
 /*
@@ -193,6 +187,7 @@ static struct platform_device baseboard_i2s_device = {
         .id   = -1,
 };
 #endif
+
 
 /* new Alsa SOC driver */
 #if defined CONFIG_SND_SOC_TMPA9XX_I2S
