@@ -331,9 +331,6 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 
 		dev_dbg(&adap->dev, "%s(): msg %p, msg->buf 0x%x, msg->len 0x%x, msg->flags 0x%x\n", __func__, msg, (unsigned int)msg->buf, msg->len, msg->flags);
 
-		if (msg->len == 0)
-			continue;
-
 		if (rw_direction != is_read) {
 			if (i) {
 				dev_dbg(&adap->dev, "%s(): sending restart condition\n", __func__);

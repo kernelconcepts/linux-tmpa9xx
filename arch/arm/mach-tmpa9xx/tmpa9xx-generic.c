@@ -741,11 +741,11 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
 #if defined CONFIG_FB_ARMCLCD || defined CONFIG_FB_ARMCLCD_MODULE
 
 #if defined CONFIG_MACH_TONGA
-static unsigned int videoparams[4]={0x19211e4c,0x10040cef,0x013f380d,0x00010928};
+static unsigned int videoparams[4]={0x19211e4c,0x10040cef,0x013f380d,0x00010828};
 #elif defined CONFIG_MACH_TONGA2_TFTTIMER
-static unsigned int videoparams[4]={0x28050a74,0x0808290f,0x01df000b,0x00010928};
+static unsigned int videoparams[4]={0x28050a74,0x0808290f,0x01df000b,0x00010828};
 #else
-static unsigned int videoparams[4]={0x0707074c,0x020204ef,0x013f200e,0x0001092A};
+static unsigned int videoparams[4]={0x0707074c,0x020204ef,0x013f200e,0x0001082A};
 #endif
 
 static void setup_display(void)
@@ -786,6 +786,8 @@ static void setup_display(void)
         tmpa9xx_panel.mode.vsync_len    = ((videoparams[1]>>10)  &  0x1f)  + 1;
 
         tmpa9xx_panel.bpp               =  1 << ((videoparams[3]>>1)&0x07);
+        if (videoparams[3] & (1 << 8))
+		tmpa9xx_panel.cntl      |= CNTL_BGR;
 
         if (!(videoparams[2] & (1<<11)))
 		sync |= FB_SYNC_HOR_HIGH_ACT;
