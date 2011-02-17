@@ -613,6 +613,7 @@ static struct platform_device tmpa9xx_iio_adc_device = {
 };
 #endif
 
+#if defined CONFIG_FB_ACCELERATOR_TOSHIBA || defined CONFIG_FB_ACCELERATOR_ALTIA
 static struct resource tmpa9xx_lcdda_resource[] = {
         [0] = {
                 .start = 0xF2050000,
@@ -637,6 +638,7 @@ static struct platform_device tmpa9xx_device_lcdda = {
                 .coherent_dma_mask        = 0xffffffffUL
         }
 };
+#endif
 
 #if defined CONFIG_TMPA9XX_PWM_CANNEL_0 || defined CONFIG_TMPA9XX_PWM_CANNEL_0_MODULE
 static struct resource tmpa9xx_pwm0_resource[] = {
@@ -1008,15 +1010,18 @@ void __init tmpa9xx_init(void)
         
 #if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE \
  || defined CONFIG_SND_TMPA9XX_WM8976 || defined CONFIG_SND_TMPA9XX_WM8976_MODULE \
+ || defined CONFIG_SND_TMPA9XX_WM8974 || defined CONFIG_SND_TMPA9XX_WM8974_MODULE \
  || defined CONFIG_SND_SOC_TMPA9XX_I2S
         GPIOLFR1 |= (0x1f); /* bits 4:0 for I2S */
-#endif        
+#endif
+
 #ifdef CONFIG_SPI_PL022_CHANNEL_1
-        GPIOLFR2 |= (0x0f);
+//        GPIOLFR2 |= (0x0f);
 #endif
 
 #if !defined CONFIG_SND_TMPA9XX_WM8983  && !defined CONFIG_SND_TMPA9XX_WM8983_MODULE \
  && !defined CONFIG_SND_TMPA9XX_WM8976  && !defined CONFIG_SND_TMPA9XX_WM8976_MODULE \
+ && !defined CONFIG_SND_TMPA9XX_WM8974  && !defined CONFIG_SND_TMPA9XX_WM8974_MODULE \
  && !defined CONFIG_SND_SOC_TMPA9XX_I2S && !defined CONFIG_SPI_PL022_CHANNEL_1 
         TMPA9XX_CFG_PORT_GPIO(PORTL)
 #endif        
