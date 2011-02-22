@@ -56,17 +56,17 @@ static struct i2c_board_info baseboard_i2c_0_devices[] = {
 	/* no devices */
 };
 
-#if defined CONFIG_SND_SOC_TMPA9XX_I2S
+#if defined CONFIG_SND_SOC_TMPA9XX_I2S || defined CONFIG_SND_SOC_TMPA9XX_I2S_MODULE \
+ || defined CONFIG_SND_TMPA9XX_WM8983  || defined CONFIG_SND_TMPA9XX_WM8983_MODULE
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
-        {
-                I2C_BOARD_INFO("wm8983", 0x1a),
-        },
+        {I2C_BOARD_INFO("wm8983", 0x1a),},
 };
 #else
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
 	/* no devices */
 };
-#endif
+#endif // Sound Config
+
 #endif // CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
 
 /*
@@ -176,7 +176,7 @@ static struct spi_board_info spi_board_info[] = {
 }
 #endif
 };
-#elif defined(CONFIG_SPI_SPIDEV)
+#elif defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_SPI_SPIDEV_MODULE)
 static struct spi_board_info spi_board_info[] = {
 #ifdef CONFIG_SPI_PL022_CHANNEL_0
 {
@@ -247,14 +247,6 @@ static struct platform_device tonga_backlight_device = {
 };
 #endif
 
-/* this is for the old alsa/arm/ sound driver */
-#if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE
-static struct platform_device baseboard_i2s_device = {
-        .name = "WM8983-I2S",
-        .id   = -1,
-};
-#endif
-
 /* new Alsa SOC driver */
 #if defined CONFIG_SND_SOC_TMPA9XX_I2S
 static struct platform_device baseboard_i2s_device = {
@@ -267,7 +259,7 @@ static struct platform_device *devices_baseboard[] __initdata = {
 #if defined CONFIG_BACKLIGHT_PWM
         &tonga_backlight_device,
 #endif
-#if defined CONFIG_SND_TMPA910_WM8983 || defined CONFIG_SND_TMPA910_WM8983_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
+#if defined CONFIG_SND_SOC_TMPA9XX_I2S
         &baseboard_i2s_device,    
 #endif
 };
@@ -281,17 +273,14 @@ void __init baseboard_init(void)
         i2c_register_board_info(1, baseboard_i2c_1_devices,
                         ARRAY_SIZE(baseboard_i2c_1_devices));
 #endif
-#if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_MMC_SPI)
+#if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_SPI_SPIDEV_MODULE) || defined(CONFIG_MMC_SPI)
         spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
 
         /* Add devices */
         platform_add_devices(devices_baseboard, ARRAY_SIZE(devices_baseboard));
 
-	/* Configure Pins and reset LCD */
-        GPIOMDIR=3;
-        GPIOMFR1=0;
-	/* Reset */
+	/* Reset LCD*/
 	GPIOMDATA=0;
     	udelay(1000);
 	GPIOMDATA|=(1<<0);
