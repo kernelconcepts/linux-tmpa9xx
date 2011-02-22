@@ -339,6 +339,7 @@ static int snd_wm8976_playback_trigger(struct snd_pcm_substream *substream, int 
 		default:
 			spin_unlock(&chip->wm8976_lock);
 			return -EINVAL;
+			break;
 	}
 	spin_unlock(&chip->wm8976_lock);
 
