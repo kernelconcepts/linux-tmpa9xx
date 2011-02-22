@@ -180,6 +180,7 @@ static struct spi_board_info spi_board_info[] = {
 
 #endif //defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
 
+#if 0
 /* this is for the old alsa/arm/ sound driver */
 #if defined CONFIG_SND_TMPA9XX_WM8974 || defined CONFIG_SND_TMPA9XX_WM8974_MODULE
 static struct platform_device baseboard_i2s_device = {
@@ -187,7 +188,7 @@ static struct platform_device baseboard_i2s_device = {
         .id   = -1,
 };
 #endif
-
+#endif
 
 /* new Alsa SOC driver */
 #if defined CONFIG_SND_SOC_TMPA9XX_I2S
@@ -227,10 +228,7 @@ void __init baseboard_init(void)
         /* Add devices */
         platform_add_devices(devices_baseboard, ARRAY_SIZE(devices_baseboard));
 
-	/* Configure Pins and reset LCD */
-        GPIOMDIR=3;
-        GPIOMFR1=0;
-	/* Reset */
+	/* Reset LCD*/
 	GPIOMDATA=0;
     	udelay(1000);
 	GPIOMDATA|=(1<<0);
