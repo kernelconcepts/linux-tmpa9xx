@@ -1037,6 +1037,7 @@ void __init tmpa9xx_init(void)
         
 #if defined CONFIG_SND_TMPA9XX_WM8983 || defined CONFIG_SND_TMPA9XX_WM8983_MODULE \
  || defined CONFIG_SND_TMPA9XX_WM8976 || defined CONFIG_SND_TMPA9XX_WM8976_MODULE \
+ || defined CONFIG_SND_TMPA9XX_WM8974 || defined CONFIG_SND_TMPA9XX_WM8974_MODULE \
  || defined CONFIG_SND_SOC_TMPA9XX_I2S
         GPIOMFR1 &= ~(0x03);
         GPIOMFR1 |=  (0x04); /* M2 I2S1DAT0 */
