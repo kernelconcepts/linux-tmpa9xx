@@ -125,12 +125,12 @@ static int tmpa9xx_i2c_restart(struct i2c_adapter *adap)
 	    ;
 
 	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
+		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
 		return -EBUSY;
 	}
 
 	if (tmpa9xx_i2c_wait_lrb_set(adap) < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_lrb_set() failed\n", __func__);
+		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_lrb_set() failed\n", __func__);
 		return -EBUSY;
 	}
 	
@@ -147,7 +147,7 @@ static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr, int is_rea
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
 	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
+		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
 		return -EBUSY;
 	}
 
@@ -163,7 +163,7 @@ static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr, int is_rea
 	    ;
 
 	if (tmpa9xx_i2c_wait_done(adap) < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
+		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
 		return -ETIMEDOUT;
 	}
 	return 0;
@@ -182,7 +182,7 @@ static int tmpa9xx_i2c_stop(struct i2c_adapter *adap)
 	    ;
 
 	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
+		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
 		return -EBUSY;
 	}
 
@@ -204,13 +204,13 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 	sr = regs->i2c_sr;
 
 	if (sr & (1UL << 0)) {	/* check last received bit (should be low for ACK) */
-		dev_err(&adap->dev, "%s(): ack check failed\n", __func__);
+		dev_dbg(&adap->dev, "%s(): ack check failed\n", __func__);
 		tmpa9xx_i2c_dump_regs(adap);
 		return -EIO;
 	}
 
 	if ((sr & (1UL << 6)) == 0) {	/* check xmit/rcv selection state (should be xmit) */
-		dev_err(&adap->dev, "%s(): wrong transfer state\n", __func__);
+		dev_dbg(&adap->dev, "%s(): wrong transfer state\n", __func__);
 		return -EIO;
 	}
 
@@ -229,7 +229,7 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 		regs->i2c_dbr = data[i] & 0xFF;	/* put 8bits into xmit FIFO */
 
 		if (tmpa9xx_i2c_wait_done(adap) < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
+		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
 			return -ETIMEDOUT;
 		}
 
@@ -252,13 +252,13 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 	sr = regs->i2c_sr;
 
 	if (sr & (1UL << 0)) { /* check last received bit (should be low for ACK) */
-		dev_err(&adap->dev, "%s(): no ack from slave\n", __func__);
+		dev_dbg(&adap->dev, "%s(): no ack from slave\n", __func__);
 		/* tmpa9xx_i2c_dump_regs(adap); */
 		return -EIO;
 	}
 
 	if (sr & (1UL << 6)) {	/* check xmit/rcv selection state (should be rcv) */
-		dev_err(&adap->dev, "%s(): wrong transfer state\n", __func__);
+		dev_dbg(&adap->dev, "%s(): wrong transfer state\n", __func__);
 		return -EIO;
 	}
 	/* read receive data */
@@ -275,12 +275,12 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 		ret = tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 4), (1UL << 4));	// SCL line = free ? ?
 		if (ret < 0) {
-			dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_status_timeout() @ initial free failed\n", __func__);
+			dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_status_timeout() @ initial free failed\n", __func__);
 			break;
 		}
 
 		if (tmpa9xx_i2c_wait_done(adap) < 0) {
-			dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
+			dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
 			return -ETIMEDOUT;
 		}
 
@@ -298,7 +298,7 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 		/* wait until 1bit xfer is complete */
 		ret = tmpa9xx_i2c_wait_status_timeout(adap, (1UL << 4), (1UL << 4));	// SCL line = free ? ?
 		if (ret < 0) {
-			dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_status_timeout() @ wait 1bit xfer failed\n", __func__);
+			dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_status_timeout() @ wait 1bit xfer failed\n", __func__);
 			break;
 		}
 	}
@@ -321,7 +321,7 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	dev_dbg(&adap->dev, "%s(): num %d\n", __func__, num);
 
 	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
+		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
 		tmpa9xx_i2c_setup(adap);
 	}
 
@@ -337,7 +337,7 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	
 				ret = tmpa9xx_i2c_restart(adap);
 				if (ret < 0) {
-					dev_err(&adap->dev, "%s(): tmpa9xx_i2c_restart() failed\n", __func__);
+					dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_restart() failed\n", __func__);
 					/* keep ret */
 					goto out;
 				}
@@ -345,13 +345,13 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 
 			ret = tmpa9xx_i2c_start(adap, msg->addr, msg->flags & I2C_M_RD);
 			if (ret < 0) {
-				dev_err(&adap->dev, "%s(): tmpa9xx_i2c_start() failed\n", __func__);
+				dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_start() failed\n", __func__);
 				/* keep ret */
 				goto out;
 			}
 
 			if (tmpa9xx_i2c_wait_done(adap) < 0) {
-				dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
+				dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
 				ret = -ETIMEDOUT;
 				goto out;
 			}
@@ -375,7 +375,7 @@ static int tmpa9xx_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 out:
 	i = tmpa9xx_i2c_stop(adap);
 	if (i < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_stop() failed\n", __func__);
+		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_stop() failed\n", __func__);
 		return i;
 	}
 
@@ -426,7 +426,7 @@ static int tmpa9xx_i2c_shutdown(struct i2c_adapter *adap)
 	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
 
 	if(tmpa9xx_i2c_wait_free_bus(adap) < 0) {
-		dev_err(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
+		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
 	}
 
 	regs->i2c_prs = 0;
@@ -457,13 +457,13 @@ static int __devinit tmpa9xx_i2c_probe_one(struct platform_device *pdev, struct 
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, offset);
 	if (!res) {
-		dev_err(&pdev->dev, "platform_get_resource() failed @ offset %d\n", offset);
+		dev_dbg(&pdev->dev, "platform_get_resource() failed @ offset %d\n", offset);
 		return -ENODEV;
 	}
 
 	res = request_mem_region(res->start, res->end - res->start + 1, pdev->name);
 	if (!res) {
-		dev_err(&pdev->dev, "request_mem_region() failed @ offset %d\n", offset);
+		dev_dbg(&pdev->dev, "request_mem_region() failed @ offset %d\n", offset);
 		return -EBUSY;
 	}
 
@@ -472,14 +472,14 @@ static int __devinit tmpa9xx_i2c_probe_one(struct platform_device *pdev, struct 
 
 	priv->i2c_algo_data[offset].regs = ioremap(res->start, res->end - res->start + 1);
 	if (!priv->i2c_algo_data[offset].regs) {
-		dev_err(&pdev->dev, "ioremap() failed @ offset %d\n", offset);
+		dev_dbg(&pdev->dev, "ioremap() failed @ offset %d\n", offset);
 		release_mem_region(priv->io_start[offset], priv->io_lenght[offset]);
 		return -ENODEV;
 	}
 
 	irq = platform_get_irq(pdev, offset);
 	if (irq < 0) {
-		dev_err(&pdev->dev, "platform_get_irq() failed @ offset %d\n", offset);
+		dev_dbg(&pdev->dev, "platform_get_irq() failed @ offset %d\n", offset);
 		iounmap(priv->i2c_algo_data[offset].regs);
 		release_mem_region(priv->io_start[offset], priv->io_lenght[offset]);
 		return -ENXIO;
@@ -489,7 +489,7 @@ static int __devinit tmpa9xx_i2c_probe_one(struct platform_device *pdev, struct 
 
 	adapter = kzalloc(sizeof(struct i2c_adapter), GFP_KERNEL);
 	if (!adapter) {
-		dev_err(&pdev->dev, "kzalloc() failed @ offset %d\n", offset);
+		dev_dbg(&pdev->dev, "kzalloc() failed @ offset %d\n", offset);
 		iounmap(priv->i2c_algo_data[offset].regs);
 		release_mem_region(priv->io_start[offset], priv->io_lenght[offset]);
 		return -ENOMEM;
@@ -509,7 +509,7 @@ static int __devinit tmpa9xx_i2c_probe_one(struct platform_device *pdev, struct 
 
 	ret = i2c_add_numbered_adapter(priv->i2c_adapter[offset]);
 	if (ret) {
-		dev_err(&pdev->dev, "i2c_add_numbered_adapter() failed @ offset %d\n", offset);
+		dev_dbg(&pdev->dev, "i2c_add_numbered_adapter() failed @ offset %d\n", offset);
 		tmpa9xx_i2c_shutdown(adapter);
 		kfree(adapter);
 		iounmap(priv->i2c_algo_data[offset].regs);
@@ -539,7 +539,7 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 
 	priv = kzalloc(sizeof(struct tmpa9xx_i2c_priv), GFP_KERNEL);
 	if (!priv) {
-		dev_err(&pdev->dev, "kzalloc() failed\n");
+		dev_dbg(&pdev->dev, "kzalloc() failed\n");
 		return -ENOMEM;
 	}
 
@@ -549,14 +549,14 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 
 	ret = tmpa9xx_i2c_probe_one(pdev, priv, 0);
 	if (ret) {
-		dev_err(&pdev->dev, "tmpa9xx_i2c_probe_one() @ 0 failed\n");
+		dev_dbg(&pdev->dev, "tmpa9xx_i2c_probe_one() @ 0 failed\n");
 		kfree(priv);
 		return -ENODEV;
 	}
 
 	ret = tmpa9xx_i2c_probe_one(pdev, priv, 1);
 	if (ret) {
-		dev_err(&pdev->dev, "tmpa9xx_i2c_probe_one() @ 1 failed\n");
+		dev_dbg(&pdev->dev, "tmpa9xx_i2c_probe_one() @ 1 failed\n");
 		tmpa9xx_i2c_remove_one(pdev, priv, 0);
 		kfree(priv);
 		return -ENODEV;
