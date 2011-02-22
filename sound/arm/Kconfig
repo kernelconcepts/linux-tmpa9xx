@@ -16,9 +16,9 @@ config SND_TMPA9XX_WM8974
 	depends on MACH_TONGA2_TFTTIMER && SND
 	select SND_PCM
 	help
-	  Say Y here if you have a Toshiba TopasA900
-	  TMPA900 development board and
-	  want to use its WM8976 audio chip.
+	  Say Y here if you have a Tonga2
+          TFTTimer Board and want to use its
+          WM8974 audio chip.
 
 config SND_TMPA9XX_WM8976
 	tristate "TMPA9xx WM8976 driver"
