@@ -6,14 +6,11 @@
  * GPLv2
  *
  */
+
+#include <linux/module.h>
 #include <linux/init.h>
-#include <linux/slab.h>
-#include <linux/spinlock.h>
-#include <linux/dma-mapping.h>
-#include <linux/platform_device.h>
-#include <asm/irq.h>
-#include <asm/delay.h>
- 
+#include <linux/i2c.h>
+#include <linux/delay.h>
 
 #include <sound/core.h>
 #include <sound/info.h>
@@ -32,14 +29,13 @@
 #define I2S_DMA_TX   I2S1
 #define I2S_IRQ_ERR  I2S_INT
 
-
-
 #undef WM8983_DEBUG
 
 #ifdef WM8983_DEBUG
 #define wm_printd(level, format, arg...) \
 	printk(level "i2s: " format, ## arg)
-#define snd_printk_marker() printk(KERN_DEBUG "->\n");
+#define snd_printk_marker() \
+	printk(KERN_DEBUG "->\n");
 #else
 #define wm_printd(level, format, arg...)
 #define snd_printk_marker()
@@ -53,151 +49,77 @@
 #define CHIP_NAME	"Wolfson WM8983"
 #define PCM_NAME	"WM8983_PCM"
 
-/* Only one WM8983 soundcard is supported */
-static struct platform_device *g_device = NULL;
-
-
 /* Chip level */
 #define WM8983_BUF_SZ 	0x10000  /* 64kb */
 #define PCM_BUFFER_MAX	(WM8983_BUF_SZ / 2)
 
-#define CHANNELS_OUTPUT	2
-#define CHANNELS_INPUT	2
 #define FRAGMENTS_MIN	2
 #define FRAGMENTS_MAX	32
 
-#define AUDIO_RATE_DEFAULT  44100
-
-
-static unsigned char wm8983_for_samplerate[7][6]={
-	{0x00,0x08,0x0C,0x93,0xE9,0x49}, 	/* 48000HZ */
-	{0x00,0x07,0x21,0x61,0x27,0x49}, 	/* 44100HZ */
-	{0x02,0x08,0x0C,0x93,0xE9,0x69}, 	/* 32000HZ */	
-	{0x04,0x07,0x21,0x61,0x27,0x89}, 	/* 22050HZ */
-	{0x05,0x07,0x21,0x61,0x27,0xa9}, 	/* 16000HZ */
-	{0x08,0x07,0x21,0x61,0x27,0xC9}, 	/* 12000HZ */
-	{0x0a,0x08,0x0C,0x93,0xE9,0xE9}, 	/* 8000HZ  */						
+static unsigned char wm8983_for_samplerate[7][6]=
+{
+	{0x00,0x08,0x0C,0x93,0xE9,0x49}, 	/* 48000 Hz */
+	{0x00,0x07,0x21,0x61,0x27,0x49}, 	/* 44100 Hz */
+	{0x02,0x08,0x0C,0x93,0xE9,0x69}, 	/* 32000 Hz */
+	{0x04,0x07,0x21,0x61,0x27,0x89}, 	/* 22050 Hz */
+	{0x05,0x07,0x21,0x61,0x27,0xa9}, 	/* 16000 Hz */
+	{0x08,0x07,0x21,0x61,0x27,0xC9}, 	/* 12000 Hz */
+	{0x0a,0x08,0x0C,0x93,0xE9,0xE9}, 	/* 8000 Hz */
 };
-	
 
-typedef struct snd_wm8983 wm8983_t;
-typedef struct snd_pcm_substream snd_pcm_substream_t;
-typedef struct snd_pcm_hardware snd_pcm_hardware_t;
-typedef struct snd_pcm_hw_params snd_pcm_hw_params_t;
-typedef struct snd_pcm_runtime snd_pcm_runtime_t;
-typedef struct snd_pcm_ops snd_pcm_ops_t;
-
-struct snd_wm8983 {
-	struct snd_card    *card;
+struct snd_wm8983 
+{
+	struct snd_card *card;
 	struct tmpa9xx_i2s *i2s;
-	spinlock_t    wm8983_lock;
-
+	spinlock_t wm8983_lock;
+	struct i2c_client *i2c_client;
 	struct snd_pcm *pcm;
 
-	int poll_reg;  /* index of the wm8983 register last queried */
-
 	/* if non-null, current subtream running */
-	snd_pcm_substream_t *rx_substream;
+	struct snd_pcm_substream *rx_substream;
 	/* if non-null, current subtream running */
-	snd_pcm_substream_t *tx_substream;
+	struct snd_pcm_substream *tx_substream;
 };
 
-/*======================================================*/
-/*     WM8983 I2C INTERFACE DEFINE                      */
-/*======================================================*/
-#define I2C1SR_BUS_CHECK	0x00000020
-#define I2C1SR_BUS_FREE		0x00000000
-
-#define I2C1SR_ACK_CHECK	0x00000010
-#define I2C1SR_ACK_ENABLE	0x00000000
-static void snd_wm8983_set_samplerate(long rate);
-
-static void i2c_bus_free_chk(void)
+/* this must be moved into tmpa9xx_i2s.c */
+static void init_wm8983_i2c_hw(void)
 {
-	u32 reg_data;
-	do {
-		reg_data = I2C1SR;
-	} while ((reg_data & I2C1SR_BUS_CHECK) != I2C1SR_BUS_FREE );
-}
-
-static void i2c_ack_wait(void)
-{
-	u32 reg_data;
-	do {
-		reg_data = I2C1SR;
-	} while ((reg_data & I2C1SR_ACK_CHECK) != I2C1SR_ACK_ENABLE );
-}
-
-static void i2c_packet_send(u8 sub_addr, u8 data)
-{
-	wm_printd(KERN_ERR, "[0x%x] <- 0x%3x\n", sub_addr >> 1, data | ((sub_addr&1) << 8) );
-
-	I2C1DBR = 0x34;
-	I2C1CR2 = 0xf8;
-
-	i2c_ack_wait();
-
-	I2C1DBR = sub_addr;
-	i2c_ack_wait();
-
-	I2C1DBR = data;
-	i2c_ack_wait();
-
-	I2C1CR2 = 0xd8;
-	i2c_bus_free_chk();
-}
-
-static void init_wm8983_i2c(void)
-{
-	unsigned long flags;
-
-	local_irq_save(flags);
-
 	I2SCOMMON = 0x19;		/* IISSCLK = Fosch(X1),       Set SCK/WS/CLKO of Tx and Rx as Common */
-	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896MHz */
-                                                      
+	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896M Hz */
 	I2SRMCON = 0x04;
-		
 	I2STCON = 0x00;			/* IIS Standard Format */
 	I2STFCLR = 0x01;		/* Clear FIFO */
 	I2SRMS = 0x00;			/* Slave */
 	I2STMS = 0x00;			/* Slave */
+}
 
-	local_irq_restore(flags);	
-	i2c_bus_free_chk();
-	I2C1CR2 = 0xc8;
-	I2C1PRS = 0x19;
-	I2C1CR1 = 0x13;
+#define i2c_packet_send(reg, val) \
+	{ \
+	int ret = i2c_smbus_write_byte_data(i2c_client, reg, val); \
+	if (ret) \
+		dev_err(&i2c_client->dev, "i2c_smbus_write_byte_data() failed, ret %d\n", ret); \
+	}
+
+static void init_wm8983_i2c(struct i2c_client *i2c_client)
+{
+	init_wm8983_i2c_hw();
 
 	i2c_packet_send(0x00,0x00);	/* R0  0x000 */
 	i2c_packet_send(0x02,0x3d);	/* R1  0x02D */
-	/*i2c_packet_send(0x05,0x91);*/	/* R2  0x191 */
 	i2c_packet_send(0x05,0x95);	/* R2  0x195 */
 	i2c_packet_send(0x06,0x6F);	/* R3  0x00F */
 	i2c_packet_send(0x08,0x10);	/* R4  0X010 */
 	i2c_packet_send(0x0a,0x00);	/* R5  0X000 */
-	/*i2c_packet_send(0x0d,0x49);*/	/* R6  0x14d */
- 
-	/*i2c_packet_send(0x0e,0x00);*/	/* R7  0x00A  set sample rate 48khz */
-        
 	i2c_packet_send(0x14, 0x80);	/* R10 = 0x080 */
 	i2c_packet_send(0x17,0xff);	/* R11 0X1ff */
 	i2c_packet_send(0x19,0xff);	/* R12 0X1ff */
 	i2c_packet_send(0x1c,0x00);	/* R14 = 0x1c01 */
 	i2c_packet_send(0x1F,0xff);	/* R15 0X1FF */
 	i2c_packet_send(0x30, 0x32);	/* R24 = 0x032 */
-	/*i2c_packet_send(0x48,0x07);*/	/* R36 0X017 */
-	/*i2c_packet_send(0x4A,0x21);*/	/* R37 0X012 */
-	/*i2c_packet_send(0x4C,0x61);*/	/* R38 0X011 */
-	/*i2c_packet_send(0x4E,0x27);*/	/* R39 0X096  set pll 12.288Mhz */
-	/*i2c_packet_send(0x58,0x00);*/	/* R44 0X000 */
 	i2c_packet_send(0x5b,0x3f);	/* R45 0X000 */
 	i2c_packet_send(0x56,0x10);	/* R43 0X010   add for WM8983 8 ohm speaker */
-    
 	i2c_packet_send(0x5f,0x55);	/* R47 0X005 */
-
 	i2c_packet_send(47<<1 | 1,0xff);	/* R47 0X1ff */
-
 	i2c_packet_send(0x62,0x02);	/* R49 0X002 */
 	i2c_packet_send(0x64,0x01);	/* R50 0X001 */
 	i2c_packet_send(0x66,0x01);	/* R51 0X001 */
@@ -205,26 +127,36 @@ static void init_wm8983_i2c(void)
 	i2c_packet_send(0x6b,0x3f);	/* R53 0X13f */
 }
 
-static void release_wm8983_i2c(void)
+static void snd_wm8983_set_samplerate(struct i2c_client *i2c_client, long rate)
 {
+	/* wait for any frame to complete */
+	udelay(125);
+
+	if (rate >= 48000)
+		rate = 0;
+	else if (rate >= 44100)
+		rate = 1;
+	else if (rate >= 32000)
+		rate = 2;
+	else if (rate >= 22050)
+		rate = 3;
+	else if (rate >= 16000)
+		rate = 4;
+	else if (rate >= 12000)
+		rate = 5;
+	else
+		rate = 6;
+
+	i2c_packet_send(0x0d, wm8983_for_samplerate[rate][5]);    /* R6  */
+	i2c_packet_send(0x0e, wm8983_for_samplerate[rate][0]);    /* R7  */
+	i2c_packet_send(0x48, wm8983_for_samplerate[rate][1]);    /* R36 */
+	i2c_packet_send(0x4a, wm8983_for_samplerate[rate][2]);    /* R37 */
+	i2c_packet_send(0x4d, wm8983_for_samplerate[rate][3]);    /* R38 */
+	i2c_packet_send(0x4e, wm8983_for_samplerate[rate][4]);    /* R39 */
 }
 
-/*======================================*/
-/* AUDIO CLOCK INTERFACE                */
-static void enable_audio_sysclk(void)
-{
-}
-
-static void disable_audio_sysclk(void)
-{
-}
-
-
-/*************************************************************
- *                pcm methods
- *************************************************************/
-
-static snd_pcm_hardware_t snd_wm8983_playback_hw = {
+/* pcm methods */
+static struct snd_pcm_hardware snd_wm8983_playback_hw = {
 	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
 	.formats =      SNDRV_PCM_FMTBIT_S16_LE,
 	.rates =            (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
@@ -242,7 +174,7 @@ static snd_pcm_hardware_t snd_wm8983_playback_hw = {
 	.periods_max =      FRAGMENTS_MAX,
 };
 
-static snd_pcm_hardware_t snd_wm8983_capture_hw = {
+static struct snd_pcm_hardware snd_wm8983_capture_hw = {
 	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
 	.formats =          SNDRV_PCM_FMTBIT_S16_LE,
 	.rates =            (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
@@ -260,9 +192,9 @@ static snd_pcm_hardware_t snd_wm8983_capture_hw = {
 	.periods_max =      FRAGMENTS_MAX,
 };
 
-static int snd_wm8983_playback_open(snd_pcm_substream_t *substream)
+static int snd_wm8983_playback_open(struct snd_pcm_substream *substream)
 {
-	wm8983_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8983 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	chip->tx_substream = substream;
@@ -271,9 +203,9 @@ static int snd_wm8983_playback_open(snd_pcm_substream_t *substream)
 	return 0;
 }
 
-static int snd_wm8983_capture_open(snd_pcm_substream_t *substream)
+static int snd_wm8983_capture_open(struct snd_pcm_substream *substream)
 {
-	wm8983_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8983 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	substream->runtime->hw = snd_wm8983_capture_hw;
@@ -282,9 +214,9 @@ static int snd_wm8983_capture_open(snd_pcm_substream_t *substream)
 	return 0;
 }
 
-static int snd_wm8983_playback_close(snd_pcm_substream_t *substream)
+static int snd_wm8983_playback_close(struct snd_pcm_substream *substream)
 {
-	wm8983_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8983 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	chip->tx_substream = NULL;
@@ -292,9 +224,9 @@ static int snd_wm8983_playback_close(snd_pcm_substream_t *substream)
 	return 0;
 }
 
-static int snd_wm8983_capture_close(snd_pcm_substream_t *substream)
+static int snd_wm8983_capture_close(struct snd_pcm_substream *substream)
 {
-	wm8983_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8983 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	chip->rx_substream = NULL;
@@ -302,8 +234,8 @@ static int snd_wm8983_capture_close(snd_pcm_substream_t *substream)
 }
 
 /* I2S in following */
-static int snd_wm8983_hw_params(snd_pcm_substream_t *substream,
-					snd_pcm_hw_params_t *hwparams)
+static int snd_wm8983_hw_params(struct snd_pcm_substream *substream,
+					struct snd_pcm_hw_params *hwparams)
 {
 	snd_printk_marker();
 
@@ -314,14 +246,13 @@ static int snd_wm8983_hw_params(snd_pcm_substream_t *substream,
 	*  We're relying on the driver not supporting full duplex mode
 	*  to allow us to grab all the memory.
 	*/
-	/* printk("params_buffer_bytes return %d\n", params_buffer_bytes(hwparams)); */
 	if (snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(hwparams)) < 0 )
 		return -ENOMEM;
 
 	return 0;
 }
 
-static int snd_wm8983_hw_free(snd_pcm_substream_t * substream)
+static int snd_wm8983_hw_free(struct snd_pcm_substream * substream)
 {
 	snd_printk_marker();
 	snd_pcm_lib_free_pages(substream);
@@ -329,20 +260,18 @@ static int snd_wm8983_hw_free(snd_pcm_substream_t * substream)
 	return 0;
 }
 
-static int snd_wm8983_playback_prepare(snd_pcm_substream_t *substream)
+static int snd_wm8983_playback_prepare(struct snd_pcm_substream *substream)
 {
-        int err = 0;
+	struct snd_wm8983 *chip = snd_pcm_substream_chip(substream);
+	struct snd_pcm_runtime *runtime = substream->runtime;
         int word_len = 4;
-
-	wm8983_t *chip = snd_pcm_substream_chip(substream);
-	snd_pcm_runtime_t *runtime = substream->runtime;
+	int ret;
 
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
 	wm_printd(KERN_ERR, "Playback sample rate = %d.\n",runtime->rate);
 
 	/* set requested samplerate */
-	snd_wm8983_set_samplerate(runtime->rate);
-
+	snd_wm8983_set_samplerate(chip->i2c_client, runtime->rate);
 
 	if (substream != chip->tx_substream)
 		return -EINVAL;
@@ -352,26 +281,25 @@ static int snd_wm8983_playback_prepare(snd_pcm_substream_t *substream)
 			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
-	err = tmpa9xx_i2s_config_tx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
+	ret = tmpa9xx_i2s_config_tx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
 			runtime->periods, fragsize_bytes, word_len);
 
-	return err;
+	return ret;
 }
 
-static int snd_wm8983_capture_prepare(snd_pcm_substream_t *substream)
+static int snd_wm8983_capture_prepare(struct snd_pcm_substream *substream)
 {
-        int err = 0;
+	struct snd_wm8983 *chip = snd_pcm_substream_chip(substream);
+	struct snd_pcm_runtime *runtime = substream->runtime;
         int word_len = 4;
-
-	wm8983_t *chip = snd_pcm_substream_chip(substream);
-	snd_pcm_runtime_t *runtime = substream->runtime;
+	int ret;
 
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
 
 	wm_printd(KERN_ERR, "Record sample rate = %d.\n",runtime->rate);
 
 	/* set requested samplerate */
-	snd_wm8983_set_samplerate(runtime->rate);	
+	snd_wm8983_set_samplerate(chip->i2c_client, runtime->rate);
 
 	if (substream != chip->tx_substream)
 		return -EINVAL;
@@ -381,16 +309,16 @@ static int snd_wm8983_capture_prepare(snd_pcm_substream_t *substream)
 			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
-	err = tmpa9xx_i2s_config_rx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
+	ret = tmpa9xx_i2s_config_rx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
 			runtime->periods, fragsize_bytes, word_len);
 
-	return err;
+	return ret;
 }
 
-static int snd_wm8983_playback_trigger(snd_pcm_substream_t *substream, int cmd)
+static int snd_wm8983_playback_trigger(struct snd_pcm_substream *substream, int cmd)
 {
+	struct snd_wm8983 *chip = snd_pcm_substream_chip(substream);
 	int ret;
-	wm8983_t *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 
@@ -406,7 +334,6 @@ static int snd_wm8983_playback_trigger(snd_pcm_substream_t *substream, int cmd)
 			ret = tmpa9xx_i2s_tx_stop(chip->i2s);
 			break;
 		default:
-			ret = -1;
 			spin_unlock(&chip->wm8983_lock);
 			return -EINVAL;
 			break;
@@ -418,9 +345,9 @@ static int snd_wm8983_playback_trigger(snd_pcm_substream_t *substream, int cmd)
 	return 0;
 }
 
-static int snd_wm8983_capture_trigger(snd_pcm_substream_t *substream, int cmd)
+static int snd_wm8983_capture_trigger(struct snd_pcm_substream *substream, int cmd)
 {
-	wm8983_t *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm8983 *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 
@@ -450,29 +377,29 @@ static int snd_wm8983_capture_trigger(snd_pcm_substream_t *substream, int cmd)
 	return 0;
 }
 
-static snd_pcm_uframes_t snd_wm8983_playback_pointer(snd_pcm_substream_t *substream)
+static snd_pcm_uframes_t snd_wm8983_playback_pointer(struct snd_pcm_substream *substream)
 {
-	wm8983_t *chip = snd_pcm_substream_chip(substream);
-	snd_pcm_runtime_t *runtime = substream->runtime;
+	struct snd_wm8983 *chip = snd_pcm_substream_chip(substream);
+	struct snd_pcm_runtime *runtime = substream->runtime;
 	unsigned int offset;
 
 	offset = tmpa9xx_i2s_curr_offset_tx(chip->i2s);
-	
+
 	offset = bytes_to_frames(runtime, offset);
 	if (offset >= runtime->buffer_size)
 		offset = 0;
-		
+
 	return offset;
 }
 
-static snd_pcm_uframes_t snd_wm8983_capture_pointer(snd_pcm_substream_t *substream)
+static snd_pcm_uframes_t snd_wm8983_capture_pointer(struct snd_pcm_substream *substream)
 {
-	wm8983_t *chip = snd_pcm_substream_chip(substream);
-	snd_pcm_runtime_t *runtime = substream->runtime;
+	struct snd_wm8983 *chip = snd_pcm_substream_chip(substream);
+	struct snd_pcm_runtime *runtime = substream->runtime;
 	unsigned int offset;
 
 	offset = tmpa9xx_i2s_curr_offset_rx(chip->i2s);
-	
+
 	offset = bytes_to_frames(runtime, offset);
 
 	wm_printd(KERN_ERR, "offset=0x%02x\n",offset);		/* wym */
@@ -483,12 +410,12 @@ static snd_pcm_uframes_t snd_wm8983_capture_pointer(snd_pcm_substream_t *substre
 
 	if (offset >= runtime->buffer_size)
 		offset = 0;
-		
+
 	return offset;
 }
 
 /* pcm method tables */
-static snd_pcm_ops_t snd_wm8983_playback_ops = {
+static struct snd_pcm_ops snd_wm8983_playback_ops = {
 	.open      = snd_wm8983_playback_open,
 	.close     = snd_wm8983_playback_close,
 	.ioctl     = snd_pcm_lib_ioctl,
@@ -499,7 +426,7 @@ static snd_pcm_ops_t snd_wm8983_playback_ops = {
 	.pointer   = snd_wm8983_playback_pointer,
 };
 
-static snd_pcm_ops_t snd_wm8983_capture_ops = {
+static struct snd_pcm_ops snd_wm8983_capture_ops = {
 	.open  = snd_wm8983_capture_open,
 	.close = snd_wm8983_capture_close,
 	.ioctl = snd_pcm_lib_ioctl,
@@ -510,9 +437,7 @@ static snd_pcm_ops_t snd_wm8983_capture_ops = {
 	.pointer   = snd_wm8983_capture_pointer,
 };
 
-/*************************************************************
- *      card and device
- *************************************************************/
+/* card and device */
 static int snd_wm8983_stop(struct snd_wm8983 *chip)
 {
 	snd_printk_marker();
@@ -522,7 +447,7 @@ static int snd_wm8983_stop(struct snd_wm8983 *chip)
 
 static int snd_wm8983_dev_free(struct snd_device *device)
 {
-	struct snd_wm8983 *chip = (wm8983_t *)device->device_data;
+	struct snd_wm8983 *chip = (struct snd_wm8983 *)device->device_data;
 
 	snd_printk_marker();
 
@@ -536,13 +461,13 @@ static struct snd_device_ops snd_wm8983_ops = {
 static void snd_wm8983_dma_rx(void *data)
 {
 	struct snd_wm8983 *wm8983 = data;
-   	
+
         snd_printk_marker();
 
 
-	if (wm8983->rx_substream) {
+    if (wm8983->rx_substream) {
 		snd_pcm_period_elapsed(wm8983->rx_substream);
-	        
+
 		wm_printd(KERN_ERR, "WM8983->rx_substream=0x%02x\n", (unsigned int)wm8983->rx_substream);
 		wm_printd(KERN_ERR, "handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(2));
 	       	wm_printd(KERN_ERR, "handler dest addr = 0x%02x\n", DMA_DEST_ADDR(2));
@@ -554,7 +479,6 @@ static void snd_wm8983_dma_rx(void *data)
 static void snd_wm8983_dma_tx(void *data)
 {
 	struct snd_wm8983 *wm8983 = data;
-	
 	snd_printk_marker();
 
 	if (wm8983->tx_substream) {
@@ -569,20 +493,22 @@ static void snd_wm8983_dma_tx(void *data)
 
 static void snd_wm8983_i2s_err(void *data)
 {
-	printk(KERN_ERR DRIVER_NAME ":%s: err happened on i2s\n", __FUNCTION__);
+	struct snd_wm8983 *wm8983 = data;
+	dev_err(&wm8983->i2c_client->dev, "I2S error\n");
 }
 
 static int __devinit snd_wm8983_pcm(struct snd_wm8983 *wm8983)
 {
 	struct snd_pcm *pcm;
-	int err = 0;
+	int ret;
 
 	snd_printk_marker();
 
 	/* 1 playback and 1 capture substream, of 2-8 channels each */
-	if ((err = snd_pcm_new(wm8983->card, PCM_NAME, 0, 1, 1, &pcm)) < 0)
-	{
-		return err;
+	ret = snd_pcm_new(wm8983->card, PCM_NAME, 0, 1, 1, &pcm);
+	if (ret < 0) {
+		dev_err(&wm8983->i2c_client->dev, "snd_pcm_new() failed\n");
+		return ret;
 	}
 
 	/*
@@ -592,7 +518,6 @@ static int __devinit snd_wm8983_pcm(struct snd_wm8983 *wm8983)
 	 */
 	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_DEV,
 			snd_dma_isa_data(), WM8983_BUF_SZ, WM8983_BUF_SZ);
-
 
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &snd_wm8983_playback_ops);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &snd_wm8983_capture_ops);
@@ -605,44 +530,21 @@ static int __devinit snd_wm8983_pcm(struct snd_wm8983 *wm8983)
 	return 0;
 }
 
-static int __devinit snd_wm8983_probe(struct platform_device *pdev)
+static int wm8983_i2c_probe(struct i2c_client *i2c_client, const struct i2c_device_id *iid)
 {
-	int err = 0;
-	struct snd_card *card = NULL;
 	struct snd_wm8983 *wm8983;
-	struct tmpa9xx_i2s *i2s;
-	char *id = "ID string for TMPA9XX + WM8983 soundcard.";
-	
+	struct snd_card *card;
+	char *id = "ID string for TMPA9XX + wm8983 soundcard.";
+	int ret = 0;
+
+	init_wm8983_i2c(i2c_client);
+
 	snd_printk_marker();
-	
-	if (g_device != NULL)
-		return -ENOENT;
 
 	snd_card_create(-1, id, THIS_MODULE, sizeof(struct snd_wm8983), &card);
-	if (card == NULL) {
-		snd_printdd(KERN_DEBUG "%s: snd_card_new() failed\n", __FUNCTION__);
+	if (!card) {
+		dev_err(&i2c_client->dev, "snd_card_create() failed\n");
 		return -ENOMEM;
-	}
-
-	wm8983 = card->private_data;
-	wm8983->card = card;
-
-	if ((i2s = tmpa9xx_i2s_init(I2S_DMA_RX, snd_wm8983_dma_rx, I2S_DMA_TX, snd_wm8983_dma_tx,
-			    I2S_IRQ_ERR, snd_wm8983_i2s_err, wm8983)) == NULL) {
-		printk(KERN_ERR DRIVER_NAME ": Failed to find device on i2s\n");
-		err = -ENODEV;
-		goto __i2s_err;
-	}
-
-	wm8983->i2s = i2s;
-
-	err = snd_device_new(card, SNDRV_DEV_LOWLEVEL, wm8983, &snd_wm8983_ops);
-	if (err) {
-		goto __nodev;
-	}
-
-	if ((err = snd_wm8983_pcm(wm8983)) < 0) {
-		goto __nodev;
 	}
 
 	strcpy(card->driver, DRIVER_NAME);
@@ -650,113 +552,99 @@ static int __devinit snd_wm8983_probe(struct platform_device *pdev)
 	sprintf(card->longname, "%s at I2S rx/tx dma %d/%d err irq %d",
 		  card->shortname,
 		  I2S_DMA_RX, I2S_DMA_TX, I2S_IRQ_ERR);
-		  
-	snd_card_set_dev(card, &pdev->dev);
 
-	if ((err = snd_card_register(card)) < 0) {
-		printk(KERN_ERR "snd_card_register failed.\n");
-		goto __nodev;
+	wm8983 = card->private_data;
+
+	wm8983->card = card;
+	wm8983->i2c_client = i2c_client;
+
+	wm8983->i2s = tmpa9xx_i2s_init(I2S_DMA_RX, snd_wm8983_dma_rx, I2S_DMA_TX, snd_wm8983_dma_tx,
+			    I2S_IRQ_ERR, snd_wm8983_i2s_err, wm8983);
+	if (!wm8983->i2s) {
+		dev_err(&i2c_client->dev, "tmpa9xx_i2s_init() failed\n");
+		ret = -ENODEV;
+		goto err0;
 	}
 
-	platform_set_drvdata(pdev, card);
+	ret = snd_device_new(card, SNDRV_DEV_LOWLEVEL, wm8983, &snd_wm8983_ops);
+	if (ret) {
+		dev_err(&i2c_client->dev, "snd_device_new() failed\n");
+		ret = -ENODEV;
+		goto err1;
+	}
 
-	g_device = pdev;
+	ret = snd_wm8983_pcm(wm8983);
+	if (ret) {
+		dev_err(&i2c_client->dev, "snd_wm8983_pcm() failed\n");
+		ret = -ENODEV;
+		goto err2;
+	}
+
+	ret = snd_card_register(card);
+	if (ret) {
+		dev_err(&i2c_client->dev, "snd_card_register() failed\n");
+		ret = -ENODEV;
+		goto err3;
+	}
+
+	snd_card_set_dev(card, &i2c_client->dev);
+
+	i2c_set_clientdata(i2c_client, card);
 
 	return 0;
 
-__nodev:
-	tmpa9xx_i2s_free(i2s);
-__i2s_err:
+err3:
+err2:
+err1:
+	tmpa9xx_i2s_free(wm8983->i2s);
+err0:
 	snd_card_free(card);
-	return err;
+	return ret;
+
+	return 0;
 }
 
-static int __devexit snd_wm8983_remove(struct platform_device *pdev)
+static int wm8983_i2c_remove(struct i2c_client *i2c_client)
 {
-	struct snd_card *card;
-	struct snd_wm8983 *wm8983;
-	
-	card = platform_get_drvdata(pdev);
-	wm8983 = card->private_data;
+	struct snd_card *card = i2c_get_clientdata(i2c_client);
+	struct snd_wm8983 *wm8983 = card->private_data;
 
-	snd_wm8983_stop(wm8983);
 	tmpa9xx_i2s_free(wm8983->i2s);
 
 	snd_card_free(card);
-	platform_set_drvdata(pdev, NULL);
+
+	i2c_set_clientdata(i2c_client, NULL);
 
 	return 0;
 }
+static struct i2c_device_id wm8983_id[] = {
+	{"wm8983", 0},
+	{}, /* mandatory */
+};
+MODULE_DEVICE_TABLE(i2c, wm8983_id);
 
-#define TMPA9XX_WM8983_DRIVER	"tmpa9xx_wm8983"
-static struct platform_driver snd_wm8983_driver = {
-	.probe		= snd_wm8983_probe,
-	.remove		= __devexit_p(snd_wm8983_remove),
-	.driver		= {
-		.name	= DRIVER_NAME,
+static struct i2c_driver wm8983_i2c_driver = {
+	.driver = {
+		.name = "wm8983",
+		.owner = THIS_MODULE,
 	},
+	.id_table = wm8983_id,
+	.probe = wm8983_i2c_probe,
+	.remove = wm8983_i2c_remove,
 };
 
-static int __init snd_wm8983_init(void)
+static int __init wm8983_init(void)
 {
-	int err;
-
-	init_wm8983_i2c();
-	enable_audio_sysclk();
-
-	if ((err = platform_driver_register(&snd_wm8983_driver)) < 0) {
-		printk(KERN_ERR "platform_driver_register failed. ret=%d\n", err);
-		return err;
-	}
-
-	return 0;
+	return i2c_add_driver(&wm8983_i2c_driver);
 }
+module_init(wm8983_init);
 
-static void __exit snd_wm8983_exit(void)
+static void __exit wm8983_exit(void)
 {
-	if (g_device) {
-		platform_device_unregister(g_device);
-		platform_driver_unregister(&snd_wm8983_driver);
-		release_wm8983_i2c();
-		disable_audio_sysclk();
-	}
-
-	g_device = NULL;
+	i2c_del_driver(&wm8983_i2c_driver);
 }
-
-	
-static void snd_wm8983_set_samplerate(long rate)
-{
-	/* wait for any frame to complete */
-	udelay(125);
-	
-	if (rate >= 48000)
-		rate = 0;
-	else if (rate >= 44100)
-		rate = 1;
-	else if (rate >= 32000)
-		rate = 2;
-	else if (rate >= 22050)
-		rate = 3;	
-	else if (rate >= 16000)
-		rate = 4;	
-	else if (rate >= 12000)
-		rate = 5;
-	else
-		rate = 6;
-
-	i2c_packet_send(0x0d, wm8983_for_samplerate[rate][5]);    /* R6  */
-	i2c_packet_send(0x0e, wm8983_for_samplerate[rate][0]);    /* R7  */
-	i2c_packet_send(0x48, wm8983_for_samplerate[rate][1]);    /* R36 */
-	i2c_packet_send(0x4a, wm8983_for_samplerate[rate][2]);    /* R37 */
-	i2c_packet_send(0x4d, wm8983_for_samplerate[rate][3]);    /* R38 */
-	i2c_packet_send(0x4e, wm8983_for_samplerate[rate][4]);    /* R39 */	
-}	
-
+module_exit(wm8983_exit);
 
 MODULE_AUTHOR("Nils Faerber <nils.faerber@kernelconcepts.de>");
 MODULE_DESCRIPTION("TMPA900/WM8983");
 MODULE_LICENSE("GPL");
-
-module_init(snd_wm8983_init);
-module_exit(snd_wm8983_exit);
