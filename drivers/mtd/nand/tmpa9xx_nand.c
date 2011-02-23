@@ -48,6 +48,8 @@
 #define ECC_BYTES_RS		  10
 #define NAND_DMA_CHANNEL	   5
 
+#define MAX_WAIT_FOR_HW		10000
+
 struct tmpa9xx_nand_timing {
 	unsigned int splw;
 	unsigned int sphw;
@@ -335,16 +337,31 @@ static int tmpa9xx_wait_nand_dev_ready(struct mtd_info *mtd)
 {
 	int count = 0;
         
-	while ( ((NDFMCR0 & NDFMCR0_BUSY)==NDFMCR0_BUSY) && count < 100000)
+        
+	while ( ((NDFMCR0 & NDFMCR0_BUSY)==NDFMCR0_BUSY) && count < MAX_WAIT_FOR_HW)
         	count++;
-        return 1;
+
+	if (count>= MAX_WAIT_FOR_HW)
+        {
+        	printk(KERN_ERR " tmpa9xx_wait_nand_als_ready timeout\n");
+                return 0;
+	}
+        return 1;                
 }
 
-static void tmpa9xx_wait_nand_als_ready(struct mtd_info *mtd)
+static int tmpa9xx_wait_nand_als_ready(struct mtd_info *mtd)
 {
 	int count = 0;
-	while( ((NDFMCR1 & NDFMCR1_ALS)==NDFMCR1_ALS) && count < 100000)
+	while( ((NDFMCR1 & NDFMCR1_ALS)==NDFMCR1_ALS) && count < MAX_WAIT_FOR_HW)
         	count++;
+                
+	if (count>= MAX_WAIT_FOR_HW)
+        {
+        	printk(KERN_ERR " tmpa9xx_wait_nand_als_ready timeout\n");
+                return 0;
+	}
+        
+        return tmpa9xx_wait_nand_dev_ready(mtd);
 }
 
 /* Set WP on deselect, write enable on select */
@@ -435,6 +452,8 @@ static void tmpa9xx_nand_read_buf(struct mtd_info *mtd, u_char * buf, int len)
 	/* latching this in to NAND chip due to an interrupt appearing */
 	/* Work around: Disable all interrupts at the time latching in the NAND_CMD_READSTART */
 
+	tmpa9xx_wait_nand_als_ready(mtd);
+
 	if ((len == NAND_DMA_TRANSFER_SIZE) && (priv->dma == 1)) {
 		tmpa9xx_nand_set_cmd(NAND_CMD_READ0);	/* Set readpage */
 		tmpa9xx_nand_dma_read(priv, priv->phy_buf, len);	/* Set up the DMA transfer */
@@ -481,6 +500,8 @@ static void tmpa9xx_nand_write_buf(struct mtd_info *mtd, const u_char * buf,
 	/* The startup of the DMA transfer is a little bit silly: */
 	/* First send the command, then set up the DMA and autoload functions, then the address */
 	/* The autoload waits then until the rising edge of the busy signal from the NAND and starts the transfer to the FIFO */
+
+	tmpa9xx_wait_nand_als_ready(mtd);
 
 	if (priv->column == 0 || (former_column != 2048 && len == 64)) {
 		tmpa9xx_nand_set_cmd(NAND_CMD_SEQIN);	/* Set sqeuential data in */
@@ -671,8 +692,8 @@ static int tmpa9xx_nand_part_correctdata_hamming(struct mtd_info *mtd,
 				       find_byte, find_bit);
 				return 1;
 			} else {
-				printk(KERN_DEBUG "ECC UNCORRECTED_ERROR 1\n");
-				return -1;
+				printk(KERN_ERR "ECC UNCORRECTED_ERROR 1\n");
+				return -EIO;
 			}
 		} else if (!(diff & (diff - 1))) {
 			/* Single bit ECC error in the ECC itself,
@@ -681,8 +702,8 @@ static int tmpa9xx_nand_part_correctdata_hamming(struct mtd_info *mtd,
 			return 1;
 		} else {
 			/* Uncorrectable error */
-			printk(KERN_DEBUG "ECC UNCORRECTED_ERROR 2\n");
-			return -1;
+			printk(KERN_ERR "ECC UNCORRECTED_ERROR 2\n");
+			return -EIO;
 		}
 	}
 	return (0);
@@ -916,8 +937,6 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	/* Control Functions */
 	nand->select_chip = tmpa9xx_nand_select_chip;
 	nand->cmdfunc = tmpa9xx_nand_command;
-	nand->dev_ready = tmpa9xx_wait_nand_dev_ready;
-
 	/* Data access functions */
 	nand->read_byte = tmpa9xx_nand_read_byte;
 	nand->read_buf = tmpa9xx_nand_read_buf;
@@ -935,6 +954,7 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	tmpa9xx_nand_get_internal_structure(priv);
 
 	if (priv->dma == 1) {
+		nand->dev_ready = tmpa9xx_wait_nand_als_ready;
 		nand->ecc.mode = NAND_ECC_HW;
 		nand->ecc.calculate = tmpa9xx_nand_calculate_ecc;
 		nand->ecc.hwctl = tmpa9xx_nand_enable_hwecc;
@@ -955,6 +975,7 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 			}
 		}
 	} else {
+		nand->dev_ready = tmpa9xx_wait_nand_dev_ready;
 		nand->ecc.mode = NAND_ECC_SOFT;
 	}
 
