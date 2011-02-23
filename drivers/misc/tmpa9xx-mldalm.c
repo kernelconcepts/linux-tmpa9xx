@@ -39,8 +39,8 @@
 
 /* ......................................................................... */
 
-unsigned char running=0;
-unsigned char used_type=0;
+unsigned char running = 0;
+unsigned char used_type = 0;
 
 /*
  *  Open the Melody/Alarm device
@@ -55,145 +55,145 @@ static int tmpa9xx_mldalm_open(struct inode *inode, struct file *file)
  */
 static int tmpa9xx_mldalm_close(struct inode *inode, struct file *file)
 {
-        
+
 	return 0;
 }
 
 static void tmpa9xx_mldalm_settype(struct mldalm_type type)
 {
-	
-        
-        switch (type.invert)
-        {
-        case 0:
-        case MLDALM_INVERT:
-		MLDALMINV = type.invert;
-                break;
-        default:
-        	printk(KERN_ERR "Impossible invert value\n");
-		break;
-        }
+	int MldFreqReg;
 
-	switch (type.type)
-        {
-        case MLDALM_MELODY:
-        	MLDALMSEL = type.type;
-                used_type = type.type;
-                if (type.data <= 0xfff)
-			MLDFRQ = type.data;
-                else
-                {
-			MLDFRQ = 0;
-                	printk(KERN_ERR "Melody frequency out of range\n");
-                }
-                break;
-                
-        
-        case MLDALM_ALARM:
-        	MLDALMSEL = type.type;
-                used_type = type.type;
-                switch (type.data)
-                {
-                case ALMPTSEL_AL0:
-                case ALMPTSEL_AL1:
-                case ALMPTSEL_AL2:
-                case ALMPTSEL_AL3:
-                case ALMPTSEL_AL4:
-                case ALMPTSEL_AL5:
-                case ALMPTSEL_AL6:
-                case ALMPTSEL_AL7:
-                case ALMPTSEL_AL8:
-                	ALMPATERN = type.data;
-                        break;
-                        
-                default:
-                 	ALMPATERN = 0;
-                 	printk(KERN_ERR "No valid alarm pattern\n");
-                        break;
-                }
-                break;
-        default:
-        	printk(KERN_ERR "Invalid output signal select\n");
+	switch (type.invert) {
+	case 0:
+	case MLDALM_INVERT:
+		MLDALMINV = type.invert;
 		break;
-        }        
-        
+	default:
+		printk(KERN_ERR "Impossible invert value\n");
+		break;
+	}
+
+	switch (type.type) {
+	case MLDALM_MELODY:
+		MLDALMSEL = type.type;
+		used_type = type.type;
+
+		MldFreqReg = (16384u / type.data) - 2;
+		if (MldFreqReg > 0 && MldFreqReg <= 0xfff) {
+			MLDFRQ = MldFreqReg;
+		} else {
+			MLDFRQ = 1;	// 0 is prohibited
+			printk(KERN_ERR "Melody frequency out of range\n");
+		}
+		break;
+
+	case MLDALM_ALARM:
+		MLDALMSEL = type.type;
+		used_type = type.type;
+		switch (type.data) {
+		case ALMPTSEL_AL0:
+		case ALMPTSEL_AL1:
+		case ALMPTSEL_AL2:
+		case ALMPTSEL_AL3:
+		case ALMPTSEL_AL4:
+		case ALMPTSEL_AL5:
+		case ALMPTSEL_AL6:
+		case ALMPTSEL_AL7:
+		case ALMPTSEL_AL8:
+			ALMPATERN = type.data;
+			break;
+
+		default:
+			ALMPATERN = 0;
+			printk(KERN_ERR "No valid alarm pattern\n");
+			break;
+		}
+		break;
+	default:
+		printk(KERN_ERR "Invalid output signal select\n");
+		break;
+	}
 }
 
 static void tmpa9xx_mldalm_startstop(unsigned char start_stop)
 {
 	switch (start_stop) {
-        
-        case MLDALM_START:
-        	running=1;
-                if (used_type==MLDALM_MELODY)
-         		MLDCNTCR = 0x1;       	
-		else                        
-	                ALMCNTCR = 0x1;
-                break;
-                
+	case MLDALM_START:
+		running = 1;
+		if (used_type == MLDALM_MELODY)
+			MLDCNTCR = 0x1;
+		else
+			ALMCNTCR = 0x1;
+		break;
+
 	case MLDALM_STOP:
-        	running=0;
-                if (used_type==MLDALM_MELODY)
-         		MLDCNTCR = 0x0;
-		else                        
-	                ALMCNTCR = 0x0;
-                break;
-        default:
-        	printk(KERN_ERR "Not start or stop\n");
-                break;
-        }         
+		running = 0;
+		if (used_type == MLDALM_MELODY)
+			MLDCNTCR = 0x0;
+		else
+			ALMCNTCR = 0x0;
+		break;
+	default:
+		printk(KERN_ERR "Not start or stop\n");
+		break;
+	}
 }
 
 /*
  * Handle commands from user-space.
  */
-static long tmpa9xx_mldalm_ioctl(struct file *file,unsigned int cmd, unsigned long arg)
+static long tmpa9xx_mldalm_ioctl(struct file *file, unsigned int cmd,
+				 unsigned long arg)
 {
 	void __user *argp = (void __user *)arg;
 	int __user *p = argp;
 	struct mldalm_type type;
-        unsigned char start_stop;
+	unsigned char start_stop;
 
 	switch (cmd) {
-
 	case MLDALM_TYPE_SELECT:
-		if (copy_from_user(&type,p,sizeof(struct mldalm_type)))
+		if (copy_from_user(&type, p, sizeof(struct mldalm_type))) {
 			return -EFAULT;
-                if (!running)
+		}
+		if (!running) {
 			tmpa9xx_mldalm_settype(type);
-                else
-                	printk(KERN_ERR "Not stopped\n");
-		break;                        
-       	
-        case MLDALM_START_STOP:
-		if (get_user(start_stop,(const unsigned char __user *)argp))
+			return (0);
+		} else {
+			printk(KERN_ERR "Not stopped\n");
+		}
+		break;
+
+	case MLDALM_START_STOP:
+		if (get_user(start_stop, (const unsigned char __user *)argp)) {
 			return -EFAULT;
-		tmpa9xx_mldalm_startstop(start_stop);
-                break;
-                
-        default:
-        	printk(KERN_ERR "Unkonwn iocl - %d\n",cmd);
-                
+		} else {
+			tmpa9xx_mldalm_startstop(start_stop);
+			return (0);
+		}
+		break;
+
+	default:
+		printk(KERN_ERR "Unkonwn iocl - %d\n", cmd);
+		break;
 	}
-        
+
 	return -ENOTTY;
 }
-
 
 /* ......................................................................... */
 
 static const struct file_operations tmpa9xx_mldalm_fops = {
-	.owner			= THIS_MODULE,
-	.llseek			= no_llseek,
-	.unlocked_ioctl		= tmpa9xx_mldalm_ioctl,
-	.open			= tmpa9xx_mldalm_open,
-	.release		= tmpa9xx_mldalm_close,
+	.owner = THIS_MODULE,
+	.llseek = no_llseek,
+	.unlocked_ioctl = tmpa9xx_mldalm_ioctl,
+	.open = tmpa9xx_mldalm_open,
+	.release = tmpa9xx_mldalm_close,
 };
 
 static struct miscdevice tmpa9xx_mldalm_miscdev = {
-	.minor		= MISC_DYNAMIC_MINOR,
-	.name		= "mldalm",
-	.fops		= &tmpa9xx_mldalm_fops,
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "mldalm",
+	.fops = &tmpa9xx_mldalm_fops,
 };
 
 static int __init tmpa9xx_mldalm_probe(struct platform_device *pdev)
@@ -204,9 +204,7 @@ static int __init tmpa9xx_mldalm_probe(struct platform_device *pdev)
 		return -EBUSY;
 	tmpa9xx_mldalm_miscdev.parent = &pdev->dev;
 
-	
-
-        ret = misc_register(&tmpa9xx_mldalm_miscdev);
+	ret = misc_register(&tmpa9xx_mldalm_miscdev);
 
 	printk(KERN_INFO DRV_NAME " enabled\n");
 
@@ -226,7 +224,8 @@ static int __exit tmpa9xx_mldalm_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_PM
 
-static int tmpa9xx_mldalm_suspend(struct platform_device *pdev, pm_message_t message)
+static int tmpa9xx_mldalm_suspend(struct platform_device *pdev,
+				  pm_message_t message)
 {
 	return 0;
 }
@@ -242,18 +241,19 @@ static int tmpa9xx_mldalm_resume(struct platform_device *pdev)
 #endif
 
 static struct platform_driver tmpa9xx_mldalm_driver = {
-	.remove		= __exit_p(tmpa9xx_mldalm_remove),
-	.suspend	= tmpa9xx_mldalm_suspend,
-	.resume		= tmpa9xx_mldalm_resume,
-	.driver		= {
-		.name	= "tmpa9xx-mldalm",
-		.owner	= THIS_MODULE,
-	},
+	.remove = __exit_p(tmpa9xx_mldalm_remove),
+	.suspend = tmpa9xx_mldalm_suspend,
+	.resume = tmpa9xx_mldalm_resume,
+	.driver = {
+		   .name = "tmpa9xx-mldalm",
+		   .owner = THIS_MODULE,
+		   },
 };
 
 static int __init tmpa9xx_mldalm_init(void)
 {
-	return platform_driver_probe(&tmpa9xx_mldalm_driver, tmpa9xx_mldalm_probe);
+	return platform_driver_probe(&tmpa9xx_mldalm_driver,
+				     tmpa9xx_mldalm_probe);
 }
 
 static void __exit tmpa9xx_mldalm_exit(void)
