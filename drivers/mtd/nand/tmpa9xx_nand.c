@@ -331,14 +331,20 @@ static void tmpa9xx_nand_rsoff(void)
 }
 #endif
 
-static int tmpa9xx_nand_dev_ready(struct mtd_info *mtd)
+static int tmpa9xx_wait_nand_dev_ready(struct mtd_info *mtd)
 {
-	return !(NDFMCR0 & NDFMCR0_BUSY);	/* Wait for NAND device ready */
+	int count = 0;
+        
+	while ( ((NDFMCR0 & NDFMCR0_BUSY)==NDFMCR0_BUSY) && count < 10000)
+        	count++;
+        return 1;
 }
 
-static int tmpa9xx_nand_als_ready(struct mtd_info *mtd)
+static void tmpa9xx_wait_nand_als_ready(struct mtd_info *mtd)
 {
-	return !(NDFMCR1 & NDFMCR1_ALS);	/* Wait for autoload finished */
+	int count = 0;
+	while( ((NDFMCR1 & NDFMCR1_ALS)==NDFMCR1_ALS) && count < 10000)
+        	count++;
 }
 
 /* Set WP on deselect, write enable on select */
@@ -439,12 +445,11 @@ static void tmpa9xx_nand_read_buf(struct mtd_info *mtd, u_char * buf, int len)
 		tmpa9xx_nand_set_rw_mode(1);	/* Set controller to read mode */
 		spin_unlock_irqrestore(&priv->lock, irq_flags);	/* Enable Interrupts again */
 		if (tmpa9xx_nand_wait_dma_complete(priv, DMA_TIMEOUT)) {
-			printk(KERN_ERR
-			       "read page :0x%x, column:0x%x time out\n",
+			printk(KERN_ERR "read page :0x%x, column:0x%x time out\n",
 			       priv->page_addr, priv->column);
 			return;
 		}
-		while (!tmpa9xx_nand_als_ready(mtd)) ;
+		tmpa9xx_wait_nand_als_ready(mtd);
 
 		memcpy(buf, priv->buf, len);	/* Have to use our own dma_coherend created buffer */
 		priv->column += len;	/* Remember internal position */
@@ -454,7 +459,7 @@ static void tmpa9xx_nand_read_buf(struct mtd_info *mtd, u_char * buf, int len)
 		tmpa9xx_nand_set_addr(priv->column, priv->page_addr);
 		tmpa9xx_nand_set_cmd(NAND_CMD_READSTART);
 		tmpa9xx_nand_set_rw_mode(1);
-		while (!tmpa9xx_nand_dev_ready(mtd)) ;
+		tmpa9xx_wait_nand_dev_ready(mtd);
 		for (i = 0; i < len; i++)
 			*(buf + i) = tmpa9xx_nand_read_byte(mtd);
 		priv->column += len;
@@ -493,13 +498,13 @@ static void tmpa9xx_nand_write_buf(struct mtd_info *mtd, const u_char * buf,
 			       priv->page_addr, priv->column);
 			return;
 		}
-		while (!tmpa9xx_nand_als_ready(mtd)) ;	/* Wait till autoload has finished */
+		tmpa9xx_wait_nand_als_ready(mtd);	/* Wait till autoload has finished */
 		priv->column += len;	/* Remember internal position */
 	} else {
 		int i;
 		for (i = 0; i < len; i++)
 			NDFDTR = buf[i];	/* Poll in the data */
-		while (!tmpa9xx_nand_dev_ready(mtd)) ;
+		tmpa9xx_wait_nand_dev_ready(mtd);
 		priv->column += len;	/* Remember internal position */
 	}
 
@@ -835,7 +840,7 @@ static void tmpa9xx_nand_command(struct mtd_info *mtd, unsigned command,
 		break;
 	}
 
-	while (!tmpa9xx_nand_dev_ready(mtd)) ;
+	tmpa9xx_wait_nand_dev_ready(mtd);
 }
 
 static void tmpa9xx_nand_get_internal_structure(struct tmpa9xx_nand_private
@@ -845,14 +850,14 @@ static void tmpa9xx_nand_get_internal_structure(struct tmpa9xx_nand_private
 	unsigned char id_code[4];
 
 	tmpa9xx_nand_set_cmd(NAND_CMD_RESET);
-	while (!tmpa9xx_nand_dev_ready(NULL)) ;
+	while (!tmpa9xx_wait_nand_dev_ready(NULL)) ;
 	tmpa9xx_nand_set_cmd(NAND_CMD_READID);
-	while (!tmpa9xx_nand_dev_ready(NULL)) ;
+	while (!tmpa9xx_wait_nand_dev_ready(NULL)) ;
 	NDFMCR0 |= NDFMCR0_ALE | NDFMCR0_WE;
 	NDFDTR = 0x00;
 	/* Latch in address */
 	NDFMCR0 &= ~(NDFMCR0_ALE | NDFMCR0_WE);
-	while (!tmpa9xx_nand_dev_ready(NULL)) ;
+	while (!tmpa9xx_wait_nand_dev_ready(NULL)) ;
 
 	NDFMCR0 &= ~NDFMCR0_WE;
 
@@ -911,7 +916,7 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	/* Control Functions */
 	nand->select_chip = tmpa9xx_nand_select_chip;
 	nand->cmdfunc = tmpa9xx_nand_command;
-	nand->dev_ready = tmpa9xx_nand_dev_ready;
+	nand->dev_ready = tmpa9xx_wait_nand_dev_ready;
 
 	/* Data access functions */
 	nand->read_byte = tmpa9xx_nand_read_byte;
