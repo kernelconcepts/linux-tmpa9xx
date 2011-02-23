@@ -131,8 +131,8 @@ static void __init tonga2_tfttimer_init(void)
         platform_add_devices(devices, ARRAY_SIZE(devices));
 #endif
 
-	baseboard_init();
 	tmpa9xx_init();
+	baseboard_init();
 }
 
 MACHINE_START(TONGA2_TFTTIMER, "Tonga 2 TFTTimer")
