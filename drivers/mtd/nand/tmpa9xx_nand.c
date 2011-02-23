@@ -335,7 +335,7 @@ static int tmpa9xx_wait_nand_dev_ready(struct mtd_info *mtd)
 {
 	int count = 0;
         
-	while ( ((NDFMCR0 & NDFMCR0_BUSY)==NDFMCR0_BUSY) && count < 10000)
+	while ( ((NDFMCR0 & NDFMCR0_BUSY)==NDFMCR0_BUSY) && count < 100000)
         	count++;
         return 1;
 }
@@ -343,7 +343,7 @@ static int tmpa9xx_wait_nand_dev_ready(struct mtd_info *mtd)
 static void tmpa9xx_wait_nand_als_ready(struct mtd_info *mtd)
 {
 	int count = 0;
-	while( ((NDFMCR1 & NDFMCR1_ALS)==NDFMCR1_ALS) && count < 10000)
+	while( ((NDFMCR1 & NDFMCR1_ALS)==NDFMCR1_ALS) && count < 100000)
         	count++;
 }
 
