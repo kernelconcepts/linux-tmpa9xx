@@ -122,30 +122,29 @@ static struct nand_ecclayout nand_oob_rs_2048 = {
 /*
  * Define static partitions for flash device
  */
-static int num_partitions = 3;
+static int num_partitions = 5;
 
 static struct mtd_partition mtd_parts_builtin[] = {
-	{
-	 .name = "u-boot",
+	{.name = "u-boot",
 	 .offset = 0x00000000,
 	 .size = 0x00060000,
-	 }, {
-	     .name = "u-boot_env",
-	     .offset = 0x00060000,
-	     .size = 0x00020000,
-	     }, {
-		 .name = "splash",
-		 .offset = 0x00080000,
-		 .size = 0x00300000,
-		 }, {
-		     .name = "kernel",
-		     .offset = 0x00380000,
-		     .size = 0x00300000,
-		     }, {
-			 .name = "rootfs",
-			 .offset = 0x00680000,
-			 .size = MTDPART_SIZ_FULL,
-			 },
+	 },
+	{.name = "u-boot_env",
+	 .offset = 0x00060000,
+	 .size = 0x00020000,
+	 },
+	{.name = "splash",
+	 .offset = 0x00080000,
+	 .size = 0x00300000,
+	 },
+	{.name = "kernel",
+	 .offset = 0x00380000,
+	 .size = 0x00300000,
+	 },
+	{.name = "rootfs",
+	 .offset = 0x00680000,
+	 .size = MTDPART_SIZ_FULL,
+	 },
 };
 
 static const char *part_probes[] = { "cmdlinepart", NULL };
@@ -157,18 +156,18 @@ void tmpa9xx_nand_dma_read(struct tmpa9xx_nand_private *priv, unsigned int buf,
 {
 	DMA_SRC_ADDR(priv->dma_ch) = NDFDTR_PHY;	// Source address
 	DMA_DEST_ADDR(priv->dma_ch) = buf;	// Destination address
-	DMA_CONTROL(priv->dma_ch) = ((0x1 << 12) |	// SBSize[2:0] - 0y001: 4 beats
-				     (0x1 << 15) |	// DBSize[2:0] - 0y001: 4 beats
-				     (0x1 << 19) |	// Swidth[2:0] - 0y010: Word (32 bits)
-				     (0x1 << 22) |	// Dwidth[2:0] - 0y010: Word (32 bits)
-				     (0x1 << 27) |	// DI          - 0y1  : Auto Increment Destination
-				     (0x1 << 31) |	// I           - 0y1  : Enable Terminal count interrupt
+	DMA_CONTROL(priv->dma_ch) = (DMAC_CH_CTRL_SBSIZE_4B |	// SBSize[2:0] - 0y001: 4 beats
+				     DMAC_CH_CTRL_DBSIZE_4B |	// DBSize[2:0] - 0y001: 4 beats
+				     DMAC_CH_CTRL_SWIDTH_WORD |	// Swidth[2:0] - 0y010: Word (32 bits)
+				     DMAC_CH_CTRL_DWIDTH_WORD |	// Dwidth[2:0] - 0y010: Word (32 bits)
+				     DMAC_CH_CTRL_DI |	// DI          - 0y1  : Auto Increment Destination
+				     DMAC_CH_CTRL_I |	// I           - 0y1  : Enable Terminal count interrupt
 				     (size / 4));	// TransferSize[11:0
 
-	DMA_CONFIG(priv->dma_ch) = ((0x1 << 0) |	// E             - Channel Enable
+	DMA_CONFIG(priv->dma_ch) = (DMAC_CH_CONF_E |	// E             - Channel Enable
 				    (0x1 << 3) |	// SrcPeripheral - Peripheral
-				    (0x1 << 12) |	// FlowCntrl     - Peripheral to Memory
-				    (0x1 << 15));	// ITC           - Terminal count interrupt enable
+				    DMAC_CH_CONF_FLOWCNTRL_PER2MEM |	// FlowCntrl     - Peripheral to Memory
+				    DMAC_CH_CONF_ITC);	// ITC           - Terminal count interrupt enable
 }
 
 void tmpa9xx_nand_dma_write(struct tmpa9xx_nand_private *priv,
@@ -176,18 +175,18 @@ void tmpa9xx_nand_dma_write(struct tmpa9xx_nand_private *priv,
 {
 	DMA_SRC_ADDR(priv->dma_ch) = buf;	// Source address
 	DMA_DEST_ADDR(priv->dma_ch) = NDFDTR_PHY;	// Destination address
-	DMA_CONTROL(priv->dma_ch) = ((0x1 << 12) |	// SBSize[2:0] - 0y001: 4 beats
-				     (0x1 << 15) |	// DBSize[2:0] - 0y001: 4 beats
-				     (0x1 << 19) |	// Swidth[2:0] - 0y010: Word (32 bits)
-				     (0x1 << 22) |	// Dwidth[2:0] - 0y010: Word (32 bits)
-				     (0x1 << 26) |	// SI          - 0y1  : Auto Increment Source
-				     (0x1 << 31) |	// I           - 0y1  : Enable Terminal count interrupt
+	DMA_CONTROL(priv->dma_ch) = (DMAC_CH_CTRL_SBSIZE_4B |	// SBSize[2:0] - 0y001: 4 beats
+				     DMAC_CH_CTRL_DBSIZE_4B |	// DBSize[2:0] - 0y001: 4 beats
+				     DMAC_CH_CTRL_SWIDTH_WORD |	// Swidth[2:0] - 0y010: Word (32 bits)
+				     DMAC_CH_CTRL_DWIDTH_WORD |	// Dwidth[2:0] - 0y010: Word (32 bits)
+				     DMAC_CH_CTRL_SI |	// SI          - 0y1  : Auto Increment Source
+				     DMAC_CH_CTRL_I |	// I           - 0y1  : Enable Terminal count interrupt
 				     (size / 4));	// TransferSize[11:0]
 
-	DMA_CONFIG(priv->dma_ch) = ((0x1 << 0) |	// E             - Channel Enable
-				    (0x1 << 8) |	// DestPeripheral- Peripheral 
-				    (0x1 << 11) |	// FlowCntrl     - Memory to Peripheral
-				    (0x1 << 15));	// ITC           - Terminal count interrupt enable
+	DMA_CONFIG(priv->dma_ch) = (DMAC_CH_CONF_E |	// E              - Channel Enable
+				    (0x1 << 8) |	// DestPeripheral - Peripheral 
+				    DMAC_CH_CONF_FLOWCNTRL_MEM2PER |	// FlowCntrl      - Memory to Peripheral
+				    DMAC_CH_CONF_ITC);	// ITC            - Terminal count interrupt enable
 }
 
 static int tmpa9xx_nand_wait_dma_complete(struct tmpa9xx_nand_private *priv,
@@ -921,6 +920,10 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 
 	/* ECC Mode */
 	nand->ecc.mode = NAND_ECC_HW;
+
+	/* Options */
+	nand->options = NAND_NO_SUBPAGE_WRITE |
+	    NAND_NO_AUTOINCR | NAND_NO_READRDY;
 
 	tmpa9xx_nand_select_chip(NULL, 0);
 	tmpa9xx_nand_set_timing(priv);
