@@ -1015,10 +1015,8 @@ void __init tmpa9xx_init(void)
  || defined CONFIG_SND_TMPA9XX_WM8974 || defined CONFIG_SND_TMPA9XX_WM8974_MODULE \
  || defined CONFIG_SND_SOC_TMPA9XX_I2S
         GPIOLFR1 |= (0x1f); /* bits 4:0 for I2S */
-#endif
-
-#ifdef CONFIG_SPI_PL022_CHANNEL_1
-//        GPIOLFR2 |= (0x0f);
+#elif CONFIG_SPI_PL022_CHANNEL_1
+        GPIOLFR2 |= (0x0f);
 #endif
 
 #if !defined CONFIG_SND_TMPA9XX_WM8983  && !defined CONFIG_SND_TMPA9XX_WM8983_MODULE \
@@ -1068,7 +1066,7 @@ void __init tmpa9xx_init(void)
            used as general-purpose output pins. (Bits [7:3] are not used.)
            Port R can also be used as reset output (RESETOUTn), high-frequency clock output
            (FCOUT), interrupt function (INTH) and Oscillation Frequency Detection (OFDOUTn). */
-           
+
         GPIORDIR  = (0x00);
         GPIORDATA = (0x00);
         GPIORFR1  = (0x00);
