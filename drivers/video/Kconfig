@@ -306,6 +306,20 @@ config FB_ARMCLCD
 	  will be called amba-clcd.
 
 choice
+	depends on FB_ARMCLCD && ARCH_TMPA9XX
+	prompt "Select TMPA9xx LCD accelerator"
+        
+config FB_ACCELERATOR_NONE
+        bool "None"
+
+config FB_ACCELERATOR_ALTIA
+        bool "Altia LCDDA implementation"
+	help
+          Use the Altia LCDDDA implementation with /dev/altia
+
+endchoice        
+
+choice
 
 	depends on FB_ARMCLCD && (ARCH_LH7A40X || ARCH_LH7952X)
 	prompt "LCD Panel"

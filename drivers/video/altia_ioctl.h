@@ -1,0 +1,94 @@
+/* $Revision: 1.3.2.1 $    $Date: 2009-11-09 18:40:15 $
+ * Copyright (c) 2001 Altia Inc.
+ *
+ * Permission to use, copy, and modify this software for any purpose is 
+ * hereby granted, provided that this copyright notice appears in all 
+ * copies and that the entity using, copying, or modifying this software 
+ * has purchased an Altia Deep Screen license. Permission to sell or 
+ * distribute this source code is denied. Altia makes no representations 
+ * about the suitability of this software for any purpose.  It is provided 
+ * "as is" without express or implied warranty.
+ *
+ * ALTIA INC. DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+ * IN NO EVENT SHALL ALTIA INC. BE LIABLE FOR ANY SPECIAL, INDIRECT OR
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
+ * DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+ * OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#ifndef ALTIA_IOCTL_H
+#define ALTIA_IOCTL_H
+
+#include <linux/ioctl.h>
+
+/***************************************************************************
+** types
+***************************************************************************/
+
+typedef struct
+{
+    int size;
+    unsigned long physical;
+} ALTIA_IO_MEMORY_T;
+
+typedef struct 
+{
+    unsigned long status;
+    unsigned short ga;
+    unsigned short err;
+}
+ALTIA_IO_IST_T;
+
+typedef struct
+{
+    unsigned long reg;
+    unsigned long value;
+    char size;
+} ALTIA_IO_REG_T;
+
+typedef struct
+{
+    unsigned long cr0;
+    unsigned long dr0;
+    unsigned long dr1;
+    unsigned long fcp;
+    unsigned long efcp;
+    unsigned long dv0;
+    unsigned long dv1;
+    unsigned long cr2;
+    unsigned long dxdst;
+    unsigned long dydst;
+    unsigned long ssize;
+    unsigned long dsize;
+    unsigned long s0adr;
+    unsigned long dadr;
+    unsigned long cr1;
+} ALTIA_IO_UPDATE_T;
+
+typedef struct
+{
+    int operation : 5;
+    int pending : 1;
+} ALTIA_IO_STATUS_T;
+
+
+/***************************************************************************
+** definitions 
+***************************************************************************/
+
+#define ALTIA_IOC_MAGIC     0xAA
+
+#define ALTIA_IOVER     _IO(ALTIA_IOC_MAGIC, 1)
+#define ALTIA_IOALLOC   _IOWR(ALTIA_IOC_MAGIC, 2, ALTIA_IO_MEMORY_T)
+#define ALTIA_IOFREE    _IOWR(ALTIA_IOC_MAGIC, 3, ALTIA_IO_MEMORY_T)
+#define ALTIA_IOIST     _IOWR(ALTIA_IOC_MAGIC, 4, ALTIA_IO_IST_T)
+#define ALTIA_IOREGR    _IOWR(ALTIA_IOC_MAGIC, 5, ALTIA_IO_REG_T)
+#define ALTIA_IOREGW    _IOWR(ALTIA_IOC_MAGIC, 6, ALTIA_IO_REG_T)
+#define ALTIA_IOUPDATE  _IOWR(ALTIA_IOC_MAGIC, 8, ALTIA_IO_UPDATE_T)
+#define ALTIA_IOSTATUS  _IOWR(ALTIA_IOC_MAGIC, 9, ALTIA_IO_STATUS_T)
+#define ALTIA_IORESET   _IO(ALTIA_IOC_MAGIC, 10)
+
+
+#endif /* ALTIA_IOCTL_H */
