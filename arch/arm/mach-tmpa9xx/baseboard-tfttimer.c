@@ -247,10 +247,11 @@ void __init baseboard_init(void)
 	udelay(200);
 
 	/* Free Port N for other usage than TxD RxD */
-        GPIONDIR  = (0x00);
-        GPIONDATA = (0x00);
+        /* Switching N2/N3 to high for mlad_alm output enable */
+        GPIONDIR  = (0x0c);
+        GPIONDATA = (0x0c);
         GPIONFR1  = (0x01);
         GPIONFR2  = (0x02);
         GPIONIE   = (0x00);
-
+        
 }
