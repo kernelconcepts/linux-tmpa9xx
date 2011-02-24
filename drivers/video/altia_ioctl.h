@@ -1,21 +1,22 @@
-/* $Revision: 1.3.2.1 $    $Date: 2009-11-09 18:40:15 $
- * Copyright (c) 2001 Altia Inc.
+/*
+ *  drivers/video/altia_ioctl.h
  *
- * Permission to use, copy, and modify this software for any purpose is 
- * hereby granted, provided that this copyright notice appears in all 
- * copies and that the entity using, copying, or modifying this software 
- * has purchased an Altia Deep Screen license. Permission to sell or 
- * distribute this source code is denied. Altia makes no representations 
- * about the suitability of this software for any purpose.  It is provided 
- * "as is" without express or implied warranty.
+ * Copyright (C) 2010,2011 Altia Inc.
  *
- * ALTIA INC. DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
- * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
- * IN NO EVENT SHALL ALTIA INC. BE LIABLE FOR ANY SPECIAL, INDIRECT OR
- * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
- * DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
- * OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION
- * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
  */
 
 #ifndef ALTIA_IOCTL_H
