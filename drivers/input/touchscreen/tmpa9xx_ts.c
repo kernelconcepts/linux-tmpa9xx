@@ -89,18 +89,17 @@ static int ts_update_pendown(struct tmpa9xx_ts_priv *t)
 	pen_is_down = t->ts->tsicr0 & TMPA9XX_TS_CR0_PTST ? 1 : 0;
 
 	if (t->pen_is_down == pen_is_down)
-		return t->pen_is_down;
+		return 0;
 
 	t->pen_is_down = pen_is_down;
 
 	input_report_key(t->input_dev, BTN_TOUCH, pen_is_down);
 	input_report_abs(t->input_dev, ABS_PRESSURE, pen_is_down);
-	input_sync(t->input_dev);
 
-	return t->pen_is_down;
+	return 1;
 }
 
-static void ts_update_pos(struct tmpa9xx_ts_priv *t)
+static int ts_update_pos(struct tmpa9xx_ts_priv *t)
 {
 	int x;
 	int y;
@@ -112,27 +111,33 @@ static void ts_update_pos(struct tmpa9xx_ts_priv *t)
 	y = tmpa9xx_adc_read(4, 1);
 
 	if (x < threshold_x || y < threshold_y)
-		return;
+		return 0;
 
 	input_report_abs(t->input_dev, ABS_X, x);
 	input_report_abs(t->input_dev, ABS_Y, y);
-	input_sync(t->input_dev);
+
+	return 1;
 }
 
 static void backend_irq_work(struct work_struct *work)
 {
 	struct tmpa9xx_ts_priv *t = container_of(work, struct tmpa9xx_ts_priv, wq_irq);
-	int pen_is_down;
+	int have_reports;
 
 	while(1) {
-		pen_is_down = ts_update_pendown(t);
+		have_reports = ts_update_pendown(t);
 
-		if (!pen_is_down) {
+		if (!t->pen_is_down) {
+			if (have_reports)
+				input_sync(t->input_dev);
 			ts_enable_interrupt(t);
 			break;
 		}
 
-		ts_update_pos(t);
+		have_reports |= ts_update_pos(t);
+
+		if (have_reports)
+			input_sync(t->input_dev);
 
 		ts_init(t);
 
