@@ -725,14 +725,14 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
 
 #if defined CONFIG_FB_ACCELERATOR_TOSHIBA || defined CONFIG_FB_ACCELERATOR_ALTIA
        &tmpa9xx_device_lcdda,
-#endif       
+#endif
 
 #if defined CONFIG_TMPA9XX_PWM_CANNEL_0 || defined CONFIG_TMPA9XX_PWM_CANNEL_0_MODULE
         &tmpa9xx_pwm0_device,
-#endif        
+#endif
 #if defined CONFIG_TMPA9XX_PWM_CANNEL_1 || defined CONFIG_TMPA9XX_PWM_CANNEL_1_MODULE
         &tmpa9xx_pwm1_device,
-#endif        
+#endif
 };
 
 /*

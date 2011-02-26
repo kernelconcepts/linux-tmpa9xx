@@ -65,9 +65,9 @@ static struct i2c_board_info baseboard_i2c_1_devices[] = {
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
 	/* no devices */
 };
-#endif // Sound Config
+#endif /* Sound Config */
 
-#endif // CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
+#endif /* CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE */
 
 /*
  * SPI
@@ -203,7 +203,7 @@ static struct spi_board_info spi_board_info[] = {
 };
 #endif
 
-#endif //defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
+#endif /* defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE */
 
 #if defined CONFIG_BACKLIGHT_PWM
 static int tonga_backlight_init(struct device *dev)
@@ -223,10 +223,6 @@ static int tonga_backlight_notify(struct device *dev, int brightness)
 
 static void tonga_backlight_exit(struct device *dev)
 {
-/*
-        gpio_free(VIPER_LCD_EN_GPIO);
-        gpio_free(VIPER_BCKLIGHT_EN_GPIO);
-*/
 }
 
 static struct platform_pwm_backlight_data tonga_backlight_data = {
@@ -264,6 +260,10 @@ static struct platform_device *devices_baseboard[] __initdata = {
 #endif
 };
 
+#define LCD_BACKLIGHT_GPIO	20	/* PORTC4 */
+#define LCD_RESET_GPIO		96	/* PORTM0 */
+#define LCD_PWR_GPIO		97	/* PORTM1 */
+
 void __init baseboard_init(void)
 {
 #if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
@@ -280,18 +280,32 @@ void __init baseboard_init(void)
         /* Add devices */
         platform_add_devices(devices_baseboard, ARRAY_SIZE(devices_baseboard));
 
-	/* Reset LCD*/
-	GPIOMDATA=0;
-    	udelay(1000);
-	GPIOMDATA|=(1<<0);
-	/* Enable */
-	GPIOMDATA|=(1<<1);
-	/* Light */
-	GPIOCDATA=0;
+	/* PWR Enable, PORTM1, high active */
+	if (gpio_request(LCD_PWR_GPIO, "LCD power") != 0) {
+		printk(KERN_ERR "Glyn Baseboard init: failed to request GPIO%d for LCD power\n", LCD_PWR_GPIO);
+	} else {
+		gpio_direction_output(LCD_PWR_GPIO, 1);
+	}
+
+	/* Reset LCD, low active*/
+	if (gpio_request(LCD_RESET_GPIO, "LCD reset") != 0) {
+		printk(KERN_ERR "Glyn Baseboard init: failed to request GPIO%d for LCD reset\n", LCD_RESET_GPIO);
+	} else {
+		gpio_direction_output(LCD_RESET_GPIO, 0);
+		udelay(1000);
+		gpio_set_value(LCD_RESET_GPIO, 1);
+	}
+
+	/* Backlight, low active */
+	if (gpio_request(LCD_BACKLIGHT_GPIO, "LCD backlight") != 0) {
+		printk(KERN_ERR "Glyn Baseboard init: failed to request GPIO%d for LCD backlight\n", LCD_BACKLIGHT_GPIO);
+	} else {
+		gpio_direction_output(LCD_BACKLIGHT_GPIO, 0);
+	}
 
         LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
         PMCCTL &= ~PMCCTL_PMCPWE;
         PMCWV1 |= PMCWV1_PMCCTLV;
-        udelay(200);
 
+        udelay(200);
 }

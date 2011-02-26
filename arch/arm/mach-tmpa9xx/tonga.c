@@ -136,6 +136,7 @@ static void __init tonga_init(void)
         platform_add_devices(devices, ARRAY_SIZE(devices));
 
 	tmpa9xx_init();
+
 	baseboard_init();
 }
 
