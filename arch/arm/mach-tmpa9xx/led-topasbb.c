@@ -115,15 +115,15 @@ static int __devinit topas_led_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, NULL);
     
 	/* Yes we could have this easier, but I need a 'customer' for the GPIO implementation */
-	ret += gpio_request(GPIO_LED_SEG_A, "LED_SEG_A");
-	ret += gpio_request(GPIO_LED_SEG_B, "LED_SEG_B");
-	ret += gpio_request(GPIO_LED_SEG_C, "LED_SEG_C");
-	ret += gpio_request(GPIO_LED_SEG_D, "LED_SEG_D");
+	ret += gpio_request(GPIO_LED_SEG_A, "LED_SEG_A"); gpio_direction_output(GPIO_LED_SEG_A, 0);
+	ret += gpio_request(GPIO_LED_SEG_B, "LED_SEG_B"); gpio_direction_output(GPIO_LED_SEG_B, 0);
+	ret += gpio_request(GPIO_LED_SEG_C, "LED_SEG_C"); gpio_direction_output(GPIO_LED_SEG_C, 0);
+	ret += gpio_request(GPIO_LED_SEG_D, "LED_SEG_D"); gpio_direction_output(GPIO_LED_SEG_D, 0);
 #ifdef CONFIG_MACH_TOPAS910
-	ret += gpio_request(GPIO_LED_SEG_E, "LED_SEG_E");
-	ret += gpio_request(GPIO_LED_SEG_F, "LED_SEG_F");
-	ret += gpio_request(GPIO_LED_SEG_G, "LED_SEG_G");
-	ret += gpio_request(GPIO_LED_SEG_DP,"LED_SEG_DP");
+	ret += gpio_request(GPIO_LED_SEG_E, "LED_SEG_E"); gpio_direction_output(GPIO_LED_SEG_E, 0);
+	ret += gpio_request(GPIO_LED_SEG_F, "LED_SEG_F"); gpio_direction_output(GPIO_LED_SEG_F, 0);
+	ret += gpio_request(GPIO_LED_SEG_G, "LED_SEG_G"); gpio_direction_output(GPIO_LED_SEG_G, 0);
+	ret += gpio_request(GPIO_LED_SEG_DP,"LED_SEG_DP"); gpio_direction_output(GPIO_LED_SEG_DP, 0);
 #endif
 
 	if (ret < 0) {
