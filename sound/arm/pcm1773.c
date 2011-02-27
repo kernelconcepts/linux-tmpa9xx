@@ -274,7 +274,7 @@ static int snd_pcm1773_configure(pcm1773_t *chip)
 	int err = 0;
 	struct tmpa9xx_i2s *i2s= chip->i2s;
 
-	err = err | tmpa9xx_i2s_config_tx(i2s);
+	//err = err | tmpa9xx_i2s_config_tx(i2s);
 	
 	if (err)
 	{
@@ -455,7 +455,7 @@ static int __init snd_pcm1773_init(void)
 
 	if ((err = platform_driver_register(&snd_pcm1773_driver)) < 0)	
 	{
-		printk(KERN_ERR "platform_driver_register failed. ret=%d\n", platform_driver_register);
+		printk(KERN_ERR "platform_driver_register failed. ret=%d\n", err);
 		return err;
 	}
 
