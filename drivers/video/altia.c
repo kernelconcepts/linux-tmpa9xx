@@ -203,7 +203,7 @@ static int altia_open(struct inode *inode, struct file *filp);
 static int altia_release(struct inode *inode, struct file *filp);
 static ssize_t altia_read(struct file *filp, char *buf, size_t count, loff_t *f_pos);
 static ssize_t altia_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos);
-static int altia_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
+static long altia_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 static int altia_mmap(struct file *filp, struct vm_area_struct *vma);
 static int altia_fasync(int fd, struct file *filp, int mode);
 static int altia_remove(struct platform_device *pdev);
@@ -332,7 +332,7 @@ void __exit altia_exit (void)
   platform_driver_unregister (&altia_driver);
 }
 
-static int __init altia_probe(struct platform_device *pdev)
+static int __devinit altia_probe(struct platform_device *pdev)
 {
     int status, count, size, ret;
 
@@ -456,7 +456,7 @@ static int __init altia_probe(struct platform_device *pdev)
     return 0;
 }
 
-static int altia_remove(struct platform_device *pdev)
+static int __devexit altia_remove(struct platform_device *pdev)
 {
 #if ALTIA_DEBUG
     printk(KERN_INFO "altia:  remove\r\n");
@@ -589,7 +589,7 @@ static ssize_t altia_write(struct file *filp, const char *buf, size_t count, lof
     return -ENOSYS;
 }
 
-static int altia_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+static long altia_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
     int size;
 
