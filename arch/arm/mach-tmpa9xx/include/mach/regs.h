@@ -571,8 +571,7 @@
 
 
 /* Touchscreen Controller */
-#define TS_BASE                 (0xF00601F0)
-#define TOUCHSCREEN_BASE        (0xF00601F0)
+#define TS_BASE                 (0xF0060000)
 
 /* ADC */
 #define ADC_BASE                (0xf0080000)

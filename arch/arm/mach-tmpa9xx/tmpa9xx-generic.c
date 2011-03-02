@@ -385,37 +385,23 @@ struct platform_device tmpa9xx_device_sdhc = {
  * Touchscreen
  */
 #if defined CONFIG_TOUCHSCREEN_TMPA9XX || defined CONFIG_TOUCHSCREEN_TMPA9XX_MODULE
-static struct tmpa9xx_ts_platforminfo tmpa9xx_info_ts = {
-        .fuzz       = 0,
-        .rate       = 100,
-        .skip_count = 4,
-};
-
 static struct resource tmpa9xx_resource_ts[] = {
         {
          .start = TS_BASE,
          .end   = TS_BASE + 0x40,
          .flags = IORESOURCE_MEM,
         }, {
-         .start = ADC_BASE,
-         .end   = ADC_BASE + 0x80,
-         .flags = IORESOURCE_MEM,
-        }, {
          .start = INTR_VECT_GPIOD,
          .end   = INTR_VECT_GPIOD,
          .flags = IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-        }, {
-         .start = INTR_VECT_ADC,
-         .end   = INTR_VECT_ADC,
-         .flags = IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-        }
+        },
 };
 
 struct platform_device tmpa9xx_device_ts = {
         .name= "tmpa9xx-ts",
         .id  = -1,
         .dev = {
-                .platform_data = &tmpa9xx_info_ts,
+                .platform_data = NULL,
         },
         .resource      = tmpa9xx_resource_ts,
         .num_resources = ARRAY_SIZE(tmpa9xx_resource_ts),

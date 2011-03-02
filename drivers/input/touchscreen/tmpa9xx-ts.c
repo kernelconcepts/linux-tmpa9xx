@@ -36,21 +36,35 @@ module_param(threshold_x, int, S_IRUGO);
 static int threshold_y = 25;
 module_param(threshold_y, int, S_IRUGO);
 
+#define TS_CR0_TSI7     (1<<7) /* TSI7  R/W 0y0 pull-down resistor(refer to Explanation) */
+#define TS_CR0_INGE     (1<<6) /* INGE  R/W 0y0 Input gate control of Port PD6, PD7 */
+#define TS_CR0_PTST     (1<<5) /* PTST  R   0y0 Detection condition */
+#define TS_CR0_TWIEN	(1<<4) /* TWIEN R/W 0y0 INTA interrupt control */
+#define TS_CR0_PYEN     (1<<3) /* PYEN  R/W 0y0 SPY */
+#define TS_CR0_PXEN     (1<<2) /* PXEN  R/W 0y0 SPX */
+#define TS_CR0_MYEN     (1<<1) /* MYEN  R/W 0y0 SMY */
+#define TS_CR0_MXEN     (1<<0) /* MXEN[0] MXEN  R/W 0y0 SMX */
+
+#define TSI_CR0	(0x1f0) /* control register 0 */
+#define TSI_CR1	(0x1f4) /* control register 1 */
+
+#define ts_writel(b, o, v)	writel(v, b->regs + o)
+#define ts_readl(b, o)		readl(b->regs + o)
+
 struct tmpa9xx_ts_priv
 {
-	volatile struct tmpa9xx_ts *ts;
+	void __iomem *regs;
 	struct input_dev *input_dev;
 	int pen_is_down;
-	int ts_irq;
+	int irq;
 	int delay;
-
 	struct workqueue_struct *wq;
 	struct work_struct wq_irq;
 };
 
 static inline void ts_init(struct tmpa9xx_ts_priv *t)
 {
-	t->ts->tsicr0 = TMPA9XX_TS_CR0_TSI7 | TMPA9XX_TS_CR0_PYEN;
+	ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_PYEN);
 }
 
 static inline void ts_clear_interrupt(void)
@@ -60,12 +74,14 @@ static inline void ts_clear_interrupt(void)
 
 static inline void ts_enable_interrupt(struct tmpa9xx_ts_priv *t)
 {
-	t->ts->tsicr0 |= TMPA9XX_TS_CR0_TWIEN;
+	uint32_t val = ts_readl(t, TSI_CR0);
+	ts_writel(t, TSI_CR0, val | TS_CR0_TWIEN);
 }
 
 static inline void ts_disable_interrupt(struct tmpa9xx_ts_priv *t)
 {
-	t->ts->tsicr0 &= ~TMPA9XX_TS_CR0_TWIEN;
+	uint32_t val = ts_readl(t, TSI_CR0);
+	ts_writel(t, TSI_CR0, val & ~TS_CR0_TWIEN);
 }
 
 static inline void enable_interrupt(struct tmpa9xx_ts_priv *t)
@@ -83,10 +99,11 @@ static inline void disable_interrupt(struct tmpa9xx_ts_priv *t)
 static int ts_update_pendown(struct tmpa9xx_ts_priv *t)
 {
 	int pen_is_down;
-	
+	uint32_t val = ts_readl(t, TSI_CR0);
+
 	/* ts_init() must have been called before */
 
-	pen_is_down = t->ts->tsicr0 & TMPA9XX_TS_CR0_PTST ? 1 : 0;
+	pen_is_down = val & TS_CR0_PTST ? 1 : 0;
 
 	if (t->pen_is_down == pen_is_down)
 		return 0;
@@ -104,10 +121,10 @@ static int ts_update_pos(struct tmpa9xx_ts_priv *t)
 	int x;
 	int y;
 
-	t->ts->tsicr0 = 0xc5;
+	ts_writel(t, TSI_CR0, 0xc5);
 	x = tmpa9xx_adc_read(5, 1);
 
-	t->ts->tsicr0 = 0xca;
+	ts_writel(t, TSI_CR0, 0xca);
 	y = tmpa9xx_adc_read(4, 1);
 
 	if (x < threshold_x || y < threshold_y)
@@ -158,28 +175,18 @@ static irqreturn_t topas910_ts_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static int tmpa9xx_ts_fuzz = 0;
+static int tmpa9xx_ts_rate = 100;
+
 static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct tmpa9xx_ts_platforminfo *tmpa9xx_ts_platforminfo;
 	struct tmpa9xx_ts_priv *t;
-	struct resource *ts_r;
-	int rate;
-	int fuzz;
+	struct resource *res;
 	int ret;
 
-	tmpa9xx_ts_platforminfo = (struct tmpa9xx_ts_platforminfo *)dev->platform_data;
-	if (tmpa9xx_ts_platforminfo) {
-		fuzz       = tmpa9xx_ts_platforminfo->fuzz;
-		rate       = tmpa9xx_ts_platforminfo->rate;
-	}
-	else {
-		fuzz       = TMPA9XX_TS_DEFAULT_FUZZ;
-		rate       = TMPA9XX_TS_DEFAULT_RATE;
-	}
-
-	ts_r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!ts_r) {
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
 		dev_err(dev, "platform_get_resource() failed\n");
 		ret = -ENXIO;
 		return ret;
@@ -193,20 +200,17 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 		goto err0;
 	}
 
-	t->ts_irq = platform_get_irq(pdev, 0);
-	if (t->ts_irq == NO_IRQ) {
+	t->irq = platform_get_irq(pdev, 0);
+	if (t->irq == NO_IRQ) {
 		dev_err(dev, "platform_get_irq() failed\n");
 		ret = -ENXIO;
 		goto err1;
 	}
 
-	if (rate)
-		t->delay = 1000 / rate;
-	else
-		t->delay = 10;
+	t->delay = 1000 / tmpa9xx_ts_rate;
 
-	t->ts = ioremap(ts_r->start, resource_size(ts_r));
-	if (!t->ts) {
+	t->regs = ioremap(res->start, resource_size(res));
+	if (!t->regs) {
 		dev_err(dev, "ioremap() failed\n");
 		ret = -ENOMEM;
 		goto err2;
@@ -220,7 +224,7 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 	}
 
 	t->input_dev->name       = DRIVER_DESC;
-	t->input_dev->phys       = (void *) t->ts;
+	t->input_dev->phys       = (void *)t->regs;
 	t->input_dev->id.bustype = BUS_HOST;
 	t->input_dev->id.vendor  = 0;
 	t->input_dev->id.product = 0;
@@ -236,7 +240,7 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 	}
 	INIT_WORK(&t->wq_irq, backend_irq_work);
 
-	ret = request_irq(t->ts_irq, topas910_ts_interrupt, IRQF_SHARED, "tmpa9xx-ts-irq", t);
+	ret = request_irq(t->irq, topas910_ts_interrupt, IRQF_SHARED, "tmpa9xx-ts-irq", t);
 	if (ret) {
 		dev_err(dev, "request_irq() failed\n");
 		ret = -ENOMEM;
@@ -244,8 +248,8 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 	}
 
 	/* TMPA9xx ADC is 10bit */
-	input_set_abs_params(t->input_dev, ABS_X, 0, 1024, fuzz, 0);
-	input_set_abs_params(t->input_dev, ABS_Y, 0, 1024, fuzz, 0);
+	input_set_abs_params(t->input_dev, ABS_X, 0, 1024, tmpa9xx_ts_fuzz, 0);
+	input_set_abs_params(t->input_dev, ABS_Y, 0, 1024, tmpa9xx_ts_fuzz, 0);
 	input_set_abs_params(t->input_dev, ABS_PRESSURE, 0, 1, 0, 0);
 
 	ret = input_register_device(t->input_dev);
@@ -262,23 +266,24 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, t);
 
 	/* setup ts controller */
-	t->ts->tsicr1 = 0xc5;
+	ts_writel(t, TSI_CR1, 0xc5);
+
 	ts_init(t);
 
 	enable_interrupt(t);
 
-	dev_info(dev, DRIVER_DESC " (fuzz=%d, rate=%d Hz) ready\n", fuzz, rate);
+	dev_info(dev, DRIVER_DESC " (fuzz=%d, rate=%d Hz) ready\n", tmpa9xx_ts_fuzz, tmpa9xx_ts_rate);
 
 	return 0;
 
 err6:
-	free_irq(t->ts_irq, t);
+	free_irq(t->irq, t);
 err5:
 	destroy_workqueue(t->wq);
 err4:
 	input_free_device(t->input_dev);
 err3:
-	iounmap(t->ts);
+	iounmap(t->regs);
 err2:
 err1:
 	kfree(t);
@@ -294,8 +299,8 @@ static int __devexit tmpa9xx_ts_remove(struct platform_device *pdev)
 
 	disable_interrupt(t);
 
-	t->ts->tsicr0 = 0;
-	t->ts->tsicr1 = 0;
+	ts_writel(t, TSI_CR0, 0x00);
+	ts_writel(t, TSI_CR1, 0x00);
 
 	flush_workqueue(t->wq);
 
@@ -303,11 +308,11 @@ static int __devexit tmpa9xx_ts_remove(struct platform_device *pdev)
 
 	input_unregister_device(t->input_dev);
 
-	free_irq(t->ts_irq, t);
+	free_irq(t->irq, t);
 
 	input_free_device(t->input_dev);
 
-	iounmap(t->ts);
+	iounmap(t->regs);
 
 	kfree(t);
 
@@ -341,5 +346,5 @@ module_exit(tmpa9xx_ts_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Florian Boor <florian@kernelconcepts.de>");
+MODULE_AUTHOR("Michael Hunold <michael@mihu.de>");
 MODULE_DESCRIPTION(DRIVER_DESC);
-
