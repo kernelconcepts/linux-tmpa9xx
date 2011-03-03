@@ -118,6 +118,11 @@ struct clcd_board {
 	void	(*enable)(struct clcd_fb *);
 
 	/*
+	 * Optional.  Hardware specific ioctl handling.
+	 */
+	int	(*ioctl)(struct clcd_fb *, unsigned int, unsigned long);
+
+	/*
 	 * Setup platform specific parts of CLCD driver
 	 */
 	int	(*setup)(struct clcd_fb *);

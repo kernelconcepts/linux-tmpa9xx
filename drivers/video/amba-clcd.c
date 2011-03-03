@@ -337,6 +337,17 @@ static int clcdfb_mmap(struct fb_info *info,
 	return ret;
 }
 
+static int clcdfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
+{
+	struct clcd_fb *fb = to_clcd(info);
+	int ret = -ENOIOCTLCMD;
+
+	if (fb->board->ioctl)
+		ret = fb->board->ioctl(fb, cmd, arg);
+
+	return ret;
+}
+
 static int clcdfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 {
 	struct clcd_fb *fb = to_clcd(info);
@@ -365,6 +376,7 @@ static struct fb_ops clcdfb_ops = {
 	.fb_copyarea	= cfb_copyarea,
 	.fb_imageblit	= cfb_imageblit,
 	.fb_mmap	= clcdfb_mmap,
+	.fb_ioctl	= clcdfb_ioctl,
 	.fb_pan_display = clcdfb_pan_display,
 };
 
