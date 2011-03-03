@@ -241,9 +241,15 @@ struct clcd_panel default_panel = {
 	.grayscale      = 0,
 };
 
-struct clcd_panel *tmpa9xx_panels[] = {
-	&default_panel,
-	NULL,
+struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {
+	{
+		.panel = &tmpa9xx_panel,
+		.fuzz = 0,
+		.rate = 200,
+	},
+	{
+		.panel = NULL,
+	},
 };
 
 void __init baseboard_init(void)
