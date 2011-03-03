@@ -40,6 +40,11 @@
 #define TIM2_IOE		(1 << 14)
 #define TIM2_BCD		(1 << 26)
 
+#define INTR_MBERR		(1 << 4)
+#define INTR_VCOMP		(1 << 3)
+#define INTR_LNBU		(1 << 2)
+#define INTR_FUF		(1 << 1)
+
 #define CNTL_LCDEN		(1 << 0)
 #define CNTL_LCDBPP1		(0 << 1)
 #define CNTL_LCDBPP2		(1 << 1)
