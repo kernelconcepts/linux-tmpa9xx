@@ -46,13 +46,11 @@ static inline void clcdfb_sleep(unsigned int ms)
 	}
 }
 
-static inline void clcdfb_set_start(struct clcd_fb *fb)
+static inline void clcdfb_set_start(struct clcd_fb *fb, unsigned long ustart, unsigned long offset)
 {
-	unsigned long ustart = fb->fb.fix.smem_start;
 	unsigned long lstart;
 
-	ustart += fb->fb.var.yoffset * fb->fb.fix.line_length;
-	lstart = ustart + fb->fb.var.yres * fb->fb.fix.line_length / 2;
+	lstart = ustart + offset;
 
 	writel(ustart, fb->regs + CLCD_UBAS);
 	writel(lstart, fb->regs + CLCD_LBAS);
@@ -205,6 +203,8 @@ static int clcdfb_set_par(struct fb_info *info)
 {
 	struct clcd_fb *fb = to_clcd(info);
 	struct clcd_regs regs;
+	unsigned long ustart;
+	unsigned long offset;
 
 	fb->fb.fix.line_length = fb->fb.var.xres_virtual *
 				 fb->fb.var.bits_per_pixel / 8;
@@ -223,7 +223,9 @@ static int clcdfb_set_par(struct fb_info *info)
 	writel(regs.tim2, fb->regs + CLCD_TIM2);
 	writel(regs.tim3, fb->regs + CLCD_TIM3);
 
-	clcdfb_set_start(fb);
+	ustart = fb->fb.fix.smem_start + fb->fb.var.yoffset * fb->fb.fix.line_length;
+	offset = fb->fb.var.yres * fb->fb.fix.line_length / 2;
+	clcdfb_set_start(fb, ustart, offset);
 
 	clk_set_rate(fb->clk, (1000000000 / regs.pixclock) * 1000);
 
@@ -335,6 +337,24 @@ static int clcdfb_mmap(struct fb_info *info,
 	return ret;
 }
 
+static int clcdfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
+{
+	struct clcd_fb *fb = to_clcd(info);
+	unsigned long ustart;
+	unsigned long offset;
+
+	/* pl11x updates settings on vbl only */
+	if ((var->activate & FB_ACTIVATE_MASK) != FB_ACTIVATE_VBL)
+		return -EINVAL;
+
+	ustart = fb->fb.fix.smem_start + var->yoffset * fb->fb.fix.line_length;
+	offset = var->yres * fb->fb.fix.line_length / 2;
+
+	clcdfb_set_start(fb, ustart, offset);
+
+	return 0;
+}
+
 static struct fb_ops clcdfb_ops = {
 	.owner		= THIS_MODULE,
 	.fb_check_var	= clcdfb_check_var,
@@ -345,6 +365,7 @@ static struct fb_ops clcdfb_ops = {
 	.fb_copyarea	= cfb_copyarea,
 	.fb_imageblit	= cfb_imageblit,
 	.fb_mmap	= clcdfb_mmap,
+	.fb_pan_display = clcdfb_pan_display,
 };
 
 static int clcdfb_register(struct clcd_fb *fb)
@@ -392,7 +413,7 @@ static int clcdfb_register(struct clcd_fb *fb)
 	fb->fb.fix.type		= FB_TYPE_PACKED_PIXELS;
 	fb->fb.fix.type_aux	= 0;
 	fb->fb.fix.xpanstep	= 0;
-	fb->fb.fix.ypanstep	= 0;
+	fb->fb.fix.ypanstep	= 1;
 	fb->fb.fix.ywrapstep	= 0;
 	fb->fb.fix.accel	= FB_ACCEL_NONE;
 
@@ -411,7 +432,7 @@ static int clcdfb_register(struct clcd_fb *fb)
 	fb->fb.var.vsync_len	= fb->panel->mode.vsync_len;
 	fb->fb.var.sync		= fb->panel->mode.sync;
 	fb->fb.var.vmode	= fb->panel->mode.vmode;
-	fb->fb.var.activate	= FB_ACTIVATE_NOW;
+	fb->fb.var.activate	= FB_ACTIVATE_VBL;
 	fb->fb.var.nonstd	= 0;
 	fb->fb.var.height	= fb->panel->height;
 	fb->fb.var.width	= fb->panel->width;
