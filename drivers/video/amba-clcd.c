@@ -30,6 +30,9 @@
 
 #define to_clcd(info)	container_of(info, struct clcd_fb, fb)
 
+static wait_queue_head_t clcd_wait_vsync;
+static unsigned int clcd_vsync_counter;
+
 /* This is limited to 16 characters when displayed by X startup */
 static const char *clcd_name = "CLCD FB";
 
@@ -337,10 +340,61 @@ static int clcdfb_mmap(struct fb_info *info,
 	return ret;
 }
 
+static irqreturn_t clcd_vsync_interrupt(int irq, void *ptr)
+{
+	struct clcd_fb *fb = ptr;
+
+	/* clear pending irq */
+	writel(INTR_VCOMP, fb->regs + CLCD_ICR);
+
+	clcd_vsync_counter++;
+
+	/* wake up the waiting process, if any */
+	wake_up_interruptible(&clcd_wait_vsync);
+
+	return IRQ_HANDLED;
+}
+
+static void clcdfb_enable_vsync_handling(struct clcd_fb *fb)
+{
+	uint32_t val;
+
+	/* interrupt on start of vsync */
+	val = readl(fb->regs + fb->off_cntl);
+	val &= ~CNTL_LCDVCOMP(3);
+	val |= CNTL_LCDVCOMP(0);
+	writel(val, fb->regs + fb->off_cntl);
+
+	/* enable vcomp interrupt */
+	val = readl(fb->regs + fb->off_ienb);
+	val |= INTR_VCOMP;
+	writel(val, fb->regs + fb->off_ienb);
+
+	fb->vsync_enabled = true;
+}
+
+static int clcdfb_ioctl_vsync(struct clcd_fb *fb)
+{
+	unsigned int counter;
+
+	if (fb->dev->irq[0] == NO_IRQ)
+		return -EOPNOTSUPP;
+
+	if (!fb->vsync_enabled)
+		clcdfb_enable_vsync_handling(fb);
+
+	counter = clcd_vsync_counter;
+
+	return wait_event_interruptible(clcd_wait_vsync, (clcd_vsync_counter != counter));
+}
+
 static int clcdfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 {
 	struct clcd_fb *fb = to_clcd(info);
 	int ret = -ENOIOCTLCMD;
+
+	if (cmd == FBIO_WAITFORVSYNC)
+		return clcdfb_ioctl_vsync(fb);
 
 	if (fb->board->ioctl)
 		ret = fb->board->ioctl(fb, cmd, arg);
@@ -494,6 +548,15 @@ static int clcdfb_register(struct clcd_fb *fb)
 	return ret;
 }
 
+static void clcdfb_unregister(struct clcd_fb *fb)
+{
+	unregister_framebuffer(&fb->fb);
+	if (fb->fb.cmap.len)
+		fb_dealloc_cmap(&fb->fb.cmap);
+	iounmap(fb->regs);
+	clk_put(fb->clk);
+}
+
 static int clcdfb_probe(struct amba_device *dev, struct amba_id *id)
 {
 	struct clcd_board *board = dev->dev.platform_data;
@@ -523,12 +586,28 @@ static int clcdfb_probe(struct amba_device *dev, struct amba_id *id)
 	if (ret)
 		goto free_fb;
 
-	ret = clcdfb_register(fb); 
-	if (ret == 0) {
-		amba_set_drvdata(dev, fb);
-		goto out;
+	ret = clcdfb_register(fb);
+	if (ret)
+		goto board_remove;
+
+	init_waitqueue_head(&clcd_wait_vsync);
+	clcd_vsync_counter = 0;
+
+	if (dev->irq[0] != NO_IRQ) {
+		ret = request_irq(dev->irq[0], clcd_vsync_interrupt, IRQF_DISABLED, clcd_name, fb);
+		if (ret) {
+			printk(KERN_INFO "CLCD: request_irq failed(), ret %d\n",ret);
+			goto unregister_clcdfb;
+		}
 	}
 
+	amba_set_drvdata(dev, fb);
+
+	return 0;
+
+ unregister_clcdfb:
+	clcdfb_unregister(fb);
+ board_remove:
 	fb->board->remove(fb);
  free_fb:
 	kfree(fb);
@@ -542,14 +621,16 @@ static int clcdfb_remove(struct amba_device *dev)
 {
 	struct clcd_fb *fb = amba_get_drvdata(dev);
 
+	writel(0, fb->regs + fb->off_ienb);
+
+	if (dev->irq[0] != NO_IRQ)
+		free_irq (dev->irq[0], fb);
+
 	amba_set_drvdata(dev, NULL);
 
 	clcdfb_disable(fb);
-	unregister_framebuffer(&fb->fb);
-	if (fb->fb.cmap.len)
-		fb_dealloc_cmap(&fb->fb.cmap);
-	iounmap(fb->regs);
-	clk_put(fb->clk);
+
+	clcdfb_unregister(fb);
 
 	fb->board->remove(fb);
 
