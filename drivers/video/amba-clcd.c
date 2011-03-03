@@ -408,9 +408,13 @@ static int clcdfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *inf
 	unsigned long ustart;
 	unsigned long offset;
 
+	/* most applications ignore the fact that some hardware
+	does not support FB_ACTIVATE_NOW ... :-( */
+#if 0
 	/* pl11x updates settings on vbl only */
 	if ((var->activate & FB_ACTIVATE_MASK) != FB_ACTIVATE_VBL)
 		return -EINVAL;
+#endif
 
 	ustart = fb->fb.fix.smem_start + var->yoffset * fb->fb.fix.line_length;
 	offset = var->yres * fb->fb.fix.line_length / 2;
