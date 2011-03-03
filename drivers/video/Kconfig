@@ -305,19 +305,38 @@ config FB_ARMCLCD
 	  here and read <file:Documentation/kbuild/modules.txt>.  The module
 	  will be called amba-clcd.
 
-choice
-	depends on FB_ARMCLCD && ARCH_TMPA9XX
-	prompt "Select TMPA9xx LCD accelerator"
-        
-config FB_ACCELERATOR_NONE
-        bool "None"
+config FB_TMPA9XX_CLCD
+	tristate "TMPA9xx LCD support"
+	depends on FB && ARM && ARM_AMBA && ARCH_TMPA9XX
+	select FB_ARMCLCD
+	help
+	  This framebuffer device driver is for the Toshiba TMPA9xx
+	  Colour LCD controller.  It is based on the ARM PrimeCell PL110,
+	  module, which will be automatically selected.
+
+	  If you want to compile this as a module (=code which can be
+	  inserted into and removed from the running kernel), say M
+	  here and read <file:Documentation/kbuild/modules.txt>.  The module
+	  will be called tmpa9xx-clcd.
+
+config FB_TMPA9XX_CLCD_MEM
+	int "Additional video memory size in kB"
+	depends on FB_TMPA9XX_CLCD
+	default 1024
+	help
+	  This is the amount of *additional* video memory reserved for
+	  the framebuffer, which can be used by DirectFB for example.
 
 config FB_ACCELERATOR_ALTIA
-        bool "Altia LCDDA implementation"
+        tristate "Altia LCDDA implementation"
+	depends on FB_TMPA9XX_CLCD
+	select FB_TMPA9XX_CLCD_NO_LCDDA
 	help
           Use the Altia LCDDDA implementation with /dev/altia
 
-endchoice        
+config FB_TMPA9XX_CLCD_NO_LCDDA
+	bool
+	depends on FB_ACCELERATOR_ALTIA
 
 choice
 

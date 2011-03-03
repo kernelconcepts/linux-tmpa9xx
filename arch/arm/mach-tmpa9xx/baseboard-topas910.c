@@ -32,8 +32,10 @@
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
 #include <linux/dma-mapping.h>
-#include <linux/amba/pl022.h>
 #include <linux/gpio_keys.h>
+#include <linux/amba/bus.h>
+#include <linux/amba/clcd.h>
+#include <linux/amba/pl022.h>
 
 #include <asm/system.h>
 #include <asm/irq.h>
@@ -261,6 +263,39 @@ static struct platform_device *devices_baseboard[] __initdata = {
         &topas_led_device,
         &topas_keys_device,
         &baseboard_i2s_device,    
+};
+
+#define HCLK 			96000000
+#define PIX_CLOCK_DIVIDER	16
+#define PIX_CLOCK		(HCLK/PIX_CLOCK_DIVIDER)
+
+struct clcd_panel tmpa9xx_panel = {
+	.mode = {
+		.name		= "TMPA9xx panel",
+		.refresh	= 30, /* unused */
+		.xres		= 320,
+		.yres		= 240,
+		.pixclock	= PIX_CLOCK,
+		.left_margin	= 8,
+		.right_margin	= 8,
+		.upper_margin	= 2,
+		.lower_margin	= 2,
+		.hsync_len	= 16,
+		.vsync_len	= 8,
+		.sync		= FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	.width		= -1,
+	.height		= -1,
+	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER,
+	.cntl		= CNTL_BGR | CNTL_LCDTFT | CNTL_WATERMARK,
+	.bpp		= 32,
+	.grayscale	= 0,
+};
+
+struct clcd_panel *tmpa9xx_panels[] = {
+	&tmpa9xx_panel,
+	NULL,
 };
 
 void __init baseboard_init(void)

@@ -49,10 +49,9 @@
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 
-
 #define ARM_UART_PERIPH_ID  0x00041011
 #define ARM_SSP_PERIPH_ID   0x00041022
-#define ARM_CLCD_PERIPH_ID  0x00041110
+
 /*
  * Memory Map Description
  */
@@ -189,104 +188,37 @@ static struct amba_device pl022_device1 = {
 #endif //defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
 
 #if defined CONFIG_FB_ARMCLCD || defined CONFIG_FB_ARMCLCD_MODULE
-
-/*
- * CLCD support
- */
-#define CLOCK_TO_DIV(e,c)       (((c) + (e) - 1)/(e))
-
-#define HCLK 96000000
-#define PIX_CLOCK_TARGET        (9600000) /* -/6.3/7 MHz */
-#define PIX_CLOCK_DIVIDER       CLOCK_TO_DIV (PIX_CLOCK_TARGET, HCLK)
-#define PIX_CLOCK               (HCLK/PIX_CLOCK_DIVIDER)
-
-struct clcd_panel tmpa9xx_panel = {
-	.mode		= {
-		.name		= "TMPA9xx Panel",
-		.refresh	= 30,
-		.xres		= 320,
-		.yres		= 240,
-		.pixclock	= PIX_CLOCK,
-		.left_margin	= 8,
-		.right_margin	= 8,
-		.upper_margin	= 2,
-		.lower_margin	= 2,
-		.hsync_len	= 8,
-		.vsync_len	= 2,
-		.sync		= FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
-		.vmode		= FB_VMODE_NONINTERLACED,
-	},
-	.width		= -1,
-	.height		= -1,
-	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER,
-	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK,
-	.bpp		= 32,
-	.grayscale	= 0,
+static struct resource tmpa9xx_resource_clcd[] = {
+        {
+		.start = LCDC_BASE,
+		.end   = LCDC_BASE + (4*1024) - 1,
+		.flags = IORESOURCE_MEM,
+        }, {
+		.start = LCDDA_BASE,
+		.end   = LCDDA_BASE + 0x38 - 1,
+		.flags = IORESOURCE_MEM,
+        }, {
+		.start = INTR_VECT_LCDC,
+		.end   = INTR_VECT_LCDC,
+		.flags = IORESOURCE_IRQ
+        }, {
+		.start = INTR_VECT_LCDDA,
+		.end   = INTR_VECT_LCDDA,
+		.flags = IORESOURCE_IRQ
+        }
 };
 
-static void tmpa9xx_clcd_enable(struct clcd_fb *fb)
-{
-}
+/* defined by baseboard file */
+extern struct tmpa9xx_panel_ts_info tmpa9xx_panels[];
 
-static unsigned long framesize = SZ_1M;
-
-static int tmpa9xx_clcd_setup(struct clcd_fb *fb)
-{
-	dma_addr_t dma;
-
-	fb->panel = &tmpa9xx_panel;
-
-	fb->fb.screen_base = dma_alloc_writecombine(&fb->dev->dev, framesize,
-						    &dma, GFP_KERNEL);
-	if (!fb->fb.screen_base) {
-		printk(KERN_ERR "CLCD: unable to map framebuffer\n");
-		return -ENOMEM;
-	}
-
-	fb->fb.fix.smem_start	= dma;
-	fb->fb.fix.smem_len	= framesize;
-
-	return 0;
-}
-
-static int tmpa9xx_clcd_mmap(struct clcd_fb *fb, struct vm_area_struct *vma)
-{
-	return dma_mmap_writecombine(&fb->dev->dev, vma,
-				     fb->fb.screen_base,
-				     fb->fb.fix.smem_start,
-				     fb->fb.fix.smem_len);
-}
-
-static void tmpa9xx_clcd_remove(struct clcd_fb *fb)
-{
-	dma_free_writecombine(&fb->dev->dev, fb->fb.fix.smem_len,
-			      fb->fb.screen_base, fb->fb.fix.smem_start);
-}
-
-static struct clcd_board clcd_platform_data = {
-	.name		= "tmpa9xx FB",
-	.check		= clcdfb_check,
-	.decode		= clcdfb_decode,
-	.enable		= tmpa9xx_clcd_enable,
-	.setup		= tmpa9xx_clcd_setup,
-	.mmap		= tmpa9xx_clcd_mmap,
-	.remove		= tmpa9xx_clcd_remove,
-};
-
-static struct amba_device clcd_device = {
-        .dev = {
-                .coherent_dma_mask = ~0,
-                .init_name = "tmpa9xx-clcd",
-                .platform_data = &clcd_platform_data,
-                },
-        .res = {
-                .start        = LCDC_BASE,
-                .end          = LCDC_BASE+ (4*1024) - 1,
-                .flags        = IORESOURCE_MEM,
-                },
-        .dma_mask = ~0,
-        .irq      = { INTR_VECT_LCDC, },
-        .periphid = ARM_CLCD_PERIPH_ID,
+static struct platform_device tmpa9xx_clcd_device = {
+        .name          = "tmpa9xx-clcd",
+        .id            = -1,
+        .resource      = tmpa9xx_resource_clcd,
+        .num_resources = ARRAY_SIZE(tmpa9xx_resource_clcd),
+        .dev           = {
+		.platform_data = &tmpa9xx_panels,
+        }
 };
 #endif
 
@@ -310,9 +242,6 @@ static struct amba_device *amba_devs[] __initdata = {
 #ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_2
         &pl011_device2,
 #endif 
-#if defined CONFIG_FB_ARMCLCD || defined CONFIG_FB_ARMCLCD_MODULE
-        &clcd_device,
-#endif        
 };
 #endif
 
@@ -406,6 +335,12 @@ struct platform_device tmpa9xx_device_ts = {
         .resource      = tmpa9xx_resource_ts,
         .num_resources = ARRAY_SIZE(tmpa9xx_resource_ts),
 };
+
+int tmpa9xx_ts_fuzz = 0;
+int tmpa9xx_ts_rate = 100;
+
+EXPORT_SYMBOL(tmpa9xx_ts_fuzz);
+EXPORT_SYMBOL(tmpa9xx_ts_rate);
 #endif
 
 /*
@@ -599,7 +534,7 @@ static struct platform_device tmpa9xx_iio_adc_device = {
 };
 #endif
 
-#if defined CONFIG_FB_ACCELERATOR_TOSHIBA || defined CONFIG_FB_ACCELERATOR_ALTIA
+#if defined CONFIG_FB_ACCELERATOR_ALTIA || defined CONFIG_FB_ACCELERATOR_ALTIA_MODULE
 static struct resource tmpa9xx_lcdda_resource[] = {
         [0] = {
                 .start = 0xF2050000,
@@ -613,15 +548,15 @@ static struct resource tmpa9xx_lcdda_resource[] = {
         },
 };
 
-static u64 tmpa9xx_device_lcdda_dmamask = 0xffffffffUL;
-static struct platform_device tmpa9xx_device_lcdda = {
+static u64 tmpa9xx_lcdda_device_dmamask = 0xffffffffUL;
+static struct platform_device tmpa9xx_lcdda_device = {
         .name = "tmpa9xx-lcdda",
         .id = -1,
         .num_resources = ARRAY_SIZE(tmpa9xx_lcdda_resource),
         .resource = tmpa9xx_lcdda_resource,
-        .dev              = {
-                .dma_mask                = &tmpa9xx_device_lcdda_dmamask,
-                .coherent_dma_mask        = 0xffffffffUL
+        .dev		  = {
+                .dma_mask                = &tmpa9xx_lcdda_device_dmamask,
+                .coherent_dma_mask       = 0xffffffffUL
         }
 };
 #endif
@@ -709,8 +644,12 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
         &tmpa9xx_iio_adc_device,
 #endif
 
-#if defined CONFIG_FB_ACCELERATOR_TOSHIBA || defined CONFIG_FB_ACCELERATOR_ALTIA
-       &tmpa9xx_device_lcdda,
+#if defined CONFIG_FB_ARMCLCD || defined CONFIG_FB_ARMCLCD_MODULE
+       &tmpa9xx_clcd_device,
+#endif
+
+#if defined CONFIG_FB_ACCELERATOR_ALTIA || defined CONFIG_FB_ACCELERATOR_ALTIA_MODULE
+       &tmpa9xx_lcdda_device,
 #endif
 
 #if defined CONFIG_TMPA9XX_PWM_CANNEL_0 || defined CONFIG_TMPA9XX_PWM_CANNEL_0_MODULE
@@ -721,74 +660,6 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
 #endif
 };
 
-/*
- * LCD Parameter Parsing for compatibility
- */ 
-#if defined CONFIG_FB_ARMCLCD || defined CONFIG_FB_ARMCLCD_MODULE
-
-#if defined CONFIG_MACH_TONGA
-static unsigned int videoparams[4]={0x19211e4c,0x10040cef,0x013f380d,0x00010828};
-#elif defined CONFIG_MACH_TONGA2_TFTTIMER
-static unsigned int videoparams[4]={0x28050a74,0x0808290f,0x01df000b,0x00010828};
-#else
-static unsigned int videoparams[4]={0x0707074c,0x020204ef,0x013f200e,0x0001082A};
-#endif
-
-static void setup_display(void)
-{
-    	char *options = NULL;
-        unsigned int sync   = 0;
-        unsigned int timer2 = 0;
-        
-	fb_get_options("tmpa9xxfb", &options);
-	if (options) {
-	    	unsigned int r0, r1, r2 , r3;
-    		r3=0;
-
-		if (sscanf(options, "%08x:%08x:%08x:%08x", &r0, &r1, &r2, &r3) != 4) {
-			if (sscanf(options, "%08x:%08x:%08x", &r0, &r1, &r2) != 3) {
-				return;
-                	}
-		}
-		videoparams[0] = r0;
-		videoparams[1] = r1;
-		videoparams[2] = r2;
-	        if (r3!=0)
-			videoparams[3] = r3;
-
-		printk(KERN_INFO "tmpa9xxfb: Options from cmdline: \n" \
-	        	         "LCDTiming0: 0x%08x\nLCDTiming1: 0x%08x\nLCDTiming2: 0x%08x\nLCDControl: 0x%08x\n"
-                                 , videoparams[0],videoparams[1],videoparams[2],videoparams[3]);
-        }
-	
-        tmpa9xx_panel.mode.xres         = (((videoparams[0]>>2)  &  0x3f)  + 1) *16;
-        tmpa9xx_panel.mode.left_margin  = (  videoparams[0]>>24)           + 1;
-        tmpa9xx_panel.mode.right_margin = (( videoparams[0]>>16) &  0xff)  + 1;
-        tmpa9xx_panel.mode.hsync_len    = (( videoparams[0]>>8)  &  0xff)  + 1;
-
-        tmpa9xx_panel.mode.yres         = ( videoparams[1]&        0x3ff)  + 1;
-        tmpa9xx_panel.mode.upper_margin = ( videoparams[1]>>24)               ;
-        tmpa9xx_panel.mode.lower_margin = ((videoparams[1]>>16)  &  0xff)     ;
-        tmpa9xx_panel.mode.vsync_len    = ((videoparams[1]>>10)  &  0x1f)  + 1;
-
-        tmpa9xx_panel.bpp               =  1 << ((videoparams[3]>>1)&0x07);
-        if (videoparams[3] & (1 << 8))
-		tmpa9xx_panel.cntl      |= CNTL_BGR;
-
-        if (!(videoparams[2] & (1<<11)))
-		sync |= FB_SYNC_HOR_HIGH_ACT;
-        if (!(videoparams[2] & (1<<12)))
-		sync |= FB_SYNC_VERT_HIGH_ACT;
-        if ((videoparams[2] & (1<<13)))
-		timer2 |= TIM2_IPC;
-
-	timer2 |= (videoparams[2])&0x1f;
-        
-        tmpa9xx_panel.mode.sync = sync;
-	tmpa9xx_panel.tim2      = timer2;
-}
-#endif
-
 static u64 tmpa9xx_dma_mask = DMA_BIT_MASK(32);
 
 void __init tmpa9xx_init(void)
@@ -796,9 +667,6 @@ void __init tmpa9xx_init(void)
 #ifdef CONFIG_ARM_AMBA
         int i;
 #endif        
-#if defined CONFIG_FB_ARMCLCD || defined CONFIG_FB_ARMCLCD_MODULE
-	setup_display();
-#endif
         /* DMA setup */
         platform_bus.coherent_dma_mask = DMA_BIT_MASK(32);
         platform_bus.dma_mask          = &tmpa9xx_dma_mask;

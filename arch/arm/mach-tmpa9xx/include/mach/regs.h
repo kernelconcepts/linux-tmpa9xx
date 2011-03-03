@@ -549,25 +549,8 @@
 #define VICINTENABLE            (0xF4000010)
 #define VICADDRESS              __REG(INTR_BASE + 0x0F00)
 
-
 /* LCDDA (LCD Data Process Accelerator) */
-#define LCDDA_BASE              (0xF2050000)
-#define LCDDA_LDACR0            __REG(LCDDA_BASE+0x00)
-#define LCDDA_LDADRSRC1         __REG(LCDDA_BASE+0x04)
-#define LCDDA_LDADRSRC0         __REG(LCDDA_BASE+0x08)
-#define LCDDA_LDAFCPSRC1        __REG(LCDDA_BASE+0x0c)
-#define LCDDA_LDAEFCPSRC1       __REG(LCDDA_BASE+0x10)
-#define LCDDA_LDADVSRC0         __REG(LCDDA_BASE+0x14)
-#define LCDDA_LDADVSRC1         __REG(LCDDA_BASE+0x18)
-#define LCDDA_LDADXDST          __REG(LCDDA_BASE+0x1c)
-#define LCDDA_LDADYDST          __REG(LCDDA_BASE+0x20)
-#define LCDDA_LDASSIZE          __REG(LCDDA_BASE+0x24)
-#define LCDDA_LDADSIZE          __REG(LCDDA_BASE+0x28)
-#define LCDDA_LDAS0AD           __REG(LCDDA_BASE+0x2c)
-#define LCDDA_LDADAD            __REG(LCDDA_BASE+0x30)
-#define LCDDA_LDACR1            __REG(LCDDA_BASE+0x34)
-#define LCDDA_LDACR2            __REG(LCDDA_BASE+0x38)
-
+#define LCDDA_BASE              (0xf2050000)
 
 /* Touchscreen Controller */
 #define TS_BASE                 (0xF0060000)

@@ -22,4 +22,14 @@
 #ifndef __TMPA9XX_TS_H__
 #define __TMPA9XX_TS_H__
 
+struct tmpa9xx_panel_ts_info
+{
+	struct clcd_panel *panel;
+	int fuzz;
+	int rate;
+};
+
+extern int tmpa9xx_ts_fuzz;
+extern int tmpa9xx_ts_rate;
+
 #endif /* __TMPA9XX_TS_H__ */

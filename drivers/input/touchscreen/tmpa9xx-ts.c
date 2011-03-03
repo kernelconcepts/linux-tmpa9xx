@@ -175,9 +175,6 @@ static irqreturn_t topas910_ts_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static int tmpa9xx_ts_fuzz = 0;
-static int tmpa9xx_ts_rate = 100;
-
 static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;

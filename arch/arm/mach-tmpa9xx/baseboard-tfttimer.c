@@ -31,10 +31,12 @@
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
 #include <linux/dma-mapping.h>
-#include <linux/amba/pl022.h>
 #include <linux/spi/mmc_spi.h>
 #include <linux/mmc/host.h>
 #include <linux/pwm_backlight.h>
+#include <linux/amba/bus.h>
+#include <linux/amba/clcd.h>
+#include <linux/amba/pl022.h>
 
 #include <asm/system.h>
 #include <asm/irq.h>
@@ -209,6 +211,39 @@ static struct platform_device *devices_baseboard[] __initdata = {
 	&i2c0_gpio_device,
 	&i2c1_gpio_device,
 #endif        
+};
+
+#define HCLK 			96000000
+#define PIX_CLOCK_DIVIDER	11
+#define PIX_CLOCK		(HCLK/PIX_CLOCK_DIVIDER)
+
+struct clcd_panel default_panel = {
+	.mode = {
+		.name		= "tfttimer",
+		.refresh	= 30, /* unused */
+		.xres           = 480,
+		.yres           = 272,
+		.pixclock       = PIX_CLOCK,
+		.left_margin    = 41,
+		.right_margin   = 6,
+		.upper_margin   = 8,
+		.lower_margin   = 8,
+		.hsync_len      = 11,
+		.vsync_len      = 11,
+		.sync           = FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT | 0,
+		.vmode          = 3,
+	},
+	.width          = -1,
+	.height         = -1,
+	.tim2           = PIX_CLOCK_DIVIDER,
+	.cntl           = CNTL_LCDTFT | CNTL_WATERMARK,
+	.bpp            = 16,
+	.grayscale      = 0,
+};
+
+struct clcd_panel *tmpa9xx_panels[] = {
+	&default_panel,
+	NULL,
 };
 
 void __init baseboard_init(void)

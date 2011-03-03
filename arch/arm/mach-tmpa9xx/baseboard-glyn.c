@@ -32,10 +32,12 @@
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
 #include <linux/dma-mapping.h>
-#include <linux/amba/pl022.h>
 #include <linux/spi/mmc_spi.h>
 #include <linux/mmc/host.h>
 #include <linux/pwm_backlight.h>
+#include <linux/amba/bus.h>
+#include <linux/amba/clcd.h>
+#include <linux/amba/pl022.h>
 
 #include <asm/system.h>
 #include <asm/irq.h>
@@ -258,6 +260,130 @@ static struct platform_device *devices_baseboard[] __initdata = {
 #if defined CONFIG_SND_SOC_TMPA9XX_I2S
         &baseboard_i2s_device,    
 #endif
+};
+
+#define HCLK 			96000000
+#define PIX_CLOCK		(HCLK/PIX_CLOCK_DIVIDER)
+
+#define PIX_CLOCK_DIVIDER_QVGA 13
+static struct clcd_panel qvga = {
+	.mode = {
+		.name		= "qvga",
+		.xres		= 320,
+		.yres		= 240,
+		.pixclock	= HCLK/PIX_CLOCK_DIVIDER_QVGA,
+		.left_margin	= 26,
+		.right_margin	= 34,
+		.upper_margin	= 16,
+		.lower_margin	= 4,
+		.hsync_len	= 31,
+		.vsync_len	= 4,
+		.sync	 	= 0,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	.width		= -1,
+	.height		= -1,
+	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER_QVGA,
+	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK | 0,
+	.bpp		= 16,
+	.grayscale	= 0,
+};
+
+static struct clcd_panel wqvga = {
+	.mode = {
+		.name		= "wqvga",
+		.xres		= 480,
+		.yres		= 272,
+		.pixclock	= 6000000,
+		.left_margin	= 11,
+		.right_margin	= 16,
+		.upper_margin	= 2,
+		.lower_margin	= 2,
+		.hsync_len	= 21,
+		.vsync_len	= 11,
+		.sync		= 0,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	.width		= -1,
+	.height		= -1,
+	.tim2		= TIM2_IPC | 11,
+	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK,
+	.bpp		= 16,
+	.grayscale	= 0,
+};
+
+#define PIX_CLOCK_DIVIDER_VGA 5
+static struct clcd_panel vga = {
+	.mode = {
+		.name		= "vga",
+		.xres		= 640,
+		.yres		= 480,
+		.pixclock	= HCLK/PIX_CLOCK_DIVIDER_VGA,
+		.left_margin	= 96,
+		.right_margin	= 32,
+		.upper_margin	= 32,
+		.lower_margin	= 32,
+		.hsync_len	= 32,
+		.vsync_len	= 16,
+		.sync		= 0,
+		.vmode		 = FB_VMODE_NONINTERLACED,
+	},
+	.width		= -1,
+	.height		= -1,
+	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER_VGA,
+	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK,
+	.bpp		= 16,
+	.grayscale	= 0,
+};
+
+#define PIX_CLOCK_DIVIDER_WVGA 4
+static struct clcd_panel wvga = {
+	.mode = {
+		.name		= "wvga",
+		.xres		= 800,
+		.yres		= 480,
+		.pixclock	= HCLK/PIX_CLOCK_DIVIDER_WVGA,
+		.left_margin	= 32,
+		.right_margin	= 32,
+		.upper_margin	= 32,
+		.lower_margin	= 16,
+		.hsync_len	= 128,
+		.vsync_len	= 4,
+		.sync		= FB_SYNC_HOR_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	.width		= -1,
+	.height		= -1,
+	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER_WVGA,
+	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK,
+	.bpp		= 16,
+	.grayscale	= 0,
+};
+
+struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {
+	{
+		.panel = &qvga,
+		.fuzz = 0,
+		.rate = 200,
+	},
+	{
+		.panel = &wqvga,
+		.fuzz = 0,
+		.rate = 200,
+	},
+	{
+		.panel = &vga,
+		.fuzz = 0,
+		.rate = 200,
+	},
+	{
+		.panel = &wvga,
+		.fuzz = 0,
+		.rate = 200,
+	},
+	{
+		.panel = NULL,
+	},
 };
 
 #define LCD_BACKLIGHT_GPIO	20	/* PORTC4 */
