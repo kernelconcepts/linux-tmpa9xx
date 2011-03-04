@@ -306,18 +306,15 @@
 
 
 /* RTC */
-#define RTC_BASE                   (0xF0030000)
-#define RTCDATA                    (RTC_BASE + 0x0000)             /* RTC Data Register */
-#define RTCCOMP                    (RTC_BASE + 0x0004)             /* RTC Compare Register */
-#define RTCPRST                    (RTC_BASE + 0x0008)             /* RTC Preset Register */
-#define MLDALMINV                  __REG(RTC_BASE + 0x0100)        /* Melody Alarm Invert Register */
-#define MLDALMSEL                  __REG(RTC_BASE + 0x0104)        /* Melody Alarm signal Select Register */ 
-#define ALMCNTCR                   __REG(RTC_BASE + 0x0108)        /* Alarm Counter Control Register */
-#define ALMPATERN                  __REG(RTC_BASE + 0x010C)        /* Alarm Pattern Register */
-#define MLDCNTCR                   __REG(RTC_BASE + 0x0110)        /* Melody Counter Control Register */
-#define MLDFRQ                     __REG(RTC_BASE + 0x0114)        /* Melody Frequency Register */
-#define RTCALMINTCTR              (RTC_BASE + 0x0200)              /* RTC ALM Interrupt Control Register */
-#define RTCALMMIS                 (RTC_BASE + 0x0204)              /* RTC ALM Interrupt Status Register */
+#define RTC_BASE	(0xf0030000)
+#define RTCDATA		(RTC_BASE + 0x0000)	   /* RTC Data Register */
+#define RTCCOMP		(RTC_BASE + 0x0004)	   /* RTC Compare Register */
+#define RTCPRST		(RTC_BASE + 0x0008)	   /* RTC Preset Register */
+#define RTCALMINTCTR	(RTC_BASE + 0x0200)	   /* RTC ALM Interrupt Control Register */
+#define RTCALMMIS	(RTC_BASE + 0x0204)	   /* RTC ALM Interrupt Status Register */
+
+/* Melody / Alarm */
+#define MA_BASE                   (0xf0030100)
 
 /* I2C Ports */
 #define I2C0_BASE                 (0xF0070000)

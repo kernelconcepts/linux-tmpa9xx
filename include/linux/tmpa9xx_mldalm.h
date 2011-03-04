@@ -1,11 +1,3 @@
-/*
- *	Generic watchdog defines. Derived from..
- *
- * Berkshire PC Watchdog Defines
- * by Ken Hollis <khollis@bitgate.com>
- *
- */
-
 #ifndef _TMPA9XX_MLDALM_H
 #define _TMPA9XX_MLDALM_H
 

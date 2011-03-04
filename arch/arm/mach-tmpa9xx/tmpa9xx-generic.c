@@ -477,8 +477,8 @@ static struct platform_device tmpa9xx_device_rtc = {
 #if defined CONFIG_TMPA9XX_MLDALM || defined CONFIG_TMPA9XX_MLDALM_MODULE
 static struct resource tmpa9xx_resource_mldalm[] = {
         {
-         .start = RTC_BASE + 0x100,
-         .end   = RTC_BASE + 0x1ff,
+         .start = MA_BASE,
+         .end   = MA_BASE + 0xff,
          .flags = IORESOURCE_MEM
         }
 };
