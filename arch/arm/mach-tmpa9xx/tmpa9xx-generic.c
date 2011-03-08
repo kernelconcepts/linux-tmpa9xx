@@ -217,7 +217,8 @@ static struct platform_device tmpa9xx_clcd_device = {
         .resource      = tmpa9xx_resource_clcd,
         .num_resources = ARRAY_SIZE(tmpa9xx_resource_clcd),
         .dev           = {
-		.platform_data = &tmpa9xx_panels,
+                .coherent_dma_mask 	= ~0,
+		.platform_data		= &tmpa9xx_panels,
         }
 };
 #endif

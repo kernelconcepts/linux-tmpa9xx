@@ -21,9 +21,20 @@ struct tmpa9xx_blit
 	int blend;
 };
 
+struct tmpa9xx_frect
+{
+	unsigned long dst;
+	unsigned long color;
+	int w;
+	int h;
+	int bpp;
+	int pitch;
+};
+
 /* this ioctl definition is provided via the framebuffer fd.
 'F' is from include/linux/fb.h */
 
-#define TMPA9XX_BLIT _IOW('F', 0x30, struct tmpa9xx_blit)
+#define TMPA9XX_BLIT  _IOW('F', 0x30, struct tmpa9xx_blit)
+#define TMPA9XX_FRECT _IOW('F', 0x31, struct tmpa9xx_frect)
 
 #endif /* __ASM_ARCH_TMPA9XX_LCDDA_H */
