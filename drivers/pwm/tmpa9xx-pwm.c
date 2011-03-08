@@ -214,7 +214,7 @@ static int tmpa9xx_pwm_config(struct pwm_channel *p,
        return tmpa9xx_pwm_config_nosleep(p, c);
 }
 
-static int __init tmpa9xx_pwm_probe(struct platform_device *pdev)
+static int __devinit tmpa9xx_pwm_probe(struct platform_device *pdev)
 {
        const struct platform_device_id *id = platform_get_device_id(pdev);
        struct tmpa9xx_pwm *tmpa9xx;
