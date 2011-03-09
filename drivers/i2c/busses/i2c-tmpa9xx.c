@@ -214,22 +214,19 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 		return -EIO;
 	}
 
+	cr1 = regs->i2c_cr1;
+	cr1 &= ~(7UL << 5);	/* 8bit transfer */
+	cr1 |= (1UL << 4);	/* acknowledge */
+	regs->i2c_cr1 = cr1;
+
 	for (i = 0; i < msg->len; i++) {
-		cr1 = regs->i2c_cr1;
-		cr1 &= ~(7UL << 5);	/* 8bit transfer */
-		cr1 |= (1UL << 4);	/* acknowledge */
 
-		if (tmpa9xx_i2c_wait_done(adap) < 0) {
-			dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
-			return -ETIMEDOUT;
-		}
-
-		regs->i2c_cr1 = cr1;
+		dev_dbg(&adap->dev, "%s(): ... %d ...\n", __func__, i);
 
 		regs->i2c_dbr = data[i] & 0xFF;	/* put 8bits into xmit FIFO */
 
 		if (tmpa9xx_i2c_wait_done(adap) < 0) {
-		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
+			dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_done() failed\n", __func__);
 			return -ETIMEDOUT;
 		}
 
@@ -266,6 +263,9 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 	cr1 = regs->i2c_cr1;
 	cr1 &= ~((1UL << 4) | (7UL << 5));	/* 8bit transfer, no ACK */
+	if (msg->len > 1) {
+		cr1 |= (1UL << 4);      /* do ACK */
+	}
 	regs->i2c_cr1 = cr1;
 
 	/* write dummy data to set PIN to 1 */
@@ -286,10 +286,17 @@ static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 		data[i] = regs->i2c_dbr;
 
-		/* generate NACK, clear ACK */
 		cr1 = regs->i2c_cr1;
-		cr1 &= ~((1UL << 4) | (7UL << 5));	/* clear no of xfer bits, no ACK */
-		cr1 |= (1UL << 5);			/* xfer bits = 1 */
+		if (i + 2 < msg->len) {
+	        	cr1 |= (1UL << 4);                      /* send ack */
+		}
+		else if (i + 1 < msg->len) {
+	        	cr1 &= ~(1UL << 4);                     /* send nack */
+		}
+		else {
+	        	cr1 &= ~((1UL << 4) | (7UL << 5));      /* clear no of xfer bits, no ACK */
+	        	cr1 |= (1UL << 5);                      /* xfer bits = 1 */
+		}
 		regs->i2c_cr1 = cr1;
 
 		/* write dummy data to issue the ack */
