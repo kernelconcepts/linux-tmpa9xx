@@ -619,9 +619,9 @@ static int setup_display(struct platform_device *pdev)
 	c->panel.grayscale = 0;
 
 	if (!(videoparams[2] & (1<<11)))
-		sync |= FB_SYNC_HOR_HIGH_ACT;
-	if (!(videoparams[2] & (1<<12)))
 		sync |= FB_SYNC_VERT_HIGH_ACT;
+	if (!(videoparams[2] & (1<<12)))
+		sync |= FB_SYNC_HOR_HIGH_ACT;
 	if ((videoparams[2] & (1<<13)))
 		timer2 |= TIM2_IPC;
 
