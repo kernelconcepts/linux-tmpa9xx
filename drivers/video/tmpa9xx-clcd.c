@@ -630,10 +630,15 @@ static int setup_display(struct platform_device *pdev)
 	c->panel.mode.sync = sync;
 	c->panel.tim2      = timer2;
 
+out:
 #ifdef DEBUG
+	dev_info(&pdev->dev, "#define PIX_CLOCK_DIVIDER_xxx %d\n", c->panel.tim2 & ~(TIM2_IPC));
+	dev_info(&pdev->dev, "static struct clcd_panel xxx = {\n");
+	dev_info(&pdev->dev, "\t.mode = {\n");
+	dev_info(&pdev->dev, "\t\t.name\t\t= \"xxx\",\n");
 	dev_info(&pdev->dev, "\t\t.xres\t\t= %d,\n", c->panel.mode.xres);
 	dev_info(&pdev->dev, "\t\t.yres\t\t= %d,\n", c->panel.mode.yres);
-	dev_info(&pdev->dev, "\t\t.pixclock\t= %d,\n", c->panel.mode.pixclock);
+	dev_info(&pdev->dev, "\t\t.pixclock\t= HCLK/PIX_CLOCK_DIVIDER_xxx,\n");
 	dev_info(&pdev->dev, "\t\t.left_margin\t= %d,\n", c->panel.mode.left_margin);
 	dev_info(&pdev->dev, "\t\t.right_margin\t= %d,\n", c->panel.mode.right_margin);
 	dev_info(&pdev->dev, "\t\t.upper_margin\t= %d,\n", c->panel.mode.upper_margin);
@@ -646,16 +651,14 @@ static int setup_display(struct platform_device *pdev)
 		(c->panel.mode.sync & ~(FB_SYNC_HOR_HIGH_ACT|FB_SYNC_VERT_HIGH_ACT))
 		);
 	dev_info(&pdev->dev, "\t\t.vmode\t\t= %s%d,\n",
-		 c->panel.mode.sync & FB_VMODE_NONINTERLACED ? "FB_VMODE_NONINTERLACED |" : "",
-		(c->panel.mode.sync & ~(FB_VMODE_NONINTERLACED))
+		 c->panel.mode.vmode & FB_VMODE_NONINTERLACED ? "FB_VMODE_NONINTERLACED |" : "",
+		(c->panel.mode.vmode & ~(FB_VMODE_NONINTERLACED))
 		);
 	dev_info(&pdev->dev, "\t},\n");
 	dev_info(&pdev->dev, "\t.width\t\t= %d,\n", c->panel.width);
 	dev_info(&pdev->dev, "\t.height\t\t= %d,\n", c->panel.height);
-	dev_info(&pdev->dev, "\t.tim2\t\t= %s%d,\n",
-		 c->panel.tim2 & TIM2_IPC ? "TIM2_IPC | " : "",
-		(c->panel.tim2 & ~(TIM2_IPC))
-		);
+	dev_info(&pdev->dev, "\t.tim2\t\t= %sPIX_CLOCK_DIVIDER_xxx,\n",
+		 c->panel.tim2 & TIM2_IPC ? "TIM2_IPC | " : "");
 	dev_info(&pdev->dev, "\t.cntl\t\t= %s%s%s%d,\n",
 		 c->panel.cntl & CNTL_BGR ? "CNTL_BGR | " : "",
 		 c->panel.cntl & CNTL_LCDTFT ? "CNTL_LCDTFT | " : "",
@@ -664,9 +667,9 @@ static int setup_display(struct platform_device *pdev)
 		);
 	dev_info(&pdev->dev, "\t.bpp\t\t= %d,\n", c->panel.bpp);
 	dev_info(&pdev->dev, "\t.grayscale\t= %d,\n", c->panel.grayscale);
+	dev_info(&pdev->dev, "};\n");
 #endif
 
-out:
 #ifdef TMPA9XX_PORTRAIT
 	c->wq = create_workqueue("tmpa9xx-clcd-wq");
 	if (!c->wq) {
