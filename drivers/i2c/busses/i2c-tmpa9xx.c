@@ -20,6 +20,10 @@
 #include <linux/irq.h>
 #include <linux/slab.h>
 
+static int speed_khz = 100;
+module_param(speed_khz, int, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(speed_khz, "i2c bus speed in khz");
+
 #define CR1	(0x00)	/* control register 1 */
 #define DBR	(0x04)	/* data buffer register*/
 #define AR	(0x08)	/* slave address register */
@@ -394,7 +398,7 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 
 	i2c_writel(priv, AR, 0);
 
-	calculate_prescaler_timing(96*1000, 100, &priv->p);
+	calculate_prescaler_timing(96*1000, speed_khz, &priv->p);
 	dev_dbg(&pdev->dev, "prs %d, n %d, freq %d\n", priv->p.prs, priv->p.n, priv->p.freq);
 
 	/* setup scalers to 100khz */
