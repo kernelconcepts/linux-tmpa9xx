@@ -255,36 +255,53 @@ static struct amba_device *amba_devs[] __initdata = {
 /*
  * I2C
  */ 
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
-static struct resource tmpa9xx_resource_i2c[] = {
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
+static struct resource tmpa9xx_resource_i2c_channel_0[] = {
         {
             .start = I2C0_BASE,
             .end   = I2C0_BASE+0x1F,
             .flags = IORESOURCE_MEM,
         }, {
+            .start = INTR_VECT_I2C_CH0,
+            .end   = INTR_VECT_I2C_CH0,
+            .flags = IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
+        },
+};
+
+struct platform_device tmpa9xx_device_i2c_channel_0 = {
+        .name = "tmpa9xx-i2c",
+        .id   = 0,
+        .dev  = {
+                .platform_data     = NULL,
+                .coherent_dma_mask = DMA_BIT_MASK(32),
+        },
+        .resource      = tmpa9xx_resource_i2c_channel_0,
+        .num_resources = ARRAY_SIZE(tmpa9xx_resource_i2c_channel_0),
+};
+#endif
+
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
+static struct resource tmpa9xx_resource_i2c_channel_1[] = {
+	{
             .start = I2C1_BASE,
             .end   = I2C1_BASE+0x1F,
             .flags = IORESOURCE_MEM,
         }, {
-            .start = INTR_VECT_I2C_CH0,
-            .end   = INTR_VECT_I2C_CH0,
-            .flags = IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-        }, {
             .start = INTR_VECT_I2C_CH1,
             .end   = INTR_VECT_I2C_CH1,
             .flags = IORESOURCE_IRQ | IRQF_TRIGGER_HIGH,
-        }
+        },
 };
 
-struct platform_device tmpa9xx_device_i2c = {
-        .name= "tmpa9xx-i2c",
-        .id  = 0,
-        .dev = {
+struct platform_device tmpa9xx_device_i2c_channel_1 = {
+        .name = "tmpa9xx-i2c",
+        .id   = 1,
+        .dev  = {
                 .platform_data     = NULL,
                 .coherent_dma_mask = DMA_BIT_MASK(32),
         },
-        .resource      = tmpa9xx_resource_i2c,
-        .num_resources = ARRAY_SIZE(tmpa9xx_resource_i2c),
+        .resource      = tmpa9xx_resource_i2c_channel_1,
+        .num_resources = ARRAY_SIZE(tmpa9xx_resource_i2c_channel_1),
 };
 #endif
 
@@ -603,8 +620,11 @@ static struct platform_device tmpa9xx_pwm1_device = {
 #endif
 
 static struct platform_device *devices_tmpa9xx[] __initdata = {
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
-        &tmpa9xx_device_i2c,
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
+        &tmpa9xx_device_i2c_channel_0,
+#endif
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
+        &tmpa9xx_device_i2c_channel_1,
 #endif
 
 #if defined CONFIG_MMC_TMPA9XX_SDHC || defined CONFIG_MMC_TMPA9XX_SDHC_MODULE
@@ -748,9 +768,8 @@ void __init tmpa9xx_init(void)
 #endif
 
         
-#if (defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE) \
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_0 \
  && (!defined CONFIG_USB_OHCI_HCD_TMPA9XX && !defined CONFIG_USB_OHCI_HCD_TMPA9XX_MODULE) \
- && defined CONFIG_I2C_TMPA9XX_CHANNEL_0
         /* set PORT-C 6,7 to I2C and enable open drain */
         GPIOCFR1 |=  (0xc0);
         GPIOCFR2 &= ~(0xc0);
@@ -802,7 +821,7 @@ void __init tmpa9xx_init(void)
         GPIOFIE  &= ~(0xc0);
         GPIOFODE &= ~(0xc0);
 #endif    
-#if (defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE) && defined CONFIG_I2C_TMPA9XX_CHANNEL_1
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
         /* set PORT-C 6,7 to I2C and enable open drain */
         GPIOFDIR &= ~(0xc0);
         GPIOFFR1 |=  (0xc0);
