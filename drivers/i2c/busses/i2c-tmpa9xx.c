@@ -34,27 +34,20 @@ struct tmpa9xx_i2c_regs {
 
 #define i2c_sr i2c_cr2		// reading cr2 reads the status
 
-struct tmpa9xx_i2c_algo_data {
-	struct tmpa9xx_i2c_regs *regs;
-	int channel;
-
-	int irq;
-	spinlock_t lock;
-};
-
 struct tmpa9xx_i2c_priv {
-	struct platform_device *pdev;
+	struct device *dev;
 	struct i2c_adapter *i2c_adapter;
-	struct tmpa9xx_i2c_algo_data i2c_algo_data;
+	struct tmpa9xx_i2c_regs *regs;
 	unsigned long io_start;
 	unsigned long io_lenght;
+	int irq;
 };
 
 #ifdef DEBUG
 static void tmpa9xx_i2c_dump_regs(struct i2c_adapter *adap)
 {
-	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
-	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+	struct tmpa9xx_i2c_priv *priv = adap->algo_data;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = priv->regs;
 
 	printk("I2C controller at %p\n", regs);
 	printk(" I2C%dCR1 (0x%02x) = 0x%02x\n", algo->channel, offsetof(struct tmpa9xx_i2c_regs, i2c_cr1), regs->i2c_cr1);
@@ -77,8 +70,8 @@ static void tmpa9xx_i2c_dump_regs(struct i2c_adapter *adap)
 static int tmpa9xx_i2c_wait_status_timeout(struct i2c_adapter *adap,
 				    uint32_t mask, uint32_t val)
 {
-	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
-	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+	struct tmpa9xx_i2c_priv *priv = adap->algo_data;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = priv->regs;
 #ifdef USE_UDELAY
 	volatile int timeout = 1000;
 #else
@@ -116,8 +109,8 @@ static int tmpa9xx_i2c_wait_lrb_set(struct i2c_adapter *adap)
 
 static int tmpa9xx_i2c_restart(struct i2c_adapter *adap)
 {
-	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
-	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+	struct tmpa9xx_i2c_priv *priv = adap->algo_data;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = priv->regs;
 
 	regs->i2c_cr2 = 0
 	    | (1UL << 4)		/* clear service request */
@@ -143,8 +136,8 @@ static int tmpa9xx_i2c_restart(struct i2c_adapter *adap)
 
 static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr, int is_read)
 {
-	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
-	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+	struct tmpa9xx_i2c_priv *priv = adap->algo_data;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = priv->regs;
 
 	if (tmpa9xx_i2c_wait_free_bus(adap) < 0) {
 		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
@@ -171,8 +164,8 @@ static int tmpa9xx_i2c_start(struct i2c_adapter *adap, int slave_adr, int is_rea
 
 static int tmpa9xx_i2c_stop(struct i2c_adapter *adap)
 {
-	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
-	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+	struct tmpa9xx_i2c_priv *priv = adap->algo_data;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = priv->regs;
 
 	regs->i2c_cr2 = (1UL << 7)	/* select master mode */
 	    | (1UL << 6)	/* transmit operation */
@@ -191,8 +184,8 @@ static int tmpa9xx_i2c_stop(struct i2c_adapter *adap)
 
 static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 {
-	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
-	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+	struct tmpa9xx_i2c_priv *priv = adap->algo_data;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = priv->regs;
 
 	int ret;
 	unsigned int sr, cr1;
@@ -237,8 +230,8 @@ static int tmpa9xx_i2c_xmit(struct i2c_adapter *adap, struct i2c_msg *msg)
 
 static int tmpa9xx_i2c_rcv(struct i2c_adapter *adap, struct i2c_msg *msg)
 {
-	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
-	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+	struct tmpa9xx_i2c_priv *priv = adap->algo_data;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = priv->regs;
 	int ret;
 	unsigned int sr, cr1;
 	int i, dummy;
@@ -406,8 +399,8 @@ out:
 
 static int tmpa9xx_i2c_setup(struct i2c_adapter *adap)
 {
-	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
-	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+	struct tmpa9xx_i2c_priv *priv = adap->algo_data;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = priv->regs;
 
 	/* software reset */
 	regs->i2c_cr2 = (1UL << 1) | (0UL << 0);
@@ -429,8 +422,8 @@ static int tmpa9xx_i2c_setup(struct i2c_adapter *adap)
 
 static int tmpa9xx_i2c_shutdown(struct i2c_adapter *adap)
 {
-	struct tmpa9xx_i2c_algo_data *algo = adap->algo_data;
-	volatile struct tmpa9xx_i2c_regs __iomem *regs = algo->regs;
+	struct tmpa9xx_i2c_priv *priv = adap->algo_data;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = priv->regs;
 
 	if(tmpa9xx_i2c_wait_free_bus(adap) < 0) {
 		dev_dbg(&adap->dev, "%s(): tmpa9xx_i2c_wait_free_bus() failed\n", __func__);
@@ -455,12 +448,26 @@ static struct i2c_algorithm tmpa9xx_algorithm = {
 	.functionality = tmpa9xx_i2c_func,
 };
 
+static irqreturn_t interrupt_handler(int irq, void *ptr)
+{
+	struct tmpa9xx_i2c_priv *priv = ptr;
+	volatile struct tmpa9xx_i2c_regs __iomem *regs = priv->regs;
+	struct device *dev = priv->dev;
+
+/*
+	dev_err(dev, "irq\n");
+*/
+
+	regs->i2c_ir = 0x1;
+
+	return IRQ_HANDLED;
+}
+
 static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 {
 	struct tmpa9xx_i2c_priv *priv;
 	struct i2c_adapter *adapter;
 	struct resource *res;
-	int irq;
 	int ret;
 
 	priv = kzalloc(sizeof(struct tmpa9xx_i2c_priv), GFP_KERNEL);
@@ -470,8 +477,7 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 		goto err0;
 	}
 
-	priv->pdev = pdev;
-	priv->i2c_algo_data.irq = NO_IRQ;
+	priv->dev = &pdev->dev;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -490,33 +496,37 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	priv->io_start = res->start;
 	priv->io_lenght = res->end - res->start + 1;
 
-	priv->i2c_algo_data.regs = ioremap(res->start, res->end - res->start + 1);
-	if (!priv->i2c_algo_data.regs) {
+	priv->regs = ioremap(res->start, res->end - res->start + 1);
+	if (!priv->regs) {
 		dev_dbg(&pdev->dev, "ioremap() failed\n");
 		ret = -ENOMEM;
 		goto err3;
 	}
 
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
+	priv->irq = platform_get_irq(pdev, 0);
+	if (priv->irq < 0) {
 		dev_dbg(&pdev->dev, "platform_get_irq() failed\n");
 		ret = -ENODEV;
 		goto err4;
 	}
 
-	priv->i2c_algo_data.irq = irq;
+	ret = request_irq(priv->irq, interrupt_handler, IRQF_DISABLED, "tmpa9xx-i2c", priv);
+	if (ret) {
+		dev_dbg(&pdev->dev, "platform_get_irq() failed\n");
+		ret = -ENODEV;
+		goto err5;
+	}
 
 	adapter = kzalloc(sizeof(struct i2c_adapter), GFP_KERNEL);
 	if (!adapter) {
 		dev_dbg(&pdev->dev, "kzalloc() failed\n");
 		ret = -ENODEV;
-		goto err5;
+		goto err6;
 	}
 
 	sprintf(adapter->name, "tmpa9xx_i2c%d", pdev->id);
 	adapter->algo = &tmpa9xx_algorithm;
-	adapter->algo_data = &priv->i2c_algo_data;
-	priv->i2c_algo_data.channel = pdev->id;
+	adapter->algo_data = priv;
 	adapter->class = I2C_CLASS_HWMON;
 	adapter->dev.parent = &pdev->dev;
 	adapter->id = 0;
@@ -529,20 +539,25 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_dbg(&pdev->dev, "i2c_add_numbered_adapter() failed\n");
 		ret = -ENODEV;
-		goto err6;
+		goto err7;
 	}
 
 	platform_set_drvdata(pdev, priv);
 
-	dev_info(&pdev->dev, "channel %d, irq %d, io @ %p\n", pdev->id, priv->i2c_algo_data.irq, priv->i2c_algo_data.regs);
+	dev_info(&pdev->dev, "channel %d, irq %d, io @ %p\n", pdev->id, priv->irq, priv->regs);
+
+	priv->regs->i2c_ie = 0x1;
 
 	return 0;
 
-err6:
+err7:
 	tmpa9xx_i2c_shutdown(adapter);
+	kfree(adapter);
+err6:
+	free_irq(priv->irq, priv);
 err5:
 err4:
-	iounmap(priv->i2c_algo_data.regs);
+	iounmap(priv->regs);
 err3:
 	release_mem_region(priv->io_start, priv->io_lenght);
 err2:
@@ -557,10 +572,13 @@ static int __devexit tmpa9xx_i2c_remove(struct platform_device *pdev)
 	struct tmpa9xx_i2c_priv *priv = platform_get_drvdata(pdev);
 	struct i2c_adapter *adapter = priv->i2c_adapter;
 
+	priv->regs->i2c_ie = 0x0;
+
 	i2c_del_adapter(adapter);
 	tmpa9xx_i2c_shutdown(adapter);
 	kfree(adapter);
-	iounmap(priv->i2c_algo_data.regs);
+	iounmap(priv->regs);
+	free_irq(priv->irq, priv);
 	release_mem_region(priv->io_start, priv->io_lenght);
 	platform_set_drvdata(pdev, NULL);
 	kfree(priv);
