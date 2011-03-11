@@ -504,11 +504,13 @@ static int tmpa9xx_clcd_ioctl(struct clcd_fb *fb, unsigned int cmd, unsigned lon
 {
 	int ret = -ENOIOCTLCMD;
 
+#ifndef CONFIG_FB_TMPA9XX_CLCD_NO_LCDDA
 	if (cmd == TMPA9XX_BLIT)
 		return tmpa9xx_blit_fct(fb, arg);
 
 	if (cmd == TMPA9XX_FRECT)
 		return tmpa9xx_frect_fct(fb, arg);
+#endif
 
 	return ret;
 }
