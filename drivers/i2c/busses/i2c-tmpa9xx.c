@@ -35,11 +35,9 @@ struct tmpa9xx_i2c_regs {
 #define i2c_sr i2c_cr2		// reading cr2 reads the status
 
 struct tmpa9xx_i2c_priv {
+	struct tmpa9xx_i2c_regs *regs;
 	struct device *dev;
 	struct i2c_adapter *i2c_adapter;
-	struct tmpa9xx_i2c_regs *regs;
-	unsigned long io_start;
-	unsigned long io_lenght;
 	int irq;
 };
 
@@ -493,9 +491,6 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 		goto err2;
 	}
 
-	priv->io_start = res->start;
-	priv->io_lenght = res->end - res->start + 1;
-
 	priv->regs = ioremap(res->start, res->end - res->start + 1);
 	if (!priv->regs) {
 		dev_dbg(&pdev->dev, "ioremap() failed\n");
@@ -559,7 +554,7 @@ err5:
 err4:
 	iounmap(priv->regs);
 err3:
-	release_mem_region(priv->io_start, priv->io_lenght);
+	release_mem_region(res->start, res->end - res->start + 1);
 err2:
 err1:
 	kfree(priv);
@@ -571,6 +566,10 @@ static int __devexit tmpa9xx_i2c_remove(struct platform_device *pdev)
 {
 	struct tmpa9xx_i2c_priv *priv = platform_get_drvdata(pdev);
 	struct i2c_adapter *adapter = priv->i2c_adapter;
+	struct resource *res;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	BUG_ON(!res);
 
 	priv->regs->i2c_ie = 0x0;
 
@@ -579,7 +578,7 @@ static int __devexit tmpa9xx_i2c_remove(struct platform_device *pdev)
 	kfree(adapter);
 	iounmap(priv->regs);
 	free_irq(priv->irq, priv);
-	release_mem_region(priv->io_start, priv->io_lenght);
+	release_mem_region(res->start, res->end - res->start + 1);
 	platform_set_drvdata(pdev, NULL);
 	kfree(priv);
 

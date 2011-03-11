@@ -211,7 +211,6 @@ static int __devinit tmpa9xx_mldalm_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-
 	dev_set_drvdata(dev, m);
 	m->dev = dev;
 
