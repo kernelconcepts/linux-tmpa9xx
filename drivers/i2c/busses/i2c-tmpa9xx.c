@@ -14,7 +14,8 @@
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/i2c.h>
-
+#include <linux/clk.h>
+#include <linux/err.h>
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/irq.h>
@@ -46,6 +47,7 @@ struct prescaler_timing
 struct tmpa9xx_i2c_priv {
 	void __iomem *regs;
 	struct device *dev;
+	struct clk *pclk;
 	struct i2c_adapter *i2c_adapter;
 	int irq;
 	struct completion c;
@@ -294,7 +296,7 @@ bailout:
 	return ret;
 }
 
-static void calculate_prescaler_timing(int pclk, int fscl, struct prescaler_timing *t)
+static void calculate_prescaler_timing(int pclk_khz, int fscl_khz, struct prescaler_timing *t)
 {
 	int tprsck;
 	struct prescaler_timing cur;
@@ -302,14 +304,14 @@ static void calculate_prescaler_timing(int pclk, int fscl, struct prescaler_timi
 	t->freq = 0;
 
 	for(cur.prs = 1; cur.prs <= 32; cur.prs++) {
-		tprsck = (cur.prs * 1000 * 1000) / pclk;
+		tprsck = (cur.prs * 1000 * 1000) / pclk_khz;
 		if (tprsck < 50)
 			continue;
 		if (tprsck > 150)
 			continue;
 		for(cur.n = 0; cur.n <= 7; cur.n++) {
-			cur.freq = pclk / (cur.prs * ((1 << (2+cur.n)) + 16));
-			if (cur.freq > t->freq && cur.freq <= fscl)
+			cur.freq = pclk_khz / (cur.prs * ((1 << (2+cur.n)) + 16));
+			if (cur.freq > t->freq && cur.freq <= fscl_khz)
 				*t = cur;
 		}
 	}
@@ -398,8 +400,15 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 
 	i2c_writel(priv, AR, 0);
 
-	calculate_prescaler_timing(96*1000, speed_khz, &priv->p);
-	dev_dbg(&pdev->dev, "prs %d, n %d, freq %d\n", priv->p.prs, priv->p.n, priv->p.freq);
+	priv->pclk = clk_get(&pdev->dev, "apb_pclk");
+	if (IS_ERR(priv->pclk)) {
+		dev_dbg(&pdev->dev, "clk_get() failed\n");
+		ret = PTR_ERR(priv->pclk);
+		goto err7;
+	}
+
+	calculate_prescaler_timing(clk_get_rate(priv->pclk)/1000, speed_khz, &priv->p);
+	dev_err(&pdev->dev, "prs %d, n %d, freq %d\n", priv->p.prs, priv->p.n, priv->p.freq);
 
 	/* setup scalers to 100khz */
 	i2c_writel(priv, PRS, priv->p.prs);
@@ -412,7 +421,7 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_dbg(&pdev->dev, "i2c_add_numbered_adapter() failed\n");
 		ret = -ENODEV;
-		goto err7;
+		goto err8;
 	}
 
 	platform_set_drvdata(pdev, priv);
@@ -423,6 +432,8 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 
 	return 0;
 
+err8:
+	clk_put(priv->pclk);
 err7:
 	/* disable i2c operation */
 	i2c_writel(priv, CR2, (0 << 3));
@@ -460,6 +471,7 @@ static int __devexit tmpa9xx_i2c_remove(struct platform_device *pdev)
 	iounmap(priv->regs);
 	free_irq(priv->irq, priv);
 	release_mem_region(res->start, res->end - res->start + 1);
+	clk_put(priv->pclk);
 	platform_set_drvdata(pdev, NULL);
 	kfree(priv);
 
