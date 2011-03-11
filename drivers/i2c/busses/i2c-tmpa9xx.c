@@ -408,7 +408,7 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	}
 
 	calculate_prescaler_timing(clk_get_rate(priv->pclk)/1000, speed_khz, &priv->p);
-	dev_err(&pdev->dev, "prs %d, n %d, freq %d\n", priv->p.prs, priv->p.n, priv->p.freq);
+	dev_dbg(&pdev->dev, "prs %d, n %d, freq %d\n", priv->p.prs, priv->p.n, priv->p.freq);
 
 	/* setup scalers to 100khz */
 	i2c_writel(priv, PRS, priv->p.prs);
@@ -426,7 +426,7 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, priv);
 
-	dev_info(&pdev->dev, "channel %d, irq %d, io @ %p\n", pdev->id, priv->irq, priv->regs);
+	dev_info(&pdev->dev, "channel %d, irq %d, io @ %p, speed %d kHz\n", pdev->id, priv->irq, priv->regs, priv->p.freq);
 
 	i2c_writel(priv, IE, (1 << 0));
 
