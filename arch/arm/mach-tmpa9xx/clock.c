@@ -76,7 +76,9 @@ static struct clk tim_clk = {
 	.rate = 96000000,
 };
 
-static struct clk dummy_apb_pclk;
+static struct clk dummy_apb_pclk = {
+	.rate = 96000000,
+};
 
 static struct clk_lookup lookups[] = {
         {      /* Bus clock */
