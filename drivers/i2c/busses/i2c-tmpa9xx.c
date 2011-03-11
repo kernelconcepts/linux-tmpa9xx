@@ -32,13 +32,20 @@
 #define i2c_writel(b, o, v)	writel(v, b->regs + o)
 #define i2c_readl(b, o)		readl(b->regs + o)
 
+struct prescaler_timing
+{
+	int prs;
+	int n;
+	int freq;
+};
+
 struct tmpa9xx_i2c_priv {
 	void __iomem *regs;
 	struct device *dev;
 	struct i2c_adapter *i2c_adapter;
 	int irq;
-	int cr1_sck;
 	struct completion c;
+	struct prescaler_timing p;
 };
 
 #define CR1_ACK  (1<<4)
@@ -71,7 +78,7 @@ static int start(struct tmpa9xx_i2c_priv *i, struct i2c_msg *msg)
 
 	dev_dbg(i->dev, "emitting start condition @ addr 0x%02x\n", addr);
 
-	i2c_writel(i, CR1, CR1_ACK | i->cr1_sck);
+	i2c_writel(i, CR1, CR1_ACK | i->p.n);
 	i2c_writel(i, DBR, addr);
 	init_completion(&i->c);
 	i2c_writel(i, CR2, CR2_MST | CR2_TRX | CR2_BB | CR2_PIN | CR2_I2CM);
@@ -180,7 +187,7 @@ static int xinb(struct tmpa9xx_i2c_priv *i, int ack)
 	dev_dbg(i->dev, "ack %d\n", ack);
 
 	if (!ack)
-		i2c_writel(i, CR1, i->cr1_sck);
+		i2c_writel(i, CR1, i->p.n);
 
 	init_completion(&i->c);
 	i2c_writel(i, DBR, 0);
@@ -188,7 +195,7 @@ static int xinb(struct tmpa9xx_i2c_priv *i, int ack)
 	indata = i2c_readl(i, DBR);
 
 	if (!ack) {
-		i2c_writel(i, CR1, (1 << 5) | i->cr1_sck);
+		i2c_writel(i, CR1, (1 << 5) | i->p.n);
 		init_completion(&i->c);
 		i2c_writel(i, DBR, 0);
 		wait_for_completion(&i->c);
@@ -283,20 +290,26 @@ bailout:
 	return ret;
 }
 
-/*
- * serial clock rate = PCLK / (Prescaler*(2**(2+sck)+16))
- *
- * 400khz for PCLK = 96MHz
- * 400 = 96*1000 / ( 12 * (2**(2+0) + 16))
- */
-#define PRSCK_400KHZ 12
-#define CR1SCK_400KHZ 0
-/*
- * 100khz for PCLK = 96MHz
- * 100 = 96*1000 / ( 30 * (2**(2+2) + 16))
- */
-#define PRSCK_100KHZ 30
-#define CR1SCK_100KHZ 2
+static void calculate_prescaler_timing(int pclk, int fscl, struct prescaler_timing *t)
+{
+	int tprsck;
+	struct prescaler_timing cur;
+
+	t->freq = 0;
+
+	for(cur.prs = 1; cur.prs <= 32; cur.prs++) {
+		tprsck = (cur.prs * 1000 * 1000) / pclk;
+		if (tprsck < 50)
+			continue;
+		if (tprsck > 150)
+			continue;
+		for(cur.n = 0; cur.n <= 7; cur.n++) {
+			cur.freq = pclk / (cur.prs * ((1 << (2+cur.n)) + 16));
+			if (cur.freq > t->freq && cur.freq <= fscl)
+				*t = cur;
+		}
+	}
+}
 
 static u32 func(struct i2c_adapter *adapter)
 {
@@ -381,10 +394,12 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 
 	i2c_writel(priv, AR, 0);
 
+	calculate_prescaler_timing(96*1000, 100, &priv->p);
+	dev_dbg(&pdev->dev, "prs %d, n %d, freq %d\n", priv->p.prs, priv->p.n, priv->p.freq);
+
 	/* setup scalers to 100khz */
-	i2c_writel(priv, PRS, PRSCK_100KHZ);
-	priv->cr1_sck = CR1SCK_100KHZ;
-	i2c_writel(priv, CR1, CR1_ACK | priv->cr1_sck);
+	i2c_writel(priv, PRS, priv->p.prs);
+	i2c_writel(priv, CR1, CR1_ACK | priv->p.n);
 
 	/* enable i2c operation, clear any requests */
 	i2c_writel(priv, CR2, CR2_I2CM | CR2_PIN);
