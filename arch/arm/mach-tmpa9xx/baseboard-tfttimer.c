@@ -231,7 +231,7 @@ struct clcd_panel default_panel = {
 		.hsync_len      = 11,
 		.vsync_len      = 11,
 		.sync           = FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT | 0,
-		.vmode          = 3,
+		.vmode          = 0,
 	},
 	.width          = -1,
 	.height         = -1,
@@ -243,7 +243,7 @@ struct clcd_panel default_panel = {
 
 struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {
 	{
-		.panel = &tmpa9xx_panel,
+		.panel = &default_panel,
 		.fuzz = 0,
 		.rate = 200,
 	},
