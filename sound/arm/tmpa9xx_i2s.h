@@ -6,8 +6,6 @@
 #include <linux/workqueue.h>
 #include <asm/dma.h>
 
-#define DESC_ELEMENT_COUNT  9
-
 struct scatter_dma_t {
 	unsigned long srcaddr;
 	unsigned long dstaddr;
@@ -18,7 +16,7 @@ struct scatter_dma_t {
 struct tmpa9xx_i2s {
 	int i2s_num;
 	int err_irq;
-	
+
 	int dma_tx_ch;
 	int dma_rx_ch;
 
@@ -59,7 +57,7 @@ int tmpa9xx_i2s_config_tx_dma(struct tmpa9xx_i2s *i2s,
         unsigned char *cpu_buf, unsigned int phy_buf,
 		int fragcount, size_t fragsize, size_t size);
 
-int tmpa9xx_i2s_config_rx_dma(struct tmpa9xx_i2s *i2s, 
+int tmpa9xx_i2s_config_rx_dma(struct tmpa9xx_i2s *i2s,
         unsigned char *cpu_buf, unsigned int phy_buf,
 		int fragcount, size_t fragsize, size_t size);
 
