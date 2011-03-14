@@ -31,7 +31,7 @@
 
 #include <mach/regs.h>
 
-#define DRV_NAME "TMPA9xx Watchdog"
+#define DRV_NAME "TMPA9xx watchdog"
 
 /* TMPA9xx runs 32bit counter @ PCLK */
 
