@@ -199,6 +199,27 @@ static struct amba_device watchdog = {
 	.periphid = ARM_WDT_PERIPH_ID,
 };
 
+#if defined CONFIG_SND_TMPA9XX_I2S || defined CONFIG_SND_TMPA9XX_I2S_MODULE
+static struct resource tmpa9xx_resource_i2s[] = {
+        {
+		.start = I2S_BASE,
+		.end   = I2S_BASE + (3*1024) - 1,
+		.flags = IORESOURCE_MEM,
+        },
+};
+
+static struct platform_device tmpa9xx_i2s_device = {
+        .name          = "tmpa9xx-i2s",
+        .id            = -1,
+        .resource      = tmpa9xx_resource_i2s,
+        .num_resources = ARRAY_SIZE(tmpa9xx_resource_i2s),
+        .dev           = {
+                .coherent_dma_mask 	= ~0,
+		.platform_data		= NULL,
+        }
+};
+#endif
+
 #if defined CONFIG_FB_ARMCLCD || defined CONFIG_FB_ARMCLCD_MODULE
 static struct resource tmpa9xx_resource_clcd[] = {
         {
@@ -653,6 +674,10 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
 
 #if defined CONFIG_FB_ACCELERATOR_ALTIA || defined CONFIG_FB_ACCELERATOR_ALTIA_MODULE
        &tmpa9xx_lcdda_device,
+#endif
+
+#if defined CONFIG_SND_TMPA9XX_I2S || defined CONFIG_SND_TMPA9XX_I2S_MODULE
+       &tmpa9xx_i2s_device,
 #endif
 
 #if defined CONFIG_TMPA9XX_PWM_CANNEL_0 || defined CONFIG_TMPA9XX_PWM_CANNEL_0_MODULE

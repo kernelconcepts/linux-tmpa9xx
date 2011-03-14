@@ -1,5 +1,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/platform_device.h>
+
 #include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -459,6 +461,43 @@ EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_rx);
 EXPORT_SYMBOL(tmpa9xx_i2s_free);
 EXPORT_SYMBOL(tmpa9xx_i2s_tx_start);
 EXPORT_SYMBOL(tmpa9xx_i2s_tx_stop);
+
+static int __devinit probe(struct platform_device *pdev)
+{
+	dev_err(&pdev->dev, "%s()\n", __func__);
+	return 0;
+}
+
+static int __devexit remove(struct platform_device *pdev)
+{
+	dev_err(&pdev->dev, "%s()\n", __func__);
+
+	platform_set_drvdata(pdev, NULL);
+
+	return 0;
+}
+
+static struct platform_driver tmpa9xx_i2s_driver = {
+	.probe = probe,
+	.remove = __devexit_p(remove),
+	.driver = {
+		.name  = "tmpa9xx-i2s",
+		.owner = THIS_MODULE,
+	},
+};
+
+static int __init tmpa9xx_i2s_init_module(void)
+{
+	return platform_driver_register(&tmpa9xx_i2s_driver);
+}
+
+static void __exit tmpa9xx_i2s_exit_module(void)
+{
+	platform_driver_unregister(&tmpa9xx_i2s_driver);
+}
+
+module_init(tmpa9xx_i2s_init_module);
+module_exit(tmpa9xx_i2s_exit_module);
 
 MODULE_AUTHOR("Michael Hunold <michael@mihu.de>");
 MODULE_DESCRIPTION("I2S driver for TMPA9xx");
