@@ -177,6 +177,7 @@ int tmpa9xx_clcd_check(struct clcd_fb *fb, struct fb_var_screeninfo *var)
 	return 0;
 }
 
+#ifndef CONFIG_FB_TMPA9XX_CLCD_NO_LCDDA
 static irqreturn_t lcdda_interrupt(int irq, void *data)
 {
 	struct tmpa9xx_lcdda *l = data;
@@ -210,7 +211,86 @@ static void lcdda_reset(struct tmpa9xx_lcdda *l)
 	l->blit_status = 0;
 }
 
-static int blit_fct(struct tmpa9xx_clcd *c, struct tmpa9xx_lcdda *l, struct tmpa9xx_blit *params)
+static int lcdda_probe(struct platform_device *pdev)
+{
+	struct tmpa9xx_lcdda *l = &g_tmpa9xx_lcdda;
+	struct resource	*res;
+	int ret;
+
+	memset(l, 0, sizeof(*l));
+
+	l->len = 32;
+	l->mem = dma_alloc_writecombine(&pdev->dev, l->len, &l->dma, GFP_KERNEL);
+	if (!l->mem) {
+		dev_err(&pdev->dev, "dma_alloc_writecombine() @ size %ld failed\n", l->len);
+		ret = -ENOMEM;
+		goto err0;
+	}
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (!res) {
+		dev_err(&pdev->dev, "platform_get_resource() failed @ IORESOURCE_MEM\n");
+		ret = -ENODEV;
+		goto err1;
+	}
+
+	l->regs = ioremap(res->start, resource_size(res));
+	if (!l->regs) {
+		dev_err(&pdev->dev, "ioremap() failed\n");
+		ret = -ENODEV;
+		goto err2;
+	}
+
+	lcdda_reset(l);
+
+	l->irq = platform_get_irq(pdev, 1);
+	if (l->irq <= 0) {
+		dev_err(&pdev->dev, "platform_get_irq() failed\n");
+		ret = -ENODEV;
+		goto err3;
+	}
+
+	ret = request_irq(l->irq, lcdda_interrupt, IRQF_DISABLED, "tmpa9xx_lcdda", l);
+	if (ret) {
+		dev_err(&pdev->dev, "request_irq() failed\n");
+		ret = -ENODEV;
+		goto err4;
+	}
+
+	l->dev = &pdev->dev;
+
+	init_waitqueue_head(&l->blit_wait);
+
+	return 0;
+
+err4:
+err3:
+	iounmap(l->regs);
+err2:
+err1:
+	dma_free_writecombine(&pdev->dev, l->len, l->mem, l->dma);
+err0:
+	return ret;
+	return 0;
+}
+
+static void lcdda_remove(struct platform_device *pdev)
+{
+	struct tmpa9xx_lcdda *l = &g_tmpa9xx_lcdda;
+
+	disable_irq(l->irq);
+
+	lcdda_reset(l);
+
+	free_irq(l->irq, l);
+
+	iounmap(l->regs);
+
+	dma_free_writecombine(&pdev->dev, l->len, l->mem, l->dma);
+
+}
+
+static int lcdda_blit_fct(struct tmpa9xx_clcd *c, struct tmpa9xx_lcdda *l, struct tmpa9xx_blit *params)
 {
 	int src_diff_pitch = (params->src_pitch - ((params->w-1) * params->bpp));
 	int dst_diff_pitch = (params->dst_pitch - ((params->w-1) * params->bpp));
@@ -297,7 +377,7 @@ out:
  	return -1;
 }
 
-static int frect_fct(struct tmpa9xx_clcd *c, struct tmpa9xx_lcdda *l, struct tmpa9xx_frect *params)
+static int lcdda_frect_fct(struct tmpa9xx_clcd *c, struct tmpa9xx_lcdda *l, struct tmpa9xx_frect *params)
 {
 	int dst_diff_pitch = (params->pitch - ((params->w-1) * params->bpp));
 	int mode = BLIT_MODE_NORMAL;
@@ -387,9 +467,9 @@ static int tmpa9xx_frect_fct(struct clcd_fb *fb, unsigned long arg)
 		return -EBADE;
 	}
 
-	ret = frect_fct(c, l, &params);
+	ret = lcdda_frect_fct(c, l, &params);
 	if (ret) {
-		dev_err(l->dev, "blit_fct() @ frect failed\n");
+		dev_err(l->dev, "lcdda_frect_fct() failed\n");
 		return -EBUSY;
 	}
 
@@ -415,14 +495,25 @@ static int tmpa9xx_blit_fct(struct clcd_fb *fb, unsigned long arg)
 		return -EBADE;
 	}
 
-	ret = blit_fct(c, l, &params);
+	ret = lcdda_blit_fct(c, l, &params);
 	if (ret) {
-		dev_err(l->dev, "blit_fct() @ blit_fct failed\n");
+		dev_err(l->dev, "lcdda_blit_fct() failed\n");
 		return -EBUSY;
 	}
 
 	return 0;
 }
+
+#else
+static int lcdda_probe(struct platform_device *pdev)
+{
+	return 0;
+}
+
+static void lcdda_remove(struct platform_device *pdev)
+{
+}
+#endif
 
 #ifdef TMPA9XX_PORTRAIT
 static void tmpa9xx_clcd_display(struct clcd_fb *fb, unsigned long ustart, unsigned long offset)
@@ -469,9 +560,9 @@ static void backend_clcd_work(struct work_struct *work)
 	if (!b.src)
 		return;
 
-	ret = blit_fct(c, l, &b);
+	ret = lcdda_frect_fct(c, l, &b);
 	if (ret) {
-		dev_err(l->dev, "blit_fct() @ backend failed\n");
+		dev_err(l->dev, "lcdda_frect_fct() @ backend failed\n");
 	}
 }
 #endif
@@ -522,9 +613,7 @@ static struct clcd_board clcd_platform_data = {
 	.decode		= tmpa9xx_clcd_decode,
 	.setup		= tmpa9xx_clcd_setup,
 	.mmap		= tmpa9xx_clcd_mmap,
-#ifndef CONFIG_FB_TMPA9XX_CLCD_NO_LCDDA
 	.ioctl		= tmpa9xx_clcd_ioctl,
-#endif
 #ifdef TMPA9XX_PORTRAIT
 	.display	= tmpa9xx_clcd_display,
 	.vsync		= tmpa9xx_clcd_vsync,
@@ -689,6 +778,13 @@ out:
 	return 0;
 }
 
+static void shutdown_display(void)
+{
+	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
+
+	kfree(c);
+}
+
 static struct amba_device clcd_device =
 {
 	.dev = {
@@ -705,7 +801,6 @@ static struct amba_device clcd_device =
 
 static int __devinit probe(struct platform_device *pdev)
 {
-	struct tmpa9xx_lcdda *l = &g_tmpa9xx_lcdda;
 	struct amba_device *d;
 	struct resource	*res;
 	int ret;
@@ -713,12 +808,16 @@ static int __devinit probe(struct platform_device *pdev)
 	ret = setup_display(pdev);
 	if (ret) {
 		dev_err(&pdev->dev, "setup_display() failed\n");
-		return -ENODEV;
+		ret = -ENODEV;
+		goto err1;
 	}
 
 	d = kzalloc(sizeof(struct amba_device), GFP_KERNEL);
-	if (!d)
-		return -ENOMEM;
+	if (!d) {
+		dev_err(&pdev->dev, "kzalloc() failed\n");
+		ret = -ENOMEM;
+		goto err2;
+	}
 
 	/* copy over template */
 	*d = clcd_device;
@@ -729,8 +828,8 @@ static int __devinit probe(struct platform_device *pdev)
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
 		dev_err(&pdev->dev, "platform_get_resource() failed @ IORESOURCE_MEM\n");
-		kfree(d);
-		return -ENODEV;
+		ret = -ENODEV;
+		goto err3;
 	}
 
 	d->res.start = res->start;
@@ -739,95 +838,61 @@ static int __devinit probe(struct platform_device *pdev)
 	d->irq[0] = platform_get_irq(pdev, 0);
 	if (d->irq[0] <= 0) {
 		dev_err(&pdev->dev, "platform_get_irq() failed\n");
-		kfree(d);
-		return -ENODEV;
+		ret = -ENODEV;
+		goto err4;
 	}
 
-#ifndef CONFIG_FB_TMPA9XX_CLCD_NO_LCDDA
-	memset(l, 0, sizeof(*l));
-
-	l->len = 32;
-	l->mem = dma_alloc_writecombine(&pdev->dev, l->len, &l->dma, GFP_KERNEL);
-	if (!l->mem) {
-		dev_err(&pdev->dev, "dma_alloc_writecombine() @ size %ld failed\n", l->len);
-		kfree(d);
-		return -ENOMEM;
-	}
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	if (!res) {
-		dev_err(&pdev->dev, "platform_get_resource() failed @ IORESOURCE_MEM\n");
-		dma_free_writecombine(&pdev->dev, l->len, l->mem, l->dma);
-		kfree(d);
-		return -ENODEV;
-	}
-
-	l->regs = ioremap(res->start, resource_size(res));
-	if (!l->regs) {
-		dev_err(&pdev->dev, "ioremap() failed\n");
-		dma_free_writecombine(&pdev->dev, l->len, l->mem, l->dma);
-		kfree(d);
-		return -ENODEV;
-	}
-
-	lcdda_reset(l);
-
-	l->irq = platform_get_irq(pdev, 1);
-	if (l->irq <= 0) {
-		dev_err(&pdev->dev, "platform_get_irq() failed\n");
-		iounmap(l->regs);
-		dma_free_writecombine(&pdev->dev, l->len, l->mem, l->dma);
-		kfree(d);
-		return -ENODEV;
-	}
-
-	ret = request_irq(l->irq, lcdda_interrupt, IRQF_DISABLED, "tmpa9xx_lcdda", l);
+	ret = lcdda_probe(pdev);
 	if (ret) {
-		dev_err(&pdev->dev, "request_irq() failed\n");
-		iounmap(l->regs);
-		dma_free_writecombine(&pdev->dev, l->len, l->mem, l->dma);
-		kfree(d);
-		return -ENODEV;
+		dev_err(&pdev->dev, "lcdda_probe() failed\n");
+		ret = -ENODEV;
+		goto err5;
 	}
 
-	l->dev = &pdev->dev;
-
-	init_waitqueue_head(&l->blit_wait);
-#endif
 	platform_set_drvdata(pdev, d);
 
-	return amba_device_register(d, &pdev->resource[0]);
+	ret = amba_device_register(d, &pdev->resource[0]);
+	if (ret) {
+		dev_err(&pdev->dev, "amba_device_register() failed\n");
+		ret = -ENODEV;
+		goto err6;
+	}
+
+	return 0;
+
+err6:
+	platform_set_drvdata(pdev, NULL);
+	lcdda_remove(pdev);
+err5:
+err4:
+err3:
+	kfree(d);
+err2:
+	shutdown_display();
+err1:
+	return ret;
 }
 
 static int __devexit remove(struct platform_device *pdev)
 {
-	struct tmpa9xx_lcdda *l = &g_tmpa9xx_lcdda;
 	struct amba_device *d = platform_get_drvdata(pdev);
-	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
 
 #ifdef TMPA9XX_PORTRAIT
+	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
+
 	c->shutdown = true;
 
 	flush_workqueue(c->wq);
 
 	destroy_workqueue(c->wq);
 #endif
-#ifndef CONFIG_FB_TMPA9XX_CLCD_NO_LCDDA
-	disable_irq(l->irq);
-
-	lcdda_reset(l);
-
-	free_irq(l->irq, l);
-
-	iounmap(l->regs);
-
-	dma_free_writecombine(&pdev->dev, l->len, l->mem, l->dma);
-#endif
 	amba_device_unregister(d);
 
-	platform_set_drvdata(pdev, NULL);
+	lcdda_remove(pdev);
 
-	kfree(c);
+	shutdown_display();
+
+	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }
