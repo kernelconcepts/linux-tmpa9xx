@@ -29,9 +29,6 @@
 #include <linux/spi/mmc_spi.h>
 #include <linux/mmc/host.h>
 #include <linux/i2c.h>
-#include <linux/mtd/mtd.h>
-#include <linux/mtd/nand.h>
-#include <linux/mtd/partitions.h>
 #include <linux/pwm_backlight.h>
 #include <linux/dma-mapping.h>
 #include <linux/amba/bus.h>
@@ -1040,13 +1037,6 @@ void __init tmpa9xx_init(void)
 	setup_port_n();
 	setup_port_r();
 	setup_port_t();
-
-        /* NAND Controller */
-        NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
-        NDFMCR1 = 0x00000000; // ECC = Hamming
-        NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
-                              // NDREn L = 4clks,H = 3clks
-        NDFINTC = 0x00000000; // ALL Interrupt Disable
 
         /* Register the active AMBA devices on this chip */
 #ifdef CONFIG_ARM_AMBA

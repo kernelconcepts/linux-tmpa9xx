@@ -906,6 +906,13 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	int num_cmdline_parts;
 #endif
 
+        /* NAND Controller */
+        NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
+        NDFMCR1 = 0x00000000; // ECC = Hamming
+        NDFMCR2 = 0x00003343; // NDWEn L = 3clks,H =3clks,
+                              // NDREn L = 4clks,H = 3clks
+        NDFINTC = 0x00000000; // ALL Interrupt Disable
+
 	/* We only get one Nand Controller, so we do not modify CFG_NAND_BASE_LIST 
 	   to get the multiple IO address for the controllers */
 	/* Remeber to set CFG_MAX_NAND_DEVICE in the board config file to be the 
