@@ -26,18 +26,17 @@
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 #include <linux/fs.h>
+#include <linux/clk.h>
+#include <linux/io.h>
 
 #include <mach/regs.h>
 
 #define DRV_NAME "TMPA9xx Watchdog"
 
-#define SYSCLK 	(192*1000*1000)	// tmpa9xx is clocked with
-#define PCLK 	(SYSCLK/2)
+/* TMPA9xx runs 32bit counter @ PCLK */
 
-/* TMPA9xx runns 32bit counter @ PCLK */
-
-#define s_to_ticks(t)	(t*PCLK)
-#define ticks_to_s(t)	(t/PCLK)
+#define s_to_ticks(t)	(t*clk_get_rate(w->pclk))
+#define ticks_to_s(t)	(t/clk_get_rate(w->pclk))
 
 #define WDT_HEARTBEAT 10
 
@@ -51,9 +50,23 @@ module_param(nowayout, int, 0);
 MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started "
 	"(default=" __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
 
+#define WDOGLOAD    (0x0000) /* Watchdog load register */
+#define WDOGVALUE   (0x0004) /* The current value for the watchdog counter */
+#define WDOGCONTROL (0x0008) /* Watchdog control register */
+#define WDOGINTCLR  (0x000C) /* Clears the watchdog interrupt */
+#define WDOGRIS     (0x0010) /* Watchdog raw interrupt status */
+#define WDOGMIS     (0x0014) /* Watchdog masked interrupt status */
+#define WDOGLOCK    (0x0C00) /* Watchdog Lock register */
+
+#define wdt_writel(b, o, v)	writel(v, b->regs + o)
+#define wdt_readl(b, o)		readl(b->regs + o)
+
 struct tmpa9xx_wdt_priv
 {
-	int foo;
+	void __iomem *regs;
+	struct device *dev;
+	struct resource *res;
+	struct clk *pclk;
 };
 
 struct tmpa9xx_wdt_priv *g_tmpa9xx_wdt_priv;
@@ -103,6 +116,7 @@ static inline void tmpa9xx_wdt_set_value(long timeout)
  */
 static int tmpa9xx_wdt_open(struct inode *inode, struct file *file)
 {
+	struct tmpa9xx_wdt_priv *w = g_tmpa9xx_wdt_priv;
 	tmpa9xx_wdt_set_value(s_to_ticks(WDT_HEARTBEAT));
         tmpa9xx_wdt_enable();
 	return nonseekable_open(inode, file);
@@ -131,6 +145,7 @@ static const struct watchdog_info tmpa9xx_wdt_info = {
  */
 static long tmpa9xx_wdt_ioctl(struct file *file,unsigned int cmd, unsigned long arg)
 {
+	struct tmpa9xx_wdt_priv *w = g_tmpa9xx_wdt_priv;
 	void __user *argp = (void __user *)arg;
 	int __user *p = argp;
 	int new_value;
@@ -209,7 +224,8 @@ static struct miscdevice tmpa9xx_wdt_miscdev = {
 static int __init tmpa9xx_wdt_probe(struct platform_device *pdev)
 {
 	struct tmpa9xx_wdt_priv *w;
-	int res;
+	struct resource *res;
+	int ret;
 
 	if (tmpa9xx_wdt_miscdev.parent)
 		return -EBUSY;
@@ -217,34 +233,87 @@ static int __init tmpa9xx_wdt_probe(struct platform_device *pdev)
 
 	w = kzalloc(sizeof(*w), GFP_KERNEL);
 	if (!w) {
-		dev_dbg(&pdev->dev, "kzalloc() failed\n");
-		return -ENOMEM;
+		dev_err(&pdev->dev, "kzalloc() failed\n");
+		ret = -ENOMEM;
+		goto err0;
 	}
 
-	res = misc_register(&tmpa9xx_wdt_miscdev);
-	if (res) {
-		dev_dbg(&pdev->dev, "misc_register() failed\n");
-		kfree(w);
-		return res;
+	w->dev = &pdev->dev;
+
+	g_tmpa9xx_wdt_priv = w;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
+		dev_err(&pdev->dev, "platform_get_resource() failed\n");
+		ret = -ENODEV;
+		goto err1;
 	}
 
-	printk(KERN_INFO DRV_NAME " enabled (heartbeat=%d sec, nowayout=%d)\n",	heartbeat, nowayout);
+	w->res = request_mem_region(res->start, res->end - res->start + 1, pdev->name);
+	if (!w->res) {
+		dev_err(&pdev->dev, "request_mem_region() failed\n");
+		ret = -ENODEV;
+		goto err2;
+	}
+
+	w->regs = ioremap(w->res->start, w->res->end - w->res->start + 1);
+	if (!w->regs) {
+		dev_err(&pdev->dev, "ioremap() failed\n");
+		ret = -ENOMEM;
+		goto err3;
+	}
+
+	w->pclk = clk_get(&pdev->dev, "apb_pclk");
+	if (IS_ERR(w->pclk)) {
+		dev_err(&pdev->dev, "clk_get() failed\n");
+		ret = PTR_ERR(w->pclk);
+		goto err4;
+	}
+
+	ret = misc_register(&tmpa9xx_wdt_miscdev);
+	if (ret) {
+		dev_err(&pdev->dev, "misc_register() failed\n");
+		/* pass through ret */
+		goto err5;
+	}
+
+	dev_info(&pdev->dev, DRV_NAME " enabled, heartbeat %d sec, nowayout %d, io @ %p\n", heartbeat, nowayout, w->regs);
 
 	return 0;
+
+err5:
+	clk_put(w->pclk);
+err4:
+	iounmap(w->regs);
+err3:
+	release_mem_region(w->res->start, w->res->end - w->res->start + 1);
+err2:
+err1:
+	kfree(w);
+err0:
+	return ret;
 }
 
 static int __exit tmpa9xx_wdt_remove(struct platform_device *pdev)
 {
 	struct tmpa9xx_wdt_priv *w = g_tmpa9xx_wdt_priv;
-	int res;
+	int ret;
 
-	res = misc_deregister(&tmpa9xx_wdt_miscdev);
-	if (!res)
+	ret = misc_deregister(&tmpa9xx_wdt_miscdev);
+	if (!ret)
 		tmpa9xx_wdt_miscdev.parent = NULL;
+
+	clk_put(w->pclk);
+
+	iounmap(w->regs);
+
+	release_mem_region(w->res->start, w->res->end - w->res->start + 1);
 
 	kfree(w);
 
-	return res;
+	g_tmpa9xx_wdt_priv = NULL;
+
+	return 0;
 }
 
 #ifdef CONFIG_PM
