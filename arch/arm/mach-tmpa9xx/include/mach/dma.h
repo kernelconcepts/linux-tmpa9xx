@@ -9,6 +9,12 @@
 
 #define	TMPA9XX_DMA_CHANNELS	8
 
+struct tmpa9xx_dma_config
+{
+	int rx;
+	int tx;
+};
+
 enum {
 	DMA_UART0_TX = 0,
 	DMA_UART0_RX = 1,

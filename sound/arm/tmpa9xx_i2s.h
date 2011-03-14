@@ -41,8 +41,8 @@ struct tmpa9xx_i2s {
 };
 
 struct tmpa9xx_i2s* tmpa9xx_i2s_init(
-		int dma_rx, void (*rx_callback)(void *),
-		int dma_tx, void (*tx_callback)(void *),
+		void (*rx_callback)(void *),
+		void (*tx_callback)(void *),
 		void (*err_callback)(void *),
 		void *data);
 
