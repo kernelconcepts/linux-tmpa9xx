@@ -18,21 +18,15 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <linux/errno.h>
-#include <linux/fs.h>
-#include <linux/init.h>
-#include <linux/io.h>
 #include <linux/kernel.h>
-#include <linux/miscdevice.h>
 #include <linux/module.h>
-#include <linux/moduleparam.h>
 #include <linux/platform_device.h>
-#include <linux/types.h>
+#include <linux/miscdevice.h>
 #include <linux/watchdog.h>
-#include <linux/jiffies.h>
-#include <linux/timer.h>
-#include <linux/bitops.h>
 #include <linux/uaccess.h>
+#include <linux/slab.h>
+#include <linux/fs.h>
+
 #include <mach/regs.h>
 
 #define DRV_NAME "TMPA9xx Watchdog"
@@ -56,6 +50,13 @@ static int nowayout = WATCHDOG_NOWAYOUT;
 module_param(nowayout, int, 0);
 MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started "
 	"(default=" __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
+
+struct tmpa9xx_wdt_priv
+{
+	int foo;
+};
+
+struct tmpa9xx_wdt_priv *g_tmpa9xx_wdt_priv;
 
 /*
  * Enable the watchdog timer.
@@ -207,17 +208,25 @@ static struct miscdevice tmpa9xx_wdt_miscdev = {
 
 static int __init tmpa9xx_wdt_probe(struct platform_device *pdev)
 {
+	struct tmpa9xx_wdt_priv *w;
 	int res;
 
 	if (tmpa9xx_wdt_miscdev.parent)
 		return -EBUSY;
 	tmpa9xx_wdt_miscdev.parent = &pdev->dev;
 
-	/* Set watchdog */
+	w = kzalloc(sizeof(*w), GFP_KERNEL);
+	if (!w) {
+		dev_dbg(&pdev->dev, "kzalloc() failed\n");
+		return -ENOMEM;
+	}
 
 	res = misc_register(&tmpa9xx_wdt_miscdev);
-	if (res)
+	if (res) {
+		dev_dbg(&pdev->dev, "misc_register() failed\n");
+		kfree(w);
 		return res;
+	}
 
 	printk(KERN_INFO DRV_NAME " enabled (heartbeat=%d sec, nowayout=%d)\n",	heartbeat, nowayout);
 
@@ -226,11 +235,14 @@ static int __init tmpa9xx_wdt_probe(struct platform_device *pdev)
 
 static int __exit tmpa9xx_wdt_remove(struct platform_device *pdev)
 {
+	struct tmpa9xx_wdt_priv *w = g_tmpa9xx_wdt_priv;
 	int res;
 
 	res = misc_deregister(&tmpa9xx_wdt_miscdev);
 	if (!res)
 		tmpa9xx_wdt_miscdev.parent = NULL;
+
+	kfree(w);
 
 	return res;
 }
