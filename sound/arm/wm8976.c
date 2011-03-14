@@ -30,7 +30,6 @@
 
 #define I2S_DMA_RX   I2S0
 #define I2S_DMA_TX   I2S1
-#define I2S_IRQ_ERR  I2S_INT
 
 #undef WM8976_DEBUG
 
@@ -552,9 +551,9 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 
 	strcpy(card->driver, DRIVER_NAME);
 	strcpy(card->shortname, CHIP_NAME);
-	sprintf(card->longname, "%s at I2S rx/tx dma %d/%d err irq %d",
+	sprintf(card->longname, "%s at I2S rx/tx dma %d/%d",
 		  card->shortname,
-		  I2S_DMA_RX, I2S_DMA_TX, I2S_IRQ_ERR);
+		  I2S_DMA_RX, I2S_DMA_TX);
 
 	wm8976 = card->private_data;
 
@@ -562,7 +561,7 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 	wm8976->i2c_client = i2c_client;
 
 	wm8976->i2s = tmpa9xx_i2s_init(I2S_DMA_RX, snd_wm8976_dma_rx, I2S_DMA_TX, snd_wm8976_dma_tx,
-			    I2S_IRQ_ERR, snd_wm8976_i2s_err, wm8976);
+			    snd_wm8976_i2s_err, wm8976);
 	if (!wm8976->i2s) {
 		dev_err(&i2c_client->dev, "tmpa9xx_i2s_init() failed\n");
 		ret = -ENODEV;
