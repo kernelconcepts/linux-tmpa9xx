@@ -29,8 +29,6 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 
-#include <mach/regs.h>
-
 #define DRV_NAME "TMPA9xx watchdog"
 
 /* TMPA9xx runs 32bit counter @ PCLK */
@@ -71,14 +69,25 @@ struct tmpa9xx_wdt_priv
 
 struct tmpa9xx_wdt_priv *g_tmpa9xx_wdt_priv;
 
+#define ENABLE_WRITING_TO_WDT_REGISTERS() \
+	wdt_writel(w, WDOGLOCK, 0x1ACCE551);
+
+#define DISABLE_WRITING_TO_WDT_REGISTERS() \
+	wdt_writel(w, WDOGLOCK, 0);
+
 /*
  * Enable the watchdog timer.
  */
 static inline void tmpa9xx_wdt_enable(void)
 {
-	WDT_WDOGLOCK	= 0x1ACCE551; 	/* Enable writing to WDT registers */
-	WDT_WDOGCONTROL = 0x3;		/* Enables the WDT counter and the WDT interrupt, enables WDT reset output. */
-        WDT_WDOGLOCK	= 0;		/* Disable writing to WDT registers */
+	struct tmpa9xx_wdt_priv *w = g_tmpa9xx_wdt_priv;
+
+	ENABLE_WRITING_TO_WDT_REGISTERS();
+
+	/* Enables the WDT counter and the WDT interrupt, enables WDT reset output. */
+	wdt_writel(w, WDOGCONTROL, 0x3);
+
+	DISABLE_WRITING_TO_WDT_REGISTERS();
 }
 
 /*
@@ -86,9 +95,14 @@ static inline void tmpa9xx_wdt_enable(void)
  */
 static inline void tmpa9xx_wdt_disable(void)
 {
-	WDT_WDOGLOCK	= 0x1ACCE551; 	/* Enable writing to WDT registers */
-	WDT_WDOGCONTROL = 0x0;		/* Enables the WDT counter and the WDT interrupt, enables WDT reset output. */
-        WDT_WDOGLOCK	= 0;		/* Disable writing to WDT registers */
+	struct tmpa9xx_wdt_priv *w = g_tmpa9xx_wdt_priv;
+
+	ENABLE_WRITING_TO_WDT_REGISTERS();
+
+	/* Disables the WDT counter and the WDT interrupt, enables WDT reset output. */
+	wdt_writel(w, WDOGCONTROL, 0x0);
+
+	DISABLE_WRITING_TO_WDT_REGISTERS();
 }
 
 /*
@@ -96,9 +110,14 @@ static inline void tmpa9xx_wdt_disable(void)
  */
 static inline void tmpa9xx_wdt_reset(void)
 {
-	WDT_WDOGLOCK	= 0x1ACCE551; 	/* Enable writing to WDT registers */
-	WDT_WDOGINTCLR  = 1; 		/* Writing any value resets watchdog */
-        WDT_WDOGLOCK	= 0;		/* Disable writing to WDT registers */
+	struct tmpa9xx_wdt_priv *w = g_tmpa9xx_wdt_priv;
+
+	ENABLE_WRITING_TO_WDT_REGISTERS();
+
+	/* Writing any value resets watchdog */
+	wdt_writel(w, WDOGINTCLR, 0x1);
+
+	DISABLE_WRITING_TO_WDT_REGISTERS();
 }
 
 /*
@@ -106,9 +125,14 @@ static inline void tmpa9xx_wdt_reset(void)
  */
 static inline void tmpa9xx_wdt_set_value(long timeout)
 {
-	WDT_WDOGLOCK	= 0x1ACCE551;	/* Enable writing to WDT registers */
-	WDT_WDOGLOAD 	= timeout;	/* Set WDT value */
-	WDT_WDOGLOCK	= 0x0;		/* Disable writing to WDT registers */
+	struct tmpa9xx_wdt_priv *w = g_tmpa9xx_wdt_priv;
+
+	ENABLE_WRITING_TO_WDT_REGISTERS();
+
+	/* Set WDT value */
+	wdt_writel(w, WDOGLOAD, timeout);
+
+	DISABLE_WRITING_TO_WDT_REGISTERS();
 }
 
 /*
@@ -128,9 +152,7 @@ static int tmpa9xx_wdt_open(struct inode *inode, struct file *file)
 static int tmpa9xx_wdt_close(struct inode *inode, struct file *file)
 {
 	if (!nowayout)
-        {
 		tmpa9xx_wdt_disable();
-       	}
 
 	return 0;
 }
@@ -149,6 +171,7 @@ static long tmpa9xx_wdt_ioctl(struct file *file,unsigned int cmd, unsigned long 
 	void __user *argp = (void __user *)arg;
 	int __user *p = argp;
 	int new_value;
+	uint32_t val;
 
 	switch (cmd) {
 	case WDIOC_GETSUPPORT:
@@ -166,13 +189,16 @@ static long tmpa9xx_wdt_ioctl(struct file *file,unsigned int cmd, unsigned long 
 		if (get_user(new_value, p))
 			return -EFAULT;
 		tmpa9xx_wdt_set_value(s_to_ticks(new_value));
-		return put_user(ticks_to_s(WDT_WDOGLOAD), p);  /* return current value */
+		val = wdt_readl(w, WDOGLOAD);
+		return put_user(ticks_to_s(val), p);  /* return current value */
 
 	case WDIOC_GETTIMEOUT:
-		return put_user(ticks_to_s(WDT_WDOGLOAD), p);
+		val = wdt_readl(w, WDOGLOAD);
+		return put_user(ticks_to_s(val), p);
 
 	case WDIOC_GETTIMELEFT:
-		return put_user(ticks_to_s(WDT_WDOGVALUE), p);
+		val = wdt_readl(w, WDOGVALUE);
+		return put_user(ticks_to_s(val), p);
 
 	}
 	return -ENOTTY;
@@ -187,8 +213,7 @@ static ssize_t tmpa9xx_wdt_write(struct file *file, const char *data, size_t len
 		return 0;
 
 	/* Scan for magic character */
-	if (nowayout)
-        {
+	if (nowayout) {
 		size_t i;
 		for (i = 0; i < len; i++) {
 			char c;
