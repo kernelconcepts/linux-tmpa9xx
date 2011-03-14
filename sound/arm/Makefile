@@ -2,16 +2,18 @@
 # Makefile for ALSA
 #
 obj-$(CONFIG_SND_TMPA9XX_WM8974) += snd-tmpa9xx-wm8974.o 
-snd-tmpa9xx-wm8974-objs		:= tmpa9xx_i2s.o wm8974.o
+snd-tmpa9xx-wm8974-objs 	 := wm8974.o
 
 obj-$(CONFIG_SND_TMPA9XX_WM8976) += snd-tmpa9xx-wm8976.o 
-snd-tmpa9xx-wm8976-objs		:= tmpa9xx_i2s.o wm8976.o
+snd-tmpa9xx-wm8976-objs		 := wm8976.o
 
 obj-$(CONFIG_SND_TMPA9XX_WM8983) += snd-tmpa9xx-wm8983.o 
-snd-tmpa9xx-wm8983-objs		:= tmpa9xx_i2s.o wm8983.o
+snd-tmpa9xx-wm8983-objs		 := wm8983.o
 
 obj-$(CONFIG_SND_TMPA9XX_PCM1773) += snd-tmpa9xx-pcm1773.o 
-snd-tmpa9xx-pcm1773-objs	:= tmpa9xx_i2s.o pcm1773.o
+snd-tmpa9xx-pcm1773-objs	  := pcm1773.o
+
+obj-$(CONFIG_SND_TMPA9XX_I2S)	+= snd-tmpa9xx-i2s.o 
 
 obj-$(CONFIG_SND_ARMAACI)	+= snd-aaci.o
 snd-aaci-objs			:= aaci.o

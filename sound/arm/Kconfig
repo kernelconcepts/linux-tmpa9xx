@@ -11,10 +11,14 @@ menuconfig SND_ARM
 
 if SND_ARM
 
+config SND_TMPA9XX_I2S
+	tristate
+
 config SND_TMPA9XX_WM8974
 	tristate "TMPA9xx WM8974 driver"
 	depends on MACH_TONGA2_TFTTIMER && SND
 	select SND_PCM
+	select SND_TMPA9XX_I2S
 	help
 	  Say Y here if you have a Tonga2
           TFTTimer Board and want to use its
@@ -24,6 +28,7 @@ config SND_TMPA9XX_WM8976
 	tristate "TMPA9xx WM8976 driver"
 	depends on MACH_TOPASA900 && SND && I2C_TMPA9XX
 	select SND_PCM
+	select SND_TMPA9XX_I2S
 	help
 	  Say Y here if you have a Toshiba TopasA900
 	  TMPA900 development board and
@@ -33,6 +38,7 @@ config SND_TMPA9XX_WM8983
 	tristate "TMPA9xx WM8983 driver"
 	depends on MACH_TONGA && SND
 	select SND_PCM
+	select SND_TMPA9XX_I2S
 	help
 	  Say Y here if you have a Toshiba Tonga2 
 	  TMPA900 CPU board and
@@ -42,6 +48,7 @@ config SND_TMPA9XX_PCM1773
 	tristate "TMPA9XX PCM1773 driver"
 	depends on (MACH_TOPASA900 || MACH_TOPAS910) && SND
 	select SND_PCM
+	select SND_TMPA9XX_I2S
 	help
 	  Say Y here if you have a Toshiba TopasA900
 	  TMPA900 development board and
