@@ -42,6 +42,7 @@
 #include <mach/hardware.h>
 #include <mach/ts.h>
 #include <mach/regs.h>
+#include <mach/dma.h>
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
@@ -208,6 +209,11 @@ static struct resource tmpa9xx_resource_i2s[] = {
         },
 };
 
+static struct tmpa9xx_dma_config tmpa9xx_i2s_dma_config = {
+	.rx = I2S0,
+	.tx = I2S1,
+};
+
 static struct platform_device tmpa9xx_i2s_device = {
         .name          = "tmpa9xx-i2s",
         .id            = -1,
@@ -215,7 +221,7 @@ static struct platform_device tmpa9xx_i2s_device = {
         .num_resources = ARRAY_SIZE(tmpa9xx_resource_i2s),
         .dev           = {
                 .coherent_dma_mask 	= ~0,
-		.platform_data		= NULL,
+		.platform_data		= &tmpa9xx_i2s_dma_config,
         }
 };
 #endif
