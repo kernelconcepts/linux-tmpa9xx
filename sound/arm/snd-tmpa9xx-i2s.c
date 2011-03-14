@@ -1,11 +1,5 @@
-/*
- * Author?
- * (c) ?
- *
- * Function: Handles TMPA I2S DMA
- *
- */
-
+#include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -453,3 +447,19 @@ void tmpa9xx_i2s_free(struct tmpa9xx_i2s *i2s)
 	kfree(i2s);
 	i2s_printd(KERN_ERR, "-%s\n", __FUNCTION__);
 }
+
+
+EXPORT_SYMBOL(tmpa9xx_i2s_rx_start);
+EXPORT_SYMBOL(tmpa9xx_i2s_init);
+EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_tx);
+EXPORT_SYMBOL(tmpa9xx_i2s_config_tx_dma);
+EXPORT_SYMBOL(tmpa9xx_i2s_rx_stop);
+EXPORT_SYMBOL(tmpa9xx_i2s_config_rx_dma);
+EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_rx);
+EXPORT_SYMBOL(tmpa9xx_i2s_free);
+EXPORT_SYMBOL(tmpa9xx_i2s_tx_start);
+EXPORT_SYMBOL(tmpa9xx_i2s_tx_stop);
+
+MODULE_AUTHOR("Michael Hunold <michael@mihu.de>");
+MODULE_DESCRIPTION("I2S driver for TMPA9xx");
+MODULE_LICENSE("GPL");
