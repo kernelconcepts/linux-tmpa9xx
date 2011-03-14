@@ -379,7 +379,7 @@ static void err_handler(int dma_ch, void *dev_id)
 struct tmpa9xx_i2s *tmpa9xx_i2s_init(
 		int dma_rx, void (*rx_callback)(void*),
 		int dma_tx, void (*tx_callback)(void*),
-		int err_irq, void (*err_callback)(void*),
+		void (*err_callback)(void*),
 		void *data)
 {
 	struct tmpa9xx_i2s *i2s;
@@ -408,7 +408,6 @@ struct tmpa9xx_i2s *tmpa9xx_i2s_init(
 	}
 	//printk("dma_rx_ch = %d\n", i2s->dma_rx_ch);
 
-	i2s->err_irq = err_irq;
 	i2s->rx_callback = rx_callback;
 	i2s->tx_callback = tx_callback;
 	i2s->err_callback = err_callback;

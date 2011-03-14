@@ -15,7 +15,6 @@ struct scatter_dma_t {
 
 struct tmpa9xx_i2s {
 	int i2s_num;
-	int err_irq;
 
 	int dma_tx_ch;
 	int dma_rx_ch;
@@ -44,7 +43,7 @@ struct tmpa9xx_i2s {
 struct tmpa9xx_i2s* tmpa9xx_i2s_init(
 		int dma_rx, void (*rx_callback)(void *),
 		int dma_tx, void (*tx_callback)(void *),
-		int err_irq, void (*err_callback)(void *),
+		void (*err_callback)(void *),
 		void *data);
 
 void tmpa9xx_i2s_free(struct tmpa9xx_i2s* i2s);
