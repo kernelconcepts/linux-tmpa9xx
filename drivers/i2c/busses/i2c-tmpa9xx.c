@@ -437,6 +437,7 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	return 0;
 
 err8:
+	i2c_writel(priv, IE, 0);
 	clk_put(priv->pclk);
 err7:
 	/* disable i2c operation */
