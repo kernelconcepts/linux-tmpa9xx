@@ -377,7 +377,7 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 
 	ret = request_irq(priv->irq, interrupt_handler, IRQF_DISABLED, "tmpa9xx-i2c", priv);
 	if (ret) {
-		dev_dbg(&pdev->dev, "platform_get_irq() failed\n");
+		dev_dbg(&pdev->dev, "request_irq() failed\n");
 		ret = -ENODEV;
 		goto err5;
 	}
@@ -421,18 +421,18 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	/* enable i2c operation, clear any requests */
 	i2c_writel(priv, CR2, CR2_I2CM | CR2_PIN);
 
+	platform_set_drvdata(pdev, priv);
+
+	dev_info(&pdev->dev, "channel %d, irq %d, io @ %p, speed %d kHz\n", pdev->id, priv->irq, priv->regs, priv->p.freq);
+
+	i2c_writel(priv, IE, (1 << 0));
+
 	ret = i2c_add_numbered_adapter(priv->i2c_adapter);
 	if (ret) {
 		dev_dbg(&pdev->dev, "i2c_add_numbered_adapter() failed\n");
 		ret = -ENODEV;
 		goto err8;
 	}
-
-	platform_set_drvdata(pdev, priv);
-
-	dev_info(&pdev->dev, "channel %d, irq %d, io @ %p, speed %d kHz\n", pdev->id, priv->irq, priv->regs, priv->p.freq);
-
-	i2c_writel(priv, IE, (1 << 0));
 
 	return 0;
 
