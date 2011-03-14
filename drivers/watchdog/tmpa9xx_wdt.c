@@ -1,7 +1,7 @@
 /*
  * Watchdog driver for Toshiba tmpa9xx processors.
  *
- * Copyright (C) 2010, 2010 Florian Boor <florian.boor@kernelconcepts.de> 
+ * Copyright (C) 2010, 2010 Florian Boor <florian.boor@kernelconcepts.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,7 +38,7 @@
 #define DRV_NAME "TMPA9xx Watchdog"
 
 #define SYSCLK 	(192*1000*1000)	// tmpa9xx is clocked with
-#define PCLK 	(SYSCLK/2)	
+#define PCLK 	(SYSCLK/2)
 
 /* TMPA9xx runns 32bit counter @ PCLK */
 
@@ -56,9 +56,6 @@ static int nowayout = WATCHDOG_NOWAYOUT;
 module_param(nowayout, int, 0);
 MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started "
 	"(default=" __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
-
-/* ......................................................................... */
-
 
 /*
  * Enable the watchdog timer.
@@ -100,7 +97,6 @@ static inline void tmpa9xx_wdt_set_value(long timeout)
 	WDT_WDOGLOCK	= 0x0;		/* Disable writing to WDT registers */
 }
 
-
 /*
  * Watchdog device is opened, and watchdog starts running.
  */
@@ -120,7 +116,7 @@ static int tmpa9xx_wdt_close(struct inode *inode, struct file *file)
         {
 		tmpa9xx_wdt_disable();
        	}
-        
+
 	return 0;
 }
 
@@ -158,10 +154,10 @@ static long tmpa9xx_wdt_ioctl(struct file *file,unsigned int cmd, unsigned long 
 
 	case WDIOC_GETTIMEOUT:
 		return put_user(ticks_to_s(WDT_WDOGLOAD), p);
-                
-	case WDIOC_GETTIMELEFT:    
+
+	case WDIOC_GETTIMELEFT:
 		return put_user(ticks_to_s(WDT_WDOGVALUE), p);
-                
+
 	}
 	return -ENOTTY;
 }
@@ -190,11 +186,9 @@ static ssize_t tmpa9xx_wdt_write(struct file *file, const char *data, size_t len
 	}
 
 	tmpa9xx_wdt_reset();
-        
+
 	return len;
 }
-
-/* ......................................................................... */
 
 static const struct file_operations tmpa9xx_wdt_fops = {
 	.owner			= THIS_MODULE,
