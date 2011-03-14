@@ -353,13 +353,13 @@ struct platform_device tmpa9xx_device_ts = {
         .resource      = tmpa9xx_resource_ts,
         .num_resources = ARRAY_SIZE(tmpa9xx_resource_ts),
 };
+#endif
 
 int tmpa9xx_ts_fuzz = 0;
 int tmpa9xx_ts_rate = 100;
 
 EXPORT_SYMBOL(tmpa9xx_ts_fuzz);
 EXPORT_SYMBOL(tmpa9xx_ts_rate);
-#endif
 
 /*
  * NAND Flash Controller
