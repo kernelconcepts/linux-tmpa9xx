@@ -33,8 +33,8 @@
 
 /* TMPA9xx runs 32bit counter @ PCLK */
 
-#define s_to_ticks(t)	(t*clk_get_rate(w->pclk))
-#define ticks_to_s(t)	(t/clk_get_rate(w->pclk))
+#define s_to_ticks(t)	(t*(clk_get_rate(w->pclk)/2))
+#define ticks_to_s(t)	(t/(clk_get_rate(w->pclk)/2))
 
 #define WDT_HEARTBEAT 10
 
