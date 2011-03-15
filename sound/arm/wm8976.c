@@ -69,7 +69,6 @@ static unsigned char wm8976_for_samplerate[7][6] =
 struct snd_wm8976
 {
 	struct snd_card *card;
-	struct tmpa9xx_i2s *i2s;
 	spinlock_t wm8976_lock;
 	struct i2c_client *i2c_client;
 	struct snd_pcm *pcm;
@@ -280,7 +279,7 @@ static int snd_wm8976_playback_prepare(struct snd_pcm_substream *substream)
 			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
-	ret = tmpa9xx_i2s_config_tx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
+	ret = tmpa9xx_i2s_config_tx_dma(runtime->dma_area, runtime->dma_addr,
 			runtime->periods, fragsize_bytes, word_len);
 
 	return ret;
@@ -308,7 +307,7 @@ static int snd_wm8976_capture_prepare(struct snd_pcm_substream *substream)
 			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
-	ret = tmpa9xx_i2s_config_rx_dma(chip->i2s, runtime->dma_area, runtime->dma_addr,
+	ret = tmpa9xx_i2s_config_rx_dma(runtime->dma_area, runtime->dma_addr,
 			runtime->periods, fragsize_bytes, word_len);
 
 	return ret;
@@ -326,11 +325,11 @@ static int snd_wm8976_playback_trigger(struct snd_pcm_substream *substream, int 
 	switch (cmd) {
 		case SNDRV_PCM_TRIGGER_START:
 			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_START\n");
-			ret = tmpa9xx_i2s_tx_start(chip->i2s);
+			ret = tmpa9xx_i2s_tx_start();
 			break;
 		case SNDRV_PCM_TRIGGER_STOP:
 			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_STOP\n");
-			ret = tmpa9xx_i2s_tx_stop(chip->i2s);
+			ret = tmpa9xx_i2s_tx_stop();
 			break;
 		default:
 			spin_unlock(&chip->wm8976_lock);
@@ -358,11 +357,11 @@ static int snd_wm8976_capture_trigger(struct snd_pcm_substream *substream, int c
 	switch (cmd) {
 		case SNDRV_PCM_TRIGGER_START:
 			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_START\n");
-			tmpa9xx_i2s_rx_start(chip->i2s);
+			tmpa9xx_i2s_rx_start();
 			break;
 		case SNDRV_PCM_TRIGGER_STOP:
 			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_STOP\n");
-			tmpa9xx_i2s_rx_stop(chip->i2s);
+			tmpa9xx_i2s_rx_stop();
 			break;
 		default:
 			spin_unlock(&chip->wm8976_lock);
@@ -378,11 +377,10 @@ static int snd_wm8976_capture_trigger(struct snd_pcm_substream *substream, int c
 
 static snd_pcm_uframes_t snd_wm8976_playback_pointer(struct snd_pcm_substream *substream)
 {
-	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	unsigned int offset;
 
-	offset = tmpa9xx_i2s_curr_offset_tx(chip->i2s);
+	offset = tmpa9xx_i2s_curr_offset_tx();
 
 	offset = bytes_to_frames(runtime, offset);
 	if (offset >= runtime->buffer_size)
@@ -393,11 +391,10 @@ static snd_pcm_uframes_t snd_wm8976_playback_pointer(struct snd_pcm_substream *s
 
 static snd_pcm_uframes_t snd_wm8976_capture_pointer(struct snd_pcm_substream *substream)
 {
-	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	unsigned int offset;
 
-	offset = tmpa9xx_i2s_curr_offset_rx(chip->i2s);
+	offset = tmpa9xx_i2s_curr_offset_rx();
 
 	offset = bytes_to_frames(runtime, offset);
 
@@ -556,9 +553,9 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 	wm8976->card = card;
 	wm8976->i2c_client = i2c_client;
 
-	wm8976->i2s = tmpa9xx_i2s_init(snd_wm8976_dma_rx, snd_wm8976_dma_tx,
+	ret = tmpa9xx_i2s_init(snd_wm8976_dma_rx, snd_wm8976_dma_tx,
 			    snd_wm8976_i2s_err, wm8976);
-	if (!wm8976->i2s) {
+	if (ret) {
 		dev_err(&i2c_client->dev, "tmpa9xx_i2s_init() failed\n");
 		ret = -ENODEV;
 		goto err0;
@@ -594,7 +591,7 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 err3:
 err2:
 err1:
-	tmpa9xx_i2s_free(wm8976->i2s);
+	tmpa9xx_i2s_free();
 err0:
 	snd_card_free(card);
 	return ret;
@@ -605,9 +602,8 @@ err0:
 static int wm8976_i2c_remove(struct i2c_client *i2c_client)
 {
 	struct snd_card *card = i2c_get_clientdata(i2c_client);
-	struct snd_wm8976 *wm8976 = card->private_data;
 
-	tmpa9xx_i2s_free(wm8976->i2s);
+	tmpa9xx_i2s_free();
 
 	snd_card_free(card);
 
