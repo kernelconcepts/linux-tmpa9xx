@@ -18,22 +18,6 @@ struct tmpa9xx_i2s_priv
 
 struct tmpa9xx_i2s_priv *g_tmpa9xx_i2s_priv;
 
-#undef TMPA9XX_I2S_DEBUG
-
-#ifdef TMPA9XX_I2S_DEBUG
-#define i2s_printd(level, format, arg...) \
-		printk(level "i2s: " format, ## arg)
-#define I2S_ASSERT(expr) \
-	do { \
-		if (unlikely(!(expr))) { \
-			printk(KERN_ERR "%s: %d, bug\n", __FUNCTION__, __LINE__); \
-		} \
-	} while(0)
-#else
-#define i2s_printd(level, format, arg...)
-#define I2S_ASSERT(expr)
-#endif
-
 static void setup_tx_desc(struct scatter_dma_t *desc, unsigned int phydesc,
             unsigned int phy_buf, int fragcount, size_t fragsize)
 {
@@ -54,8 +38,6 @@ static void setup_rx_desc(struct scatter_dma_t *desc, unsigned int phydesc,
 			unsigned int phy_buf, int fragcount, size_t fragsize)
 {
 	int i;
-
-	//printk("The fragcount is %d.\n",fragcount);
 
 	for (i=0; i<fragcount; ++i)
 	{
@@ -78,7 +60,6 @@ static int i2s_tx_start(struct tmpa9xx_i2s *i2s)
 	/* I2S transfer start */
 	I2STSLVON = 0x0001;
 
-	//printk("====> Start TX I2S\n");
 	return 0;
 }
 
@@ -92,7 +73,6 @@ static int i2s_rx_start(struct tmpa9xx_i2s *i2s)
 	/*----I2S transfer start */
 	I2SRSLVON = 0x0001;
 
-	//printk("====> Start RX I2S\n");
 	return 0;
 }
 
@@ -103,8 +83,6 @@ static int i2s_tx_stop(struct tmpa9xx_i2s *i2s)
 
 	tmpa9xx_dma_disable(i2s->dma_tx_ch);
 
-	//printk("====> Stop TX I2S\n");
-
 	return 0;
 }
 
@@ -114,8 +92,6 @@ static int i2s_rx_stop(struct tmpa9xx_i2s *i2s)
 	I2SRSLVON = 0x0000;
 
 	tmpa9xx_dma_disable(i2s->dma_rx_ch);
-
-	//printk("====> Stop RX I2S\n");
 
 	return 0;
 }
@@ -146,13 +122,9 @@ static inline int i2s_rx_dma_start(struct tmpa9xx_i2s *i2s)
 	dma_desc = i2s->curr_rx_desc;
 
 	DMA_SRC_ADDR(dma_ch) = dma_desc->srcaddr;
-//	printk("srcaddr = 0x%02x\n", dma_desc->srcaddr);
 	DMA_DEST_ADDR(dma_ch) = dma_desc->dstaddr;
-//        printk("dest addr = 0x%02x\n", dma_desc->dstaddr);
 	DMA_LLI(dma_ch) = dma_desc->lli;
-//        printk("lli addr = 0x%02x\n", dma_desc->lli);
 	DMA_CONTROL(dma_ch) = dma_desc->control;
-//        printk("control = 0x%02x\n", dma_desc->control);
 	DMA_CONFIG(dma_ch) = 0x00009017;
 
 	return 0;
@@ -160,8 +132,6 @@ static inline int i2s_rx_dma_start(struct tmpa9xx_i2s *i2s)
 
 int tmpa9xx_i2s_tx_start(struct tmpa9xx_i2s *i2s)
 {
-	i2s_printd(KERN_ERR, "%s: tx_run:%d\n", __FUNCTION__, i2s->tx_run);
-
 	if (i2s->tx_run)
 		return -EBUSY;
 
@@ -174,8 +144,6 @@ int tmpa9xx_i2s_tx_start(struct tmpa9xx_i2s *i2s)
 
 int tmpa9xx_i2s_rx_start(struct tmpa9xx_i2s *i2s)
 {
-	i2s_printd(KERN_ERR, "%s: rx_run:%d\n", __FUNCTION__, i2s->rx_run);
-
 	if (i2s->rx_run)
 		return -EBUSY;
 
@@ -188,7 +156,6 @@ int tmpa9xx_i2s_rx_start(struct tmpa9xx_i2s *i2s)
 
 int tmpa9xx_i2s_tx_stop(struct tmpa9xx_i2s *i2s)
 {
-	i2s_printd(KERN_ERR, "%s: rx_run:%d\n", __FUNCTION__, i2s->rx_run);
 	if (!i2s->tx_run)
 		return 0;
 
@@ -203,7 +170,6 @@ int tmpa9xx_i2s_tx_stop(struct tmpa9xx_i2s *i2s)
 
 int tmpa9xx_i2s_rx_stop(struct tmpa9xx_i2s *i2s)
 {
-	i2s_printd(KERN_ERR, "%s: rx_run:%d\n", __FUNCTION__, i2s->rx_run);
 	if (!i2s->rx_run)
 		return 0;
 
@@ -222,28 +188,20 @@ int tmpa9xx_i2s_config_tx_dma(struct tmpa9xx_i2s *i2s,
 	unsigned int count;
 	dma_addr_t addr;
 
-	i2s_printd(KERN_ERR, "%s( %p, %X, %d, %x, %x )\n", __FUNCTION__, cpu_buf, phy_buf,
-			fragcount, fragsize, size);
-
 	count = fragsize / size;
 
 	/* for fragments larger than 16k words we use 2d dma,
 	 * denote fragecount as two numbers' mutliply and both of them
 	 * are less than 64k.*/
 	if (count >= 0x1000) {
-		i2s_printd(KERN_ERR, "Error: tx dma size too large %d\n", count);
 		return -EINVAL;
 	}
 
 	if (i2s->dma_tx_desc) {
-		i2s_printd(KERN_ERR, "+dma_free_coherent dma_tx_desc=0x%08lx\n", (unsigned long)i2s->dma_tx_desc);
 		dma_free_coherent(NULL, i2s->tx_desc_bytes, i2s->dma_tx_desc, i2s->dma_tx_phydesc);
-		i2s_printd(KERN_ERR, "-dma_free_coherent\n");
 	}
 
-	i2s_printd(KERN_ERR, "+dma_alloc_coherent\n");
 	i2s->dma_tx_desc = dma_alloc_coherent(NULL, fragcount * sizeof(struct scatter_dma_t), &addr, GFP_USER);
-	i2s_printd(KERN_ERR, "-dma_alloc_coherent dma_tx_desc=0x%08lx\n", (unsigned long)i2s->dma_tx_desc);
 	i2s->tx_desc_bytes = fragcount * sizeof(struct scatter_dma_t);
 	i2s->dma_tx_phydesc = addr;
 	i2s->dma_tx_buf = phy_buf;
@@ -252,9 +210,7 @@ int tmpa9xx_i2s_config_tx_dma(struct tmpa9xx_i2s *i2s,
 		return -ENOMEM;
 	}
 
-	i2s_printd(KERN_ERR, "+setup_tx_desc\n");
 	setup_tx_desc(i2s->dma_tx_desc, addr, phy_buf, fragcount, fragsize);
-	i2s_printd(KERN_ERR, "-setup_tx_desc\n");
 
 	return 0;
 }
@@ -265,9 +221,6 @@ int tmpa9xx_i2s_config_rx_dma(struct tmpa9xx_i2s *i2s,
 {
 	unsigned int count;
 	dma_addr_t addr;
-
-	i2s_printd(KERN_ERR, "%s( %p, %X, %d, %x, %x )\n", __FUNCTION__, cpu_buf, phy_buf,
-			fragcount, fragsize, size);
 
 	count = fragsize / size;
 
@@ -305,8 +258,6 @@ unsigned int tmpa9xx_i2s_curr_offset_tx(struct tmpa9xx_i2s *i2s)
 	addr = DMA_SRC_ADDR(dma_ch);
 	size = addr - i2s->dma_tx_buf;
 
-	//printk("size[%d]", size);
-
 	return size;
 }
 
@@ -317,8 +268,6 @@ unsigned int tmpa9xx_i2s_curr_offset_rx(struct tmpa9xx_i2s *i2s)
 
 	addr = DMA_DEST_ADDR(dma_ch);
 	size = addr - i2s->dma_rx_buf;
-
-	//printk("size[%d]", size);
 
 	return size;
 }
@@ -338,8 +287,6 @@ static void tx_handler(int dma_ch, void *dev_id)
 	unsigned int tx_stat;
 	struct tmpa9xx_i2s *i2s = dev_id;
 
-	i2s_printd(KERN_ERR, "%s\n", __FUNCTION__);
-
 	i2s_check_status(i2s, NULL, NULL, &tx_stat);
 
 	if (i2s->tx_callback) {
@@ -352,17 +299,11 @@ static void rx_handler(int dma_ch, void *dev_id)
 	unsigned int rx_stat;
 	struct tmpa9xx_i2s *i2s = dev_id;
 
-	i2s_printd(KERN_ERR, "%s\n", __FUNCTION__);
 	i2s_check_status(i2s, NULL, NULL, &rx_stat);
 
 	if (i2s->rx_callback) {
 		i2s->rx_callback(i2s->data);
 	}
-
-        //printk("handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(dma_ch));
-        //printk("handler dest addr = 0x%02x\n", DMA_DEST_ADDR(dma_ch));
-        //printk("handler lli addr = 0x%02x\n", DMA_LLI(dma_ch));
-        //printk("handler control = 0x%02x\n", DMA_CONTROL(dma_ch));
 }
 
 static void err_handler(int dma_ch, void *dev_id)
@@ -370,7 +311,6 @@ static void err_handler(int dma_ch, void *dev_id)
 	unsigned int status;
 	struct tmpa9xx_i2s *i2s = dev_id;
 
-	i2s_printd(KERN_ERR, "%s\n", __FUNCTION__);
 	if (i2s_check_status(i2s, &status, NULL, NULL)) {
 		printk(KERN_ERR "error checking status ??");
 		return;
@@ -402,22 +342,16 @@ struct tmpa9xx_i2s *tmpa9xx_i2s_init(
 		printk(KERN_ERR "request tx audio dma failed\n");
 		goto __init_err2;
 	}
-	//printk("dma_tx_ch = %d\n", i2s->dma_tx_ch);
-
 	i2s->dma_rx_ch = tmpa9xx_dma_request("I2S RX", 2, rx_handler,
 					err_handler, i2s);
 	if (i2s->dma_rx_ch < 0) {
 		printk(KERN_ERR "request rx audio dma failed\n");
 		goto __init_err1;
 	}
-	//printk("dma_rx_ch = %d\n", i2s->dma_rx_ch);
-
 	i2s->rx_callback = rx_callback;
 	i2s->tx_callback = tx_callback;
 	i2s->err_callback = err_callback;
 	i2s->data = data;
-
-	//i2s_printd(KERN_ERR, "dma tx: %p\n", i2s->dma_tx);
 
 	return i2s;
 
@@ -434,8 +368,6 @@ void tmpa9xx_i2s_free(struct tmpa9xx_i2s *i2s)
 	if (i2s == NULL)
 		return;
 
-	i2s_printd(KERN_ERR, "+%s\n", __FUNCTION__);
-
 	i2s_tx_stop(i2s);
 	i2s_rx_stop(i2s);
 
@@ -450,7 +382,6 @@ void tmpa9xx_i2s_free(struct tmpa9xx_i2s *i2s)
 	tmpa9xx_dma_free(i2s->dma_rx_ch);
 
 	kfree(i2s);
-	i2s_printd(KERN_ERR, "-%s\n", __FUNCTION__);
 }
 
 
