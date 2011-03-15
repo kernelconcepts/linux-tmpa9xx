@@ -81,7 +81,8 @@ static struct clk dummy_apb_pclk = {
 };
 
 static struct clk_lookup lookups[] = {
-        {      /* Bus clock */
+        {
+		/* Bus clock */
                 .con_id         = "apb_pclk",
                 .clk            = &dummy_apb_pclk,
         }, {
@@ -109,6 +110,9 @@ static struct clk_lookup lookups[] = {
 	}, {	/* PWM */
 		.dev_id		= "tmpa9xx-pwm.1",
 		.clk		= &tim_clk,
+	}, {	/* WDT */
+		.dev_id		= "tmpa9xx-wdt",
+		.clk		= &dummy_apb_pclk,
 	}
 };
 
