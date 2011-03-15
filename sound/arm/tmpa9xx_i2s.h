@@ -9,7 +9,6 @@
 int tmpa9xx_i2s_init(
 		void (*rx_callback)(void *),
 		void (*tx_callback)(void *),
-		void (*err_callback)(void *),
 		void *data);
 
 void tmpa9xx_i2s_free(void);
