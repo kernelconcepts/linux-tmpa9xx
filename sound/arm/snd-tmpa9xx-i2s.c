@@ -49,39 +49,6 @@ struct tmpa9xx_i2s_priv
 
 struct tmpa9xx_i2s_priv *g_tmpa9xx_i2s_priv;
 
-static void setup_tx_desc(struct scatter_dma_t *desc, unsigned int phydesc,
-            unsigned int phy_buf, int fragcount, size_t fragsize)
-{
-	int i;
-
-	for (i=0; i<fragcount; i++) {
-		desc[i].lli = (unsigned long)(phydesc + (i + 1) * sizeof(struct scatter_dma_t));
-		desc[i].srcaddr = (unsigned long)(phy_buf + i*fragsize);    //Phy Addr
-		desc[i].dstaddr = (unsigned long)I2STDAT_ADR;
-		desc[i].control = 0x84492000 + (unsigned long)(fragsize >> 2);
-	}
-
-	/* make circular */
-	desc[fragcount-1].lli = (unsigned long)phydesc;
-}
-
-static void setup_rx_desc(struct scatter_dma_t *desc, unsigned int phydesc,
-			unsigned int phy_buf, int fragcount, size_t fragsize)
-{
-	int i;
-
-	for (i=0; i<fragcount; ++i)
-	{
-		desc[i].lli  = (unsigned long)(phydesc + (i + 1) * sizeof(struct scatter_dma_t));
-		desc[i].srcaddr = (unsigned long)I2SRDAT_ADR;
-		desc[i].dstaddr = (unsigned long)(phy_buf + i*fragsize);    //Phy Addr
-		desc[i].control = 0x88492000 + (unsigned long)(fragsize >> 2);
-	}
-
-	/* make circular */
-	desc[fragcount-1].lli = (unsigned long)phydesc;
-}
-
 static int i2s_tx_start(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
@@ -236,8 +203,10 @@ int tmpa9xx_i2s_config_tx_dma(
 		int fragcount, size_t fragsize, size_t size)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+	struct scatter_dma_t *desc;
 	unsigned int count;
 	dma_addr_t addr;
+	int i;
 
 	count = fragsize / size;
 
@@ -261,7 +230,16 @@ int tmpa9xx_i2s_config_tx_dma(
 		return -ENOMEM;
 	}
 
-	setup_tx_desc(i2s->dma_tx_desc, addr, phy_buf, fragcount, fragsize);
+	desc = i2s->dma_tx_desc;
+	for (i=0; i<fragcount; i++) {
+		desc[i].lli = (unsigned long)(addr + (i + 1) * sizeof(struct scatter_dma_t));
+		desc[i].srcaddr = (unsigned long)(phy_buf + i*fragsize);
+		desc[i].dstaddr = (unsigned long)I2STDAT_ADR;
+		desc[i].control = 0x84492000 + (unsigned long)(fragsize >> 2);
+	}
+
+	/* make circular */
+	desc[fragcount-1].lli = (unsigned long)addr;
 
 	return 0;
 }
@@ -271,8 +249,10 @@ int tmpa9xx_i2s_config_rx_dma(
 		int fragcount, size_t fragsize, size_t size)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+	struct scatter_dma_t *desc;
 	unsigned int count;
 	dma_addr_t addr;
+	int i;
 
 	count = fragsize / size;
 
@@ -297,7 +277,17 @@ int tmpa9xx_i2s_config_rx_dma(
 		return -ENOMEM;
 	}
 
-	setup_rx_desc(i2s->dma_rx_desc, addr, phy_buf, fragcount, fragsize);
+	desc = i2s->dma_tx_desc;
+	for (i=0; i<fragcount; ++i)
+	{
+		desc[i].lli  = (unsigned long)(addr + (i + 1) * sizeof(struct scatter_dma_t));
+		desc[i].srcaddr = (unsigned long)I2SRDAT_ADR;
+		desc[i].dstaddr = (unsigned long)(phy_buf + i*fragsize);
+		desc[i].control = 0x88492000 + (unsigned long)(fragsize >> 2);
+	}
+
+	/* make circular */
+	desc[fragcount-1].lli = (unsigned long)addr;
 
 	return 0;
 }
@@ -352,15 +342,7 @@ int tmpa9xx_i2s_init(
 		void (*tx_callback)(void*),
 		void *data)
 {
-	struct tmpa9xx_i2s_priv *i2s;
-
-	i2s = kzalloc(sizeof(*i2s), GFP_KERNEL);
-	if (!i2s) {
-		printk(KERN_ERR "kmalloc() failed\n");
-		return -ENOMEM;
-	}
-
-	g_tmpa9xx_i2s_priv = i2s;
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
 
  	i2s->dma_tx_ch = tmpa9xx_dma_request("I2S TX", 1, tx_handler,
 					err_handler, i2s);
@@ -395,19 +377,13 @@ void tmpa9xx_i2s_free(void)
 	i2s_tx_stop();
 	i2s_rx_stop();
 
-	if (i2s->dma_tx_desc) {
+	if (i2s->dma_tx_desc)
 		dma_free_coherent(NULL, i2s->tx_desc_bytes, i2s->dma_tx_desc, i2s->dma_tx_phydesc);
-	}
-	if (i2s->dma_rx_desc) {
+	if (i2s->dma_rx_desc)
 		dma_free_coherent(NULL, i2s->rx_desc_bytes, i2s->dma_rx_desc, i2s->dma_rx_phydesc);
-	}
 
 	tmpa9xx_dma_free(i2s->dma_tx_ch);
 	tmpa9xx_dma_free(i2s->dma_rx_ch);
-
-	g_tmpa9xx_i2s_priv = NULL;
-
-	kfree(i2s);
 }
 
 
