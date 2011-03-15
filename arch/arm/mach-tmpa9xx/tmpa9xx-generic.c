@@ -48,7 +48,7 @@
 
 #define ARM_UART_PERIPH_ID  0x00041011
 #define ARM_SSP_PERIPH_ID   0x00041022
-
+#define ARM_WDT_PERIPH_ID   0x00141805
 /*
  * Memory Map Description
  */
@@ -184,6 +184,21 @@ static struct amba_device pl022_device1 = {
 #endif
 #endif //defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE
 
+static struct amba_device watchdog = {
+	.dev = {
+		.coherent_dma_mask = ~0,
+		.init_name = "tmpa9xx-wdt",
+		.platform_data = NULL,
+	},
+	.res = {
+		.start = WDT_BASE_ADDRESS,
+		.end   = WDT_BASE_ADDRESS + 0xfff,
+		.flags = IORESOURCE_MEM,
+	},
+	.irq = { NO_IRQ, NO_IRQ },
+	.periphid = ARM_WDT_PERIPH_ID,
+};
+
 #if defined CONFIG_FB_ARMCLCD || defined CONFIG_FB_ARMCLCD_MODULE
 static struct resource tmpa9xx_resource_clcd[] = {
         {
@@ -240,6 +255,7 @@ static struct amba_device *amba_devs[] __initdata = {
 #ifdef CONFIG_SERIAL_AMBA_PL011_CHANNEL_2
         &pl011_device2,
 #endif 
+	&watchdog,
 };
 #endif
 
@@ -490,29 +506,6 @@ static struct platform_device tmpa9xx_udc_device = {
 };
 #endif
 
-/*
- * Watchdog
- */
-#if defined CONFIG_TMPA9XX_WATCHDOG || defined CONFIG_TMPA9XX_WATCHDOG_MODULE
-static struct resource tmpa9xx_wdt_resource[] = {
-        [0] = {
-               .start = WDT_BASE_ADDRESS,
-               .end   = WDT_BASE_ADDRESS + 0xc04,
-               .flags = IORESOURCE_MEM
-        },
-};
-
-static struct platform_device tmpa9xx_wdt_device = {
-        .name           = "tmpa9xx-wdt",
-        .id             = -1,
-        .num_resources  = ARRAY_SIZE(tmpa9xx_wdt_resource),
-        .resource       = tmpa9xx_wdt_resource,
-        .dev            = {
-                           .platform_data  = NULL,
-        }
-};
-#endif
-
 #if defined CONFIG_TMPA9XX_ADC || defined CONFIG_TMPA9XX_ADC_MODULE
 static struct resource tmpa9xx_adc_resource[] = {
         [0] = {
@@ -650,9 +643,6 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
 
 #if defined CONFIG_USB_GADGET_TMPA9XX || defined CONFIG_USB_GADGET_TMPA9XX_MODULE
         &tmpa9xx_udc_device,
-#endif
-#if defined CONFIG_TMPA9XX_WATCHDOG || defined CONFIG_TMPA9XX_WATCHDOG_MODULE
-        &tmpa9xx_wdt_device,
 #endif
 
 #if defined CONFIG_TMPA9XX_ADC || defined CONFIG_TMPA9XX_ADC_MODULE
