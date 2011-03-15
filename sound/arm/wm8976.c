@@ -487,12 +487,6 @@ static void snd_wm8976_dma_tx(void *data)
 	}
 }
 
-static void snd_wm8976_i2s_err(void *data)
-{
-	struct snd_wm8976 *wm8976 = data;
-	dev_err(&wm8976->i2c_client->dev, "I2S error\n");
-}
-
 static int __devinit snd_wm8976_pcm(struct snd_wm8976 *wm8976)
 {
 	struct snd_pcm *pcm;
@@ -553,8 +547,7 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 	wm8976->card = card;
 	wm8976->i2c_client = i2c_client;
 
-	ret = tmpa9xx_i2s_init(snd_wm8976_dma_rx, snd_wm8976_dma_tx,
-			    snd_wm8976_i2s_err, wm8976);
+	ret = tmpa9xx_i2s_init(snd_wm8976_dma_rx, snd_wm8976_dma_tx, wm8976);
 	if (ret) {
 		dev_err(&i2c_client->dev, "tmpa9xx_i2s_init() failed\n");
 		ret = -ENODEV;

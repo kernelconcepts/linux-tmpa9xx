@@ -44,7 +44,6 @@ struct tmpa9xx_i2s_priv
 
 	void (*rx_callback)(void *data);
 	void (*tx_callback)(void *data);
-	void (*err_callback)(void *data);
 	void *data;
 };
 
@@ -345,16 +344,12 @@ static void rx_handler(int dma_ch, void *dev_id)
 
 static void err_handler(int dma_ch, void *dev_id)
 {
-	struct tmpa9xx_i2s_priv *i2s = dev_id;
-
-	if (i2s->err_callback)
-		i2s->err_callback(i2s->data);
+	pr_info("%s():\n", __func__);
 }
 
 int tmpa9xx_i2s_init(
 		void (*rx_callback)(void*),
 		void (*tx_callback)(void*),
-		void (*err_callback)(void*),
 		void *data)
 {
 	struct tmpa9xx_i2s_priv *i2s;
@@ -381,7 +376,6 @@ int tmpa9xx_i2s_init(
 	}
 	i2s->rx_callback = rx_callback;
 	i2s->tx_callback = tx_callback;
-	i2s->err_callback = err_callback;
 	i2s->data = data;
 
 	return 0;
