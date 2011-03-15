@@ -11,9 +11,41 @@
 
 #include "tmpa9xx_i2s.h"
 
+struct scatter_dma_t {
+	unsigned long srcaddr;
+	unsigned long dstaddr;
+	unsigned long lli;
+	unsigned long control;
+};
+
 struct tmpa9xx_i2s_priv
 {
 	struct device *dev;
+
+	int i2s_num;
+
+	int dma_tx_ch;
+	int dma_rx_ch;
+
+	/* DMA descriptor ring head of current audio stream*/
+	struct scatter_dma_t *dma_tx_desc;
+	unsigned int tx_desc_bytes;
+	unsigned int dma_tx_phydesc;
+	unsigned int dma_tx_buf;
+	unsigned int tx_run; /* tx is running */
+	struct scatter_dma_t *curr_tx_desc;
+
+	struct scatter_dma_t *dma_rx_desc;
+	unsigned int rx_desc_bytes;
+	unsigned int dma_rx_phydesc;
+	unsigned int dma_rx_buf;
+	unsigned int rx_run; /* tx is running */
+	struct scatter_dma_t *curr_rx_desc;
+
+	void (*rx_callback)(void *data);
+	void (*tx_callback)(void *data);
+	void (*err_callback)(void *data);
+	void *data;
 };
 
 struct tmpa9xx_i2s_priv *g_tmpa9xx_i2s_priv;
@@ -51,8 +83,10 @@ static void setup_rx_desc(struct scatter_dma_t *desc, unsigned int phydesc,
 	desc[fragcount-1].lli = (unsigned long)phydesc;
 }
 
-static int i2s_tx_start(struct tmpa9xx_i2s *i2s)
+static int i2s_tx_start(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+
 	tmpa9xx_dma_enable(i2s->dma_tx_ch);
 
 	/* I2S DMA set complete */
@@ -63,21 +97,24 @@ static int i2s_tx_start(struct tmpa9xx_i2s *i2s)
 	return 0;
 }
 
-static int i2s_rx_start(struct tmpa9xx_i2s *i2s)
+static int i2s_rx_start(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+
 	tmpa9xx_dma_enable(i2s->dma_rx_ch);
 
-	/*----I2S DMA set complete */
+	/* I2S DMA set complete */
 	I2SRDMA1 = 0x0001;
-
-	/*----I2S transfer start */
+	/* I2S transfer start */
 	I2SRSLVON = 0x0001;
 
 	return 0;
 }
 
-static int i2s_tx_stop(struct tmpa9xx_i2s *i2s)
+static int i2s_tx_stop(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+
 	I2STDMA1 = 0x0000;
 	I2STSLVON = 0x0000;
 
@@ -86,8 +123,10 @@ static int i2s_tx_stop(struct tmpa9xx_i2s *i2s)
 	return 0;
 }
 
-static int i2s_rx_stop(struct tmpa9xx_i2s *i2s)
+static int i2s_rx_stop(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+
 	I2SRDMA1 = 0x0000;
 	I2SRSLVON = 0x0000;
 
@@ -96,8 +135,10 @@ static int i2s_rx_stop(struct tmpa9xx_i2s *i2s)
 	return 0;
 }
 
-static inline int i2s_tx_dma_start(struct tmpa9xx_i2s *i2s)
+static inline int i2s_tx_dma_start(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+
 	int dma_ch = i2s->dma_tx_ch;
 	struct scatter_dma_t *dma_desc;
 
@@ -113,8 +154,10 @@ static inline int i2s_tx_dma_start(struct tmpa9xx_i2s *i2s)
 	return 0;
 }
 
-static inline int i2s_rx_dma_start(struct tmpa9xx_i2s *i2s)
+static inline int i2s_rx_dma_start(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+
 	int dma_ch = i2s->dma_rx_ch;
 	struct scatter_dma_t *dma_desc;
 
@@ -130,37 +173,43 @@ static inline int i2s_rx_dma_start(struct tmpa9xx_i2s *i2s)
 	return 0;
 }
 
-int tmpa9xx_i2s_tx_start(struct tmpa9xx_i2s *i2s)
+int tmpa9xx_i2s_tx_start(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+
 	if (i2s->tx_run)
 		return -EBUSY;
 
-	i2s_tx_dma_start(i2s);
-	i2s_tx_start(i2s);
+	i2s_tx_dma_start();
+	i2s_tx_start();
 	i2s->tx_run = 1;
 
 	return 0;
 }
 
-int tmpa9xx_i2s_rx_start(struct tmpa9xx_i2s *i2s)
+int tmpa9xx_i2s_rx_start(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+
 	if (i2s->rx_run)
 		return -EBUSY;
 
-	i2s_rx_dma_start(i2s);
-	i2s_rx_start(i2s);
+	i2s_rx_dma_start();
+	i2s_rx_start();
 	i2s->rx_run = 1;
 
 	return 0;
 }
 
-int tmpa9xx_i2s_tx_stop(struct tmpa9xx_i2s *i2s)
+int tmpa9xx_i2s_tx_stop(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+
 	if (!i2s->tx_run)
 		return 0;
 
 	/* Both rx and tx dma stopped */
-	i2s_tx_stop(i2s);
+	i2s_tx_stop();
 	i2s->curr_tx_desc = NULL;
 
 	i2s->tx_run = 0;
@@ -168,12 +217,14 @@ int tmpa9xx_i2s_tx_stop(struct tmpa9xx_i2s *i2s)
 	return 0;
 }
 
-int tmpa9xx_i2s_rx_stop(struct tmpa9xx_i2s *i2s)
+int tmpa9xx_i2s_rx_stop(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+
 	if (!i2s->rx_run)
 		return 0;
 
-	i2s_rx_stop(i2s);
+	i2s_rx_stop();
 	i2s->curr_rx_desc = NULL;
 
 	i2s->rx_run = 0;
@@ -181,10 +232,11 @@ int tmpa9xx_i2s_rx_stop(struct tmpa9xx_i2s *i2s)
 	return 0;
 }
 
-int tmpa9xx_i2s_config_tx_dma(struct tmpa9xx_i2s *i2s,
+int tmpa9xx_i2s_config_tx_dma(
 		unsigned char *cpu_buf, unsigned int phy_buf,
 		int fragcount, size_t fragsize, size_t size)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
 	unsigned int count;
 	dma_addr_t addr;
 
@@ -215,10 +267,11 @@ int tmpa9xx_i2s_config_tx_dma(struct tmpa9xx_i2s *i2s,
 	return 0;
 }
 
-int tmpa9xx_i2s_config_rx_dma(struct tmpa9xx_i2s *i2s,
+int tmpa9xx_i2s_config_rx_dma(
 		unsigned char *cpu_buf, unsigned int phy_buf,
 		int fragcount, size_t fragsize, size_t size)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
 	unsigned int count;
 	dma_addr_t addr;
 
@@ -250,8 +303,9 @@ int tmpa9xx_i2s_config_rx_dma(struct tmpa9xx_i2s *i2s,
 	return 0;
 }
 
-unsigned int tmpa9xx_i2s_curr_offset_tx(struct tmpa9xx_i2s *i2s)
+unsigned int tmpa9xx_i2s_curr_offset_tx(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
 	int dma_ch = i2s->dma_tx_ch;
 	unsigned int addr, size;
 
@@ -261,8 +315,9 @@ unsigned int tmpa9xx_i2s_curr_offset_tx(struct tmpa9xx_i2s *i2s)
 	return size;
 }
 
-unsigned int tmpa9xx_i2s_curr_offset_rx(struct tmpa9xx_i2s *i2s)
+unsigned int tmpa9xx_i2s_curr_offset_rx(void)
 {
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
 	int dma_ch = i2s->dma_rx_ch;
 	unsigned int addr, size;
 
@@ -272,69 +327,45 @@ unsigned int tmpa9xx_i2s_curr_offset_rx(struct tmpa9xx_i2s *i2s)
 	return size;
 }
 
-static int i2s_check_status(struct tmpa9xx_i2s *i2s,
-		unsigned int *i2s_stat,
-		unsigned int *rx_stat,
-		unsigned int *tx_stat)
-{
-	int status = 0;
-
-	return status;
-}
-
 static void tx_handler(int dma_ch, void *dev_id)
 {
-	unsigned int tx_stat;
-	struct tmpa9xx_i2s *i2s = dev_id;
+	struct tmpa9xx_i2s_priv *i2s = dev_id;
 
-	i2s_check_status(i2s, NULL, NULL, &tx_stat);
-
-	if (i2s->tx_callback) {
+	if (i2s->tx_callback)
 		i2s->tx_callback(i2s->data);
-	}
 }
 
 static void rx_handler(int dma_ch, void *dev_id)
 {
-	unsigned int rx_stat;
-	struct tmpa9xx_i2s *i2s = dev_id;
+	struct tmpa9xx_i2s_priv *i2s = dev_id;
 
-	i2s_check_status(i2s, NULL, NULL, &rx_stat);
-
-	if (i2s->rx_callback) {
+	if (i2s->rx_callback)
 		i2s->rx_callback(i2s->data);
-	}
 }
 
 static void err_handler(int dma_ch, void *dev_id)
 {
-	unsigned int status;
-	struct tmpa9xx_i2s *i2s = dev_id;
-
-	if (i2s_check_status(i2s, &status, NULL, NULL)) {
-		printk(KERN_ERR "error checking status ??");
-		return;
-	}
+	struct tmpa9xx_i2s_priv *i2s = dev_id;
 
 	if (i2s->err_callback)
 		i2s->err_callback(i2s->data);
 }
 
-struct tmpa9xx_i2s *tmpa9xx_i2s_init(
+int tmpa9xx_i2s_init(
 		void (*rx_callback)(void*),
 		void (*tx_callback)(void*),
 		void (*err_callback)(void*),
 		void *data)
 {
-	struct tmpa9xx_i2s *i2s;
+	struct tmpa9xx_i2s_priv *i2s;
 
-	i2s = kmalloc(sizeof(struct tmpa9xx_i2s), GFP_KERNEL);
-
-	if (i2s == NULL) {
+	i2s = kzalloc(sizeof(*i2s), GFP_KERNEL);
+	if (!i2s) {
 		printk(KERN_ERR "kmalloc() failed\n");
-		return NULL;
+		return -ENOMEM;
 	}
-	memset(i2s, 0, sizeof(struct tmpa9xx_i2s));
+
+	g_tmpa9xx_i2s_priv = i2s;
 
  	i2s->dma_tx_ch = tmpa9xx_dma_request("I2S TX", 1, tx_handler,
 					err_handler, i2s);
@@ -353,23 +384,22 @@ struct tmpa9xx_i2s *tmpa9xx_i2s_init(
 	i2s->err_callback = err_callback;
 	i2s->data = data;
 
-	return i2s;
+	return 0;
 
 __init_err1:
 	tmpa9xx_dma_free(i2s->dma_rx_ch);
 __init_err2:
 	kfree(i2s);
 
-	return NULL;
+	return -ENODEV;
 }
 
-void tmpa9xx_i2s_free(struct tmpa9xx_i2s *i2s)
+void tmpa9xx_i2s_free(void)
 {
-	if (i2s == NULL)
-		return;
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
 
-	i2s_tx_stop(i2s);
-	i2s_rx_stop(i2s);
+	i2s_tx_stop();
+	i2s_rx_stop();
 
 	if (i2s->dma_tx_desc) {
 		dma_free_coherent(NULL, i2s->tx_desc_bytes, i2s->dma_tx_desc, i2s->dma_tx_phydesc);
@@ -381,20 +411,22 @@ void tmpa9xx_i2s_free(struct tmpa9xx_i2s *i2s)
 	tmpa9xx_dma_free(i2s->dma_tx_ch);
 	tmpa9xx_dma_free(i2s->dma_rx_ch);
 
+	g_tmpa9xx_i2s_priv = NULL;
+
 	kfree(i2s);
 }
 
 
-EXPORT_SYMBOL(tmpa9xx_i2s_rx_start);
 EXPORT_SYMBOL(tmpa9xx_i2s_init);
-EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_tx);
-EXPORT_SYMBOL(tmpa9xx_i2s_config_tx_dma);
-EXPORT_SYMBOL(tmpa9xx_i2s_rx_stop);
-EXPORT_SYMBOL(tmpa9xx_i2s_config_rx_dma);
-EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_rx);
 EXPORT_SYMBOL(tmpa9xx_i2s_free);
+EXPORT_SYMBOL(tmpa9xx_i2s_config_tx_dma);
+EXPORT_SYMBOL(tmpa9xx_i2s_config_rx_dma);
+EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_tx);
+EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_rx);
 EXPORT_SYMBOL(tmpa9xx_i2s_tx_start);
 EXPORT_SYMBOL(tmpa9xx_i2s_tx_stop);
+EXPORT_SYMBOL(tmpa9xx_i2s_rx_start);
+EXPORT_SYMBOL(tmpa9xx_i2s_rx_stop);
 
 static int __devinit probe(struct platform_device *pdev)
 {
