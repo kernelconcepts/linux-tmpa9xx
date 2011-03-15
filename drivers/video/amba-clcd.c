@@ -343,9 +343,10 @@ static int clcdfb_mmap(struct fb_info *info,
 static irqreturn_t clcd_vsync_interrupt(int irq, void *ptr)
 {
 	struct clcd_fb *fb = ptr;
+	uint32_t mis = readl(fb->regs + CLCD_MIS);
 
-	/* clear pending irq */
-	writel(INTR_VCOMP, fb->regs + CLCD_ICR);
+	if (mis & INTR_LNBU)
+		writel(INTR_LNBU, fb->regs + CLCD_ICR);
 
 	clcd_vsync_counter++;
 
@@ -359,15 +360,8 @@ static void clcdfb_enable_vsync_handling(struct clcd_fb *fb)
 {
 	uint32_t val;
 
-	/* interrupt on start of vsync */
-	val = readl(fb->regs + fb->off_cntl);
-	val &= ~CNTL_LCDVCOMP(3);
-	val |= CNTL_LCDVCOMP(0);
-	writel(val, fb->regs + fb->off_cntl);
-
-	/* enable vcomp interrupt */
 	val = readl(fb->regs + fb->off_ienb);
-	val |= INTR_VCOMP;
+	val |= INTR_LNBU;
 	writel(val, fb->regs + fb->off_ienb);
 
 	fb->vsync_enabled = true;
