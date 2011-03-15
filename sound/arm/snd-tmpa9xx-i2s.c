@@ -14,7 +14,6 @@
 struct tmpa9xx_i2s_priv
 {
 	struct device *dev;
-	struct tmpa9xx_dma_config *config;
 };
 
 struct tmpa9xx_i2s_priv *g_tmpa9xx_i2s_priv;
@@ -388,7 +387,6 @@ struct tmpa9xx_i2s *tmpa9xx_i2s_init(
 		void *data)
 {
 	struct tmpa9xx_i2s *i2s;
-	struct tmpa9xx_i2s_priv *p = g_tmpa9xx_i2s_priv;
 
 	i2s = kmalloc(sizeof(struct tmpa9xx_i2s), GFP_KERNEL);
 
@@ -401,7 +399,7 @@ struct tmpa9xx_i2s *tmpa9xx_i2s_init(
  	i2s->dma_tx_ch = tmpa9xx_dma_request("I2S TX", 1, tx_handler,
 					err_handler, i2s);
 	if (i2s->dma_tx_ch < 0) {
-		printk(KERN_ERR "request tx audio dma 0x%x failed\n", p->config->tx);
+		printk(KERN_ERR "request tx audio dma failed\n");
 		goto __init_err2;
 	}
 	//printk("dma_tx_ch = %d\n", i2s->dma_tx_ch);
@@ -409,7 +407,7 @@ struct tmpa9xx_i2s *tmpa9xx_i2s_init(
 	i2s->dma_rx_ch = tmpa9xx_dma_request("I2S RX", 2, rx_handler,
 					err_handler, i2s);
 	if (i2s->dma_rx_ch < 0) {
-		printk(KERN_ERR "request rx audio dma 0x%x failed\n", p->config->rx);
+		printk(KERN_ERR "request rx audio dma failed\n");
 		goto __init_err1;
 	}
 	//printk("dma_rx_ch = %d\n", i2s->dma_rx_ch);
@@ -483,12 +481,9 @@ static int __devinit probe(struct platform_device *pdev)
 
 	p->dev = &pdev->dev;
 
-	BUG_ON(!pdev->dev.platform_data);
-	p->config = pdev->dev.platform_data;
-
 	platform_set_drvdata(pdev, p);
 
-	dev_dbg(p->dev, "rx dma %d, tx dma %d\n", p->config->rx, p->config->tx);
+	dev_dbg(p->dev, "\n");
 
 	return 0;
 
