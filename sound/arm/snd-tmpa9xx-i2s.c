@@ -11,6 +11,23 @@
 
 #include "tmpa9xx_i2s.h"
 
+#define CON(st)		(st.register_offset + 0x000)
+#define SLVON(st)	(st.register_offset + 0x004)
+#define FCLR(st)	(st.register_offset + 0x008)
+#define MS(st)		(st.register_offset + 0x00C)
+#define MCON(st)	(st.register_offset + 0x010)
+#define MSTP(st)	(st.register_offset + 0x014)
+#define DMA1(st)	(st.register_offset + 0x018)
+
+#define COMMON	(0x044) 
+#define TST	(0x048)
+#define RST	(0x04C)
+#define INT	(0x050)
+#define INTMSK	(0x054)
+
+#define i2s_writel(b, o, v)	writel(v, b->regs + o)
+#define i2s_readl(b, o)		readl(b->regs + o)
+
 struct scatter_dma_t {
 	unsigned long srcaddr;
 	unsigned long dstaddr;
@@ -21,6 +38,7 @@ struct scatter_dma_t {
 struct i2s_stream
 {
 	int dma_ch;
+	int register_offset;
 
 	/* DMA descriptor ring head of current audio stream*/
 	struct scatter_dma_t *dma_desc;
@@ -33,6 +51,7 @@ struct i2s_stream
 
 struct tmpa9xx_i2s_priv
 {
+	void __iomem *regs;
 	struct device *dev;
 
 	struct i2s_stream rx;
@@ -380,24 +399,38 @@ static int __devinit probe(struct platform_device *pdev)
 		goto err2;
 	}
 
+	p->regs = ioremap(0xf2040000, 0x2fff); // res->start, resource_size(res));
+	if (!p->regs) {
+		dev_err(&pdev->dev, "ioremap() failed\n");
+		ret = -ENODEV;
+		goto err3;
+	}
+
 	g_tmpa9xx_i2s_priv = p;
 
 	p->dev = &pdev->dev;
 
 	platform_set_drvdata(pdev, p);
 
-	I2SCOMMON = 0x19;		/* IISSCLK = Fosch(X1),       Set SCK/WS/CLKO of Tx and Rx as Common */
-	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896M Hz */
-	I2SRMCON = 0x04;
-	I2STCON = 0x00;			/* IIS Standard Format */
-	I2STFCLR = 0x01;		/* Clear FIFO */
-	I2SRMS = 0x00;			/* Slave */
-	I2STMS = 0x00;			/* Slave */
+	p->tx.register_offset = 0x00;
+	p->rx.register_offset = 0x20;
+
+	i2s_writel(p, COMMON, 0x19); /* IISSCLK = Fosch(X1), Set SCK/WS/CLKO of Tx and Rx as Common */
+
+	i2s_writel(p, MCON(p->tx),  0x04); /* I2SMCLK = Fosch/4 = 11.2896M Hz */
+	i2s_writel(p, CON(p->tx),   0x00); /* I2S standard format */
+	i2s_writel(p, FCLR(p->tx),  0x01); /* clear fifo */
+	i2s_writel(p, MS(p->tx),    0x00); /* slave */
+
+	i2s_writel(p, MCON(p->rx),  0x04);
+	i2s_writel(p, MS(p->rx),    0x00); /* slave */
 
 	dev_dbg(p->dev, "\n");
 
 	return 0;
 
+err3:
+	tmpa9xx_dma_free(p->tx.dma_ch);
 err2:
 	tmpa9xx_dma_free(p->rx.dma_ch);
 err1:
@@ -415,6 +448,8 @@ static int __devexit remove(struct platform_device *pdev)
 
 	tmpa9xx_dma_free(p->tx.dma_ch);
 	tmpa9xx_dma_free(p->rx.dma_ch);
+
+	iounmap(p->regs);
 
 	platform_set_drvdata(pdev, NULL);
 
