@@ -13,8 +13,7 @@
 #include <linux/err.h>
 #include <linux/clk.h>
 #include <linux/mutex.h>
-
-#include <asm/clkdev.h>
+#include <linux/clkdev.h>
 
 /* currently the clk structure
  * just supports rate. This would
