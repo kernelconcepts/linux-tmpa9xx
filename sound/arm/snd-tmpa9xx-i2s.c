@@ -98,7 +98,7 @@ static int i2s_rx_stop(void)
 	return 0;
 }
 
-static inline int i2s_tx_dma_start(void)
+static int i2s_tx_dma_start(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
 
@@ -117,7 +117,7 @@ static inline int i2s_tx_dma_start(void)
 	return 0;
 }
 
-static inline int i2s_rx_dma_start(void)
+static int i2s_rx_dma_start(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
 
