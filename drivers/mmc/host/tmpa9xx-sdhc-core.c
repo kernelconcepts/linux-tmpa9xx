@@ -491,8 +491,6 @@ static int sdhc_probe(struct platform_device *pdev)
 	mmc->max_blk_count = 64;
 	mmc->max_req_size = mmc->max_blk_size * mmc->max_blk_count;
 	mmc->max_seg_size = 4096;
-	mmc->max_hw_segs = 128;
-	mmc->max_phys_segs = 128;
 	mmc->caps |= MMC_CAP_MMC_HIGHSPEED | MMC_CAP_SD_HIGHSPEED;
 
 	host = mmc_priv(mmc);
