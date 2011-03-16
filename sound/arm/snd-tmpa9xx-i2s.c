@@ -360,6 +360,14 @@ int tmpa9xx_i2s_init(
 	i2s->tx_callback = tx_callback;
 	i2s->data = data;
 
+	I2SCOMMON = 0x19;		/* IISSCLK = Fosch(X1),       Set SCK/WS/CLKO of Tx and Rx as Common */
+	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896M Hz */
+	I2SRMCON = 0x04;
+	I2STCON = 0x00;			/* IIS Standard Format */
+	I2STFCLR = 0x01;		/* Clear FIFO */
+	I2SRMS = 0x00;			/* Slave */
+	I2STMS = 0x00;			/* Slave */
+
 	return 0;
 
 __init_err1:
