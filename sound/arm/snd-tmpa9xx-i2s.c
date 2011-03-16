@@ -11,13 +11,13 @@
 
 #include "tmpa9xx_i2s.h"
 
-#define CON(st)		(st->register_offset + 0x000)
-#define SLVON(st)	(st->register_offset + 0x004)
-#define FCLR(st)	(st->register_offset + 0x008)
-#define MS(st)		(st->register_offset + 0x00C)
-#define MCON(st)	(st->register_offset + 0x010)
-#define MSTP(st)	(st->register_offset + 0x014)
-#define DMA1(st)	(st->register_offset + 0x018)
+#define CON(st)		((st->is_rx * 0x20) + 0x000)
+#define SLVON(st)	((st->is_rx * 0x20) + 0x004)
+#define FCLR(st)	((st->is_rx * 0x20) + 0x008)
+#define MS(st)		((st->is_rx * 0x20) + 0x00C)
+#define MCON(st)	((st->is_rx * 0x20) + 0x010)
+#define MSTP(st)	((st->is_rx * 0x20) + 0x014)
+#define DMA1(st)	((st->is_rx * 0x20) + 0x018)
 
 #define COMMON	(0x044) 
 #define TST	(0x048)
@@ -41,7 +41,7 @@ struct scatter_dma_t {
 struct i2s_stream
 {
 	int dma_ch;
-	int register_offset;
+	bool is_rx;
 
 	/* DMA descriptor ring head of current audio stream*/
 	struct scatter_dma_t *dma_desc;
@@ -71,6 +71,23 @@ struct tmpa9xx_i2s_priv *g_tmpa9xx_i2s_priv;
 static void stream_start(struct i2s_stream *s)
 {
 	struct tmpa9xx_i2s_priv *i = g_tmpa9xx_i2s_priv;
+	struct scatter_dma_t *dma_desc;
+
+	if (s->run)
+		return;
+
+	s->curr_desc = s->dma_desc;
+	dma_desc = s->curr_desc;
+
+        DMA_SRC_ADDR(s->dma_ch)  = dma_desc->srcaddr;
+	DMA_DEST_ADDR(s->dma_ch) = dma_desc->dstaddr;
+	DMA_LLI(s->dma_ch)       = dma_desc->lli;
+	DMA_CONTROL(s->dma_ch)   = dma_desc->control;
+	if (s->is_rx)
+		DMA_CONFIG(s->dma_ch) = 0x00009017;
+	else
+		DMA_CONFIG(s->dma_ch) = 0x00008a81;
+
 	tmpa9xx_dma_enable(s->dma_ch);
 
 	/* I2S DMA set complete */
@@ -95,67 +112,17 @@ static void stream_stop(struct i2s_stream *s)
 	s->run = 0;
 }
 
-static int i2s_tx_dma_start(void)
-{
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
-	int dma_ch = i2s->tx.dma_ch;
-	struct scatter_dma_t *dma_desc;
-
-	i2s->tx.curr_desc = i2s->tx.dma_desc;
-	dma_desc = i2s->tx.curr_desc;
-
-        DMA_SRC_ADDR(dma_ch) = dma_desc->srcaddr;
-	DMA_DEST_ADDR(dma_ch) = dma_desc->dstaddr;
-	DMA_LLI(dma_ch) = dma_desc->lli;
-	DMA_CONTROL(dma_ch) = dma_desc->control;
-	DMA_CONFIG(dma_ch) = 0x00008a81;
-
-	return 0;
-}
-
-static int i2s_rx_dma_start(void)
-{
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
-	int dma_ch = i2s->rx.dma_ch;
-	struct scatter_dma_t *dma_desc;
-
-	i2s->rx.curr_desc = i2s->rx.dma_desc;
-	dma_desc = i2s->rx.curr_desc;
-
-	DMA_SRC_ADDR(dma_ch) = dma_desc->srcaddr;
-	DMA_DEST_ADDR(dma_ch) = dma_desc->dstaddr;
-	DMA_LLI(dma_ch) = dma_desc->lli;
-	DMA_CONTROL(dma_ch) = dma_desc->control;
-	DMA_CONFIG(dma_ch) = 0x00009017;
-
-	return 0;
-}
-
 int tmpa9xx_i2s_tx_start(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
-	if (i2s->tx.run)
-		return -EBUSY;
-
-	i2s_tx_dma_start();
 	stream_start(&i2s->tx);
-
 	return 0;
 }
 
 int tmpa9xx_i2s_rx_start(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
-	if (i2s->rx.run)
-		return -EBUSY;
-
-	i2s_rx_dma_start();
 	stream_start(&i2s->rx);
-
 	return 0;
 }
 
@@ -358,7 +325,7 @@ static int __devinit probe(struct platform_device *pdev)
 		goto err2;
 	}
 
-	p->regs = ioremap(I2S_BASE, 0x2fff); // res->start, resource_size(res));
+	p->regs = ioremap(I2S_BASE	, 0x2fff); // res->start, resource_size(res));
 	if (!p->regs) {
 		dev_err(&pdev->dev, "ioremap() failed\n");
 		ret = -ENODEV;
@@ -371,8 +338,7 @@ static int __devinit probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, p);
 
-	p->tx.register_offset = 0x00;
-	p->rx.register_offset = 0x20;
+	p->rx.is_rx = true;
 
 	i2s_writel(p, COMMON, 0x19); /* IISSCLK = Fosch(X1), Set SCK/WS/CLKO of Tx and Rx as Common */
 
