@@ -22,8 +22,6 @@ struct tmpa9xx_i2s_priv
 {
 	struct device *dev;
 
-	int i2s_num;
-
 	int dma_tx_ch;
 	int dma_rx_ch;
 
@@ -315,28 +313,16 @@ int tmpa9xx_i2s_rx_setup(struct tmpa9xx_i2s_config *c)
 	return 0;
 }
 
-unsigned int tmpa9xx_i2s_curr_offset_tx(void)
+int tmpa9xx_i2s_curr_offset_tx(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-	int dma_ch = i2s->dma_tx_ch;
-	unsigned int addr, size;
-
-	addr = DMA_SRC_ADDR(dma_ch);
-	size = addr - i2s->dma_tx_buf;
-
-	return size;
+	return DMA_SRC_ADDR(i2s->dma_tx_ch) - i2s->dma_tx_buf;
 }
 
-unsigned int tmpa9xx_i2s_curr_offset_rx(void)
+int tmpa9xx_i2s_curr_offset_rx(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-	int dma_ch = i2s->dma_rx_ch;
-	unsigned int addr, size;
-
-	addr = DMA_DEST_ADDR(dma_ch);
-	size = addr - i2s->dma_rx_buf;
-
-	return size;
+	return DMA_SRC_ADDR(i2s->dma_rx_ch) - i2s->dma_rx_buf;
 }
 
 static void tx_handler(int dma_ch, void *dev_id)
