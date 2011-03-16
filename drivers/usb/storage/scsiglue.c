@@ -113,7 +113,7 @@ static int slave_alloc (struct scsi_device *sdev)
 	 * Let the scanning code know if this target merely sets
 	 * Peripheral Device Type to 0x1f to indicate no LUN.
 	 */
-	if (us->subclass == US_SC_UFI)
+	if (us->subclass == USB_SC_UFI)
 		sdev->sdev_target->pdt_1f_for_no_lun = 1;
 
 	return 0;
@@ -181,7 +181,7 @@ static int slave_configure(struct scsi_device *sdev)
 		/* Disk-type devices use MODE SENSE(6) if the protocol
 		 * (SubClass) is Transparent SCSI, otherwise they use
 		 * MODE SENSE(10). */
-		if (us->subclass != US_SC_SCSI && us->subclass != US_SC_CYP_ATACB)
+		if (us->subclass != USB_SC_SCSI && us->subclass != USB_SC_CYP_ATACB)
 			sdev->use_10_for_ms = 1;
 
 		/* Many disks only accept MODE SENSE transfer lengths of
@@ -213,6 +213,10 @@ static int slave_configure(struct scsi_device *sdev)
 		 * The sd driver has to guess which is the case. */
 		if (us->fflags & US_FL_CAPACITY_HEURISTICS)
 			sdev->guess_capacity = 1;
+
+		/* Some devices cannot handle READ_CAPACITY_16 */
+		if (us->fflags & US_FL_NO_READ_CAPACITY_16)
+			sdev->no_read_capacity_16 = 1;
 
 		/* assume SPC3 or latter devices support sense size > 18 */
 		if (sdev->scsi_level > SCSI_SPC_2)
@@ -250,7 +254,7 @@ static int slave_configure(struct scsi_device *sdev)
 		 * capacity will be decremented or is correct. */
 		if (!(us->fflags & (US_FL_FIX_CAPACITY | US_FL_CAPACITY_OK |
 					US_FL_SCM_MULT_TARG)) &&
-				us->protocol == US_PR_BULK)
+				us->protocol == USB_PR_BULK)
 			us->use_last_sector_hacks = 1;
 	} else {
 
@@ -258,6 +262,10 @@ static int slave_configure(struct scsi_device *sdev)
 		 * or to force 192-byte transfer lengths for MODE SENSE.
 		 * But they do need to use MODE SENSE(10). */
 		sdev->use_10_for_ms = 1;
+
+		/* Some (fake) usb cdrom devices don't like READ_DISC_INFO */
+		if (us->fflags & US_FL_NO_READ_DISC_INFO)
+			sdev->no_read_disc_info = 1;
 	}
 
 	/* The CB and CBI transports have no way to pass LUN values
@@ -266,7 +274,7 @@ static int slave_configure(struct scsi_device *sdev)
 	 * scsi_level == 0 (UNKNOWN).  Hence such devices must necessarily
 	 * be single-LUN.
 	 */
-	if ((us->protocol == US_PR_CB || us->protocol == US_PR_CBI) &&
+	if ((us->protocol == USB_PR_CB || us->protocol == USB_PR_CBI) &&
 			sdev->scsi_level == SCSI_UNKNOWN)
 		us->max_lun = 0;
 
@@ -282,7 +290,7 @@ static int slave_configure(struct scsi_device *sdev)
 
 /* queue a command */
 /* This is always called with scsi_lock(host) held */
-static int queuecommand(struct scsi_cmnd *srb,
+static int queuecommand_lck(struct scsi_cmnd *srb,
 			void (*done)(struct scsi_cmnd *))
 {
 	struct us_data *us = host_to_us(srb->device->host);
@@ -311,6 +319,8 @@ static int queuecommand(struct scsi_cmnd *srb,
 
 	return 0;
 }
+
+static DEF_SCSI_QCMD(queuecommand)
 
 /***********************************************************************
  * Error handling functions
