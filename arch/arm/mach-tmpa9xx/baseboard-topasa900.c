@@ -118,62 +118,44 @@ static void tmpa9xx_spi1_cs_control(u32 command)
 
 #if defined CONFIG_SPI_PL022_CHANNEL_0
 struct pl022_config_chip mmc_info = {
-        .lbm              = LOOPBACK_DISABLED,
         .com_mode         = INTERRUPT_TRANSFER,
         .iface            = SSP_INTERFACE_MOTOROLA_SPI,
         /* we can act as master only */
         .hierarchy        = SSP_MASTER,
         .slave_tx_disable = 0,
-        .endian_rx        = SSP_RX_MSB,
-        .endian_tx        = SSP_TX_MSB,
-        .data_size        = SSP_DATA_BITS_8,
         .rx_lev_trig      = SSP_RX_1_OR_MORE_ELEM,
         .tx_lev_trig      = SSP_TX_1_OR_MORE_EMPTY_LOC,
-        .clk_phase        = SSP_CLK_SECOND_EDGE,
-        .clk_pol          = SSP_CLK_POL_IDLE_HIGH,
         .cs_control       = tmpa9xx_spi0_cs_control,
 };
 #endif
 
 #if defined CONFIG_SPI_PL022_CHANNEL_0
 struct pl022_config_chip spidev0_info = {
-        .lbm              = LOOPBACK_DISABLED,
         .com_mode         = INTERRUPT_TRANSFER,
         .iface = SSP_INTERFACE_MOTOROLA_SPI,
         /* we can act as master only */
         .hierarchy        = SSP_MASTER,
         .slave_tx_disable = 0,
-        .endian_rx        = SSP_RX_MSB,
-        .endian_tx        = SSP_TX_MSB,
-        .data_size        = SSP_DATA_BITS_8,
         .rx_lev_trig      = SSP_RX_1_OR_MORE_ELEM,
         .tx_lev_trig      = SSP_TX_1_OR_MORE_EMPTY_LOC,
-        .clk_phase        = SSP_CLK_SECOND_EDGE,
-        .clk_pol          = SSP_CLK_POL_IDLE_HIGH,
         .cs_control       = tmpa9xx_spi0_cs_control,
 };
 #endif
 
 #if defined CONFIG_SPI_PL022_CHANNEL_1
 struct pl022_config_chip spidev1_info = {
-        .lbm              = LOOPBACK_DISABLED,
         .com_mode         = INTERRUPT_TRANSFER,
         .iface            = SSP_INTERFACE_MOTOROLA_SPI,
         /* we can act as master only */
         .hierarchy        = SSP_MASTER,
         .slave_tx_disable = 0,
-        .endian_rx        = SSP_RX_MSB,
-        .endian_tx        = SSP_TX_MSB,
-        .data_size        = SSP_DATA_BITS_8,
         .rx_lev_trig      = SSP_RX_1_OR_MORE_ELEM,
         .tx_lev_trig      = SSP_TX_1_OR_MORE_EMPTY_LOC,
-        .clk_phase        = SSP_CLK_SECOND_EDGE,
-        .clk_pol          = SSP_CLK_POL_IDLE_HIGH,
         .cs_control       = tmpa9xx_spi1_cs_control,
 };
 #endif
 
-#if defined CONFIG_MMC_SPI && defined CONFIG_SPI_PL022_CHANNEL_0
+#if (defined CONFIG_MMC_SPI || defined CONFIG_MMC_SPI_MODULE) && defined CONFIG_SPI_PL022_CHANNEL_0
 static struct mmc_spi_platform_data mmc_spi_info = {
         .caps     = MMC_CAP_NEEDS_POLL | MMC_CAP_SPI,
         .ocr_mask = MMC_VDD_32_33      | MMC_VDD_33_34, /* 3.3V only */
@@ -351,7 +333,8 @@ void __init baseboard_init(void)
         i2c_register_board_info(1, baseboard_i2c_1_devices,
                         ARRAY_SIZE(baseboard_i2c_1_devices));
 #endif
-#if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_SPI_SPIDEV_MODULE) || defined(CONFIG_MMC_SPI)
+#if defined CONFIG_SPI_SPIDEV || defined CONFIG_SPI_SPIDEV_MODULE \
+ || defined CONFIG_MMC_SPI    || defined CONFIG_MMC_SPI_MODULE
         spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif
 
