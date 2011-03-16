@@ -91,17 +91,13 @@ static void tmpa9xx_end_irq(unsigned int irq) {
         }
 }
 
-
-static struct irq_chip  tmpa9xx_chip = {
-        .typename  = "tmpa9xx",
-
-        .ack       = tmpa9xx_ack_irq,
-        .end       = tmpa9xx_end_irq,
-
-        .mask             = tmpa9xx_dis_irq,
-        .unmask    = tmpa9xx_ena_irq,
+static struct irq_chip tmpa9xx_chip = {
+        .name	= "tmpa9xx",
+        .ack	= tmpa9xx_ack_irq,
+        .end	= tmpa9xx_end_irq,
+        .mask	= tmpa9xx_dis_irq,
+        .unmask	= tmpa9xx_ena_irq,
 };
-
 
 void __init tmpa9xx_init_irq(void)
 {
