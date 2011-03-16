@@ -23,8 +23,6 @@
 #include <sound/initval.h>
 
 #include <mach/dma.h>
-#include <mach/irqs.h>
-#include <mach/regs.h>
 
 #include "tmpa9xx_i2s.h"
 
@@ -79,18 +77,6 @@ struct snd_wm8976
 	struct snd_pcm_substream *tx_substream;
 };
 
-/* this must be moved into tmpa9xx_i2s.c */
-static void init_wm8976_i2c_hw(void)
-{
-	I2SCOMMON = 0x19;		/* IISSCLK = Fosch(X1),       Set SCK/WS/CLKO of Tx and Rx as Common */
-	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896M Hz */
-	I2SRMCON = 0x04;
-	I2STCON = 0x00;			/* IIS Standard Format */
-	I2STFCLR = 0x01;		/* Clear FIFO */
-	I2SRMS = 0x00;			/* Slave */
-	I2STMS = 0x00;			/* Slave */
-}
-
 #define i2c_packet_send(reg, val) \
 	{ \
 	int ret = i2c_smbus_write_byte_data(i2c_client, reg, val); \
@@ -100,8 +86,6 @@ static void init_wm8976_i2c_hw(void)
 
 static void init_wm8976_i2c(struct i2c_client *i2c_client)
 {
-	init_wm8976_i2c_hw();
-
 	i2c_packet_send(0x00,0x00);	/* R0  0x000 */
 	i2c_packet_send(0x02,0x3d);	/* R1  0x02D */
 	i2c_packet_send(0x05,0x95);	/* R2  0x195 */
