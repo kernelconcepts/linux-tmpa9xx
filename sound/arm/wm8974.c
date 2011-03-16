@@ -99,7 +99,6 @@ static void init_wm8974_i2c_hw(void)
 #define i2c_packet_send(reg, val) \
 	{ \
 	int ret = i2c_smbus_write_byte_data(i2c_client, reg, val); \
-        printk("Written: Register:0x%x Value: 0x%3x \n",reg>>1,((reg&0x1)<<8)|val); \
 	if (ret) \
 		dev_err(&i2c_client->dev, "i2c_smbus_write_byte_data() failed, ret %d\n", ret); \
 	}
@@ -109,26 +108,28 @@ static void init_wm8974_i2c(struct i2c_client *i2c_client)
 	init_wm8974_i2c_hw();
 
 	i2c_packet_send(0x00,0x00);	/* R0  0x000 - Reset OFF*/
-	i2c_packet_send(0x02,0x23);	/* R1  0x03D - PLL Enable, fasted startup*/
+	//BOOST: i2c_packet_send((0x02 | 1),0x2f);	/* R1  0x03D - PLL Enable,fasted startup*/
+	i2c_packet_send((0x02),0x2f);	/* R1  0x03D - PLL Enable, fasted startup*/
 	i2c_packet_send(0x04,0x00);	/* R2  0x015 - no ADC*/
 	i2c_packet_send(0x06,0xed);	/* R3  0x0ed - SPKP/N enable, spk mix dac enable*/
 	i2c_packet_send(0x08,0x10);	/* R4  0X010 - i2s format*/
 	i2c_packet_send(0x0a,0x00);	/* R5  0X000 - reset value */
-        
+
 	i2c_packet_send(0x14,0x00);	/* R10 0x080 */
 	i2c_packet_send(0x16,0xff);	/* R11 0X0ff - max volume */
 	i2c_packet_send(0x1c,0x00);	/* R14 0x1c01 */
 	i2c_packet_send(0x1e,0x00);	/* R15 0X000 - ADC off */
-        
+
 //	i2c_packet_send(0x30, 0x32);	/* R24 = 0x032 */
 //	i2c_packet_send(0x5b,0x3f);	/* R45 0X000 */
 //	i2c_packet_send(0x56,0x10);	/* R43 0X010   add for wm8974 8 ohm speaker */
 //	i2c_packet_send(0x5f,0x55);	/* R47 0X005 */
 //	i2c_packet_send(47<<1 | 1,0xff);/* R47 0X1ff */
-//	i2c_packet_send(0x62,0x02);	/* R49 0X002 */
+	//BOOST: i2c_packet_send(0x62,0x0e);	/* R49 - gain boost  */
+	i2c_packet_send(0x62,0x02);	/* R49 - no boost  */
 	i2c_packet_send(0x64,0x01);	/* R50 0X001 */
 	i2c_packet_send(54<<1,0x39);	/* R54 0dB */
-//	i2c_packet_send(56<<1,0x39);	/* R54 0dB */
+	i2c_packet_send(56<<1,0x01);	/* R56 DAC to mono mix */
 
 }
 
