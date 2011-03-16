@@ -11,13 +11,13 @@
 
 #include "tmpa9xx_i2s.h"
 
-#define CON(st)		(st.register_offset + 0x000)
-#define SLVON(st)	(st.register_offset + 0x004)
-#define FCLR(st)	(st.register_offset + 0x008)
-#define MS(st)		(st.register_offset + 0x00C)
-#define MCON(st)	(st.register_offset + 0x010)
-#define MSTP(st)	(st.register_offset + 0x014)
-#define DMA1(st)	(st.register_offset + 0x018)
+#define CON(st)		(st->register_offset + 0x000)
+#define SLVON(st)	(st->register_offset + 0x004)
+#define FCLR(st)	(st->register_offset + 0x008)
+#define MS(st)		(st->register_offset + 0x00C)
+#define MCON(st)	(st->register_offset + 0x010)
+#define MSTP(st)	(st->register_offset + 0x014)
+#define DMA1(st)	(st->register_offset + 0x018)
 
 #define COMMON	(0x044) 
 #define TST	(0x048)
@@ -27,6 +27,9 @@
 
 #define i2s_writel(b, o, v)	writel(v, b->regs + o)
 #define i2s_readl(b, o)		readl(b->regs + o)
+
+#define I2STDAT_ADR            (I2S_BASE + 0x1000)
+#define I2SRDAT_ADR            (I2S_BASE + 0x2000)
 
 struct scatter_dma_t {
 	unsigned long srcaddr;
@@ -65,56 +68,31 @@ struct tmpa9xx_i2s_priv
 
 struct tmpa9xx_i2s_priv *g_tmpa9xx_i2s_priv;
 
-static int i2s_tx_start(void)
+static void stream_start(struct i2s_stream *s)
 {
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
-	tmpa9xx_dma_enable(i2s->tx.dma_ch);
+	struct tmpa9xx_i2s_priv *i = g_tmpa9xx_i2s_priv;
+	tmpa9xx_dma_enable(s->dma_ch);
 
 	/* I2S DMA set complete */
-	I2STDMA1 = 0x0001;
+	i2s_writel(i, DMA1(s), 0x01);
 	/* I2S transfer start */
-	I2STSLVON = 0x0001;
+	i2s_writel(i, SLVON(s), 0x01);
 
-	return 0;
+	s->run = 1;
 }
 
-static int i2s_rx_start(void)
+static void stream_stop(struct i2s_stream *s)
 {
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+	struct tmpa9xx_i2s_priv *i = g_tmpa9xx_i2s_priv;
 
-	tmpa9xx_dma_enable(i2s->rx.dma_ch);
+	if (!s->run)
+		return;
 
-	/* I2S DMA set complete */
-	I2SRDMA1 = 0x0001;
-	/* I2S transfer start */
-	I2SRSLVON = 0x0001;
+	i2s_writel(i,  DMA1(s), 0x00);
+	i2s_writel(i, SLVON(s), 0x00);
 
-	return 0;
-}
-
-static int i2s_tx_stop(void)
-{
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
-	I2STDMA1 = 0x0000;
-	I2STSLVON = 0x0000;
-
-	tmpa9xx_dma_disable(i2s->tx.dma_ch);
-
-	return 0;
-}
-
-static int i2s_rx_stop(void)
-{
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
-	I2SRDMA1 = 0x0000;
-	I2SRSLVON = 0x0000;
-
-	tmpa9xx_dma_disable(i2s->rx.dma_ch);
-
-	return 0;
+	tmpa9xx_dma_disable(s->dma_ch);
+	s->run = 0;
 }
 
 static int i2s_tx_dma_start(void)
@@ -163,8 +141,7 @@ int tmpa9xx_i2s_tx_start(void)
 		return -EBUSY;
 
 	i2s_tx_dma_start();
-	i2s_tx_start();
-	i2s->tx.run = 1;
+	stream_start(&i2s->tx);
 
 	return 0;
 }
@@ -177,8 +154,7 @@ int tmpa9xx_i2s_rx_start(void)
 		return -EBUSY;
 
 	i2s_rx_dma_start();
-	i2s_rx_start();
-	i2s->rx.run = 1;
+	stream_start(&i2s->rx);
 
 	return 0;
 }
@@ -186,31 +162,14 @@ int tmpa9xx_i2s_rx_start(void)
 int tmpa9xx_i2s_tx_stop(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
-	if (!i2s->tx.run)
-		return 0;
-
-	/* Both rx and tx dma stopped */
-	i2s_tx_stop();
-	i2s->tx.curr_desc = NULL;
-
-	i2s->tx.run = 0;
-
+	stream_stop(&i2s->tx);
 	return 0;
 }
 
 int tmpa9xx_i2s_rx_stop(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
-	if (!i2s->rx.run)
-		return 0;
-
-	i2s_rx_stop();
-	i2s->rx.curr_desc = NULL;
-
-	i2s->rx.run = 0;
-
+	stream_stop(&i2s->rx);
 	return 0;
 }
 
@@ -399,7 +358,7 @@ static int __devinit probe(struct platform_device *pdev)
 		goto err2;
 	}
 
-	p->regs = ioremap(0xf2040000, 0x2fff); // res->start, resource_size(res));
+	p->regs = ioremap(I2S_BASE, 0x2fff); // res->start, resource_size(res));
 	if (!p->regs) {
 		dev_err(&pdev->dev, "ioremap() failed\n");
 		ret = -ENODEV;
@@ -417,13 +376,13 @@ static int __devinit probe(struct platform_device *pdev)
 
 	i2s_writel(p, COMMON, 0x19); /* IISSCLK = Fosch(X1), Set SCK/WS/CLKO of Tx and Rx as Common */
 
-	i2s_writel(p, MCON(p->tx),  0x04); /* I2SMCLK = Fosch/4 = 11.2896M Hz */
-	i2s_writel(p, CON(p->tx),   0x00); /* I2S standard format */
-	i2s_writel(p, FCLR(p->tx),  0x01); /* clear fifo */
-	i2s_writel(p, MS(p->tx),    0x00); /* slave */
+	i2s_writel(p, MCON((&p->tx)), 0x04); /* I2SMCLK = Fosch/4 = 11.2896M Hz */
+	i2s_writel(p,  CON((&p->tx)), 0x00); /* I2S standard format */
+	i2s_writel(p, FCLR((&p->tx)), 0x01); /* clear fifo */
+	i2s_writel(p,   MS((&p->tx)), 0x00); /* slave */
 
-	i2s_writel(p, MCON(p->rx),  0x04);
-	i2s_writel(p, MS(p->rx),    0x00); /* slave */
+	i2s_writel(p, MCON((&p->rx)), 0x04);
+	i2s_writel(p,   MS((&p->rx)), 0x00); /* slave */
 
 	dev_dbg(p->dev, "\n");
 
