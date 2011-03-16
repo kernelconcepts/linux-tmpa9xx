@@ -44,7 +44,8 @@ struct tmpa9xx_i2s_priv
 
 	void (*rx_callback)(void *data);
 	void (*tx_callback)(void *data);
-	void *data;
+	void *tx_data;
+	void *rx_data;
 };
 
 struct tmpa9xx_i2s_priv *g_tmpa9xx_i2s_priv;
@@ -198,9 +199,19 @@ int tmpa9xx_i2s_rx_stop(void)
 	return 0;
 }
 
-int tmpa9xx_i2s_config_tx_dma(
-		unsigned char *cpu_buf, unsigned int phy_buf,
-		int fragcount, size_t fragsize, size_t size)
+static void i2s_tx_shutdown(void)
+{
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+	if (!i2s->dma_tx_desc)
+		return;
+
+	dma_free_coherent(NULL, i2s->tx_desc_bytes, i2s->dma_tx_desc, i2s->dma_tx_phydesc);
+	i2s->tx_desc_bytes = 0;
+	i2s->dma_tx_desc = 0;
+	i2s->dma_tx_phydesc = 0;
+}
+
+int tmpa9xx_i2s_tx_setup(struct tmpa9xx_i2s_config *c)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
 	struct scatter_dma_t *desc;
@@ -208,7 +219,12 @@ int tmpa9xx_i2s_config_tx_dma(
 	dma_addr_t addr;
 	int i;
 
-	count = fragsize / size;
+	i2s_tx_shutdown();
+
+	i2s->tx_callback = c->callback;
+	i2s->tx_data = c->data;
+
+	count = c->fragsize / c->size;
 
 	/* for fragments larger than 16k words we use 2d dma,
 	 * denote fragecount as two numbers' mutliply and both of them
@@ -217,36 +233,42 @@ int tmpa9xx_i2s_config_tx_dma(
 		return -EINVAL;
 	}
 
-	if (i2s->dma_tx_desc) {
-		dma_free_coherent(NULL, i2s->tx_desc_bytes, i2s->dma_tx_desc, i2s->dma_tx_phydesc);
-	}
-
-	i2s->dma_tx_desc = dma_alloc_coherent(NULL, fragcount * sizeof(struct scatter_dma_t), &addr, GFP_USER);
-	i2s->tx_desc_bytes = fragcount * sizeof(struct scatter_dma_t);
+	i2s->dma_tx_desc = dma_alloc_coherent(NULL, c->fragcount * sizeof(struct scatter_dma_t), &addr, GFP_USER);
+	i2s->tx_desc_bytes = c->fragcount * sizeof(struct scatter_dma_t);
 	i2s->dma_tx_phydesc = addr;
-	i2s->dma_tx_buf = phy_buf;
+	i2s->dma_tx_buf = c->phy_buf;
 
 	if (!i2s->dma_tx_desc) {
 		return -ENOMEM;
 	}
 
 	desc = i2s->dma_tx_desc;
-	for (i=0; i<fragcount; i++) {
+	for (i=0; i<c->fragcount; i++) {
 		desc[i].lli = (unsigned long)(addr + (i + 1) * sizeof(struct scatter_dma_t));
-		desc[i].srcaddr = (unsigned long)(phy_buf + i*fragsize);
+		desc[i].srcaddr = (unsigned long)(c->phy_buf + i*c->fragsize);
 		desc[i].dstaddr = (unsigned long)I2STDAT_ADR;
-		desc[i].control = 0x84492000 + (unsigned long)(fragsize >> 2);
+		desc[i].control = 0x84492000 + (unsigned long)(c->fragsize >> 2);
 	}
 
 	/* make circular */
-	desc[fragcount-1].lli = (unsigned long)addr;
+	desc[c->fragcount-1].lli = (unsigned long)addr;
 
 	return 0;
 }
 
-int tmpa9xx_i2s_config_rx_dma(
-		unsigned char *cpu_buf, unsigned int phy_buf,
-		int fragcount, size_t fragsize, size_t size)
+static void i2s_rx_shutdown(void)
+{
+	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
+	if (!i2s->dma_rx_desc)
+		return;
+
+	dma_free_coherent(NULL, i2s->rx_desc_bytes, i2s->dma_rx_desc, i2s->dma_rx_phydesc);
+	i2s->rx_desc_bytes = 0;
+	i2s->dma_rx_desc = 0;
+	i2s->dma_rx_phydesc = 0;
+}
+
+int tmpa9xx_i2s_rx_setup(struct tmpa9xx_i2s_config *c)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
 	struct scatter_dma_t *desc;
@@ -254,7 +276,12 @@ int tmpa9xx_i2s_config_rx_dma(
 	dma_addr_t addr;
 	int i;
 
-	count = fragsize / size;
+	i2s_rx_shutdown();
+
+	i2s->rx_callback = c->callback;
+	i2s->rx_data = c->data;
+
+	count = c->fragsize / c->size;
 
 	/* for fragments larger than 16k words we use 2d dma,
 	 * denote fragecount as two numbers' mutliply and both of them
@@ -264,30 +291,26 @@ int tmpa9xx_i2s_config_rx_dma(
 		return -EINVAL;
 	}
 
-	if (i2s->dma_rx_desc) {
-		dma_free_coherent(NULL, i2s->rx_desc_bytes, i2s->dma_rx_desc, i2s->dma_rx_phydesc);
-	}
-
-	i2s->dma_rx_desc = dma_alloc_coherent(NULL, fragcount * sizeof(struct scatter_dma_t), &addr, GFP_USER);
-	i2s->rx_desc_bytes = fragcount * sizeof(struct scatter_dma_t);
+	i2s->dma_rx_desc = dma_alloc_coherent(NULL, c->fragcount * sizeof(struct scatter_dma_t), &addr, GFP_USER);
+	i2s->rx_desc_bytes = c->fragcount * sizeof(struct scatter_dma_t);
 	i2s->dma_rx_phydesc = addr;
-	i2s->dma_rx_buf = phy_buf;
+	i2s->dma_rx_buf = c->phy_buf;
 
 	if (!i2s->dma_rx_desc) {
 		return -ENOMEM;
 	}
 
 	desc = i2s->dma_tx_desc;
-	for (i=0; i<fragcount; ++i)
+	for (i=0; i<c->fragcount; ++i)
 	{
 		desc[i].lli  = (unsigned long)(addr + (i + 1) * sizeof(struct scatter_dma_t));
 		desc[i].srcaddr = (unsigned long)I2SRDAT_ADR;
-		desc[i].dstaddr = (unsigned long)(phy_buf + i*fragsize);
-		desc[i].control = 0x88492000 + (unsigned long)(fragsize >> 2);
+		desc[i].dstaddr = (unsigned long)(c->phy_buf + i*c->fragsize);
+		desc[i].control = 0x88492000 + (unsigned long)(c->fragsize >> 2);
 	}
 
 	/* make circular */
-	desc[fragcount-1].lli = (unsigned long)addr;
+	desc[c->fragcount-1].lli = (unsigned long)addr;
 
 	return 0;
 }
@@ -321,7 +344,7 @@ static void tx_handler(int dma_ch, void *dev_id)
 	struct tmpa9xx_i2s_priv *i2s = dev_id;
 
 	if (i2s->tx_callback)
-		i2s->tx_callback(i2s->data);
+		i2s->tx_callback(i2s->tx_data);
 }
 
 static void rx_handler(int dma_ch, void *dev_id)
@@ -329,7 +352,7 @@ static void rx_handler(int dma_ch, void *dev_id)
 	struct tmpa9xx_i2s_priv *i2s = dev_id;
 
 	if (i2s->rx_callback)
-		i2s->rx_callback(i2s->data);
+		i2s->rx_callback(i2s->rx_data);
 }
 
 static void err_handler(int dma_ch, void *dev_id)
@@ -337,74 +360,15 @@ static void err_handler(int dma_ch, void *dev_id)
 	pr_info("%s():\n", __func__);
 }
 
-int tmpa9xx_i2s_init(
-		void (*rx_callback)(void*),
-		void (*tx_callback)(void*),
-		void *data)
-{
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
- 	i2s->dma_tx_ch = tmpa9xx_dma_request("I2S TX", 1, tx_handler,
-					err_handler, i2s);
-	if (i2s->dma_tx_ch < 0) {
-		printk(KERN_ERR "request tx audio dma failed\n");
-		goto __init_err2;
-	}
-	i2s->dma_rx_ch = tmpa9xx_dma_request("I2S RX", 2, rx_handler,
-					err_handler, i2s);
-	if (i2s->dma_rx_ch < 0) {
-		printk(KERN_ERR "request rx audio dma failed\n");
-		goto __init_err1;
-	}
-	i2s->rx_callback = rx_callback;
-	i2s->tx_callback = tx_callback;
-	i2s->data = data;
-
-	I2SCOMMON = 0x19;		/* IISSCLK = Fosch(X1),       Set SCK/WS/CLKO of Tx and Rx as Common */
-	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896M Hz */
-	I2SRMCON = 0x04;
-	I2STCON = 0x00;			/* IIS Standard Format */
-	I2STFCLR = 0x01;		/* Clear FIFO */
-	I2SRMS = 0x00;			/* Slave */
-	I2STMS = 0x00;			/* Slave */
-
-	return 0;
-
-__init_err1:
-	tmpa9xx_dma_free(i2s->dma_rx_ch);
-__init_err2:
-	kfree(i2s);
-
-	return -ENODEV;
-}
-
-void tmpa9xx_i2s_free(void)
-{
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-
-	i2s_tx_stop();
-	i2s_rx_stop();
-
-	if (i2s->dma_tx_desc)
-		dma_free_coherent(NULL, i2s->tx_desc_bytes, i2s->dma_tx_desc, i2s->dma_tx_phydesc);
-	if (i2s->dma_rx_desc)
-		dma_free_coherent(NULL, i2s->rx_desc_bytes, i2s->dma_rx_desc, i2s->dma_rx_phydesc);
-
-	tmpa9xx_dma_free(i2s->dma_tx_ch);
-	tmpa9xx_dma_free(i2s->dma_rx_ch);
-}
-
-
-EXPORT_SYMBOL(tmpa9xx_i2s_init);
-EXPORT_SYMBOL(tmpa9xx_i2s_free);
-EXPORT_SYMBOL(tmpa9xx_i2s_config_tx_dma);
-EXPORT_SYMBOL(tmpa9xx_i2s_config_rx_dma);
-EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_tx);
-EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_rx);
+EXPORT_SYMBOL(tmpa9xx_i2s_tx_setup);
 EXPORT_SYMBOL(tmpa9xx_i2s_tx_start);
 EXPORT_SYMBOL(tmpa9xx_i2s_tx_stop);
+EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_tx);
+
+EXPORT_SYMBOL(tmpa9xx_i2s_rx_setup);
 EXPORT_SYMBOL(tmpa9xx_i2s_rx_start);
 EXPORT_SYMBOL(tmpa9xx_i2s_rx_stop);
+EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_rx);
 
 static int __devinit probe(struct platform_device *pdev)
 {
@@ -418,16 +382,42 @@ static int __devinit probe(struct platform_device *pdev)
 		goto err0;
 	}
 
+ 	p->dma_tx_ch = tmpa9xx_dma_request("I2S TX", 1, tx_handler, err_handler, p);
+	if (p->dma_tx_ch < 0) {
+		dev_err(&pdev->dev, "tmpa9xx_dma_request() @ tx failed\n");
+		ret = -ENODEV;
+		goto err1;
+	}
+
+	p->dma_rx_ch = tmpa9xx_dma_request("I2S RX", 2, rx_handler, err_handler, p);
+	if (p->dma_rx_ch < 0) {
+		dev_err(&pdev->dev, "tmpa9xx_dma_request() @ rx failed\n");
+		ret = -ENODEV;
+		goto err2;
+	}
+
 	g_tmpa9xx_i2s_priv = p;
 
 	p->dev = &pdev->dev;
 
 	platform_set_drvdata(pdev, p);
 
+	I2SCOMMON = 0x19;		/* IISSCLK = Fosch(X1),       Set SCK/WS/CLKO of Tx and Rx as Common */
+	I2STMCON = 0x04;		/* I2SMCLK = Fosch/4 = 11.2896M Hz */
+	I2SRMCON = 0x04;
+	I2STCON = 0x00;			/* IIS Standard Format */
+	I2STFCLR = 0x01;		/* Clear FIFO */
+	I2SRMS = 0x00;			/* Slave */
+	I2STMS = 0x00;			/* Slave */
+
 	dev_dbg(p->dev, "\n");
 
 	return 0;
 
+err2:
+	tmpa9xx_dma_free(p->dma_rx_ch);
+err1:
+	kfree(p);
 err0:
 	return ret;
 }
@@ -435,6 +425,12 @@ err0:
 static int __devexit remove(struct platform_device *pdev)
 {
 	struct tmpa9xx_i2s_priv *p = platform_get_drvdata(pdev);
+
+	i2s_rx_shutdown();
+	i2s_tx_shutdown();
+
+	tmpa9xx_dma_free(p->dma_tx_ch);
+	tmpa9xx_dma_free(p->dma_rx_ch);
 
 	platform_set_drvdata(pdev, NULL);
 
