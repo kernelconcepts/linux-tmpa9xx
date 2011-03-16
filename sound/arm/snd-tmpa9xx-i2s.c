@@ -19,7 +19,7 @@
 #define MSTP(st)	((st->is_rx * 0x20) + 0x014)
 #define DMA1(st)	((st->is_rx * 0x20) + 0x018)
 
-#define COMMON	(0x044) 
+#define COMMON	(0x044)
 #define TST	(0x048)
 #define RST	(0x04C)
 #define INT	(0x050)
@@ -50,6 +50,9 @@ struct i2s_stream
 	unsigned int dma_buf;
 	unsigned int run; /* is running */
 	struct scatter_dma_t *curr_desc;
+
+	void (*callback)(void *data);
+	void *data;
 };
 
 struct tmpa9xx_i2s_priv
@@ -58,12 +61,7 @@ struct tmpa9xx_i2s_priv
 	struct device *dev;
 
 	struct i2s_stream rx;
-	void (*rx_callback)(void *data);
-	void *tx_data;
-
 	struct i2s_stream tx;
-	void (*tx_callback)(void *data);
-	void *rx_data;
 };
 
 struct tmpa9xx_i2s_priv *g_tmpa9xx_i2s_priv;
@@ -112,6 +110,79 @@ static void stream_stop(struct i2s_stream *s)
 	s->run = 0;
 }
 
+static void stream_shutdown(struct i2s_stream *s)
+{
+	if (!s->dma_desc)
+		return;
+
+	dma_free_coherent(NULL, s->desc_bytes, s->dma_desc, s->dma_phydesc);
+	s->desc_bytes = 0;
+	s->dma_desc = 0;
+	s->dma_phydesc = 0;
+}
+
+static int stream_setup(struct i2s_stream *s, struct tmpa9xx_i2s_config *c)
+{
+	struct scatter_dma_t *desc;
+	unsigned int count;
+	dma_addr_t addr;
+	int i;
+
+	stream_shutdown(s);
+
+	s->callback = c->callback;
+	s->data = c->data;
+
+	count = c->fragsize / c->size;
+
+	/* for fragments larger than 16k words we use 2d dma,
+	 * denote fragecount as two numbers' mutliply and both of them
+	 * are less than 64k.*/
+	if (count >= 0x1000) {
+		return -EINVAL;
+	}
+
+	s->dma_desc = dma_alloc_coherent(NULL, c->fragcount * sizeof(struct scatter_dma_t), &addr, GFP_USER);
+	s->desc_bytes = c->fragcount * sizeof(struct scatter_dma_t);
+	s->dma_phydesc = addr;
+	s->dma_buf = c->phy_buf;
+
+	if (!s->dma_desc) {
+		return -ENOMEM;
+	}
+
+	desc = s->dma_desc;
+	for (i=0; i<c->fragcount; i++) {
+		desc[i].lli = (unsigned long)(addr + (i + 1) * sizeof(struct scatter_dma_t));
+		if(s->is_rx) {
+			desc[i].srcaddr = (unsigned long)I2SRDAT_ADR;
+			desc[i].dstaddr = (unsigned long)(c->phy_buf + i*c->fragsize);
+			desc[i].control = 0x88492000 + (unsigned long)(c->fragsize >> 2);
+		} else {
+			desc[i].srcaddr = (unsigned long)(c->phy_buf + i*c->fragsize);
+			desc[i].dstaddr = (unsigned long)I2STDAT_ADR;
+			desc[i].control = 0x84492000 + (unsigned long)(c->fragsize >> 2);
+		}
+	}
+
+	/* make circular */
+	desc[c->fragcount-1].lli = (unsigned long)addr;
+
+	return 0;
+}
+
+int tmpa9xx_i2s_tx_setup(struct tmpa9xx_i2s_config *c)
+{
+	struct tmpa9xx_i2s_priv *i = g_tmpa9xx_i2s_priv;
+	return stream_setup(&i->tx, c);
+}
+
+int tmpa9xx_i2s_rx_setup(struct tmpa9xx_i2s_config *c)
+{
+	struct tmpa9xx_i2s_priv *i = g_tmpa9xx_i2s_priv;
+	return stream_setup(&i->rx, c);
+}
+
 int tmpa9xx_i2s_tx_start(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
@@ -140,109 +211,6 @@ int tmpa9xx_i2s_rx_stop(void)
 	return 0;
 }
 
-static void stream_shutdown(struct i2s_stream *s)
-{
-	if (!s->dma_desc)
-		return;
-
-	dma_free_coherent(NULL, s->desc_bytes, s->dma_desc, s->dma_phydesc);
-	s->desc_bytes = 0;
-	s->dma_desc = 0;
-	s->dma_phydesc = 0;
-}
-
-int tmpa9xx_i2s_tx_setup(struct tmpa9xx_i2s_config *c)
-{
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-	struct scatter_dma_t *desc;
-	unsigned int count;
-	dma_addr_t addr;
-	int i;
-
-	stream_shutdown(&i2s->tx);
-
-	i2s->tx_callback = c->callback;
-	i2s->tx_data = c->data;
-
-	count = c->fragsize / c->size;
-
-	/* for fragments larger than 16k words we use 2d dma,
-	 * denote fragecount as two numbers' mutliply and both of them
-	 * are less than 64k.*/
-	if (count >= 0x1000) {
-		return -EINVAL;
-	}
-
-	i2s->tx.dma_desc = dma_alloc_coherent(NULL, c->fragcount * sizeof(struct scatter_dma_t), &addr, GFP_USER);
-	i2s->tx.desc_bytes = c->fragcount * sizeof(struct scatter_dma_t);
-	i2s->tx.dma_phydesc = addr;
-	i2s->tx.dma_buf = c->phy_buf;
-
-	if (!i2s->tx.dma_desc) {
-		return -ENOMEM;
-	}
-
-	desc = i2s->tx.dma_desc;
-	for (i=0; i<c->fragcount; i++) {
-		desc[i].lli = (unsigned long)(addr + (i + 1) * sizeof(struct scatter_dma_t));
-		desc[i].srcaddr = (unsigned long)(c->phy_buf + i*c->fragsize);
-		desc[i].dstaddr = (unsigned long)I2STDAT_ADR;
-		desc[i].control = 0x84492000 + (unsigned long)(c->fragsize >> 2);
-	}
-
-	/* make circular */
-	desc[c->fragcount-1].lli = (unsigned long)addr;
-
-	return 0;
-}
-
-int tmpa9xx_i2s_rx_setup(struct tmpa9xx_i2s_config *c)
-{
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-	struct scatter_dma_t *desc;
-	unsigned int count;
-	dma_addr_t addr;
-	int i;
-
-	stream_shutdown(&i2s->rx);
-
-	i2s->rx_callback = c->callback;
-	i2s->rx_data = c->data;
-
-	count = c->fragsize / c->size;
-
-	/* for fragments larger than 16k words we use 2d dma,
-	 * denote fragecount as two numbers' mutliply and both of them
-	 * are less than 64k.*/
-	if (count >= 0x1000) {
-		printk(KERN_INFO "Error: rx dma size too large %d\n", count);
-		return -EINVAL;
-	}
-
-	i2s->rx.dma_desc = dma_alloc_coherent(NULL, c->fragcount * sizeof(struct scatter_dma_t), &addr, GFP_USER);
-	i2s->rx.desc_bytes = c->fragcount * sizeof(struct scatter_dma_t);
-	i2s->rx.dma_phydesc = addr;
-	i2s->rx.dma_buf = c->phy_buf;
-
-	if (!i2s->rx.dma_desc) {
-		return -ENOMEM;
-	}
-
-	desc = i2s->tx.dma_desc;
-	for (i=0; i<c->fragcount; ++i)
-	{
-		desc[i].lli  = (unsigned long)(addr + (i + 1) * sizeof(struct scatter_dma_t));
-		desc[i].srcaddr = (unsigned long)I2SRDAT_ADR;
-		desc[i].dstaddr = (unsigned long)(c->phy_buf + i*c->fragsize);
-		desc[i].control = 0x88492000 + (unsigned long)(c->fragsize >> 2);
-	}
-
-	/* make circular */
-	desc[c->fragcount-1].lli = (unsigned long)addr;
-
-	return 0;
-}
-
 int tmpa9xx_i2s_curr_offset_tx(void)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
@@ -259,16 +227,16 @@ static void tx_handler(int dma_ch, void *dev_id)
 {
 	struct tmpa9xx_i2s_priv *i2s = dev_id;
 
-	if (i2s->tx_callback)
-		i2s->tx_callback(i2s->tx_data);
+	if (i2s->tx.callback)
+		i2s->tx.callback(i2s->tx.data);
 }
 
 static void rx_handler(int dma_ch, void *dev_id)
 {
 	struct tmpa9xx_i2s_priv *i2s = dev_id;
 
-	if (i2s->rx_callback)
-		i2s->rx_callback(i2s->rx_data);
+	if (i2s->rx.callback)
+		i2s->rx.callback(i2s->rx.data);
 }
 
 static void err_handler(int dma_ch, void *dev_id)
