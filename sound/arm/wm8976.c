@@ -26,13 +26,14 @@
 
 #include "tmpa9xx_i2s.h"
 
-#undef WM8976_DEBUG
+//#undef WM8976_DEBUG
+#define WM8976_DEBUG
 
 #ifdef WM8976_DEBUG
 #define wm_printd(level, format, arg...) \
 	printk(level "i2s: " format, ## arg)
 #define snd_printk_marker() \
-	printk(KERN_DEBUG "->\n");
+	printk(KERN_DEBUG "-> %s()\n", __func__);
 #else
 #define wm_printd(level, format, arg...)
 #define snd_printk_marker()
@@ -242,20 +243,35 @@ static int snd_wm8976_hw_free(struct snd_pcm_substream * substream)
 	return 0;
 }
 
+static void snd_wm8976_dma_tx(void *data);
+
 static int snd_wm8976_playback_prepare(struct snd_pcm_substream *substream)
 {
 	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
-        int word_len = 4;
+	struct tmpa9xx_i2s_config config;
+	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
+	int word_len = 4;
 	int ret;
 
-	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
 	wm_printd(KERN_ERR, "Playback sample rate = %d.\n",runtime->rate);
+
+	if (substream != chip->tx_substream)
+		return -EINVAL;
 
 	/* set requested samplerate */
 	snd_wm8976_set_samplerate(chip->i2c_client, runtime->rate);
 
-	if (substream != chip->tx_substream)
+	config.cpu_buf = runtime->dma_area;
+	config.phy_buf = runtime->dma_addr;
+	config.fragcount = runtime->periods;
+	config.fragsize = fragsize_bytes;
+	config.size = word_len;
+	config.callback = snd_wm8976_dma_tx;
+	config.data = chip;
+
+	ret = tmpa9xx_i2s_tx_setup(&config);
+	if (ret)
 		return -EINVAL;
 
 	snd_printd(KERN_INFO "%s channels:%d, period_bytes:0x%lx, periods:%d\n",
@@ -263,38 +279,45 @@ static int snd_wm8976_playback_prepare(struct snd_pcm_substream *substream)
 			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
 
-	ret = tmpa9xx_i2s_config_tx_dma(runtime->dma_area, runtime->dma_addr,
-			runtime->periods, fragsize_bytes, word_len);
-
-	return ret;
+	return 0;
 }
+
+static void snd_wm8976_dma_rx(void *data);
 
 static int snd_wm8976_capture_prepare(struct snd_pcm_substream *substream)
 {
 	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
-        int word_len = 4;
+	struct tmpa9xx_i2s_config config;
+	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
+	int word_len = 4;
 	int ret;
 
-	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
-
 	wm_printd(KERN_ERR, "Record sample rate = %d.\n",runtime->rate);
+
+	if (substream != chip->tx_substream)
+		return -EINVAL;
 
 	/* set requested samplerate */
 	snd_wm8976_set_samplerate(chip->i2c_client, runtime->rate);
 
-	if (substream != chip->tx_substream)
+	config.cpu_buf = runtime->dma_area;
+	config.phy_buf = runtime->dma_addr;
+	config.fragcount = runtime->periods;
+	config.fragsize = fragsize_bytes;
+	config.size = word_len;
+	config.callback = snd_wm8976_dma_rx;
+	config.data = chip;
+
+	ret = tmpa9xx_i2s_rx_setup(&config);
+	if (ret)
 		return -EINVAL;
 
 	snd_printd(KERN_INFO "%s channels:%d, period_bytes:0x%lx, periods:%d\n",
 			__FUNCTION__, runtime->channels,
 			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
 			runtime->periods);
-
-	ret = tmpa9xx_i2s_config_rx_dma(runtime->dma_area, runtime->dma_addr,
-			runtime->periods, fragsize_bytes, word_len);
-
-	return ret;
+	return 0;
 }
 
 static int snd_wm8976_playback_trigger(struct snd_pcm_substream *substream, int cmd)
@@ -330,6 +353,7 @@ static int snd_wm8976_playback_trigger(struct snd_pcm_substream *substream, int 
 static int snd_wm8976_capture_trigger(struct snd_pcm_substream *substream, int cmd)
 {
 	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	int ret;
 
 	snd_printk_marker();
 
@@ -341,7 +365,7 @@ static int snd_wm8976_capture_trigger(struct snd_pcm_substream *substream, int c
 	switch (cmd) {
 		case SNDRV_PCM_TRIGGER_START:
 			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_START\n");
-			tmpa9xx_i2s_rx_start();
+			ret = tmpa9xx_i2s_rx_start();
 			break;
 		case SNDRV_PCM_TRIGGER_STOP:
 			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_STOP\n");
@@ -381,12 +405,6 @@ static snd_pcm_uframes_t snd_wm8976_capture_pointer(struct snd_pcm_substream *su
 	offset = tmpa9xx_i2s_curr_offset_rx();
 
 	offset = bytes_to_frames(runtime, offset);
-
-	wm_printd(KERN_ERR, "offset=0x%02x\n",offset);		/* wym */
-	wm_printd(KERN_ERR, "handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(2));
-	wm_printd(KERN_ERR, "handler dest addr = 0x%02x\n", DMA_DEST_ADDR(2));
-	wm_printd(KERN_ERR, "handler lli addr = 0x%02x\n", DMA_LLI(2));
-	wm_printd(KERN_ERR, "handler control = 0x%02x\n", DMA_CONTROL(2));
 
 	if (offset >= runtime->buffer_size)
 		offset = 0;
@@ -444,15 +462,8 @@ static void snd_wm8976_dma_rx(void *data)
 
         snd_printk_marker();
 
-	if (wm8976->rx_substream) {
+	if (wm8976->rx_substream)
 		snd_pcm_period_elapsed(wm8976->rx_substream);
-
-		wm_printd(KERN_ERR, "WM8976->rx_substream=0x%02x\n", (unsigned int)wm8976->rx_substream);
-		wm_printd(KERN_ERR, "handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(2));
-	       	wm_printd(KERN_ERR, "handler dest addr = 0x%02x\n", DMA_DEST_ADDR(2));
-		wm_printd(KERN_ERR, "handler lli addr = 0x%02x\n", DMA_LLI(2));
-	       	wm_printd(KERN_ERR, "handler control = 0x%02x\n", DMA_CONTROL(2));
-	}
 }
 
 static void snd_wm8976_dma_tx(void *data)
@@ -461,14 +472,8 @@ static void snd_wm8976_dma_tx(void *data)
 
 	snd_printk_marker();
 
-	if (wm8976->tx_substream) {
+	if (wm8976->tx_substream)
 		snd_pcm_period_elapsed(wm8976->tx_substream);
-
-                wm_printd(KERN_ERR, "handler srcaddr = 0x%02x\n", DMA_SRC_ADDR(1));
-                wm_printd(KERN_ERR, "handler dest addr = 0x%02x\n", DMA_DEST_ADDR(1));
-                wm_printd(KERN_ERR, "handler lli addr = 0x%02x\n", DMA_LLI(1));
-                wm_printd(KERN_ERR, "handler control = 0x%02x\n", DMA_CONTROL(1));
-	}
 }
 
 static int __devinit snd_wm8976_pcm(struct snd_wm8976 *wm8976)
@@ -531,13 +536,6 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 	wm8976->card = card;
 	wm8976->i2c_client = i2c_client;
 
-	ret = tmpa9xx_i2s_init(snd_wm8976_dma_rx, snd_wm8976_dma_tx, wm8976);
-	if (ret) {
-		dev_err(&i2c_client->dev, "tmpa9xx_i2s_init() failed\n");
-		ret = -ENODEV;
-		goto err0;
-	}
-
 	ret = snd_device_new(card, SNDRV_DEV_LOWLEVEL, wm8976, &snd_wm8976_ops);
 	if (ret) {
 		dev_err(&i2c_client->dev, "snd_device_new() failed\n");
@@ -568,8 +566,6 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 err3:
 err2:
 err1:
-	tmpa9xx_i2s_free();
-err0:
 	snd_card_free(card);
 	return ret;
 
@@ -579,8 +575,6 @@ err0:
 static int wm8976_i2c_remove(struct i2c_client *i2c_client)
 {
 	struct snd_card *card = i2c_get_clientdata(i2c_client);
-
-	tmpa9xx_i2s_free();
 
 	snd_card_free(card);
 
