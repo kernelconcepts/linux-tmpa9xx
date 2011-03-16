@@ -140,16 +140,15 @@ int tmpa9xx_i2s_rx_stop(void)
 	return 0;
 }
 
-static void i2s_tx_shutdown(void)
+static void stream_shutdown(struct i2s_stream *s)
 {
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-	if (!i2s->tx.dma_desc)
+	if (!s->dma_desc)
 		return;
 
-	dma_free_coherent(NULL, i2s->tx.desc_bytes, i2s->tx.dma_desc, i2s->tx.dma_phydesc);
-	i2s->tx.desc_bytes = 0;
-	i2s->tx.dma_desc = 0;
-	i2s->tx.dma_phydesc = 0;
+	dma_free_coherent(NULL, s->desc_bytes, s->dma_desc, s->dma_phydesc);
+	s->desc_bytes = 0;
+	s->dma_desc = 0;
+	s->dma_phydesc = 0;
 }
 
 int tmpa9xx_i2s_tx_setup(struct tmpa9xx_i2s_config *c)
@@ -160,7 +159,7 @@ int tmpa9xx_i2s_tx_setup(struct tmpa9xx_i2s_config *c)
 	dma_addr_t addr;
 	int i;
 
-	i2s_tx_shutdown();
+	stream_shutdown(&i2s->tx);
 
 	i2s->tx_callback = c->callback;
 	i2s->tx_data = c->data;
@@ -197,18 +196,6 @@ int tmpa9xx_i2s_tx_setup(struct tmpa9xx_i2s_config *c)
 	return 0;
 }
 
-static void i2s_rx_shutdown(void)
-{
-	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
-	if (!i2s->rx.dma_desc)
-		return;
-
-	dma_free_coherent(NULL, i2s->rx.desc_bytes, i2s->rx.dma_desc, i2s->rx.dma_phydesc);
-	i2s->rx.desc_bytes = 0;
-	i2s->rx.dma_desc = 0;
-	i2s->rx.dma_phydesc = 0;
-}
-
 int tmpa9xx_i2s_rx_setup(struct tmpa9xx_i2s_config *c)
 {
 	struct tmpa9xx_i2s_priv *i2s = g_tmpa9xx_i2s_priv;
@@ -217,7 +204,7 @@ int tmpa9xx_i2s_rx_setup(struct tmpa9xx_i2s_config *c)
 	dma_addr_t addr;
 	int i;
 
-	i2s_rx_shutdown();
+	stream_shutdown(&i2s->rx);
 
 	i2s->rx_callback = c->callback;
 	i2s->rx_data = c->data;
@@ -366,21 +353,21 @@ err0:
 
 static int __devexit remove(struct platform_device *pdev)
 {
-	struct tmpa9xx_i2s_priv *p = platform_get_drvdata(pdev);
+	struct tmpa9xx_i2s_priv *i = platform_get_drvdata(pdev);
 
-	i2s_rx_shutdown();
-	i2s_tx_shutdown();
+	stream_shutdown(&i->rx);
+	stream_shutdown(&i->tx);
 
-	tmpa9xx_dma_free(p->tx.dma_ch);
-	tmpa9xx_dma_free(p->rx.dma_ch);
+	tmpa9xx_dma_free(i->tx.dma_ch);
+	tmpa9xx_dma_free(i->rx.dma_ch);
 
-	iounmap(p->regs);
+	iounmap(i->regs);
 
 	platform_set_drvdata(pdev, NULL);
 
 	g_tmpa9xx_i2s_priv = NULL;
 
-	kfree(p);
+	kfree(i);
 
 	return 0;
 }
