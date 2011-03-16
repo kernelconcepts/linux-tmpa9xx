@@ -2060,7 +2060,6 @@ pl022_probe(struct amba_device *adev, struct amba_id *id)
 	master->cleanup = pl022_cleanup;
 	master->setup = pl022_setup;
 	master->transfer = pl022_transfer;
-        master->mode_bits = MODEBITS;
 
 	/*
 	 * Supports mode 0-3, loopback, and active low CS. Transfers are
