@@ -46,55 +46,18 @@
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
-#include <linux/i2c-gpio.h>
 
-/*
- * I2C
- */
-
-#if defined CONFIG_I2C_GPIO || defined CONFIG_I2C_GPIO_MODULE
-static struct i2c_gpio_platform_data i2c0_gpio_data = {
-	.sda_pin        = 23,
-	.scl_pin        = 22,
-	.udelay         = 20,
-};
-
-static struct platform_device i2c0_gpio_device = {
-	.name           = "i2c-gpio",
-	.id             = 0,
-	.dev            = {
-		.platform_data  = &i2c0_gpio_data,
-	},
-};
-
-static struct i2c_gpio_platform_data i2c1_gpio_data = {
-	.sda_pin        = 47,
-	.scl_pin        = 46,
-	.udelay         = 20,
-};
-
-static struct platform_device i2c1_gpio_device = {
-	.name           = "i2c-gpio",
-	.id             = 1,
-	.dev            = {
-		.platform_data  = &i2c1_gpio_data,
-	},
-};
-#endif
-
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE \
- || defined CONFIG_I2C_GPIO || defined CONFIG_I2C_GPIO_MODULE 
+#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
 static struct i2c_board_info baseboard_i2c_0_devices[] = {
         {
                 I2C_BOARD_INFO("wm8974", 0x1a),
         },
-	/* no devices */
 };
 
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
 	/* no devices */
 };
-#endif // CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
+#endif
 
 /*
  * SPI
@@ -193,10 +156,6 @@ static struct platform_device *devices_baseboard[] __initdata = {
 #if defined CONFIG_SND_TMPA910_WM8974 || defined CONFIG_SND_TMPA910_WM8974_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
         &baseboard_i2s_device,    
 #endif
-#if defined CONFIG_I2C_GPIO || defined CONFIG_I2C_GPIO_MODULE
-	&i2c0_gpio_device,
-	&i2c1_gpio_device,
-#endif        
 };
 
 #define HCLK 			96000000
@@ -240,8 +199,7 @@ struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {
 
 void __init baseboard_init(void)
 {
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE \
- || defined CONFIG_I2C_GPIO    || defined CONFIG_I2C_GPIO_MODULE
+#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
         i2c_register_board_info(0, baseboard_i2c_0_devices,
                         ARRAY_SIZE(baseboard_i2c_0_devices));
 
