@@ -137,9 +137,7 @@ static void __init tonga2_tfttimer_init(void)
 
 MACHINE_START(TONGA2_TFTTIMER, "Tonga 2 TFTTimer")
         /* Maintainer:  Thomas Haase <Thomas.Haase@web.de> */
-        .phys_io        = TMPA9XX_IO_PHYS_BASE,
         .boot_params    = 0,
-        .io_pg_offst    = (io_p2v(TMPA9XX_IO_PHYS_BASE) >> 18) & 0xfffc,
         .map_io         = tmpa9xx_map_io,
         .init_irq       = tmpa9xx_init_irq,
         .timer          = &tmpa9xx_timer,
