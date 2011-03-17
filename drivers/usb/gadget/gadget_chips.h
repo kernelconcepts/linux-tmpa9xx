@@ -152,6 +152,7 @@
 #define	gadget_is_tmpa9xx(g)	!strcmp("tmpa9xx-udc", (g)->name)
 #else
 #define	gadget_is_tmpa9xx(g)	0
+#endif
 
 #ifdef CONFIG_USB_GADGET_CI13XXX_MSM
 #define gadget_is_ci13xxx_msm(g)	(!strcmp("ci13xxx_msm", (g)->name))
