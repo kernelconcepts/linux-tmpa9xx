@@ -1594,7 +1594,7 @@ static irqreturn_t tmpa9xx_udc_irq(int irq, void *_udc)
 
 }
 
-int usb_gadget_register_driver(struct usb_gadget_driver *driver)
+int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind)(struct usb_gadget *))
 {
 	struct tmpa9xx_udc *udc;
 	int retval;
@@ -1603,7 +1603,7 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 
 	udc = &controller;
 	if (!driver || driver->speed < USB_SPEED_FULL
-	    || !driver->bind || !driver->setup) {
+	    || !bind || !driver->setup) {
 		DBG("bad parameter.\n");
 		return -EINVAL;
 	}
@@ -1619,7 +1619,7 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 	udc->enabled = 1;
 	udc->selfpowered = 1;
 
-	retval = driver->bind(&udc->gadget);
+	retval = bind(&udc->gadget);
 	if (retval) {
 		DBG("driver->bind() returned %d\n", retval);
 		udc->driver = NULL;
@@ -1636,7 +1636,7 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 	return 0;
 }
 
-EXPORT_SYMBOL(usb_gadget_register_driver);
+EXPORT_SYMBOL(usb_gadget_probe_driver);
 
 int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 {
