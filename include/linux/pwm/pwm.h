@@ -1,7 +1,6 @@
 /*
- * include/linux/pwm.h
- *
- * Copyright (C) 2010 Bill Gatliff < b...@billgatliff.com>
+ * Copyright (C) 2011 Bill Gatliff < bgat@billgatliff.com>
+ * Copyright (C) 2011 Arun Murthy <arun.murth@stericsson.com>
  *
  * This program is free software; you may redistribute and/or modify
  * it under the terms of the GNU General Public License version 2, as
@@ -20,109 +19,125 @@
 #ifndef __LINUX_PWM_H
 #define __LINUX_PWM_H
 
+#include <linux/device.h>
+
 enum {
-       PWM_CONFIG_DUTY_TICKS = BIT(0),
-       PWM_CONFIG_PERIOD_TICKS = BIT(1),
-       PWM_CONFIG_POLARITY = BIT(2),
-       PWM_CONFIG_START = BIT(3),
-       PWM_CONFIG_STOP = BIT(4),
-
-       PWM_CONFIG_HANDLER = BIT(5),
-
-       PWM_CONFIG_DUTY_NS = BIT(6),
-       PWM_CONFIG_DUTY_PERCENT = BIT(7),
-       PWM_CONFIG_PERIOD_NS = BIT(8),
+	PWM_FLAG_REQUESTED	= 0,
+	PWM_FLAG_STOP		= 1,
+	PWM_FLAG_RUNNING	= 2,
+	PWM_FLAG_EXPORTED	= 3,
 };
 
-struct pwm_channel;
-struct work_struct;
-
-typedef int (*pwm_handler_t)(struct pwm_channel *p, void *data);
-typedef void (*pwm_callback_t)(struct pwm_channel *p);
-
-struct pwm_channel_config {
-       int config_mask;
-       unsigned long duty_ticks;
-       unsigned long period_ticks;
-       int polarity;
-
-       pwm_handler_t handler;
-
-       unsigned long duty_ns;
-       unsigned long period_ns;
-       int duty_percent;
+enum {
+	PWM_CONFIG_DUTY_TICKS	= 0,
+	PWM_CONFIG_PERIOD_TICKS	= 1,
+	PWM_CONFIG_POLARITY	= 2,
+	PWM_CONFIG_START	= 3,
+	PWM_CONFIG_STOP		= 4,
 };
 
+struct pwm_config;
+struct pwm_device;
+
+struct pwm_device_ops {
+	struct module *owner;
+
+	int	(*request)		(struct pwm_device *p);
+	void	(*release)		(struct pwm_device *p);
+	int	(*config)		(struct pwm_device *p,
+					 struct pwm_config *c);
+	int	(*config_nosleep)	(struct pwm_device *p,
+					 struct pwm_config *c);
+	int	(*synchronize)		(struct pwm_device *p,
+					 struct pwm_device *to_p);
+	int	(*unsynchronize)	(struct pwm_device *p,
+					 struct pwm_device *from_p);
+};
+
+/**
+ * struct pwm_config - configuration data for a PWM device
+ *
+ * @config_mask: which fields are valid
+ * @duty_ticks: requested duty cycle, in ticks
+ * @period_ticks: requested period, in ticks
+ * @polarity: active high (1), or active low (0)
+ */
+struct pwm_config {
+	unsigned long	config_mask;
+	unsigned long	duty_ticks;
+	unsigned long	period_ticks;
+	int		polarity;
+};
+
+/**
+ * struct pwm_device - represents a PWM device
+ *
+ * @dev: device model reference
+ * @ops: operations supported by the PWM device
+ * @label: requestor of the PWM device, or NULL
+ * @flags: PWM device state, see FLAG_*
+ * @tick_hz: base tick rate of PWM device, in HZ
+ * @polarity: active high (1), or active low (0)
+ * @period_ticks: PWM device's current period, in ticks
+ * @duty_ticks: duration of PWM device's active cycle, in ticks
+ */
 struct pwm_device {
-       struct list_head list;
-       spinlock_t list_lock;
-       struct device *dev;
-       struct module *owner;
-       struct pwm_channel *channels;
-
-       const char *bus_id;
-       int nchan;
-
-       int     (*request)      (struct pwm_channel *p);
-       void    (*release)      (struct pwm_channel *p);
-       int     (*config)       (struct pwm_channel *p, struct pwm_channel_config *c);
-       int     (*config_nosleep)(struct pwm_channel *p, struct pwm_channel_config *c);
-       int     (*synchronize)  (struct pwm_channel *p, struct pwm_channel *to_p);
-       int     (*unsynchronize)(struct pwm_channel *p, struct pwm_channel *from_p);
-       int     (*set_callback) (struct pwm_channel *p, pwm_callback_t callback);
+	struct device	dev;
+	const struct pwm_device_ops *ops;
+	const char	*label;
+	unsigned long	flags;
+	unsigned long	tick_hz;
+	int		polarity;
+	unsigned long	period_ticks;
+	unsigned long	duty_ticks;
 };
 
-int pwm_register(struct pwm_device *pwm);
-int pwm_unregister(struct pwm_device *pwm);
+struct pwm_device *pwm_request(const char *name, const char *label);
+void pwm_release(struct pwm_device *p);
 
-enum {
-       FLAG_REQUESTED = 0,
-       FLAG_STOP = 1,
-};
+static inline int pwm_is_requested(const struct pwm_device *p)
+{
+	return test_bit(PWM_FLAG_REQUESTED, &p->flags);
+}
 
-struct pwm_channel {
-       struct list_head list;
-       struct pwm_device *pwm;
-       const char *requester;
-       pid_t pid;
-       int chan;
-       unsigned long flags;
-       unsigned long tick_hz;
+static inline int pwm_is_running(const struct pwm_device *p)
+{
+	return test_bit(PWM_FLAG_RUNNING, &p->flags);
+}
 
-       spinlock_t lock;
-       struct completion complete;
+static inline int pwm_is_exported(const struct pwm_device *p)
+{
+	return test_bit(PWM_FLAG_EXPORTED, &p->flags);
+}
 
-       pwm_callback_t callback;
+struct pwm_device *pwm_register(const struct pwm_device_ops *ops, struct device *parent,
+				const char *fmt, ...);
+void pwm_unregister(struct pwm_device *p);
 
-       struct work_struct handler_work;
-       pwm_handler_t handler;
-       void *handler_data;
+void pwm_set_drvdata(struct pwm_device *p, void *data);
+void *pwm_get_drvdata(const struct pwm_device *p);
 
-       int active_high;
-       unsigned long period_ticks;
-       unsigned long duty_ticks;
-};
+int pwm_set(struct pwm_device *p, unsigned long period_ns,
+	    unsigned long duty_ns, int polarity);
 
-struct gpio_pwm_platform_data {
-       int gpio;
-};
+int pwm_set_period_ns(struct pwm_device *p, unsigned long period_ns);
+unsigned long pwm_get_period_ns(struct pwm_device *p);
 
-struct pwm_channel *pwm_request(const char *bus_id, int chan, const char *requester);
-void pwm_release(struct pwm_channel *pwm);
-int pwm_config_nosleep(struct pwm_channel *pwm, struct pwm_channel_config *c);
-int pwm_config(struct pwm_channel *pwm, struct pwm_channel_config *c);
-unsigned long pwm_ns_to_ticks(struct pwm_channel *pwm, unsigned long nsecs);
-unsigned long pwm_ticks_to_ns(struct pwm_channel *pwm, unsigned long ticks);
-int pwm_set_period_ns(struct pwm_channel *pwm, unsigned long period_ns);
-unsigned long pwm_get_period_ns(struct pwm_channel *pwm);
-int pwm_set_duty_ns(struct pwm_channel *pwm, unsigned long duty_ns);
-int pwm_set_duty_percent(struct pwm_channel *pwm, int percent);
-unsigned long pwm_get_duty_ns(struct pwm_channel *pwm);
-int pwm_set_polarity(struct pwm_channel *pwm, int active_high);
-int pwm_start(struct pwm_channel *pwm);
-int pwm_stop(struct pwm_channel *pwm);
-int pwm_set_handler(struct pwm_channel *pwm, pwm_handler_t handler, void *data);
-int pwm_synchronize(struct pwm_channel *p, struct pwm_channel *to_p);
-int pwm_unsynchronize(struct pwm_channel *p, struct pwm_channel *from_p);
+int pwm_set_duty_ns(struct pwm_device *p, unsigned long duty_ns);
+unsigned long pwm_get_duty_ns(struct pwm_device *p);
 
-#endif /* __LINUX_PWM_H */
+int pwm_set_polarity(struct pwm_device *p, int polarity);
+
+int pwm_start(struct pwm_device *p);
+int pwm_stop(struct pwm_device *p);
+
+int pwm_config_nosleep(struct pwm_device *p, struct pwm_config *c);
+int pwm_config(struct pwm_device *p, struct pwm_config *c);
+
+int pwm_synchronize(struct pwm_device *p, struct pwm_device *to_p);
+int pwm_unsynchronize(struct pwm_device *p, struct pwm_device *from_p);
+
+struct pwm_device *gpio_pwm_create(int gpio);
+int gpio_pwm_destroy(struct pwm_device *p);
+
+#endif

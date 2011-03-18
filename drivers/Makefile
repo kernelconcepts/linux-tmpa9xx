@@ -6,8 +6,9 @@
 #
 
 obj-y				+= gpio/
+obj-$(CONFIG_GENERIC_PWM)	+= pwm/
+
 obj-$(CONFIG_PCI)		+= pci/
-obj-$(CONFIG_GENERIC_PWM)       += pwm/
 obj-$(CONFIG_PARISC)		+= parisc/
 obj-$(CONFIG_RAPIDIO)		+= rapidio/
 obj-y				+= video/

@@ -3,17 +3,26 @@
 #
 
 menuconfig GENERIC_PWM
-       tristate "PWM Support"
-       depends on SYSFS
-       help
-         This enables PWM support through the generic PWM API.
-         If unsure, say N.
+	tristate "PWM Support"
+	help
+	  Enables PWM device support implemented via a generic
+	  framework.  If unsure, say N.
 
-if GENERIC_PWM
+config GPIO_PWM
+       tristate "GPIO+hrtimer PWM device emulation"
+       depends on GENERIC_PWM
+       help
+         When enabled, this feature emulates single-channel PWM
+	 devices using high-resolution timers and GPIO pins.  You may
+	 create as many of these devices as desired, subject to CPU
+	 throughput limitations and GPIO pin availability.
+
+	 To compile this feature as a module, chose M here; the module
+	 will be called gpio-pwm.  If unsure, say N.
 
 config TMPA9XX_PWM
        tristate "TMPA9xx PWM support"
-       depends on ARCH_TMPA9XX
+       depends on GENERIC_PWM && ARCH_TMPA9XX
        help
          This option enables device driver support for the PWMC
          peripheral channels found TMPA9xx based processors.
@@ -30,19 +39,3 @@ config TMPA9XX_PWM_CANNEL_1
        depends on TMPA9XX_PWM
        help
          Make use of Channel 1 (on Timer 2)
-
-config ATMEL_PWM
-       tristate "Atmel AT32/AT91 PWM support"
-       depends on AVR32 || ARCH_AT91
-       help
-         This option enables device driver support for the PWMC
-         peripheral channels found on certain Atmel processors.
-         If unsure, say N.
-
-config GPIO_PWM
-       tristate "PWM emulation using GPIO"
-       help
-         This option enables a single-channel PWM device using
-         a kernel interval timer and a GPIO pin.  If unsure, say N.
-
-endif
