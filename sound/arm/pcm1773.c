@@ -19,8 +19,8 @@
 
 #include "tmpa9xx_i2s.h"
 
-#define I2S_DMA_RX   I2S0
-#define I2S_DMA_TX   I2S1
+#define I2S_DMA_RX   10
+#define I2S_DMA_TX   11
 #define I2S_IRQ_ERR  I2S_INT
 
 
