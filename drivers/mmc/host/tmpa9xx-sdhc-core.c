@@ -509,7 +509,7 @@ static int sdhc_probe(struct platform_device *pdev)
 		goto err1;
 	}
 
-	host->dma_channel = tmpa9xx_dma_request("TMPA9xx SDHC", 0, dma_interrupt, NULL, host);
+	host->dma_channel = tmpa9xx_dma_request(dma_interrupt, NULL, host);
 	if (host->dma_channel < 0) {
 		printk(KERN_ERR "tmpa9xx_dma_request() failed\n");
 		ret = -ENOMEM;

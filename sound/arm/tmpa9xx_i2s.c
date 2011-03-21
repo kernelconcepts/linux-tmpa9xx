@@ -425,7 +425,7 @@ struct tmpa9xx_i2s *tmpa9xx_i2s_init(
 	}
 	memset(i2s, 0, sizeof(struct tmpa9xx_i2s));
 
- 	i2s->dma_tx_ch = tmpa9xx_dma_request("I2S TX", 1, tx_handler, 
+ 	i2s->dma_tx_ch = tmpa9xx_dma_request(tx_handler, 
 					err_handler, i2s);
 	if (i2s->dma_tx_ch < 0) {
 		printk(KERN_ERR "request tx audio dma 0x%x failed\n", dma_tx);
@@ -433,7 +433,7 @@ struct tmpa9xx_i2s *tmpa9xx_i2s_init(
 	}
 	//printk("dma_tx_ch = %d\n", i2s->dma_tx_ch);
 	
-	i2s->dma_rx_ch = tmpa9xx_dma_request("I2S RX", 2, rx_handler, 
+	i2s->dma_rx_ch = tmpa9xx_dma_request(rx_handler, 
 					err_handler, i2s);
 	if (i2s->dma_rx_ch < 0) {
 		printk(KERN_ERR "request rx audio dma 0x%x failed\n", dma_rx);
