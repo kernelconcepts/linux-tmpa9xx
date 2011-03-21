@@ -1738,7 +1738,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	/* request DMA channel */
 	init_completion(&udc->dma_completion);
 	udc->dma_ch =
-	    tmpa9xx_dma_request("tmpa9xx UDC", 4, tmpa9xx_udc_dma_handler,
+	    tmpa9xx_dma_request(tmpa9xx_udc_dma_handler,
 				tmpa9xx_udc_dma_error_handler, NULL);
 	if (udc->dma_ch < 0) {
 		printk("Cannot allocate dma channel.");
