@@ -154,7 +154,6 @@ void pwm_release(struct pwm_device *p)
 	if (p->ops->release)
 		p->ops->release(p);
 
-	put_device(&p->dev);
 	module_put(p->ops->owner);
 
 done:
