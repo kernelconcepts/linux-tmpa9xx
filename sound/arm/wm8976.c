@@ -24,10 +24,9 @@
 
 #include <mach/dma.h>
 
-#include "tmpa9xx_i2s.h"
+#include "snd-tmpa9xx-i2s.h"
 
-//#undef WM8976_DEBUG
-#define WM8976_DEBUG
+#undef WM8976_DEBUG
 
 #ifdef WM8976_DEBUG
 #define wm_printd(level, format, arg...) \

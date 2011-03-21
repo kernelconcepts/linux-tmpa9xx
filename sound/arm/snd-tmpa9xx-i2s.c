@@ -9,7 +9,7 @@
 #include <mach/dma.h>
 #include <mach/regs.h>
 
-#include "tmpa9xx_i2s.h"
+#include "snd-tmpa9xx-i2s.h"
 
 #define CON(st)		((st->is_rx * 0x20) + 0x000)
 #define SLVON(st)	((st->is_rx * 0x20) + 0x004)
