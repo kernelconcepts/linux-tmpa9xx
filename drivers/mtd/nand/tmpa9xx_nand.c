@@ -46,7 +46,6 @@
 #define LARGEPAGE_SPARE		 (4*NORMALPAGE_SPARE)
 #define ECC_BYTES_HAMMING	   6
 #define ECC_BYTES_RS		  10
-#define NAND_DMA_CHANNEL	   5
 
 #define MAX_WAIT_FOR_HW		100000
 
@@ -994,8 +993,7 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 
 	init_completion(&priv->dma_completion);
 	priv->dma_ch =
-	    tmpa9xx_dma_request("TMPA9XX NAND", NAND_DMA_CHANNEL,
-				tmpa9xx_nand_dma_handler,
+	    tmpa9xx_dma_request(tmpa9xx_nand_dma_handler,
 				tmpa9xx_nand_dma_error_handler, priv);
 	if (priv->dma_ch < 0) {
 		ret = -ENODEV;

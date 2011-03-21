@@ -276,14 +276,14 @@ static int __devinit probe(struct platform_device *pdev)
 		goto err0;
 	}
 
- 	p->tx.dma_ch = tmpa9xx_dma_request("I2S TX", 1, tx_handler, err_handler, p);
+ 	p->tx.dma_ch = tmpa9xx_dma_request(tx_handler, err_handler, p);
 	if (p->tx.dma_ch < 0) {
 		dev_err(&pdev->dev, "tmpa9xx_dma_request() @ tx failed\n");
 		ret = -ENODEV;
 		goto err1;
 	}
 
-	p->rx.dma_ch = tmpa9xx_dma_request("I2S RX", 2, rx_handler, err_handler, p);
+	p->rx.dma_ch = tmpa9xx_dma_request(rx_handler, err_handler, p);
 	if (p->rx.dma_ch < 0) {
 		dev_err(&pdev->dev, "tmpa9xx_dma_request() @ rx failed\n");
 		ret = -ENODEV;
