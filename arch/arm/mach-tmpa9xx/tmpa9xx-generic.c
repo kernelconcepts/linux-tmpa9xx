@@ -454,11 +454,6 @@ static struct resource tmpa9xx_ohci_resources[] = {
          .end   = USB_HOST_BASE_ADDRESS + 0x100,
          .flags = IORESOURCE_MEM,
         },
-        [1] = {
-         .start = 0xF8008000,
-         .end   = 0xF8009fff,
-         .flags = IORESOURCE_MEM,
-        },
         [2] = {
          .start = INTR_VECT_USB_HOST,
          .end   = INTR_VECT_USB_HOST,
