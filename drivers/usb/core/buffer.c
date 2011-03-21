@@ -17,9 +17,7 @@
 #include <linux/usb/hcd.h>
 
 #ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
-void *tmpa9xx_sram_alloc(int size);
-unsigned long tmpa9xx_sram_to_phys(void *virt_sram);
-void tmpa9xx_sram_free(void *virt);
+#include <mach/sram.h>
 #else
 
 /*
