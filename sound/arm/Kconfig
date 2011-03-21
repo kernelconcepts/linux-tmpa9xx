@@ -11,18 +11,35 @@ menuconfig SND_ARM
 
 if SND_ARM
 
-config SND_TMPA9XX_I2S
-	tristate
-
 config SND_TMPA9XX_WM8974
 	tristate "TMPA9xx WM8974 driver"
-	depends on MACH_TONGA2_TFTTIMER && SND
+#	depends on MACH_TONGA2_TFTTIMER && SND
 	select SND_PCM
-	select SND_TMPA9XX_I2S
 	help
 	  Say Y here if you have a Tonga2
           TFTTimer Board and want to use its
           WM8974 audio chip.
+
+config SND_TMPA9XX_WM8983
+	tristate "TMPA9xx WM8983 driver"
+#	depends on MACH_TONGA && SND
+	select SND_PCM
+	help
+	  Say Y here if you have a Toshiba Tonga2 
+	  TMPA900 CPU board and
+	  want to use its WM8983 audio chip.
+
+config SND_TMPA9XX_PCM1773
+	tristate "TMPA9XX PCM1773 driver"
+#	depends on (MACH_TOPASA900 || MACH_TOPAS910) && SND
+	select SND_PCM
+	help
+	  Say Y here if you have a Toshiba TopasA900
+	  TMPA900 development board and
+	  want to use the TOPAS9xx PCM1773 audio chip.
+
+config SND_TMPA9XX_I2S
+	tristate
 
 config SND_TMPA9XX_WM8976
 	tristate "TMPA9xx WM8976 driver"
@@ -34,26 +51,6 @@ config SND_TMPA9XX_WM8976
 	  TMPA900 development board and
 	  want to use its WM8976 audio chip.
 
-config SND_TMPA9XX_WM8983
-	tristate "TMPA9xx WM8983 driver"
-	depends on MACH_TONGA && SND
-	select SND_PCM
-	select SND_TMPA9XX_I2S
-	help
-	  Say Y here if you have a Toshiba Tonga2 
-	  TMPA900 CPU board and
-	  want to use its WM8983 audio chip.
-
-config SND_TMPA9XX_PCM1773
-	tristate "TMPA9XX PCM1773 driver"
-	depends on (MACH_TOPASA900 || MACH_TOPAS910) && SND
-	select SND_PCM
-	select SND_TMPA9XX_I2S
-	help
-	  Say Y here if you have a Toshiba TopasA900
-	  TMPA900 development board and
-	  want to use the TOPAS9xx PCM1773 audio chip.
-          
 config SND_ARMAACI
 	tristate "ARM PrimeCell PL041 AC Link support"
 	depends on ARM_AMBA
