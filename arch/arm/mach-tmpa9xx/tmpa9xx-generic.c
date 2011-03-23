@@ -820,6 +820,44 @@ static int setup_port_d(void)
 	return 0;
 }
 
+static int setup_port_e(void)
+{
+#if defined CONFIG_TMPA9XX_CMSI || defined CONFIG_TMPA9XX_CMSI_MODULE
+        GPIOEFR1 |=  (0xff);
+#endif
+	return 0;
+}
+
+static int setup_port_f(void)
+{
+        /* Port F
+           The upper 2 bits (bits [7:6]) of Port F can be used as general-purpose input/output pins.
+           Port F can also be used as interrupt (INTC), UART (U2RXD, U2TXD) and I2C (I2C1DA,
+           I2C1CL) pins. */
+
+#if defined CONFIG_SERIAL_AMBA_PL011_CHANNEL_2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1
+        GPIOFFR1 &= ~(0xc0);  /* UART 2 */
+        GPIOFFR2 |=  (0xc0);
+        GPIOFIE  &= ~(0xc0);
+        GPIOFODE &= ~(0xc0);
+#endif    
+
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
+        /* set PORT-C 6,7 to I2C and enable open drain */
+        GPIOFDIR &= ~(0xc0);
+        GPIOFFR1 |=  (0xc0);
+        GPIOFFR2 &= ~(0xc0);
+        GPIOFIE  &= ~(0xc0);
+        GPIOFODE |=  (0xc0);
+#endif
+
+#if defined CONFIG_TMPA9XX_CMSI || defined CONFIG_TMPA9XX_CMSI_MODULE
+        GPIOFFR1 |=  (0x0f);
+#endif
+
+	return 0;
+}
+
 static int setup_port_g(void)
 {
         /* Port G can be used as general-purpose input/output pins.
@@ -1004,7 +1042,8 @@ void __init tmpa9xx_init(void)
 	setup_port_b();
 	setup_port_c();
 	setup_port_d();
-	/* port e and f in cpu specific part */
+	setup_port_e();
+	setup_port_f();
 	setup_port_g();
 	setup_port_j_and_k();
 	setup_port_l();
