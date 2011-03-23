@@ -1,11 +1,24 @@
 /*
- *  Copyright (C) 2010 Thomas Haase
- * 	heavily based on realview platform
+ * Clock support for TMPA9xx
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * Copyright (C) 2010 Thomas Haase <Thomas.Haase@web.de>
+ * Copyright (C) 2011 Michael Hunold <michael@mihu.de>
+ *
+ * This program is free software; you may redistribute and/or modify
+ * it under the terms of the GNU General Public License Version 2, as
  * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
+ * USA
  */
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
@@ -14,14 +27,32 @@
 #include <linux/clk.h>
 #include <linux/mutex.h>
 #include <linux/clkdev.h>
+#include <linux/io.h>
 
-/* currently the clk structure
- * just supports rate. This would
- * be extended as and when new devices are
- * added - TODO
- */
-struct clk {
-	unsigned long		rate;
+#include <mach/regs.h>
+
+struct clk
+{
+	unsigned long rate;
+	unsigned long (*get_rate)(struct clk *clk);
+	int (*set_rate)(struct clk *clk, unsigned long rate);
+	int offset;
+};
+
+static struct clk ssp_clk = {
+	.rate = 96000000,
+};
+
+static struct clk uart_clk = {
+	.rate = 96000000,
+};
+
+static struct clk clcd_clk = {
+	.rate = 96000000,
+};
+
+static struct clk dummy_apb_pclk = {
+	.rate = 96000000,
 };
 
 int clk_enable(struct clk *clk)
@@ -37,6 +68,9 @@ EXPORT_SYMBOL(clk_disable);
 
 unsigned long clk_get_rate(struct clk *clk)
 {
+	if (clk->get_rate)
+		return clk->get_rate(clk);
+
 	return clk->rate;
 }
 EXPORT_SYMBOL(clk_get_rate);
@@ -50,33 +84,72 @@ EXPORT_SYMBOL(clk_round_rate);
 
 int clk_set_rate(struct clk *clk, unsigned long rate)
 {
+	if (clk->set_rate)
+		return clk->set_rate(clk, rate);
+
 	clk->rate = rate;
 	return 0;
 }
 EXPORT_SYMBOL(clk_set_rate);
 
-/* ssp clock */
-static struct clk ssp_clk = {
-	.rate = 96000000,
+#define CR5	(0x54)
+
+#define clk_writel(b, o, v)	writel(v, PLL_BASE_ADDRESS + o)
+#define clk_readl(b, o)		readl(PLL_BASE_ADDRESS + o)
+
+static int timer_set_rate(struct clk *clk, unsigned long rate)
+{
+	uint32_t val;
+
+	if (rate == clk->rate)
+		return 0;
+
+	val = clk_readl(clk, CR5);
+	val &= ~(1 << clk->offset);
+
+	/* timer can be set to either 32kHz or fHCLK/2 */
+
+	if (rate == clk_get_rate(&dummy_apb_pclk)/2) {
+		val |= (1 << clk->offset);
+	} else if (rate == 32*1000) {
+		val |= (0 << clk->offset);
+	} else {
+		pr_debug("%s(): rate %lu out of bounds, offset %d\n", __func__, rate, clk->offset);
+		return -EINVAL;
+	}
+
+	clk_writel(clk, CR5, val);
+
+	clk->rate = rate;
+
+	pr_debug("%s(): offset %d, rate %lu\n", __func__, clk->offset, clk->rate);
+
+	return 0;
+}
+
+static unsigned long timer_get_rate(struct clk *clk)
+{
+	uint32_t val = clk_readl(clk, CR5);
+
+	clk->rate = (val & (1 << clk->offset)) ? clk_get_rate(&dummy_apb_pclk)/2 : 32 * 1000;
+
+	pr_debug("%s(): offset %d, rate %lu\n", __func__, clk->offset, clk->rate);
+
+	return clk->rate;
+}
+
+static struct clk tim01_clk =
+{
+	.set_rate = timer_set_rate,
+	.get_rate = timer_get_rate,
+	.offset = 0,
 };
 
-/* fixed clock */
-static struct clk uart_clk = {
-	.rate = 96000000,
-};
-
-/* fixed clock */
-static struct clk clcd_clk = {
-	.rate = 96000000,
-};
-
-/* fixed clock */
-static struct clk tim_clk = {
-	.rate = 96000000,
-};
-
-static struct clk dummy_apb_pclk = {
-	.rate = 96000000,
+static struct clk tim23_clk =
+{
+	.set_rate = timer_set_rate,
+	.get_rate = timer_get_rate,
+	.offset = 1,
 };
 
 static struct clk_lookup lookups[] = {
@@ -105,10 +178,10 @@ static struct clk_lookup lookups[] = {
 		.clk		= &clcd_clk,
 	}, {	/* PWM */
 		.dev_id		= "tmpa9xx-pwm.0",
-		.clk		= &tim_clk,
+		.clk		= &tim01_clk,
 	}, {	/* PWM */
 		.dev_id		= "tmpa9xx-pwm.1",
-		.clk		= &tim_clk,
+		.clk		= &tim23_clk,
 	}, {	/* WDT */
 		.dev_id		= "tmpa9xx-wdt",
 		.clk		= &dummy_apb_pclk,
