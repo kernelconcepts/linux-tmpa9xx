@@ -412,11 +412,11 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 		goto err7;
 	}
 
-	/* platform specifiy bus speed has priority */
-	speed_khz = (int)pdev->dev.platform_data;
-	/* otherwise check module parameter */
+	/* check module parameter for bus speed first */
+	speed_khz = pdev->id ? speed_khz_1 : speed_khz_0;
+	/* otherwise try platform specifiy bus */
 	if (!speed_khz)
-		speed_khz = pdev->id ? speed_khz_1 : speed_khz_0;
+		speed_khz = (int)pdev->dev.platform_data;
 	/* if nothing is specified, use 100kHz as default */
 	if (!speed_khz)
 		speed_khz = 100;

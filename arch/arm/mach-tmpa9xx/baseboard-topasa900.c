@@ -87,11 +87,13 @@ static struct platform_device topas_dm9000_device = {
 /*
  * I2C
  */
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
 static struct i2c_board_info baseboard_i2c_0_devices[] = {
 	/* no devices */
 };
+#endif
 
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
 	{I2C_BOARD_INFO("wm8976", 0x1a),},
 };
@@ -324,14 +326,22 @@ struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {
 	},
 };
 
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
+extern struct platform_device tmpa9xx_device_i2c_channel_0;
+#endif
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
+extern struct platform_device tmpa9xx_device_i2c_channel_1;
+#endif
+
 void __init baseboard_init(void)
 {
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
-        i2c_register_board_info(0, baseboard_i2c_0_devices,
-                        ARRAY_SIZE(baseboard_i2c_0_devices));
-
-        i2c_register_board_info(1, baseboard_i2c_1_devices,
-                        ARRAY_SIZE(baseboard_i2c_1_devices));
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
+	tmpa9xx_device_i2c_channel_0.dev.platform_data = (void *)400;
+        i2c_register_board_info(0, baseboard_i2c_0_devices, ARRAY_SIZE(baseboard_i2c_0_devices));
+#endif
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
+	tmpa9xx_device_i2c_channel_1.dev.platform_data = (void *)400;
+        i2c_register_board_info(1, baseboard_i2c_1_devices, ARRAY_SIZE(baseboard_i2c_1_devices));
 #endif
 #if defined CONFIG_SPI_SPIDEV || defined CONFIG_SPI_SPIDEV_MODULE \
  || defined CONFIG_MMC_SPI    || defined CONFIG_MMC_SPI_MODULE
