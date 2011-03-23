@@ -83,6 +83,31 @@ static struct platform_device topas_dm9000_device = {
 #endif
 
 /*
+ * CMOS image sensor interface
+ */
+#if defined CONFIG_TMPA9XX_CMSI || defined CONFIG_TMPA9XX_CMSI_MODULE
+static struct resource tmpa9xx_resource_cmsi[] = {
+        {
+		.start = CMOSCAM_BASE,
+		.end   = CMOSCAM_BASE + 0x44 - 1,
+		.flags = IORESOURCE_MEM
+        }, {
+		.start  = INTR_VECT_CMSIF,
+		.end    = INTR_VECT_CMSIF,
+		.flags  = IORESOURCE_IRQ | IRQF_TRIGGER_LOW,
+        },
+};
+
+static struct platform_device tmpa9xx_device_cmsi = {
+         .name           = "tmpa9xx-cmsi",
+         .id             = -1,
+         .num_resources  = ARRAY_SIZE(tmpa9xx_resource_cmsi),
+         .resource       = tmpa9xx_resource_cmsi,
+        }
+;
+#endif
+
+/*
  * I2C
  */
 #if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
@@ -91,7 +116,13 @@ static struct i2c_board_info baseboard_i2c_0_devices[] = {
 };
 
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
-	/* no devices */
+#if defined CONFIG_TMPA9XX_CMSI || defined CONFIG_TMPA9XX_CMSI_MODULE
+        {
+		.type = "ov6620",
+		.addr = 0x60,
+		.platform_data = &tmpa9xx_device_cmsi,
+	},
+#endif
 };
 #endif
 
