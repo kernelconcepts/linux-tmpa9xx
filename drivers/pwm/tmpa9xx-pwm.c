@@ -1,4 +1,3 @@
-#define DEBUG
 /*
  * PWM support for TMPA9xx
  *
@@ -29,6 +28,14 @@
 #include <linux/io.h>
 #include <linux/pwm/pwm.h>
 #include <asm/div64.h>
+
+static int prescaler_clock_khz_0;
+module_param(prescaler_clock_khz_0, int, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(prescaler_clock_khz_0, "pwm prescaler clock in khz");
+
+static int prescaler_clock_khz_1;
+module_param(prescaler_clock_khz_1, int, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(prescaler_clock_khz_1, "pwm prescaler clock in khz");
 
 #define DRIVER_NAME KBUILD_MODNAME
 
@@ -262,9 +269,9 @@ static int request(struct pwm_device *p)
 {
 	struct tmpa9xx_pwm_priv *pp = pwm_get_drvdata(p);
 
-	dev_dbg(pp->dev, "%s():\n", __func__);
-
 	p->tick_hz = clk_get_rate(pp->clk);
+
+	dev_dbg(pp->dev, "%s(): rate %lu\n", __func__, p->tick_hz);
 
 	return 0;
 }
@@ -279,6 +286,7 @@ static const struct pwm_device_ops device_ops = {
 static int __devinit tmpa9xx_pwm_probe(struct platform_device *pdev)
 {
 	const struct platform_device_id *id = platform_get_device_id(pdev);
+	int prescaler_clock_khz;
 	struct tmpa9xx_pwm_priv *pp;
 	int ret;
 
@@ -321,6 +329,28 @@ static int __devinit tmpa9xx_pwm_probe(struct platform_device *pdev)
 		goto err4;
 	}
 
+	prescaler_clock_khz = (int)pdev->dev.platform_data;
+	if (!prescaler_clock_khz)
+		prescaler_clock_khz = pdev->id ? prescaler_clock_khz_1 : prescaler_clock_khz_0;
+	if (!prescaler_clock_khz)
+		prescaler_clock_khz = 32 * 1000;
+
+	dev_dbg(&pdev->dev, "prescaler_clock_khz %d\n", prescaler_clock_khz);
+
+	ret = clk_set_rate(pp->clk, prescaler_clock_khz);
+	if (ret) {
+		dev_err(&pdev->dev, "clk_set_rate() failed\n");
+		ret = -ENODEV;
+		goto err5;
+	}
+
+	ret = clk_enable(pp->clk);
+	if (ret) {
+		dev_err(&pdev->dev, "clk_enable() failed\n");
+		ret = -ENODEV;
+		goto err5;
+	}
+
 	platform_set_drvdata(pdev, pp);
 
 	pp->pwm = pwm_register(&device_ops, &pdev->dev, "%s:%d", DRIVER_NAME, pdev->id);
@@ -334,7 +364,7 @@ static int __devinit tmpa9xx_pwm_probe(struct platform_device *pdev)
 
 	pwm_set_drvdata(pp->pwm, pp);
 
-	dev_dbg(pp->dev, "%s():\n", __func__);
+	dev_info(&pdev->dev, "%s: channel %d, clk speed %lu kHz\n", DRIVER_NAME, pdev->id, clk_get_rate(pp->clk));
 
 	return 0;
 
@@ -363,6 +393,7 @@ static int __devexit tmpa9xx_pwm_remove(struct platform_device *pdev)
 	}
 	pwm_unregister(pp->pwm);
 	platform_set_drvdata(pdev, NULL);
+	clk_disable(pp->clk);
 	clk_put(pp->clk);
 	iounmap(pp->regs);
 	release_mem_region(pp->r->start, resource_size(pp->r));
