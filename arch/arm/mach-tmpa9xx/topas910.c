@@ -25,8 +25,32 @@
 #include <asm/mach/arch.h>
 #include <asm/mach-types.h>
 #include <mach/hardware.h>
+#include <mach/regs.h>
 
 #include "tmpa9xx.h"
+
+static int setup_port_e(void)
+{
+#if defined CONFIG_TMPA9XX_CMSI || defined CONFIG_TMPA9XX_CMSI_MODULE
+        GPIOEFR1 |=  (0xff);
+#endif
+	return 0;
+}
+
+static int setup_port_f(void)
+{
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
+        /* set PORT-C 6,7 to I2C and enable open drain */
+        GPIOFDIR &= ~(0xc0);
+        GPIOFFR1 |=  (0xc0);
+        GPIOFIE  &= ~(0xc0);
+        GPIOFODE |=  (0xc0);
+#endif
+#if defined CONFIG_TMPA9XX_CMSI || defined CONFIG_TMPA9XX_CMSI_MODULE
+        GPIOFFR1 |=  (0x0f);
+#endif
+	return 0;
+}
 
 /*
  * Topas910 device initialisation
@@ -35,6 +59,9 @@ static void __init topas910_init(void)
 {
 	baseboard_init();
 	tmpa9xx_init();
+
+	setup_port_e();
+	setup_port_f();
 }
 
 MACHINE_START(TOPAS910, "Toshiba Topas910")

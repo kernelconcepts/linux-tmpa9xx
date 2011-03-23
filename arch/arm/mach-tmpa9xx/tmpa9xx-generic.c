@@ -820,42 +820,6 @@ static int setup_port_d(void)
 	return 0;
 }
 
-static int setup_port_f(void)
-{
-        /* Port F
-           The upper 2 bits (bits [7:6]) of Port F can be used as general-purpose input/output pins.
-           Port F can also be used as interrupt (INTC), UART (U2RXD, U2TXD) and I2C (I2C1DA,
-           I2C1CL) pins. */
-
-        GPIOFDIR  = 0x00;
-        GPIOFDATA = 0x00;
-        GPIOFFR1  = 0x00;
-        GPIOFFR2  = 0x00;
-        GPIOFIE   = 0x00;
-
-#if defined CONFIG_SERIAL_AMBA_PL011_CHANNEL_2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1
-        GPIOFFR1 &= ~(0xc0);  /* UART 2 */
-        GPIOFFR2 |=  (0xc0);
-        GPIOFIE  &= ~(0xc0);
-        GPIOFODE &= ~(0xc0);
-#endif    
-#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
-        /* set PORT-C 6,7 to I2C and enable open drain */
-        GPIOFDIR &= ~(0xc0);
-        GPIOFFR1 |=  (0xc0);
-        GPIOFFR2 &= ~(0xc0);
-        GPIOFIE  &= ~(0xc0);
-        GPIOFODE |=  (0xc0);
-#endif
-
-#if (!defined CONFIG_SERIAL_AMBA_PL011_CHANNEL_2 && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1 ) \
- && (!defined CONFIG_I2C_TMPA9XX && !defined CONFIG_I2C_TMPA9XX_MODULE) && !defined CONFIG_I2C_TMPA9XX_CHANNEL_1
-        TMPA9XX_CFG_PORT_GPIO(PORTF);
-#endif
-
-	return 0;
-}
-
 static int setup_port_g(void)
 {
         /* Port G can be used as general-purpose input/output pins.
@@ -1040,7 +1004,7 @@ void __init tmpa9xx_init(void)
 	setup_port_b();
 	setup_port_c();
 	setup_port_d();
-	setup_port_f();
+	/* port e and f in cpu specific part */
 	setup_port_g();
 	setup_port_j_and_k();
 	setup_port_l();
