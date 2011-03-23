@@ -278,7 +278,6 @@ static struct platform_device *devices_baseboard[] __initdata = {
 #endif
         &topas_led_device,
         &topas_keys_device,
-        &baseboard_i2s_device,    
 };
 
 #define HCLK 			96000000
