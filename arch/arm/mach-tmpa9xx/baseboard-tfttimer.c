@@ -47,13 +47,17 @@
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
 static struct i2c_board_info baseboard_i2c_0_devices[] = {
+#if defined CONFIG_SND_TMPA9XX_I2S || defined CONFIG_SND_TMPA9XX_I2S_MODULE
         {
-                I2C_BOARD_INFO("wm8974", 0x1a),
+                I2C_BOARD_INFO("wm89xx", 0x1a),
         },
+#endif
 };
+#endif
 
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
 	/* no devices */
 };
@@ -199,13 +203,16 @@ struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {
 
 void __init baseboard_init(void)
 {
-#if defined CONFIG_I2C_TMPA9XX || defined CONFIG_I2C_TMPA9XX_MODULE
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
         i2c_register_board_info(0, baseboard_i2c_0_devices,
                         ARRAY_SIZE(baseboard_i2c_0_devices));
+#endif
 
+#if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
         i2c_register_board_info(1, baseboard_i2c_1_devices,
                         ARRAY_SIZE(baseboard_i2c_1_devices));
 #endif
+
 #if defined CONFIG_SPI_SPIDEV || defined CONFIG_SPI_SPIDEV_MODULE
         spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 #endif

@@ -1,5 +1,5 @@
 /*
- * Wolfson wm8976 codec driver for Toshiba TMPA900 SoC
+ * Wolfson wm89xx codec driver for Toshiba TMPA9xx SoC
  *
  * Copyright (c) Toshiba
  * Copyright (c) 2011 Michael Hunold (michael@mihu.de)
@@ -26,9 +26,9 @@
 
 #include "snd-tmpa9xx-i2s.h"
 
-#undef WM8976_DEBUG
+#undef WM89XX_DEBUG
 
-#ifdef WM8976_DEBUG
+#ifdef WM89XX_DEBUG
 #define wm_printd(level, format, arg...) \
 	printk(level "i2s: " format, ## arg)
 #define snd_printk_marker() \
@@ -42,18 +42,18 @@
 
 #undef NOCONTROLS  /* define this to omit all the ALSA controls */
 
-#define DRIVER_NAME	"WM8976-I2S"
-#define CHIP_NAME	"Wolfson WM8976"
-#define PCM_NAME	"WM8976_PCM"
+#define DRIVER_NAME	"WM89XX-I2S"
+#define CHIP_NAME	"Wolfson WM89XX"
+#define PCM_NAME	"WM89XX_PCM"
 
 /* Chip level */
-#define WM8976_BUF_SZ 	0x10000  /* 64kb */
-#define PCM_BUFFER_MAX	(WM8976_BUF_SZ / 2)
+#define WM89XX_BUF_SZ 	0x10000  /* 64kb */
+#define PCM_BUFFER_MAX	(WM89XX_BUF_SZ / 2)
 
 #define FRAGMENTS_MIN	2
 #define FRAGMENTS_MAX	32
 
-static unsigned char wm8976_for_samplerate[7][6] =
+static unsigned char wm89xx_for_samplerate[7][6] =
 {
 	{0x00,0x08,0x0C,0x93,0xE9,0x49}, 	/* 48000 Hz */
 	{0x00,0x07,0x21,0x61,0x27,0x49}, 	/* 44100 Hz */
@@ -64,10 +64,10 @@ static unsigned char wm8976_for_samplerate[7][6] =
 	{0x0a,0x08,0x0C,0x93,0xE9,0xE9}, 	/* 8000 Hz */
 };
 
-struct snd_wm8976
+struct snd_wm89xx
 {
 	struct snd_card *card;
-	spinlock_t wm8976_lock;
+	spinlock_t wm89xx_lock;
 	struct i2c_client *i2c_client;
 	struct snd_pcm *pcm;
 
@@ -84,7 +84,8 @@ struct snd_wm8976
 		dev_err(&i2c_client->dev, "i2c_smbus_write_byte_data() failed, ret %d\n", ret); \
 	}
 
-static void init_wm8976_i2c(struct i2c_client *i2c_client)
+#ifdef CONFIG_MACH_TOPASA900
+static void init_wm89xx_i2c(struct i2c_client *i2c_client)
 {
 	i2c_packet_send(0x00,0x00);	/* R0  0x000 */
 	i2c_packet_send(0x02,0x3d);	/* R1  0x02D */
@@ -99,7 +100,7 @@ static void init_wm8976_i2c(struct i2c_client *i2c_client)
 	i2c_packet_send(0x1F,0xff);	/* R15 0X1FF */
 	i2c_packet_send(0x30, 0x32);	/* R24 = 0x032 */
 	i2c_packet_send(0x5b,0x3f);	/* R45 0X000 */
-	i2c_packet_send(0x56,0x10);	/* R43 0X010   add for wm8976 8 ohm speaker */
+	i2c_packet_send(0x56,0x10);	/* R43 0X010   add for wm89xx 8 ohm speaker */
 	i2c_packet_send(0x5f,0x55);	/* R47 0X005 */
 	i2c_packet_send(47<<1 | 1,0xff);	/* R47 0X1ff */
 	i2c_packet_send(0x62,0x02);	/* R49 0X002 */
@@ -108,8 +109,56 @@ static void init_wm8976_i2c(struct i2c_client *i2c_client)
 	i2c_packet_send(0x69,0x3f);	/* R52 0X13f */
 	i2c_packet_send(0x6b,0x3f);	/* R53 0X13f */
 }
+#endif
 
-static void snd_wm8976_set_samplerate(struct i2c_client *i2c_client, long rate)
+#ifdef CONFIG_MACH_TONGA2_TFTTIMER
+static void init_wm89xx_i2c(struct i2c_client *i2c_client)
+{
+	i2c_packet_send(0x00,0x00);	/* R0  0x000 - Reset OFF*/
+	i2c_packet_send((0x02),0x2f);	/* R1  0x03D - PLL Enable, fasted startup*/
+	i2c_packet_send(0x04,0x00);	/* R2  0x015 - no ADC*/
+	i2c_packet_send(0x06,0xed);	/* R3  0x0ed - SPKP/N enable, spk mix dac enable*/
+	i2c_packet_send(0x08,0x10);	/* R4  0X010 - i2s format*/
+	i2c_packet_send(0x0a,0x00);	/* R5  0X000 - reset value */
+	i2c_packet_send(0x14,0x00);	/* R10 0x080 */
+	i2c_packet_send(0x16,0xff);	/* R11 0X0ff - max volume */
+	i2c_packet_send(0x1c,0x00);	/* R14 0x1c01 */
+	i2c_packet_send(0x1e,0x00);	/* R15 0X000 - ADC off */
+	i2c_packet_send(0x62,0x02);	/* R49 - no boost  */
+	i2c_packet_send(0x64,0x01);	/* R50 0X001 */
+	i2c_packet_send(54<<1,0x39);	/* R54 0dB */
+	i2c_packet_send(56<<1,0x01);	/* R56 DAC to mono mix */
+}
+#endif
+
+#ifdef CONFIG_MACH_TONGA
+static void init_wm89xx_i2c(struct i2c_client *i2c_client)
+{
+	i2c_packet_send(0x00,0x00);	/* R0  0x000 */
+	i2c_packet_send(0x02,0x3d);	/* R1  0x02D */
+	i2c_packet_send(0x05,0x95);	/* R2  0x195 */
+	i2c_packet_send(0x06,0x6F);	/* R3  0x00F */
+	i2c_packet_send(0x08,0x10);	/* R4  0X010 */
+	i2c_packet_send(0x0a,0x00);	/* R5  0X000 */
+	i2c_packet_send(0x14, 0x80);	/* R10 = 0x080 */
+	i2c_packet_send(0x17,0xff);	/* R11 0X1ff */
+	i2c_packet_send(0x19,0xff);	/* R12 0X1ff */
+	i2c_packet_send(0x1c,0x00);	/* R14 = 0x1c01 */
+	i2c_packet_send(0x1F,0xff);	/* R15 0X1FF */
+	i2c_packet_send(0x30, 0x32);	/* R24 = 0x032 */
+	i2c_packet_send(0x5b,0x3f);	/* R45 0X000 */
+	i2c_packet_send(0x56,0x10);	/* R43 0X010   add for WM8983 8 ohm speaker */
+	i2c_packet_send(0x5f,0x55);	/* R47 0X005 */
+	i2c_packet_send(47<<1 | 1,0xff);	/* R47 0X1ff */
+	i2c_packet_send(0x62,0x02);	/* R49 0X002 */
+	i2c_packet_send(0x64,0x01);	/* R50 0X001 */
+	i2c_packet_send(0x66,0x01);	/* R51 0X001 */
+	i2c_packet_send(0x69,0x3f);	/* R52 0X13f */
+	i2c_packet_send(0x6b,0x3f);	/* R53 0X13f */
+}
+#endif
+
+static void snd_wm89xx_set_samplerate(struct i2c_client *i2c_client, long rate)
 {
 	/* wait for any frame to complete */
 	udelay(125);
@@ -129,16 +178,16 @@ static void snd_wm8976_set_samplerate(struct i2c_client *i2c_client, long rate)
 	else
 		rate = 6;
 
-	i2c_packet_send(0x0d, wm8976_for_samplerate[rate][5]);    /* R6  */
-	i2c_packet_send(0x0e, wm8976_for_samplerate[rate][0]);    /* R7  */
-	i2c_packet_send(0x48, wm8976_for_samplerate[rate][1]);    /* R36 */
-	i2c_packet_send(0x4a, wm8976_for_samplerate[rate][2]);    /* R37 */
-	i2c_packet_send(0x4d, wm8976_for_samplerate[rate][3]);    /* R38 */
-	i2c_packet_send(0x4e, wm8976_for_samplerate[rate][4]);    /* R39 */
+	i2c_packet_send(0x0d, wm89xx_for_samplerate[rate][5]);    /* R6  */
+	i2c_packet_send(0x0e, wm89xx_for_samplerate[rate][0]);    /* R7  */
+	i2c_packet_send(0x48, wm89xx_for_samplerate[rate][1]);    /* R36 */
+	i2c_packet_send(0x4a, wm89xx_for_samplerate[rate][2]);    /* R37 */
+	i2c_packet_send(0x4d, wm89xx_for_samplerate[rate][3]);    /* R38 */
+	i2c_packet_send(0x4e, wm89xx_for_samplerate[rate][4]);    /* R39 */
 }
 
 /* pcm methods */
-static struct snd_pcm_hardware snd_wm8976_playback_hw = {
+static struct snd_pcm_hardware snd_wm89xx_playback_hw = {
 	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
 	.formats =      SNDRV_PCM_FMTBIT_S16_LE,
 	.rates =            (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
@@ -156,7 +205,7 @@ static struct snd_pcm_hardware snd_wm8976_playback_hw = {
 	.periods_max =      FRAGMENTS_MAX,
 };
 
-static struct snd_pcm_hardware snd_wm8976_capture_hw = {
+static struct snd_pcm_hardware snd_wm89xx_capture_hw = {
 	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
 	.formats =          SNDRV_PCM_FMTBIT_S16_LE,
 	.rates =            (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
@@ -174,31 +223,31 @@ static struct snd_pcm_hardware snd_wm8976_capture_hw = {
 	.periods_max =      FRAGMENTS_MAX,
 };
 
-static int snd_wm8976_playback_open(struct snd_pcm_substream *substream)
+static int snd_wm89xx_playback_open(struct snd_pcm_substream *substream)
 {
-	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	chip->tx_substream = substream;
-	substream->runtime->hw = snd_wm8976_playback_hw;
+	substream->runtime->hw = snd_wm89xx_playback_hw;
 
 	return 0;
 }
 
-static int snd_wm8976_capture_open(struct snd_pcm_substream *substream)
+static int snd_wm89xx_capture_open(struct snd_pcm_substream *substream)
 {
-	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
-	substream->runtime->hw = snd_wm8976_capture_hw;
+	substream->runtime->hw = snd_wm89xx_capture_hw;
 	chip->rx_substream = substream;
 
 	return 0;
 }
 
-static int snd_wm8976_playback_close(struct snd_pcm_substream *substream)
+static int snd_wm89xx_playback_close(struct snd_pcm_substream *substream)
 {
-	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	chip->tx_substream = NULL;
@@ -206,9 +255,9 @@ static int snd_wm8976_playback_close(struct snd_pcm_substream *substream)
 	return 0;
 }
 
-static int snd_wm8976_capture_close(struct snd_pcm_substream *substream)
+static int snd_wm89xx_capture_close(struct snd_pcm_substream *substream)
 {
-	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 
 	snd_printk_marker();
 	chip->rx_substream = NULL;
@@ -216,7 +265,7 @@ static int snd_wm8976_capture_close(struct snd_pcm_substream *substream)
 }
 
 /* I2S in following */
-static int snd_wm8976_hw_params(struct snd_pcm_substream *substream,
+static int snd_wm89xx_hw_params(struct snd_pcm_substream *substream,
 					struct snd_pcm_hw_params *hwparams)
 {
 	snd_printk_marker();
@@ -234,7 +283,7 @@ static int snd_wm8976_hw_params(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-static int snd_wm8976_hw_free(struct snd_pcm_substream * substream)
+static int snd_wm89xx_hw_free(struct snd_pcm_substream * substream)
 {
 	snd_printk_marker();
 	snd_pcm_lib_free_pages(substream);
@@ -242,11 +291,11 @@ static int snd_wm8976_hw_free(struct snd_pcm_substream * substream)
 	return 0;
 }
 
-static void snd_wm8976_dma_tx(void *data);
+static void snd_wm89xx_dma_tx(void *data);
 
-static int snd_wm8976_playback_prepare(struct snd_pcm_substream *substream)
+static int snd_wm89xx_playback_prepare(struct snd_pcm_substream *substream)
 {
-	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct tmpa9xx_i2s_config config;
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
@@ -259,14 +308,14 @@ static int snd_wm8976_playback_prepare(struct snd_pcm_substream *substream)
 		return -EINVAL;
 
 	/* set requested samplerate */
-	snd_wm8976_set_samplerate(chip->i2c_client, runtime->rate);
+	snd_wm89xx_set_samplerate(chip->i2c_client, runtime->rate);
 
 	config.cpu_buf = runtime->dma_area;
 	config.phy_buf = runtime->dma_addr;
 	config.fragcount = runtime->periods;
 	config.fragsize = fragsize_bytes;
 	config.size = word_len;
-	config.callback = snd_wm8976_dma_tx;
+	config.callback = snd_wm89xx_dma_tx;
 	config.data = chip;
 
 	ret = tmpa9xx_i2s_tx_setup(&config);
@@ -281,11 +330,11 @@ static int snd_wm8976_playback_prepare(struct snd_pcm_substream *substream)
 	return 0;
 }
 
-static void snd_wm8976_dma_rx(void *data);
+static void snd_wm89xx_dma_rx(void *data);
 
-static int snd_wm8976_capture_prepare(struct snd_pcm_substream *substream)
+static int snd_wm89xx_capture_prepare(struct snd_pcm_substream *substream)
 {
-	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct tmpa9xx_i2s_config config;
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
@@ -298,14 +347,14 @@ static int snd_wm8976_capture_prepare(struct snd_pcm_substream *substream)
 		return -EINVAL;
 
 	/* set requested samplerate */
-	snd_wm8976_set_samplerate(chip->i2c_client, runtime->rate);
+	snd_wm89xx_set_samplerate(chip->i2c_client, runtime->rate);
 
 	config.cpu_buf = runtime->dma_area;
 	config.phy_buf = runtime->dma_addr;
 	config.fragcount = runtime->periods;
 	config.fragsize = fragsize_bytes;
 	config.size = word_len;
-	config.callback = snd_wm8976_dma_rx;
+	config.callback = snd_wm89xx_dma_rx;
 	config.data = chip;
 
 	ret = tmpa9xx_i2s_rx_setup(&config);
@@ -319,14 +368,14 @@ static int snd_wm8976_capture_prepare(struct snd_pcm_substream *substream)
 	return 0;
 }
 
-static int snd_wm8976_playback_trigger(struct snd_pcm_substream *substream, int cmd)
+static int snd_wm89xx_playback_trigger(struct snd_pcm_substream *substream, int cmd)
 {
-	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 	int ret;
 
 	snd_printk_marker();
 
-	spin_lock(&chip->wm8976_lock);
+	spin_lock(&chip->wm89xx_lock);
 
 	switch (cmd) {
 		case SNDRV_PCM_TRIGGER_START:
@@ -338,25 +387,25 @@ static int snd_wm8976_playback_trigger(struct snd_pcm_substream *substream, int 
 			ret = tmpa9xx_i2s_tx_stop();
 			break;
 		default:
-			spin_unlock(&chip->wm8976_lock);
+			spin_unlock(&chip->wm89xx_lock);
 			return -EINVAL;
 			break;
 	}
-	spin_unlock(&chip->wm8976_lock);
+	spin_unlock(&chip->wm89xx_lock);
 
 	snd_printd(KERN_INFO "playback cmd:%s. ret=%d\n", cmd?"start":"stop", ret);
 
 	return 0;
 }
 
-static int snd_wm8976_capture_trigger(struct snd_pcm_substream *substream, int cmd)
+static int snd_wm89xx_capture_trigger(struct snd_pcm_substream *substream, int cmd)
 {
-	struct snd_wm8976 *chip = snd_pcm_substream_chip(substream);
+	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 	int ret;
 
 	snd_printk_marker();
 
-	spin_lock(&chip->wm8976_lock);
+	spin_lock(&chip->wm89xx_lock);
 
 	if (substream != chip->rx_substream)
 		return -EINVAL;
@@ -371,18 +420,18 @@ static int snd_wm8976_capture_trigger(struct snd_pcm_substream *substream, int c
 			tmpa9xx_i2s_rx_stop();
 			break;
 		default:
-			spin_unlock(&chip->wm8976_lock);
+			spin_unlock(&chip->wm89xx_lock);
 			return -EINVAL;
 			break;
 	}
-	spin_unlock(&chip->wm8976_lock);
+	spin_unlock(&chip->wm89xx_lock);
 
 	snd_printd(KERN_ERR"capture cmd:%s\n", cmd ? "start" : "stop");
 
 	return 0;
 }
 
-static snd_pcm_uframes_t snd_wm8976_playback_pointer(struct snd_pcm_substream *substream)
+static snd_pcm_uframes_t snd_wm89xx_playback_pointer(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	unsigned int offset;
@@ -396,7 +445,7 @@ static snd_pcm_uframes_t snd_wm8976_playback_pointer(struct snd_pcm_substream *s
 	return offset;
 }
 
-static snd_pcm_uframes_t snd_wm8976_capture_pointer(struct snd_pcm_substream *substream)
+static snd_pcm_uframes_t snd_wm89xx_capture_pointer(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	unsigned int offset;
@@ -412,70 +461,70 @@ static snd_pcm_uframes_t snd_wm8976_capture_pointer(struct snd_pcm_substream *su
 }
 
 /* pcm method tables */
-static struct snd_pcm_ops snd_wm8976_playback_ops = {
-	.open      = snd_wm8976_playback_open,
-	.close     = snd_wm8976_playback_close,
+static struct snd_pcm_ops snd_wm89xx_playback_ops = {
+	.open      = snd_wm89xx_playback_open,
+	.close     = snd_wm89xx_playback_close,
 	.ioctl     = snd_pcm_lib_ioctl,
-	.hw_params = snd_wm8976_hw_params,
-	.hw_free   = snd_wm8976_hw_free,
-	.prepare   = snd_wm8976_playback_prepare,
-	.trigger   = snd_wm8976_playback_trigger,
-	.pointer   = snd_wm8976_playback_pointer,
+	.hw_params = snd_wm89xx_hw_params,
+	.hw_free   = snd_wm89xx_hw_free,
+	.prepare   = snd_wm89xx_playback_prepare,
+	.trigger   = snd_wm89xx_playback_trigger,
+	.pointer   = snd_wm89xx_playback_pointer,
 };
 
-static struct snd_pcm_ops snd_wm8976_capture_ops = {
-	.open  = snd_wm8976_capture_open,
-	.close = snd_wm8976_capture_close,
+static struct snd_pcm_ops snd_wm89xx_capture_ops = {
+	.open  = snd_wm89xx_capture_open,
+	.close = snd_wm89xx_capture_close,
 	.ioctl = snd_pcm_lib_ioctl,
-	.hw_params = snd_wm8976_hw_params,
-	.hw_free   = snd_wm8976_hw_free,
-	.prepare   = snd_wm8976_capture_prepare,
-	.trigger   = snd_wm8976_capture_trigger,
-	.pointer   = snd_wm8976_capture_pointer,
+	.hw_params = snd_wm89xx_hw_params,
+	.hw_free   = snd_wm89xx_hw_free,
+	.prepare   = snd_wm89xx_capture_prepare,
+	.trigger   = snd_wm89xx_capture_trigger,
+	.pointer   = snd_wm89xx_capture_pointer,
 };
 
 /* card and device */
-static int snd_wm8976_stop(struct snd_wm8976 *chip)
+static int snd_wm89xx_stop(struct snd_wm89xx *chip)
 {
 	snd_printk_marker();
 
 	return 0;
 }
 
-static int snd_wm8976_dev_free(struct snd_device *device)
+static int snd_wm89xx_dev_free(struct snd_device *device)
 {
-	struct snd_wm8976 *chip = (struct snd_wm8976 *)device->device_data;
+	struct snd_wm89xx *chip = (struct snd_wm89xx *)device->device_data;
 
 	snd_printk_marker();
 
-	return snd_wm8976_stop(chip);
+	return snd_wm89xx_stop(chip);
 }
 
-static struct snd_device_ops snd_wm8976_ops = {
-	.dev_free = snd_wm8976_dev_free,
+static struct snd_device_ops snd_wm89xx_ops = {
+	.dev_free = snd_wm89xx_dev_free,
 };
 
-static void snd_wm8976_dma_rx(void *data)
+static void snd_wm89xx_dma_rx(void *data)
 {
-	struct snd_wm8976 *wm8976 = data;
+	struct snd_wm89xx *wm89xx = data;
 
         snd_printk_marker();
 
-	if (wm8976->rx_substream)
-		snd_pcm_period_elapsed(wm8976->rx_substream);
+	if (wm89xx->rx_substream)
+		snd_pcm_period_elapsed(wm89xx->rx_substream);
 }
 
-static void snd_wm8976_dma_tx(void *data)
+static void snd_wm89xx_dma_tx(void *data)
 {
-	struct snd_wm8976 *wm8976 = data;
+	struct snd_wm89xx *wm89xx = data;
 
 	snd_printk_marker();
 
-	if (wm8976->tx_substream)
-		snd_pcm_period_elapsed(wm8976->tx_substream);
+	if (wm89xx->tx_substream)
+		snd_pcm_period_elapsed(wm89xx->tx_substream);
 }
 
-static int __devinit snd_wm8976_pcm(struct snd_wm8976 *wm8976)
+static int __devinit snd_wm89xx_pcm(struct snd_wm89xx *wm89xx)
 {
 	struct snd_pcm *pcm;
 	int ret;
@@ -483,9 +532,9 @@ static int __devinit snd_wm8976_pcm(struct snd_wm8976 *wm8976)
 	snd_printk_marker();
 
 	/* 1 playback and 1 capture substream, of 2-8 channels each */
-	ret = snd_pcm_new(wm8976->card, PCM_NAME, 0, 1, 1, &pcm);
+	ret = snd_pcm_new(wm89xx->card, PCM_NAME, 0, 1, 1, &pcm);
 	if (ret < 0) {
-		dev_err(&wm8976->i2c_client->dev, "snd_pcm_new() failed\n");
+		dev_err(&wm89xx->i2c_client->dev, "snd_pcm_new() failed\n");
 		return ret;
 	}
 
@@ -495,31 +544,31 @@ static int __devinit snd_wm8976_pcm(struct snd_wm8976 *wm8976)
 	 * this may be too large, trying it for now
 	 */
 	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_DEV,
-			snd_dma_isa_data(), WM8976_BUF_SZ, WM8976_BUF_SZ);
+			snd_dma_isa_data(), WM89XX_BUF_SZ, WM89XX_BUF_SZ);
 
-	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &snd_wm8976_playback_ops);
-	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &snd_wm8976_capture_ops);
-	wm8976->pcm = pcm;
+	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &snd_wm89xx_playback_ops);
+	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &snd_wm89xx_capture_ops);
+	wm89xx->pcm = pcm;
 	pcm->info_flags = 0;
 
 	strcpy(pcm->name, PCM_NAME);
-	pcm->private_data = wm8976;
+	pcm->private_data = wm89xx;
 
 	return 0;
 }
 
-static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_device_id *iid)
+static int wm89xx_i2c_probe(struct i2c_client *i2c_client, const struct i2c_device_id *iid)
 {
-	struct snd_wm8976 *wm8976;
+	struct snd_wm89xx *wm89xx;
 	struct snd_card *card;
-	char *id = "ID string for TMPA9XX + wm8976 soundcard.";
+	char *id = "ID string for TMPA9XX + wm89xx soundcard.";
 	int ret = 0;
 
-	init_wm8976_i2c(i2c_client);
+	init_wm89xx_i2c(i2c_client);
 
 	snd_printk_marker();
 
-	snd_card_create(-1, id, THIS_MODULE, sizeof(struct snd_wm8976), &card);
+	snd_card_create(-1, id, THIS_MODULE, sizeof(struct snd_wm89xx), &card);
 	if (!card) {
 		dev_err(&i2c_client->dev, "snd_card_create() failed\n");
 		return -ENOMEM;
@@ -530,21 +579,21 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 	sprintf(card->longname, "%s at I2S",
 		  card->shortname);
 
-	wm8976 = card->private_data;
+	wm89xx = card->private_data;
 
-	wm8976->card = card;
-	wm8976->i2c_client = i2c_client;
+	wm89xx->card = card;
+	wm89xx->i2c_client = i2c_client;
 
-	ret = snd_device_new(card, SNDRV_DEV_LOWLEVEL, wm8976, &snd_wm8976_ops);
+	ret = snd_device_new(card, SNDRV_DEV_LOWLEVEL, wm89xx, &snd_wm89xx_ops);
 	if (ret) {
 		dev_err(&i2c_client->dev, "snd_device_new() failed\n");
 		ret = -ENODEV;
 		goto err1;
 	}
 
-	ret = snd_wm8976_pcm(wm8976);
+	ret = snd_wm89xx_pcm(wm89xx);
 	if (ret) {
-		dev_err(&i2c_client->dev, "snd_wm8976_pcm() failed\n");
+		dev_err(&i2c_client->dev, "snd_wm89xx_pcm() failed\n");
 		ret = -ENODEV;
 		goto err2;
 	}
@@ -560,6 +609,8 @@ static int wm8976_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 
 	i2c_set_clientdata(i2c_client, card);
 
+	dev_info(&i2c_client->dev, "wm89xx driver ready\n");
+
 	return 0;
 
 err3:
@@ -571,7 +622,7 @@ err1:
 	return 0;
 }
 
-static int wm8976_i2c_remove(struct i2c_client *i2c_client)
+static int wm89xx_i2c_remove(struct i2c_client *i2c_client)
 {
 	struct snd_card *card = i2c_get_clientdata(i2c_client);
 
@@ -581,34 +632,34 @@ static int wm8976_i2c_remove(struct i2c_client *i2c_client)
 
 	return 0;
 }
-static struct i2c_device_id wm8976_id[] = {
-	{"wm8976", 0},
+static struct i2c_device_id wm89xx_id[] = {
+	{"wm89xx", 0},
 	{}, /* mandatory */
 };
-MODULE_DEVICE_TABLE(i2c, wm8976_id);
+MODULE_DEVICE_TABLE(i2c, wm89xx_id);
 
-static struct i2c_driver wm8976_i2c_driver = {
+static struct i2c_driver wm89xx_i2c_driver = {
 	.driver = {
-		.name = "wm8976",
+		.name = "wm89xx",
 		.owner = THIS_MODULE,
 	},
-	.id_table = wm8976_id,
-	.probe = wm8976_i2c_probe,
-	.remove = wm8976_i2c_remove,
+	.id_table = wm89xx_id,
+	.probe = wm89xx_i2c_probe,
+	.remove = wm89xx_i2c_remove,
 };
 
-static int __init wm8976_init(void)
+static int __init wm89xx_init(void)
 {
-	return i2c_add_driver(&wm8976_i2c_driver);
+	return i2c_add_driver(&wm89xx_i2c_driver);
 }
-module_init(wm8976_init);
+module_init(wm89xx_init);
 
-static void __exit wm8976_exit(void)
+static void __exit wm89xx_exit(void)
 {
-	i2c_del_driver(&wm8976_i2c_driver);
+	i2c_del_driver(&wm89xx_i2c_driver);
 }
-module_exit(wm8976_exit);
+module_exit(wm89xx_exit);
 
 MODULE_AUTHOR("Michael Hunold <michael@mihu.de>");
-MODULE_DESCRIPTION("wm8976 driver for TMPA900");
+MODULE_DESCRIPTION("wm89xx driver for TMPA900");
 MODULE_LICENSE("GPL");

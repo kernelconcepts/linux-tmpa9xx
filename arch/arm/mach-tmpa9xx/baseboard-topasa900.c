@@ -95,7 +95,11 @@ static struct i2c_board_info baseboard_i2c_0_devices[] = {
 
 #if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
 static struct i2c_board_info baseboard_i2c_1_devices[] = {
-	{I2C_BOARD_INFO("wm8976", 0x1a),},
+#if defined CONFIG_SND_TMPA9XX_I2S || defined CONFIG_SND_TMPA9XX_I2S_MODULE
+	{
+		I2C_BOARD_INFO("wm89xx", 0x1a),
+	},
+#endif
 };
 #endif
 

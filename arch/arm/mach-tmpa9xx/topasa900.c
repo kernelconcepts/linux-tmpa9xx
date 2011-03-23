@@ -21,6 +21,7 @@
  * Toshiba Topas A900 machine, reference design for the TMPA900 SoC 
  */
 
+#include <linux/kernel.h>
 #include <linux/init.h>
 #include <asm/mach/arch.h>
 #include <asm/mach-types.h>

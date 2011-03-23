@@ -272,11 +272,6 @@ static struct platform_device topas_keys_device = {
         },
 };
 
-static struct platform_device baseboard_i2s_device = {
-        .name = "WM8976-I2S",
-        .id   = -1,
-};
-
 static struct platform_device *devices_baseboard[] __initdata = {
 #if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
         &topas_dm9000_device,
