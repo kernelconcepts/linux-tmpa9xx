@@ -21,13 +21,13 @@
 #include <linux/irq.h>
 #include <linux/slab.h>
 
-static int speed_khz_0 = 100;
+static int speed_khz_0 = 0;
 module_param(speed_khz_0, int, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(speed_khz, "i2c bus 0 speed in khz");
+MODULE_PARM_DESC(speed_khz_0, "i2c bus 0 speed in khz");
 
-static int speed_khz_1 = 100;
+static int speed_khz_1 = 0;
 module_param(speed_khz_1, int, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(speed_khz, "i2c bus 1 speed in khz");
+MODULE_PARM_DESC(speed_khz_1, "i2c bus 1 speed in khz");
 
 #define CR1	(0x00)	/* control register 1 */
 #define DBR	(0x04)	/* data buffer register*/
@@ -336,6 +336,7 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	struct tmpa9xx_i2c_priv *priv;
 	struct i2c_adapter *adapter;
 	struct resource *res;
+	int speed_khz;
 	int ret;
 
 	priv = kzalloc(sizeof(struct tmpa9xx_i2c_priv), GFP_KERNEL);
@@ -411,7 +412,16 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 		goto err7;
 	}
 
-	calculate_prescaler_timing(clk_get_rate(priv->pclk)/1000, pdev->id ? speed_khz_1 : speed_khz_0, &priv->p);
+	/* platform specifiy bus speed has priority */
+	speed_khz = (int)pdev->dev.platform_data;
+	/* otherwise check module parameter */
+	if (!speed_khz)
+		speed_khz = pdev->id ? speed_khz_1 : speed_khz_0;
+	/* if nothing is specified, use 100kHz as default */
+	if (!speed_khz)
+		speed_khz = 100;
+
+	calculate_prescaler_timing(clk_get_rate(priv->pclk)/1000, speed_khz, &priv->p);
 	dev_dbg(&pdev->dev, "prs %d, n %d, freq %d\n", priv->p.prs, priv->p.n, priv->p.freq);
 
 	/* setup scalers to 100khz */
