@@ -46,6 +46,7 @@
 #include <mach/hardware.h>
 #include <mach/ts.h>
 #include <mach/regs.h>
+#include <mach/platform.h>
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
@@ -330,6 +331,13 @@ struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {
 	},
 };
 
+struct tmpa9xx_i2s_cfg tmpa9xx_i2s_cfg =
+{
+	.is_master_rx = false,
+	.is_master_tx = false,
+	.common_rx_tx_clock = true,
+};
+
 #if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
 extern struct platform_device tmpa9xx_device_i2c_channel_0;
 #endif
@@ -337,8 +345,47 @@ extern struct platform_device tmpa9xx_device_i2c_channel_0;
 extern struct platform_device tmpa9xx_device_i2c_channel_1;
 #endif
 
+static int setup_port_l(void)
+{
+        /* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
+           In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
+           I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins. */
+#if (defined CONFIG_SND_TMPA9XX_I2S || defined CONFIG_SND_TMPA9XX_I2S_MODULE) && defined CONFIG_SPI_PL022_CHANNEL_1
+#error "port l configuration mismatch. spi channel 1 vs. i2s channel 0"
+#endif
+
+#if defined CONFIG_SND_TMPA9XX_I2S || defined CONFIG_SND_TMPA9XX_I2S_MODULE
+#if defined CONFIG_SPI_PL022_CHANNEL_1
+#error "port l configuration mismatch. spi channel 1 vs. i2s channel 0"
+#endif
+        GPIOLFR1 |= (0x1f); /* bits 4:0 for I2S */
+#endif
+
+#if defined CONFIG_SPI_PL022_CHANNEL_1
+#if defined CONFIG_SND_TMPA9XX_I2S || defined CONFIG_SND_TMPA9XX_I2S_MODULE
+#error "port l configuration mismatch. spi channel 1 vs. i2s channel 0"
+#endif
+        GPIOLFR2 |= (0x0f);
+#endif
+	return 0;
+}
+
+static int setup_port_m(void)
+{
+        /* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
+           Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
+           I2S1WS).*/
+#if defined CONFIG_SND_TMPA9XX_I2S || defined CONFIG_SND_TMPA9XX_I2S_MODULE
+        GPIOMFR1 |=  (0x04); /* M2 I2S1DAT0 */
+#endif
+	return 0;
+}
+
 void __init baseboard_init(void)
 {
+	setup_port_l();
+	setup_port_m();
+
 #if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
 	tmpa9xx_device_i2c_channel_0.dev.platform_data = (void *)400;
         i2c_register_board_info(0, baseboard_i2c_0_devices, ARRAY_SIZE(baseboard_i2c_0_devices));

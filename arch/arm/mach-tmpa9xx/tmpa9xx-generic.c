@@ -43,6 +43,7 @@
 #include <mach/ts.h>
 #include <mach/regs.h>
 #include <mach/dma.h>
+#include <mach/platform.h>
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
@@ -201,6 +202,8 @@ static struct amba_device watchdog = {
 };
 
 #if defined CONFIG_SND_TMPA9XX_I2S || defined CONFIG_SND_TMPA9XX_I2S_MODULE
+extern struct tmpa9xx_i2s_cfg tmpa9xx_i2s_cfg;
+
 static struct resource tmpa9xx_resource_i2s[] = {
         {
 		.start = I2S_BASE,
@@ -216,7 +219,7 @@ static struct platform_device tmpa9xx_i2s_device = {
         .num_resources = ARRAY_SIZE(tmpa9xx_resource_i2s),
         .dev           = {
                 .coherent_dma_mask 	= ~0,
-		.platform_data		= NULL,
+		.platform_data		= &tmpa9xx_i2s_cfg,
         }
 };
 #endif
@@ -910,51 +913,6 @@ static int setup_port_j_and_k(void)
 	return 0;
 }
 
-static int setup_port_l(void)
-{
-        /* Port L can be used as general-purpose input/output pins. (Bits [7:5] are not used.)
-           In addition, Port L can also be used as I2S function (I2SSCLK, I2S0MCLK, I2S0DATI,
-           I2S0CLK and I2S0WS) and SPI function (SP1DI, SP1DO, SP1CLK and SP1FSS) pins. */
-        GPIOLDIR  = 0x00;
-        GPIOLDATA = 0x00;
-        GPIOLFR1  = 0x00;
-        GPIOLFR2  = 0x00;
-
-#if defined CONFIG_SND_TMPA9XX_WM89XX || defined CONFIG_SND_TMPA9XX_WM89XX_MODULE \
- || defined CONFIG_SND_SOC_TMPA9XX_I2S
-        GPIOLFR1 |= (0x1f); /* bits 4:0 for I2S */
-#elif CONFIG_SPI_PL022_CHANNEL_1
-        GPIOLFR2 |= (0x0f);
-#endif
-
-#if !defined CONFIG_SND_TMPA9XX_WM89XX  && !defined CONFIG_SND_TMPA9XX_WM89XX_MODULE \
- && !defined CONFIG_SND_SOC_TMPA9XX_I2S && !defined CONFIG_SPI_PL022_CHANNEL_1 
-        TMPA9XX_CFG_PORT_GPIO(PORTL)
-#endif        
-
-	return 0;
-}
-
-static int setup_port_m(void)
-{
-        /* Port M can be used as general-purpose input/output pins. (Bits [7:4] are not used.)
-           Port M can also be used as I2S function pins (I2S1MCLK, I2S1DATO, I2S1CLK and
-           I2S1WS).*/
-        GPIOMDIR  = 0x00;
-        GPIOMDATA = 0x00;
-        GPIOMFR1  = 0x00;
-
-#if defined CONFIG_SND_TMPA9XX_WM89XX || defined CONFIG_SND_TMPA9XX_WM89XX_MODULE \
- || defined CONFIG_SND_SOC_TMPA9XX_I2S
-        GPIOMFR1 &= ~(0x03);
-        GPIOMFR1 |=  (0x04); /* M2 I2S1DAT0 */
-#else
-        TMPA9XX_CFG_PORT_GPIO(PORTM)
-#endif
-
-	return 0;
-}
-
 static int setup_port_n(void)
 {
         /* Port N can be used as general-purpose input/output pins.
@@ -1040,8 +998,7 @@ void __init tmpa9xx_init(void)
 	setup_port_f();
 	setup_port_g();
 	setup_port_j_and_k();
-	setup_port_l();
-	setup_port_m();
+	/* port l and m are highly board specific */
 	setup_port_n();
 	setup_port_r();
 	setup_port_t();
