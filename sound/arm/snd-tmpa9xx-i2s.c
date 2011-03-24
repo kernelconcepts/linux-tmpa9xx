@@ -16,6 +16,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
 
+#include <mach/platform.h>
 #include <mach/dma.h>
 #include <mach/regs.h>
 
@@ -266,8 +267,11 @@ EXPORT_SYMBOL(tmpa9xx_i2s_curr_offset_rx);
 
 static int __devinit probe(struct platform_device *pdev)
 {
+	struct tmpa9xx_i2s_cfg *c = pdev->dev.platform_data;
 	struct tmpa9xx_i2s_priv *p;
 	int ret;
+
+	BUG_ON(!c);
 
 	p = kzalloc(sizeof(*p), GFP_KERNEL);
 	if (!p) {
@@ -305,17 +309,17 @@ static int __devinit probe(struct platform_device *pdev)
 
 	p->rx.is_rx = true;
 
-	i2s_writel(p, COMMON, 0x19); /* IISSCLK = Fosch(X1), Set SCK/WS/CLKO of Tx and Rx as Common */
+	i2s_writel(p, COMMON, 0x18 | !!c->common_rx_tx_clock); /* IISSCLK = Fosch(X1), Set SCK/WS/CLKO of Tx and Rx as Common */
 
 	i2s_writel(p, MCON((&p->tx)), 0x04); /* I2SMCLK = Fosch/4 = 11.2896M Hz */
 	i2s_writel(p,  CON((&p->tx)), 0x00); /* I2S standard format */
 	i2s_writel(p, FCLR((&p->tx)), 0x01); /* clear fifo */
-	i2s_writel(p,   MS((&p->tx)), 0x00); /* slave */
+	i2s_writel(p,   MS((&p->tx)), !!c->is_master_rx);
 
 	i2s_writel(p, MCON((&p->rx)), 0x04);
-	i2s_writel(p,   MS((&p->rx)), 0x00); /* slave */
+	i2s_writel(p,   MS((&p->tx)), !!c->is_master_tx);
 
-	dev_dbg(p->dev, "\n");
+	dev_info(p->dev, "common_rx_tx_clock %d, is_master_rx %d, is_master_rx %d\n", c->common_rx_tx_clock, c->is_master_rx, c->is_master_tx);
 
 	return 0;
 
