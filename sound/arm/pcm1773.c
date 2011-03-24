@@ -139,8 +139,6 @@ static int snd_pcm1773_playback_prepare(struct snd_pcm_substream *substream)
 	int word_len = 4;
 	int ret;
 
-	dev_dbg(chip->dev, "sample rate %d\n",runtime->rate);
-
 	if (substream != chip->tx_substream)
 		return -EINVAL;
 

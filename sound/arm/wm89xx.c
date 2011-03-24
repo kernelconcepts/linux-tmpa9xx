@@ -26,17 +26,8 @@
 
 #include "snd-tmpa9xx-i2s.h"
 
-#undef WM89XX_DEBUG
-
-#ifdef WM89XX_DEBUG
-#define wm_printd(level, format, arg...) \
-	printk(level "i2s: " format, ## arg)
-#define snd_printk_marker() \
-	printk(KERN_DEBUG "-> %s()\n", __func__);
-#else
-#define wm_printd(level, format, arg...)
-#define snd_printk_marker()
-#endif
+#define snd_printk_marker(...) \
+	dev_dbg(chip->dev, __VA_ARGS__);
 
 #undef CONFIG_SND_DEBUG_CURRPTR  /* causes output every frame! */
 
@@ -66,6 +57,8 @@ static unsigned char wm89xx_for_samplerate[7][6] =
 
 struct snd_wm89xx
 {
+	struct device *dev;
+
 	struct snd_card *card;
 	struct i2c_client *i2c_client;
 	struct snd_pcm *pcm;
@@ -226,7 +219,7 @@ static int snd_wm89xx_playback_open(struct snd_pcm_substream *substream)
 {
 	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 
-	snd_printk_marker();
+	snd_printk_marker("%s():\n", __func__);
 	chip->tx_substream = substream;
 	substream->runtime->hw = snd_wm89xx_playback_hw;
 
@@ -237,7 +230,7 @@ static int snd_wm89xx_capture_open(struct snd_pcm_substream *substream)
 {
 	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 
-	snd_printk_marker();
+	snd_printk_marker("%s():\n", __func__);
 	substream->runtime->hw = snd_wm89xx_capture_hw;
 	chip->rx_substream = substream;
 
@@ -248,7 +241,7 @@ static int snd_wm89xx_playback_close(struct snd_pcm_substream *substream)
 {
 	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 
-	snd_printk_marker();
+	snd_printk_marker("%s():\n", __func__);
 	chip->tx_substream = NULL;
 
 	return 0;
@@ -258,7 +251,7 @@ static int snd_wm89xx_capture_close(struct snd_pcm_substream *substream)
 {
 	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 
-	snd_printk_marker();
+	snd_printk_marker("%s():\n", __func__);
 	chip->rx_substream = NULL;
 	return 0;
 }
@@ -267,7 +260,9 @@ static int snd_wm89xx_capture_close(struct snd_pcm_substream *substream)
 static int snd_wm89xx_hw_params(struct snd_pcm_substream *substream,
 					struct snd_pcm_hw_params *hwparams)
 {
-	snd_printk_marker();
+	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
+
+	snd_printk_marker("%s():\n", __func__);
 
 	/*
 	*  Allocate all available memory for our DMA buffer.
@@ -284,7 +279,10 @@ static int snd_wm89xx_hw_params(struct snd_pcm_substream *substream,
 
 static int snd_wm89xx_hw_free(struct snd_pcm_substream * substream)
 {
-	snd_printk_marker();
+	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
+
+	snd_printk_marker("%s():\n", __func__);
+
 	snd_pcm_lib_free_pages(substream);
 
 	return 0;
@@ -300,8 +298,6 @@ static int snd_wm89xx_playback_prepare(struct snd_pcm_substream *substream)
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
 	int word_len = 4;
 	int ret;
-
-	wm_printd(KERN_ERR, "Playback sample rate = %d.\n",runtime->rate);
 
 	if (substream != chip->tx_substream)
 		return -EINVAL;
@@ -321,10 +317,7 @@ static int snd_wm89xx_playback_prepare(struct snd_pcm_substream *substream)
 	if (ret)
 		return -EINVAL;
 
-	snd_printd(KERN_INFO "%s channels:%d, period_bytes:0x%lx, periods:%d\n",
-			__FUNCTION__, runtime->channels,
-			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
-			runtime->periods);
+	dev_dbg(chip->dev, "sample rate %d, channels %d, period bytes %d, periods %d\n", runtime->rate, runtime->channels, frames_to_bytes(runtime, runtime->period_size), runtime->periods);
 
 	return 0;
 }
@@ -339,8 +332,6 @@ static int snd_wm89xx_capture_prepare(struct snd_pcm_substream *substream)
 	int fragsize_bytes = frames_to_bytes(runtime, runtime->period_size);
 	int word_len = 4;
 	int ret;
-
-	wm_printd(KERN_ERR, "Record sample rate = %d.\n",runtime->rate);
 
 	if (substream != chip->tx_substream)
 		return -EINVAL;
@@ -360,10 +351,8 @@ static int snd_wm89xx_capture_prepare(struct snd_pcm_substream *substream)
 	if (ret)
 		return -EINVAL;
 
-	snd_printd(KERN_INFO "%s channels:%d, period_bytes:0x%lx, periods:%d\n",
-			__FUNCTION__, runtime->channels,
-			(unsigned long)frames_to_bytes(runtime, runtime->period_size),
-			runtime->periods);
+	dev_dbg(chip->dev, "sample rate %d, channels %d, period bytes %d, periods %d\n", runtime->rate, runtime->channels, frames_to_bytes(runtime, runtime->period_size), runtime->periods);
+
 	return 0;
 }
 
@@ -372,15 +361,15 @@ static int snd_wm89xx_playback_trigger(struct snd_pcm_substream *substream, int 
 	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 	int ret;
 
-	snd_printk_marker();
+	snd_printk_marker("%s():\n", __func__);
 
 	switch (cmd) {
 		case SNDRV_PCM_TRIGGER_START:
-			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_START\n");
+			snd_printk_marker("%s(): SNDRV_PCM_TRIGGER_START\n", __func__);
 			ret = tmpa9xx_i2s_tx_start();
 			break;
 		case SNDRV_PCM_TRIGGER_STOP:
-			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_STOP\n");
+			snd_printk_marker("%s(): SNDRV_PCM_TRIGGER_STOP\n", __func__);
 			ret = tmpa9xx_i2s_tx_stop();
 			break;
 		default:
@@ -398,18 +387,18 @@ static int snd_wm89xx_capture_trigger(struct snd_pcm_substream *substream, int c
 	struct snd_wm89xx *chip = snd_pcm_substream_chip(substream);
 	int ret;
 
-	snd_printk_marker();
+	snd_printk_marker("%s():\n", __func__);
 
 	if (substream != chip->rx_substream)
 		return -EINVAL;
 
 	switch (cmd) {
 		case SNDRV_PCM_TRIGGER_START:
-			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_START\n");
+			snd_printk_marker("%s(): SNDRV_PCM_TRIGGER_START\n", __func__);
 			ret = tmpa9xx_i2s_rx_start();
 			break;
 		case SNDRV_PCM_TRIGGER_STOP:
-			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_STOP\n");
+			snd_printk_marker("%s(): SNDRV_PCM_TRIGGER_STOP\n", __func__);
 			tmpa9xx_i2s_rx_stop();
 			break;
 		default:
@@ -477,7 +466,7 @@ static struct snd_pcm_ops snd_wm89xx_capture_ops = {
 /* card and device */
 static int snd_wm89xx_stop(struct snd_wm89xx *chip)
 {
-	snd_printk_marker();
+	snd_printk_marker("%s():\n", __func__);
 
 	return 0;
 }
@@ -486,7 +475,7 @@ static int snd_wm89xx_dev_free(struct snd_device *device)
 {
 	struct snd_wm89xx *chip = (struct snd_wm89xx *)device->device_data;
 
-	snd_printk_marker();
+	snd_printk_marker("%s():\n", __func__);
 
 	return snd_wm89xx_stop(chip);
 }
@@ -497,35 +486,35 @@ static struct snd_device_ops snd_wm89xx_ops = {
 
 static void snd_wm89xx_dma_rx(void *data)
 {
-	struct snd_wm89xx *wm89xx = data;
+	struct snd_wm89xx *chip = data;
 
-        snd_printk_marker();
+        snd_printk_marker("%s():\n", __func__);
 
-	if (wm89xx->rx_substream)
-		snd_pcm_period_elapsed(wm89xx->rx_substream);
+	if (chip->rx_substream)
+		snd_pcm_period_elapsed(chip->rx_substream);
 }
 
 static void snd_wm89xx_dma_tx(void *data)
 {
-	struct snd_wm89xx *wm89xx = data;
+	struct snd_wm89xx *chip = data;
 
-	snd_printk_marker();
+	snd_printk_marker("%s():\n", __func__);
 
-	if (wm89xx->tx_substream)
-		snd_pcm_period_elapsed(wm89xx->tx_substream);
+	if (chip->tx_substream)
+		snd_pcm_period_elapsed(chip->tx_substream);
 }
 
-static int __devinit snd_wm89xx_pcm(struct snd_wm89xx *wm89xx)
+static int __devinit snd_wm89xx_pcm(struct snd_wm89xx *chip)
 {
 	struct snd_pcm *pcm;
 	int ret;
 
-	snd_printk_marker();
+	snd_printk_marker("%s():\n", __func__);
 
 	/* 1 playback and 1 capture substream, of 2-8 channels each */
-	ret = snd_pcm_new(wm89xx->card, PCM_NAME, 0, 1, 1, &pcm);
+	ret = snd_pcm_new(chip->card, PCM_NAME, 0, 1, 1, &pcm);
 	if (ret < 0) {
-		dev_err(&wm89xx->i2c_client->dev, "snd_pcm_new() failed\n");
+		dev_err(chip->dev, "snd_pcm_new() failed\n");
 		return ret;
 	}
 
@@ -539,11 +528,11 @@ static int __devinit snd_wm89xx_pcm(struct snd_wm89xx *wm89xx)
 
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &snd_wm89xx_playback_ops);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &snd_wm89xx_capture_ops);
-	wm89xx->pcm = pcm;
+	chip->pcm = pcm;
 	pcm->info_flags = 0;
 
 	strcpy(pcm->name, PCM_NAME);
-	pcm->private_data = wm89xx;
+	pcm->private_data = chip;
 
 	return 0;
 }
@@ -557,8 +546,6 @@ static int wm89xx_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 
 	init_wm89xx_i2c(i2c_client);
 
-	snd_printk_marker();
-
 	snd_card_create(-1, id, THIS_MODULE, sizeof(struct snd_wm89xx), &card);
 	if (!card) {
 		dev_err(&i2c_client->dev, "snd_card_create() failed\n");
@@ -571,7 +558,7 @@ static int wm89xx_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 		  card->shortname);
 
 	wm89xx = card->private_data;
-
+	wm89xx->dev = &i2c_client->dev;
 	wm89xx->card = card;
 	wm89xx->i2c_client = i2c_client;
 
