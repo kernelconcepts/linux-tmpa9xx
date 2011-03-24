@@ -32,11 +32,11 @@ config MACH_TONGA2_TFTTIMER
 	depends on CPU_TMPA900
 	select HAVE_PWM
 
-endchoice        
-
 config MACH_TOPAS910
         bool "Toshiba Topas910 TMPA910 development board"
 	depends on CPU_TMPA910
+
+endchoice        
 
 endif
 
