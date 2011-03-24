@@ -111,6 +111,13 @@ config TMPA9XX_MLDALM
           Enable Melody/Alarm output on Pin MLDALM
           ATTENTION: Pin Sharing with SPI Channel 0
 
+config TMPA9XX_CMSI
+	tristate "CMOS image sensor driver for TMPA9xx"
+	depends on ARCH_TMPA9XX
+	help
+          Enables support for CMOS image sensor driver
+	  for TMPA9xx
+
 config IBM_ASM
 	tristate "Device driver for IBM RSA service processor"
 	depends on X86 && PCI && INPUT && EXPERIMENTAL
