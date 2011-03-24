@@ -58,14 +58,11 @@ struct snd_pcm1773
 
 /* pcm methods */
 static struct snd_pcm_hardware snd_pcm1773_playback_hw = {
-	.info = ( SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER ),
-	.formats =      SNDRV_PCM_FMTBIT_S16_LE,
-	.rates =            (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
-				   SNDRV_PCM_RATE_22050 | SNDRV_PCM_RATE_32000 |\
-				   SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_48000 |\
-				   SNDRV_PCM_RATE_KNOT),
-	.rate_min =	    8000,
-	.rate_max =	    48000,
+	.info = 	   (SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER),
+	.formats =          SNDRV_PCM_FMTBIT_S16_LE,
+	.rates =	    SNDRV_PCM_RATE_44100,
+	.rate_min =	    44100,
+	.rate_max =	    44100,
 	.channels_min =	    2,
 	.channels_max =     2,
 	.buffer_bytes_max = PCM_BUFFER_MAX,
