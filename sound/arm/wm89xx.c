@@ -67,7 +67,6 @@ static unsigned char wm89xx_for_samplerate[7][6] =
 struct snd_wm89xx
 {
 	struct snd_card *card;
-	spinlock_t wm89xx_lock;
 	struct i2c_client *i2c_client;
 	struct snd_pcm *pcm;
 
@@ -375,8 +374,6 @@ static int snd_wm89xx_playback_trigger(struct snd_pcm_substream *substream, int 
 
 	snd_printk_marker();
 
-	spin_lock(&chip->wm89xx_lock);
-
 	switch (cmd) {
 		case SNDRV_PCM_TRIGGER_START:
 			wm_printd(KERN_ERR, "  SNDRV_PCM_TRIGGER_START\n");
@@ -387,11 +384,9 @@ static int snd_wm89xx_playback_trigger(struct snd_pcm_substream *substream, int 
 			ret = tmpa9xx_i2s_tx_stop();
 			break;
 		default:
-			spin_unlock(&chip->wm89xx_lock);
 			return -EINVAL;
 			break;
 	}
-	spin_unlock(&chip->wm89xx_lock);
 
 	snd_printd(KERN_INFO "playback cmd:%s. ret=%d\n", cmd?"start":"stop", ret);
 
@@ -404,8 +399,6 @@ static int snd_wm89xx_capture_trigger(struct snd_pcm_substream *substream, int c
 	int ret;
 
 	snd_printk_marker();
-
-	spin_lock(&chip->wm89xx_lock);
 
 	if (substream != chip->rx_substream)
 		return -EINVAL;
@@ -420,11 +413,9 @@ static int snd_wm89xx_capture_trigger(struct snd_pcm_substream *substream, int c
 			tmpa9xx_i2s_rx_stop();
 			break;
 		default:
-			spin_unlock(&chip->wm89xx_lock);
 			return -EINVAL;
 			break;
 	}
-	spin_unlock(&chip->wm89xx_lock);
 
 	snd_printd(KERN_ERR"capture cmd:%s\n", cmd ? "start" : "stop");
 

@@ -50,7 +50,6 @@ struct snd_pcm1773
 	struct device *dev;
 
 	struct snd_card *card;
-	spinlock_t pcm1773_lock;
 	struct snd_pcm *pcm;
 
 	/* if non-null, current subtream running */
@@ -167,8 +166,6 @@ static int snd_pcm1773_playback_trigger(struct snd_pcm_substream *substream, int
 	struct snd_pcm1773 *chip = snd_pcm_substream_chip(substream);
 	int ret;
 
-	spin_lock(&chip->pcm1773_lock);
-
 	switch (cmd) {
 		case SNDRV_PCM_TRIGGER_START:
 			snd_printk_marker("%s(): SNDRV_PCM_TRIGGER_START\n", __func__);
@@ -179,11 +176,9 @@ static int snd_pcm1773_playback_trigger(struct snd_pcm_substream *substream, int
 			ret = tmpa9xx_i2s_tx_stop();
 			break;
 		default:
-			spin_unlock(&chip->pcm1773_lock);
 			return -EINVAL;
 			break;
 	}
-	spin_unlock(&chip->pcm1773_lock);
 
 	return 0;
 }
