@@ -42,7 +42,6 @@
 #include <mach/hardware.h>
 #include <mach/gpio.h>
 #include <mach/hardware.h>
-#include <mach/ts.h>
 #include <mach/regs.h>
 #include <mach/platform.h>
 #include <asm/mach-types.h>

@@ -33,7 +33,6 @@
 
 #include "tmpa9xx.h"
 
-
 #include <linux/platform_device.h>
 #include <linux/input.h>
 #include <linux/dma-mapping.h>
@@ -43,12 +42,8 @@
 #include <asm/irq.h>
 #include <mach/hardware.h>
 #include <mach/gpio.h>
-#include <mach/ts.h>
 #include <mach/regs.h>
 #include <asm/mach/map.h>
-
-
-
 
 /* 
  * Ethernet 

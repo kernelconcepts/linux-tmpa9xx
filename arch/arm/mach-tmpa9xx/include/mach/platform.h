@@ -20,6 +20,16 @@
 #ifndef __TMPA9XX_PLATFORM_H__
 #define __TMPA9XX_PLATFORM_H__
 
+struct tmpa9xx_panel_ts_info
+{
+	struct clcd_panel *panel;
+	int fuzz;
+	int rate;
+};
+
+extern int tmpa9xx_ts_fuzz;
+extern int tmpa9xx_ts_rate;
+
 struct tmpa9xx_i2s_cfg
 {
 	bool is_master_tx;

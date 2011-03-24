@@ -42,7 +42,6 @@
 #include <asm/irq.h>
 #include <mach/hardware.h>
 #include <mach/gpio.h>
-#include <mach/ts.h>
 #include <mach/regs.h>
 #include <asm/mach/map.h>
 

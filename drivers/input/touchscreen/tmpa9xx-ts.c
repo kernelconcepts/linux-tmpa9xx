@@ -24,8 +24,8 @@
 #include <linux/slab.h>
 #include <linux/delay.h>
 
+#include <mach/platform.h>
 #include <mach/regs.h>
-#include <mach/ts.h>
 #include <mach/adc.h>
 
 #define DRIVER_DESC "TMPA9xx touchscreen driver"

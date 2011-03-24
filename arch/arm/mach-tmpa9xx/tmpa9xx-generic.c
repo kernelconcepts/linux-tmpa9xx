@@ -37,10 +37,8 @@
 
 #include <asm/system.h>
 #include <asm/irq.h>
-#include <mach/hardware.h>
 #include <mach/gpio.h>
 #include <mach/hardware.h>
-#include <mach/ts.h>
 #include <mach/regs.h>
 #include <mach/dma.h>
 #include <mach/platform.h>
