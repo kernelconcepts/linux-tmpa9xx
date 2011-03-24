@@ -11,17 +11,18 @@ menuconfig SND_ARM
 
 if SND_ARM
 
+config SND_TMPA9XX_I2S
+	tristate
+
 config SND_TMPA9XX_PCM1773
 	tristate "TMPA9XX PCM1773 driver"
 	depends on MACH_TOPAS910 && SND
 	select SND_PCM
+	select SND_TMPA9XX_I2S
 	help
 	  Say Y here if you have a Toshiba TopasA910
 	  TMPA910 development board and
 	  want to use the  PCM1773 audio chip.
-
-config SND_TMPA9XX_I2S
-	tristate
 
 config SND_TMPA9XX_WM89XX
 	tristate "TMPA9xx WM89XX driver"
