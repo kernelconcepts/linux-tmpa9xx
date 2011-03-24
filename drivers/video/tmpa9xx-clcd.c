@@ -21,7 +21,6 @@
 #include <asm/uaccess.h>
 
 #include <mach/platform.h>
-#include <mach/regs.h>
 #include <mach/lcdda.h>
 
 #define ARM_CLCD_PERIPH_ID 0x00041110
