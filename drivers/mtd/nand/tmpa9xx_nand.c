@@ -65,6 +65,7 @@ struct tmpa9xx_nand_private {
 	unsigned int spare_size;	/* Spare size of flash (autodetection) */
 	unsigned int column;	/* internal column position (internal) */
 	unsigned int page_addr;	/* internal page position (internal) */
+        unsigned int rndout;	/* marker for random data out reading */
 	unsigned int dma_ch;	/* used DMA channel (internal) */
 	unsigned int chip_select;	/* Chips selected (internal) */
 	unsigned char *buf;	/* Buffer pointer (internal) */
@@ -474,9 +475,19 @@ static void tmpa9xx_nand_read_buf(struct mtd_info *mtd, u_char * buf, int len)
 		priv->column += len;	/* Remember internal position */
 	} else {
 		int i;
-		tmpa9xx_nand_set_cmd(NAND_CMD_READ0);
-		tmpa9xx_nand_set_addr(priv->column, priv->page_addr);
-		tmpa9xx_nand_set_cmd(NAND_CMD_READSTART);
+                if (priv->rndout==0)
+                {
+	 		tmpa9xx_nand_set_cmd(NAND_CMD_READ0);
+			tmpa9xx_nand_set_addr(priv->column,priv->page_addr);
+			tmpa9xx_nand_set_cmd(NAND_CMD_READSTART);
+                }
+                else
+                {
+	 		tmpa9xx_nand_set_cmd(NAND_CMD_RNDOUT);
+			tmpa9xx_nand_set_addr(priv->column,-1);
+			tmpa9xx_nand_set_cmd(NAND_CMD_RNDOUTSTART);
+                }
+
 		tmpa9xx_nand_set_rw_mode(1);
 		tmpa9xx_wait_nand_dev_ready(mtd);
 		for (i = 0; i < len; i++)
@@ -952,7 +963,7 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 
 	/* Options */
 	nand->options = NAND_NO_SUBPAGE_WRITE |
-	    NAND_NO_AUTOINCR | NAND_NO_READRDY;
+	    NAND_NO_AUTOINCR | NAND_NO_READRDY | NAND_USE_FLASH_BBT;
 
 	tmpa9xx_nand_select_chip(NULL, 0);
 	tmpa9xx_nand_set_timing(priv);
