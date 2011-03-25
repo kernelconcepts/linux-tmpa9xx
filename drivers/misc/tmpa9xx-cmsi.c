@@ -51,8 +51,91 @@
 #define TE	(0x034)	/* Trimming Space End Point Setting Register */
 #define SCDMA	(0x040)	/* Soft Conversion DMA YUV-Data */
 
+#define CR_CSRST 	(1 <<  0)
+#define CR_CSIZE_QVGA	(1 <<  1)
+#define CR_CFPCLR 	(1 <<  6)
+#define CR_CHBKPH	(1 << 10)
+#define CR_CSINTM	(1 << 15)
+#define CR_CFINTF	(1 << 16)
+#define CR_CSINTF	(1 << 17)
+
+#define CV_DMAEN		(1 <<  2)
+#define CV_YUV422_48_RGB888	((1 << 5) | (1 << 3))
+
 #define cmsi_writel(b, o, v)	writel(v, b->regs + o)
 #define cmsi_readl(b, o)	readl(b->regs + o)
+
+#define OVCAM_GAIN  0x00
+#define OVCAM_BLUE  0x01
+#define OVCAM_RED   0x02
+#define OVCAM_SAT   0x03
+#define OVCAM_CTR   0x05
+#define OVCAM_BRT   0x06
+#define OVCAM_SHP   0x07
+#define OVCAM_ABLU  0x0C
+#define OVCAM_ARED  0x0D
+#define OVCAM_COMR  0x0E
+
+#define OVCAM_COMS  0x0F
+#define OVCAM_AEC   0x10
+#define OVCAM_CLKRC 0x11
+  #define OVCAM_CLKRC_HN_CHN_VP  (0x0<<6)
+  #define OVCAM_CLKRC_HN_CHN_VN  (0x1<<6)
+  #define OVCAM_CLKRC_HP_CHN_VP  (0x2<<6)
+  #define OVCAM_CLKRC_HP_CHP_VP  (0x3<<6)
+  #define OVCAM_CLKRC_PRESCALER_MASK (0x3f)
+
+#define OVCAM_COMA  0x12
+  #define OVCAM_COMA_TESTBAR   (1<<1)
+  #define OVCAM_COMA_AWB       (1<<2)
+  #define OVCAM_COMA_VIDRGB    (1<<3)
+  #define OVCAM_COMA_YUYV      (1<<4)
+  #define OVCAM_COMA_AGCEN     (1<<5)
+  #define OVCAM_COMA_MIRR      (1<<6)
+  #define OVCAM_COMA_SRST      (1<<7)
+
+#define OVCAM_COMB  0x13
+  #define OVCAM_COMB_AUTOADJ        (1<<0)
+  #define OVCAM_COMB_SINGLEFR       (1<<1)
+  #define OVCAM_COMB_3STATE_BUS     (1<<2)
+  #define OVCAM_COMB_CHSYNC         (1<<3)
+  #define OVCAM_COMB_ITU656         (1<<4)
+  #define OVCAM_COMB_8BIT           (1<<5)
+
+#define OVCAM_COMC  0x14
+#define OVCAM_COMD  0x15
+
+#define OVCAM_FSD     0x16
+#define OVCAM_HREFST  0x17
+  #define OVCAM_HREFST_MIN 0x38
+  #define OVCAM_HREFST_MAX 0xeb
+
+#define OVCAM_HREFEND 0x18
+  #define OVCAM_HREFEND_MIN 0x39
+  #define OVCAM_HREFEND_MAX 0xec
+
+#define OVCAM_VSTRT   0x19
+  #define OVCAM_VSTRT_MIN 0x03
+  #define OVCAM_VSTRT_MAX 0x93
+
+#define OVCAM_VEND    0x1A
+  #define OVCAM_VEND_MIN 0x04
+  #define OVCAM_VEND_MAX 0x94
+
+#define OVCAM_PSHFT   0x1B
+#define OVCAM_MIDH    0x1C
+#define OVCAM_MIDL    0x1D
+#define OVCAM_COME    0x20
+
+#define OVCAM_COMO    0x3E
+
+#define i2c_packet_send(reg, val) \
+	{ \
+	int ret = i2c_smbus_write_byte_data(m->i2c_client, reg, val); \
+	if (ret) \
+		dev_err(m->dev, "i2c_smbus_write_byte_data() failed @ 0x%02x, ret %d\n", reg, ret); \
+	} \
+	mdelay(10);
 
 struct scatter_dma_t {
 	unsigned long srcaddr;
@@ -65,11 +148,14 @@ struct tmpa9xx_cmsi_priv
 {
 	void __iomem *regs;
 	struct device *dev;
+	struct mutex lock;
+	struct completion complete;
+	bool should_stop;
 	int irq;
 	int dma;
 	struct i2c_client *i2c_client;
 	int type;
-	bool running;
+	bool is_running;
 
 	struct scatter_dma_t *dma_desc;
 	unsigned int desc_bytes;
@@ -79,14 +165,59 @@ struct tmpa9xx_cmsi_priv
 
 struct tmpa9xx_cmsi_priv *g_ma;
 
+static int cmsi_start(struct tmpa9xx_cmsi_priv *m)
+{
+	uint32_t val;
+
+	if (m->is_running)
+		return 0;
+
+	val = cmsi_readl(m, CR);
+	val &= ~CR_CSRST;
+	cmsi_writel(m, CR, val);
+
+	m->is_running = true;
+
+	dev_dbg(m->dev, "%s(): started processing\n", __func__);
+
+	return 0;
+}
+
+static int cmsi_stop(struct tmpa9xx_cmsi_priv *m)
+{
+	if (!m->is_running)
+		return 0;
+
+	init_completion(&m->complete);
+
+	m->should_stop = true;
+
+	wait_for_completion(&m->complete);
+
+	m->is_running = false;
+
+	dev_dbg(m->dev, "%s(): stopped processing\n", __func__);
+
+	return 0;
+}
+
 static int tmpa9xx_cmsi_open(struct inode *inode, struct file *file)
 {
+	struct tmpa9xx_cmsi_priv *m = g_ma;
+	int ret;
+
+	ret = cmsi_start(m);
+	if (ret)
+		return ret;
+
 	return nonseekable_open(inode, file);
 }
 
 static int tmpa9xx_cmsi_close(struct inode *inode, struct file *file)
 {
-	return 0;
+	struct tmpa9xx_cmsi_priv *m = g_ma;
+
+	return cmsi_stop(m);
 }
 
 static long tmpa9xx_cmsi_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
@@ -109,97 +240,10 @@ static long tmpa9xx_cmsi_ioctl(struct file *file, unsigned int cmd, unsigned lon
 	return -EOPNOTSUPP;
 }
 
-static const struct file_operations tmpa9xx_cmsi_fops = {
-	.owner = THIS_MODULE,
-	.llseek = no_llseek,
-	.unlocked_ioctl = tmpa9xx_cmsi_ioctl,
-	.open = tmpa9xx_cmsi_open,
-	.release = tmpa9xx_cmsi_close,
-};
-
-static struct miscdevice tmpa9xx_cmsi_miscdev = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "cmsi",
-	.fops = &tmpa9xx_cmsi_fops,
-};
-
-#define OVCAM_GAIN  0x00
-#define OVCAM_BLUE  0x01
-#define OVCAM_RED   0x02
-#define OVCAM_SAT   0x03
-#define OVCAM_CTR   0x05
-#define OVCAM_BRT   0x06
-#define OVCAM_SHP   0x07
-#define OVCAM_ABLU  0x0C
-#define OVCAM_ARED  0x0D
-#define OVCAM_COMR  0x0E
-
-#define OVCAM_COMS  0x0F 
-#define OVCAM_AEC   0x10 
-#define OVCAM_CLKRC 0x11 
-  #define OVCAM_CLKRC_HN_CHN_VP  (0x0<<6)
-  #define OVCAM_CLKRC_HN_CHN_VN  (0x1<<6)
-  #define OVCAM_CLKRC_HP_CHN_VP  (0x2<<6)
-  #define OVCAM_CLKRC_HP_CHP_VP  (0x3<<6)
-  #define OVCAM_CLKRC_PRESCALER_MASK (0x3f)
-
-#define OVCAM_COMA  0x12 
-  #define OVCAM_COMA_TESTBAR   (1<<1)
-  #define OVCAM_COMA_AWB       (1<<2)
-  #define OVCAM_COMA_VIDRGB    (1<<3)
-  #define OVCAM_COMA_YUYV      (1<<4)
-  #define OVCAM_COMA_AGCEN     (1<<5)
-  #define OVCAM_COMA_MIRR      (1<<6)
-  #define OVCAM_COMA_SRST      (1<<7)
-
-#define OVCAM_COMB  0x13
-  #define OVCAM_COMB_AUTOADJ        (1<<0)
-  #define OVCAM_COMB_SINGLEFR       (1<<1)
-  #define OVCAM_COMB_3STATE_BUS     (1<<2)
-  #define OVCAM_COMB_CHSYNC         (1<<3)
-  #define OVCAM_COMB_ITU656         (1<<4)
-  #define OVCAM_COMB_8BIT           (1<<5)
-
-#define OVCAM_COMC  0x14
-#define OVCAM_COMD  0x15
-
-#define OVCAM_FSD     0x16
-#define OVCAM_HREFST  0x17 
-  #define OVCAM_HREFST_MIN 0x38
-  #define OVCAM_HREFST_MAX 0xeb
-
-#define OVCAM_HREFEND 0x18 
-  #define OVCAM_HREFEND_MIN 0x39
-  #define OVCAM_HREFEND_MAX 0xec
-
-#define OVCAM_VSTRT   0x19
-  #define OVCAM_VSTRT_MIN 0x03
-  #define OVCAM_VSTRT_MAX 0x93
-
-#define OVCAM_VEND    0x1A 
-  #define OVCAM_VEND_MIN 0x04
-  #define OVCAM_VEND_MAX 0x94
-
-#define OVCAM_PSHFT   0x1B
-#define OVCAM_MIDH    0x1C 
-#define OVCAM_MIDL    0x1D  
-#define OVCAM_COME    0x20 
-
-#define OVCAM_COMO    0x3E
-
-#define i2c_packet_send(reg, val) \
-	{ \
-	int ret = i2c_smbus_write_byte_data(m->i2c_client, reg, val); \
-	if (ret) \
-		dev_err(m->dev, "i2c_smbus_write_byte_data() failed @ 0x%02x, ret %d\n", reg, ret); \
-	} \
-	mdelay(10);
-
 static int probe_cmsi(struct tmpa9xx_cmsi_priv *m)
 {
 	struct scatter_dma_t *desc;
 	dma_addr_t addr;
-	uint32_t val;
 	int i;
 
 	dev_info(m->dev, "%s(): setting up via i2c\n", __func__);
@@ -219,11 +263,10 @@ static int probe_cmsi(struct tmpa9xx_cmsi_priv *m)
 	dev_info(m->dev, "%s(): configuring registers\n", __func__);
 
 	/* reset CMSI */
-	cmsi_writel(m, CR, (1 << 10) | (1 << 6) | (1 << 1) | (1 << 0));
 
-	cmsi_writel(m, CV, 0x2c);
+	cmsi_writel(m, CR, CR_CSINTM | CR_CHBKPH | CR_CFPCLR | CR_CSIZE_QVGA | CR_CSRST);
+	cmsi_writel(m, CV, CV_YUV422_48_RGB888 | CV_DMAEN);
 
-	/* I color setting, no used for current RGB data */
 	cmsi_writel(m, CVP0, 0x1d2b3a2b);
 	cmsi_writel(m, CVP1, 0x703d2b0e);
 
@@ -259,40 +302,14 @@ static int probe_cmsi(struct tmpa9xx_cmsi_priv *m)
 	DMA_CONTROL(m->dma)   = desc[0].control;
 	DMA_CONFIG(m->dma)    = 0x0000D24B;
 
-	val = cmsi_readl(m, CR);
-	val &= ~(1 << 0);
-	val |= (1 << 15);
-	cmsi_writel(m, CR, val);
-
 	return 0;
-}
-
-static void setup_dma(struct tmpa9xx_cmsi_priv *m)
-{
-	struct scatter_dma_t *desc = m->dma_desc;
-	int i;
-
-//	dev_info(m->dev, "%s(): dma setup\n", __func__);
-
-        DMA_SRC_ADDR(m->dma)  = desc[0].srcaddr;
-	DMA_DEST_ADDR(m->dma) = desc[0].dstaddr;
-	DMA_LLI(m->dma)       = desc[0].lli;
-	DMA_CONTROL(m->dma)   = desc[0].control;
-	DMA_CONFIG(m->dma)    = 0x0000D24B;
-
-	tmpa9xx_dma_enable(m->dma);
 }
 
 static int remove_cmsi(struct tmpa9xx_cmsi_priv *m)
 {
 	uint32_t val;
 
-	/* disable interrupt */
-	val = cmsi_readl(m, CR);
-	val &= ~(1 << 15);
-	cmsi_writel(m, CR, val);
-
-	tmpa9xx_dma_disable(m->dma);
+	cmsi_stop(m);
 
 	dma_free_coherent(NULL, m->desc_bytes, m->dma_desc, m->dma_phydesc);
 
@@ -302,14 +319,20 @@ static int remove_cmsi(struct tmpa9xx_cmsi_priv *m)
 static irqreturn_t interrupt_handler(int irq, void *ptr)
 {
 	struct tmpa9xx_cmsi_priv *m = ptr;
+	struct scatter_dma_t *desc = m->dma_desc;
 	uint32_t val;
 
 	val = cmsi_readl(m, CR);
-//	dev_info(m->dev, "%s() @ %ld: irq, cr 0x%08x\n", __func__, jiffies, val);
-	val &= ~((1 << 16) | (1 << 17));
+	val &= ~(CR_CFINTF | CR_CSINTF);
 	cmsi_writel(m, CR, val);
 
-	setup_dma(m);
+        DMA_SRC_ADDR(m->dma)  = desc[0].srcaddr;
+	DMA_DEST_ADDR(m->dma) = desc[0].dstaddr;
+	DMA_LLI(m->dma)       = desc[0].lli;
+	DMA_CONTROL(m->dma)   = desc[0].control;
+	DMA_CONFIG(m->dma)    = 0x0000D24B;
+
+	tmpa9xx_dma_enable(m->dma);
 
 	return IRQ_HANDLED;
 }
@@ -317,7 +340,17 @@ static irqreturn_t interrupt_handler(int irq, void *ptr)
 static void dma_handler(int channel, void *ptr)
 {
 	struct tmpa9xx_cmsi_priv *m = ptr;
-	dev_dbg(m->dev, "%s() @ %ld:\n", __func__, jiffies);
+	uint32_t val;
+
+//	dev_dbg(m->dev, "%s() @ %ld:\n", __func__, jiffies);
+
+	if (m->should_stop) {
+		val = cmsi_readl(m, CR);
+		val |= CR_CSRST;
+		cmsi_writel(m, CR, val);
+		m->should_stop = false;
+		complete(&m->complete);
+	}
 
 	tmpa9xx_dma_disable(m->dma);
 }
@@ -327,6 +360,20 @@ static void err_handler(int dma_ch, void *ptr)
 	struct tmpa9xx_cmsi_priv *m = ptr;
 	dev_dbg(m->dev, "%s():\n", __func__);
 }
+
+static const struct file_operations tmpa9xx_cmsi_fops = {
+	.owner = THIS_MODULE,
+	.llseek = no_llseek,
+	.unlocked_ioctl = tmpa9xx_cmsi_ioctl,
+	.open = tmpa9xx_cmsi_open,
+	.release = tmpa9xx_cmsi_close,
+};
+
+static struct miscdevice tmpa9xx_cmsi_miscdev = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "cmsi",
+	.fops = &tmpa9xx_cmsi_fops,
+};
 
 static int cmsi_i2c_probe(struct i2c_client *i2c_client, const struct i2c_device_id *iid)
 {
@@ -346,6 +393,8 @@ static int cmsi_i2c_probe(struct i2c_client *i2c_client, const struct i2c_device
 
 	m->dev = &i2c_client->dev;
 	m->i2c_client = i2c_client;
+	mutex_init(&m->lock);
+	m->is_running = false;
 
 	m->irq = platform_get_irq(pdev, 0);
 	if (m->irq <= 0) {
