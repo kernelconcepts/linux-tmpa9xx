@@ -752,7 +752,7 @@ static int setup_port_c(void)
            For USB host  , 48Mhz from F PPL / 4      : [3:0] 100 / 0x4 */
         SYSCR8    |= ((0x3<<4)|(0x4<<0));
 
-        /* Enable overcurrent */
+        /* disable suspend */
         HCBCR0     = 0;
 #endif
 #if defined CONFIG_TMPA9XX_MLDALM || defined CONFIG_TMPA9XX_MLDALM_MODULE
