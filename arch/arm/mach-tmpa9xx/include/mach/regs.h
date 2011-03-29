@@ -662,28 +662,6 @@
 
 /* SSP */
 #define SSP0_BASE_ADDRESS       (0xF2002000)
-#define SSP0_CR0                __REG(OFD_BASE_ADDRESS + 0x0000) /* SSP0 Control register 0 */
-#define SSP0_CR1                __REG(OFD_BASE_ADDRESS + 0x0004) /* SSP0 Control register 1 */
-#define SSP0_DR                 __REG(OFD_BASE_ADDRESS + 0x0008) /* SSP0 Data register */
-#define SSP0_SR                 __REG(OFD_BASE_ADDRESS + 0x000C) /* SSP0 Status register */
-#define SSP0_CPSR               __REG(OFD_BASE_ADDRESS + 0x0010) /* SSP0 Clock prescale register */
-#define SSP0_IMSC               __REG(OFD_BASE_ADDRESS + 0x0014) /* SSP0 Interrupt mask set and clear register */
-#define SSP0_RIS                __REG(OFD_BASE_ADDRESS + 0x0018) /* SSP0 Raw interrupt status register */
-#define SSP0_MIS                __REG(OFD_BASE_ADDRESS + 0x001C) /* SSP0 Masked interrupt status register */
-#define SSP0_ICR                __REG(OFD_BASE_ADDRESS + 0x0020) /* SSP0 Interrupt clear register */
-#define SSP0_DMACR              __REG(OFD_BASE_ADDRESS + 0x0024) /* DMA Control register */
-
 #define SSP1_BASE_ADDRESS       (0xF2003000)
-#define SSP1_CR0                __REG(OFD_BASE_ADDRESS + 0x0000) /* SSP1 Control register 0 */
-#define SSP1_CR1                __REG(OFD_BASE_ADDRESS + 0x0004) /* SSP1 Control register 1 */
-#define SSP1_DR                 __REG(OFD_BASE_ADDRESS + 0x0008) /* SSP1 Data register */
-#define SSP1_SR                 __REG(OFD_BASE_ADDRESS + 0x000C) /* SSP1 Status register */
-#define SSP1_CPSR               __REG(OFD_BASE_ADDRESS + 0x0010) /* SSP1 Clock prescale register */
-#define SSP1_IMSC               __REG(OFD_BASE_ADDRESS + 0x0014) /* SSP1 Interrupt mask set and clear register */
-#define SSP1_RIS                __REG(OFD_BASE_ADDRESS + 0x0018) /* SSP1 Raw interrupt status register */
-#define SSP1_MIS                __REG(OFD_BASE_ADDRESS + 0x001C) /* SSP1 Masked interrupt status register */
-#define SSP1_ICR                __REG(OFD_BASE_ADDRESS + 0x0020) /* SSP1 Interrupt clear register */
-#define SSP1_DMACR              __REG(OFD_BASE_ADDRESS + 0x0024) /* DMA Control register */
-
 
 #endif /* __TMPA9XX_REGS__ */
