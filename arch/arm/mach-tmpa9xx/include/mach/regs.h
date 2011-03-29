@@ -551,19 +551,6 @@
 
 #define DMA_CONFIG_EN                (1 << 0)
 
-
-/* I2C_1 : 0xf0071000        */
-/* to be removed - handled in I2C bus driver */
-/*#define        I2C1_BASE                            (0xF0071000)         */
-#define I2C1CR1                 __REG(I2C1_BASE + 0x00)
-#define I2C1DBR                 __REG(I2C1_BASE + 0x04)
-#define I2C1AR                  __REG(I2C1_BASE + 0x08)
-#define I2C1CR2                 __REG(I2C1_BASE + 0x0c)
-#define I2C1SR                  __REG(I2C1_BASE + 0x0c)
-#define I2C1PRS                 __REG(I2C1_BASE + 0x10)
-#define I2C1IE                  __REG(I2C1_BASE + 0x14)
-#define I2C1IR                  __REG(I2C1_BASE + 0x18)
-
 /* I2S : 0xf2040000   */
 #define I2S_BASE                (0xF2040000)
 
