@@ -298,11 +298,8 @@
 /* LCD Controller */
 #define LCDC_BASE 0xf4200000
 
-/* LCD Controller Option Function */
+/* LCD Controller Option Function (unsupported at the moment) */
 #define LCDCOP_BASE 0xf00b0000
-#define LCDCOP_STN64CR             __REG(LCDCOP_BASE + 0x000)
-#define LCDCOP_STN64CR_G64_8bit    (1 << 1)
-
 
 /* RTC */
 #define RTC_BASE	(0xf0030000)
