@@ -34,14 +34,14 @@
 #define TIMER_CMP_MIS		(0xe8)
 #define TIMER_BGCMP		(0xec)
 
-#define TIMxEN			(1<<7)
-#define TIMxMOD			(1<<6)
-#define TIMxINTE		(1<<5)
-#define TIMxSIZE_16B		(1<<1)
-#define TIMxOSCTL_NORESTART	(1<<0)
+#define TIMxEN			(1<<7) /* Enable Timer */
+#define TIMxMOD_PER		(1<<6) /* Periodic Timer */
+#define TIMxINTE		(1<<5) /* Timer Interrupt Enable */
+#define TIMxSIZE_16B		(1<<1) /* 16 Bit Timer */
+#define TIMxOSCTL_NORESTART	(1<<0) /* Timer Wrapping operation */
 
-#define TIMxPRS_1 		(0x0<<2)
-#define TIMxPRS_16 		(0x1<<2)
-#define TIMxPRS_256		(0x2<<2)
+#define TIMxPRS_1 		(0x0<<2) /* Timer prescaler   1 */
+#define TIMxPRS_16 		(0x1<<2) /* Timer prescaler  16 */
+#define TIMxPRS_256		(0x2<<2) /* Timer prescaler 256 */
 
 #endif

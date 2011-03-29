@@ -24,11 +24,13 @@
 #include <linux/sched.h>
 #include <linux/io.h>
 
-#include <mach/hardware.h>
 #include <asm/irq.h>
 #include <asm/leds.h>
-#include <mach/regs.h>
 #include <asm/mach/time.h>
+
+#include <mach/hardware.h>
+#include <mach/timer.h>
+#include <mach/regs.h>
 
 #define TIMER4_LOAD		__REG(TIME4_BASE_ADDRESS + 0x0000)
 #define TIMER4_VALUE		__REG(TIME4_BASE_ADDRESS + 0x0004)
@@ -37,17 +39,6 @@
 #define TIMER4_RIS		__REG(TIME4_BASE_ADDRESS + 0x0010)
 #define TIMER4_MIS		__REG(TIME4_BASE_ADDRESS + 0x0014)
 #define TIMER4_BGLOAD		__REG(TIME4_BASE_ADDRESS + 0x0018)
-
-#define TIMxEN			(1<<7)		/* Enable Timer */
-#define TIMxMOD_PER		(1<<6)		/* Periodic Timer */
-#define TIMxINTE		(1<<5)		/* Timer Interrupt Enable */
-#define TIMxSIZE_16B		(1<<1)		/* 16 Bit Timer */
-#define TIMxWRAPPING		(1<<0)		/* Timer Wrapping operation */
-
-#define TIMxPRS_1 		(0x0<<2)	/* Timer prescaler   1 */
-#define TIMxPRS_16 		(0x1<<2)	/* Timer prescaler  16 */
-#define TIMxPRS_256		(0x2<<2)	/* Timer prescaler 256 */
-
 
 /*
  * gettimeoffset() returns time since last timer tick, in usecs.
