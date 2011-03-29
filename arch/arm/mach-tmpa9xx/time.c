@@ -32,13 +32,15 @@
 #include <mach/timer.h>
 #include <mach/regs.h>
 
-#define TIMER4_LOAD		__REG(TIME4_BASE_ADDRESS + 0x0000)
-#define TIMER4_VALUE		__REG(TIME4_BASE_ADDRESS + 0x0004)
-#define TIMER4_CONTROL  	__REG(TIME4_BASE_ADDRESS + 0x0008)
-#define TIMER4_INTCLR		__REG(TIME4_BASE_ADDRESS + 0x000C)
-#define TIMER4_RIS		__REG(TIME4_BASE_ADDRESS + 0x0010)
-#define TIMER4_MIS		__REG(TIME4_BASE_ADDRESS + 0x0014)
-#define TIMER4_BGLOAD		__REG(TIME4_BASE_ADDRESS + 0x0018)
+#define tmr_writel(b, o, v)	writel(v, b->regs + o)
+#define tmr_readl(b, o)		readl(b->regs + o)
+
+struct tmpa9xx_time_priv
+{
+	void __iomem *regs;
+};
+
+static struct tmpa9xx_time_priv g_tmpa9xx_time_priv;
 
 /*
  * gettimeoffset() returns time since last timer tick, in usecs.
@@ -48,8 +50,14 @@
  */
 static unsigned long tmpa9xx_gettimeoffset(void)
 {
+	struct tmpa9xx_time_priv *t = &g_tmpa9xx_time_priv;
 	unsigned long hwticks;
-	hwticks = LATCH - (TIMER4_VALUE & 0xffff);	/* since last underflow */
+	uint32_t val;
+
+	val = tmr_readl(t, TIMER_VALUE);
+	/* since last underflow */
+	hwticks = LATCH - (val & 0xffff);
+
 	return (hwticks * (tick_nsec / 1000)) / LATCH;
 }
 
@@ -58,11 +66,17 @@ static unsigned long tmpa9xx_gettimeoffset(void)
  */
 static irqreturn_t tmpa9xx_timer_interrupt(int irq, void *dev_id)
 {
+	struct tmpa9xx_time_priv *t = &g_tmpa9xx_time_priv;
+	uint32_t val;
+
 	timer_tick();
-        
+
+	val = tmr_readl(t, TIMER_MIS);
+	BUG_ON(!val);
+
 	/* clear the interrupt */
-	if (TIMER4_MIS)
-		TIMER4_INTCLR = ~0;
+	tmr_writel(t, TIMER_INTCLR, 0);
+
 	return IRQ_HANDLED;
 }
 
@@ -74,14 +88,23 @@ static struct irqaction tmpa9xx_timer_irq = {
 
 static void __init tmpa9xx_timer_init(void)
 {
+	struct tmpa9xx_time_priv *t = &g_tmpa9xx_time_priv;
 	struct timespec tv;
 
 	CLKCR5 &= ~(1<<2);		/* Select 32kHz Clock for Timer*/
-        
-	TIMER4_CONTROL = 0;		/* Disable Timer */
-        TIMER4_LOAD    = LATCH-1;	/* Write Latch value */
-        TIMER4_VALUE   = 0;		/* Setup counter with 0 */
-	TIMER4_INTCLR  = 1;		/* Clear pending interrupts */
+
+	memset(t, 0, sizeof(*t));
+	t->regs = ioremap(TMPA9XX_TIMER4, SZ_256-1);
+	BUG_ON(!t->regs);
+
+	/* disable timer */
+	tmr_writel(t, TIMER_CONTROL, 0);
+	/* write pre calculated latch value */
+	tmr_writel(t, TIMER_LOAD, LATCH-1);
+	/* start counting at 0 */
+	tmr_writel(t, TIMER_VALUE, 0);
+	/* clear pending interrupts */
+	tmr_writel(t, TIMER_INTCLR, 1);
 
 	setup_irq(INTR_VECT_TIMER45, &tmpa9xx_timer_irq);
 
@@ -89,11 +112,8 @@ static void __init tmpa9xx_timer_init(void)
 	tv.tv_sec = 0;
 	do_settimeofday(&tv);
 
-	TIMER4_CONTROL =   TIMxEN 	/* Enable Timer */
-			 | TIMxMOD_PER	/* Periodic */
-                         | TIMxINTE	/* Enble interrupt */
-                         | TIMxPRS_1	/* No prescaler */
-                         | TIMxSIZE_16B;/* 16 Bit timer */
+	/* enable timer, periodic, enable interrupts, no prescaler, 16 bit */
+	tmr_writel(t, TIMER_CONTROL, TIMxEN | TIMxMOD_PER | TIMxINTE | TIMxPRS_1 | TIMxSIZE_16B);
 }
 
 struct sys_timer tmpa9xx_timer = {

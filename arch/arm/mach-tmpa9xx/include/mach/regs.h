@@ -389,15 +389,6 @@
 #define SYSCR8                  __REG(PLL_BASE_ADDRESS + 0x020)
 #define CLKCR5                  __REG(PLL_BASE_ADDRESS + 0x054)
 
-
-/* timer registers */
-#define TIME0_BASE_ADDRESS      (0xF0040000)
-#define TIME1_BASE_ADDRESS      (0xF0040100)
-#define TIME2_BASE_ADDRESS      (0xF0041000)
-#define TIME3_BASE_ADDRESS      (0xF0041100)
-#define TIME4_BASE_ADDRESS      (0xF0042000)
-#define TIME5_BASE_ADDRESS      (0xF0042100)
-
 /* Watchdog Timer registers */
 #define WDT_BASE_ADDRESS        (0xF0010000)
 
