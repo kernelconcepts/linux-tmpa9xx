@@ -20,6 +20,7 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
+#include <linux/sched.h>
 #include <linux/io.h>
 
 #define DRIVER_NAME "tmpa9xx-adc"
