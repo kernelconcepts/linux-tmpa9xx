@@ -191,8 +191,6 @@ static int tmpa9xx_rtc_ioctl(struct device *dev, unsigned int cmd, unsigned long
 			reg |= 0x41;
 			_out32(RTCALMINTCTR, reg);
 //printk("rtc: RTCALMINTCTR=0x%02x\n",reg);
-			reg = _in32(VICINTENABLE);
-//printk("rtc: VICINTENABLE=0x%04x\n",reg);
 			rtc_irq_enabled = 1;
 		}
 		spin_unlock_irq(&rtc_lock);

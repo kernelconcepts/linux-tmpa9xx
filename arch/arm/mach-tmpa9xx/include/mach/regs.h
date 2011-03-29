@@ -515,8 +515,6 @@
 
 /* Interrupt Controller */
 #define INTR_BASE               (0xF4000000)
-#define VICINTENABLE            (0xF4000010)
-#define VICADDRESS              __REG(INTR_BASE + 0x0F00)
 
 /* LCDDA (LCD Data Process Accelerator) */
 #define LCDDA_BASE              (0xf2050000)
