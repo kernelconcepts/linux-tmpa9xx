@@ -30,6 +30,14 @@
 #include <mach/regs.h>
 #include <asm/mach/time.h>
 
+#define TIMER4_LOAD		__REG(TIME4_BASE_ADDRESS + 0x0000)
+#define TIMER4_VALUE		__REG(TIME4_BASE_ADDRESS + 0x0004)
+#define TIMER4_CONTROL  	__REG(TIME4_BASE_ADDRESS + 0x0008)
+#define TIMER4_INTCLR		__REG(TIME4_BASE_ADDRESS + 0x000C)
+#define TIMER4_RIS		__REG(TIME4_BASE_ADDRESS + 0x0010)
+#define TIMER4_MIS		__REG(TIME4_BASE_ADDRESS + 0x0014)
+#define TIMER4_BGLOAD		__REG(TIME4_BASE_ADDRESS + 0x0018)
+
 #define TIMxEN			(1<<7)		/* Enable Timer */
 #define TIMxMOD_PER		(1<<6)		/* Periodic Timer */
 #define TIMxINTE		(1<<5)		/* Timer Interrupt Enable */

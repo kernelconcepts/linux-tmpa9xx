@@ -29,6 +29,8 @@
 #include <linux/pwm/pwm.h>
 #include <asm/div64.h>
 
+#include <mach/timer.h>
+
 static int prescaler_clock_khz_0;
 module_param(prescaler_clock_khz_0, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(prescaler_clock_khz_0, "pwm prescaler clock in khz");
@@ -39,20 +41,6 @@ MODULE_PARM_DESC(prescaler_clock_khz_1, "pwm prescaler clock in khz");
 
 #define DRIVER_NAME KBUILD_MODNAME
 
-#define TIMER_LOAD		(0x00)
-#define TIMER_VALUE		(0x04)
-#define TIMER_CONTROL		(0x08)
-#define TIMER_INTCLR		(0x0c)
-#define TIMER_RIS		(0x10)
-#define TIMER_MIS		(0x14)
-#define TIMER_BGLOAD		(0x18)
-#define TIMER_MODE		(0x1c)
-#define TIMER_COMPARE_1		(0xa0)
-#define TIMER_CMPINTCLR_1	(0xc0)
-#define TIMER_CMPEN		(0xe0)
-#define TIMER_CMP_RIS		(0xe4)
-#define TIMER_CMP_MIS		(0xe8)
-#define TIMER_BGCMP		(0xec)
 
 #define tmr_writel(b, o, v)	writel(v, b->regs + o)
 #define tmr_readl(b, o)		readl(b->regs + o)
