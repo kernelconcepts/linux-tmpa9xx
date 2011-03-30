@@ -279,7 +279,6 @@ void __init baseboard_init(void)
         GPIOVDIR =(1<<7);
         GPIOVDATA=(1<<7);
 
-	LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
 	PMCCTL &= ~PMCCTL_PMCPWE;
 	PMCWV1 |= PMCWV1_PMCCTLV;
 	udelay(200);
