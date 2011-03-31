@@ -460,6 +460,12 @@ void __init baseboard_init(void)
 		gpio_direction_output(LCD_BACKLIGHT_GPIO, 0);
 	}
 
+	/* fixme: this must be cleaned up seriously */
+#define LCDCOP_BASE 0xf00b0000
+#define LCDCOP_STN64CR             __REG(LCDCOP_BASE + 0x000)
+#define LCDCOP_STN64CR_G64_8bit    (1 << 1)
+        LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
+
         PMCCTL &= ~PMCCTL_PMCPWE;
         PMCWV1 |= PMCWV1_PMCCTLV;
 

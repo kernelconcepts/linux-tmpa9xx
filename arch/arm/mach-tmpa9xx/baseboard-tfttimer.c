@@ -279,6 +279,12 @@ void __init baseboard_init(void)
         GPIOVDIR =(1<<7);
         GPIOVDATA=(1<<7);
 
+	/* fixme: this must be cleaned up seriously */
+#define LCDCOP_BASE 0xf00b0000
+#define LCDCOP_STN64CR             __REG(LCDCOP_BASE + 0x000)
+#define LCDCOP_STN64CR_G64_8bit    (1 << 1)
+        LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
+
 	PMCCTL &= ~PMCCTL_PMCPWE;
 	PMCWV1 |= PMCWV1_PMCCTLV;
 	udelay(200);
