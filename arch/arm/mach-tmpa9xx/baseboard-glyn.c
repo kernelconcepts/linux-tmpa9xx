@@ -233,6 +233,25 @@ static struct platform_device baseboard_i2s_device = {
 };
 #endif
 
+static struct resource tmpa900_resource_lcdcop[] = {
+        {
+		.start = LCDCOP_BASE,
+		.end   = LCDCOP_BASE + SZ_16 - 1,
+		.flags = IORESOURCE_MEM,
+	},
+};
+
+static struct platform_device tmpa900_lcdcop_device = {
+        .name          = "tmpa900-lcdcop",
+        .id            = -1,
+        .resource      = tmpa900_resource_lcdcop,
+        .num_resources = ARRAY_SIZE(tmpa900_resource_lcdcop),
+        .dev           = {
+                .coherent_dma_mask 	= ~0,
+		.platform_data		= NULL,
+        }
+};
+
 static struct platform_device *devices_baseboard[] __initdata = {
 #if defined CONFIG_BACKLIGHT_PWM
         &tonga_backlight_device,
@@ -240,6 +259,7 @@ static struct platform_device *devices_baseboard[] __initdata = {
 #if defined CONFIG_SND_SOC_TMPA9XX_I2S
         &baseboard_i2s_device,    
 #endif
+	&tmpa900_lcdcop_device,
 };
 
 #define HCLK 			96000000
@@ -459,12 +479,6 @@ void __init baseboard_init(void)
 	} else {
 		gpio_direction_output(LCD_BACKLIGHT_GPIO, 0);
 	}
-
-	/* fixme: this must be cleaned up seriously */
-#define LCDCOP_BASE 0xf00b0000
-#define LCDCOP_STN64CR             __REG(LCDCOP_BASE + 0x000)
-#define LCDCOP_STN64CR_G64_8bit    (1 << 1)
-        LCDCOP_STN64CR |= LCDCOP_STN64CR_G64_8bit;
 
         PMCCTL &= ~PMCCTL_PMCPWE;
         PMCWV1 |= PMCWV1_PMCCTLV;

@@ -336,6 +336,10 @@ config FB_TMPA9XX_CLCD
 	  here and read <file:Documentation/kbuild/modules.txt>.  The module
 	  will be called tmpa9xx-clcd.
 
+config FB_TMPA900_LCDCOP
+	tristate
+	depends on FB_TMPA9XX_CLCD
+
 config FB_TMPA9XX_CLCD_MEM
 	int "Additional video memory size in kB"
 	depends on FB_TMPA9XX_CLCD

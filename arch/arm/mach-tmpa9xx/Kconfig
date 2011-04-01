@@ -22,19 +22,21 @@ config MACH_TOPASA900
         bool "Toshiba TopasA900 TMPA900 development board"
 	depends on CPU_TMPA900
 
+config MACH_TOPAS910
+        bool "Toshiba Topas910 TMPA910 development board"
+	depends on CPU_TMPA910
+
 config MACH_TONGA
         bool "Glyn ARM9 / Tonga2 board"
 	depends on CPU_TMPA900
 	select HAVE_PWM
+	select FB_TMPA900_LCDCOP
 
 config MACH_TONGA2_TFTTIMER
         bool "TFTTimer / Tonga2 board"
 	depends on CPU_TMPA900
 	select HAVE_PWM
-
-config MACH_TOPAS910
-        bool "Toshiba Topas910 TMPA910 development board"
-	depends on CPU_TMPA910
+	select FB_TMPA900_LCDCOP
 
 endchoice        
 
