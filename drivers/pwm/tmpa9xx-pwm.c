@@ -41,7 +41,6 @@ MODULE_PARM_DESC(prescaler_clock_khz_1, "pwm prescaler clock in khz");
 
 #define DRIVER_NAME KBUILD_MODNAME
 
-
 #define tmr_writel(b, o, v)	writel(v, b->regs + o)
 #define tmr_readl(b, o)		readl(b->regs + o)
 
@@ -352,7 +351,7 @@ static int __devinit tmpa9xx_pwm_probe(struct platform_device *pdev)
 
 	pwm_set_drvdata(pp->pwm, pp);
 
-	dev_info(&pdev->dev, "%s: channel %d, clk speed %lu kHz\n", DRIVER_NAME, pdev->id, clk_get_rate(pp->clk));
+	dev_info(&pdev->dev, "channel %d, clk speed %lu kHz\n", pdev->id, clk_get_rate(pp->clk));
 
 	return 0;
 
