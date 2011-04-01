@@ -421,7 +421,7 @@ static int __devinit altia_probe(struct platform_device *pdev)
         return status;
     }
 	
-    status = tmpa9xx_dma_request("TMPA9xx LCDDA Altia", ALTIA_DMA_CHAN,tmpa9xx_altia_dma_handler ,tmpa9xx_altia_dma_error_handler, NULL);
+    status = tmpa9xx_dma_request(tmpa9xx_altia_dma_handler, tmpa9xx_altia_dma_error_handler, NULL);
     if (status<0)
     {
         printk(KERN_INFO "altia: cannot create DMA IRQ handler\r\n");
