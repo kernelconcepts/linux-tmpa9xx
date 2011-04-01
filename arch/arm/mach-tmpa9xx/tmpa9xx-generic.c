@@ -192,7 +192,7 @@ static struct amba_device watchdog = {
 	},
 	.res = {
 		.start = WDT_BASE_ADDRESS,
-		.end   = WDT_BASE_ADDRESS + 0xfff,
+		.end   = WDT_BASE_ADDRESS + SZ_4K - 1,
 		.flags = IORESOURCE_MEM,
 	},
 	.irq = { NO_IRQ, NO_IRQ },
@@ -205,7 +205,7 @@ extern struct tmpa9xx_i2s_cfg tmpa9xx_i2s_cfg;
 static struct resource tmpa9xx_resource_i2s[] = {
         {
 		.start = I2S_BASE,
-		.end   = I2S_BASE + (3*1024) - 1,
+		.end   = I2S_BASE + SZ_16K - 1,
 		.flags = IORESOURCE_MEM,
         },
 };
@@ -226,11 +226,11 @@ static struct platform_device tmpa9xx_i2s_device = {
 static struct resource tmpa9xx_resource_clcd[] = {
         {
 		.start = LCDC_BASE,
-		.end   = LCDC_BASE + (4*1024) - 1,
+		.end   = LCDC_BASE + SZ_1K - 1,
 		.flags = IORESOURCE_MEM,
         }, {
 		.start = LCDDA_BASE,
-		.end   = LCDDA_BASE + 0x38 - 1,
+		.end   = LCDDA_BASE + SZ_64 - 1,
 		.flags = IORESOURCE_MEM,
         }, {
 		.start = INTR_VECT_LCDC,
@@ -474,7 +474,7 @@ static struct platform_device tmpa9xx_device_mldalm = {
 static struct resource tmpa9xx_ohci_resources[] = {
         [0] = {
          .start = USB_HOST_BASE_ADDRESS,
-         .end   = USB_HOST_BASE_ADDRESS + 0x100,
+         .end   = USB_HOST_BASE_ADDRESS + SZ_128 - 1,
          .flags = IORESOURCE_MEM,
         },
         [2] = {
@@ -503,7 +503,7 @@ static struct platform_device tmpa9xx_ohci_device = {
 static struct resource tmpa9xx_udc_resource[] = {
         [0] = {
                .start = USB_DEVICE_BASE_ADDRESS,
-               .end   = USB_DEVICE_BASE_ADDRESS + 0x3ff,
+               .end   = USB_DEVICE_BASE_ADDRESS + SZ_1K - 1,
                .flags = IORESOURCE_MEM
         },
         [1] = {
@@ -528,7 +528,7 @@ static struct platform_device tmpa9xx_udc_device = {
 static struct resource tmpa9xx_adc_resource[] = {
         [0] = {
                .start = ADC_BASE,
-               .end   = ADC_BASE + 0x80,
+               .end   = ADC_BASE + SZ_128 - 1,
                .flags = IORESOURCE_MEM
         },
         [1] = {
@@ -591,7 +591,7 @@ static struct platform_device tmpa9xx_lcdda_device = {
 static struct resource tmpa9xx_pwm0_resource[] = {
         [0] = {
                 .start = TMPA9XX_TIMER0,
-                .end   = TMPA9XX_TIMER0 + 0x0fff,
+                .end   = TMPA9XX_TIMER0 + SZ_4K - 1,
                 .flags = IORESOURCE_MEM
         },
 };
@@ -611,7 +611,7 @@ static struct platform_device tmpa9xx_pwm0_device = {
 static struct resource tmpa9xx_pwm2_resource[] = {
         [0] = {
                 .start = TMPA9XX_TIMER2,
-                .end   = TMPA9XX_TIMER2 + 0x0fff,
+                .end   = TMPA9XX_TIMER2 + SZ_4K - 1,
                 .flags = IORESOURCE_MEM
         },
 };
