@@ -1,4 +1,3 @@
-#define DEBUG
 /*
  * Real-time clock (RTC) driver for TMPA9xx
  *
