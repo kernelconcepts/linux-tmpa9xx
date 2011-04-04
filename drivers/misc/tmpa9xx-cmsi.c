@@ -1,6 +1,10 @@
-#define DEBUG
 /*
  * CMSI driver for Toshiba TMPA9xx processors.
+ *
+ * This driver is just an ad-hoc proof of concept. It should be 
+ * a V4L2 driver instead. And it should be split into an h/w
+ * specific (ie. ov6620 driver) and h/w independent part. 
+ * And much more...
  *
  * Copyright (C) 2011 Michael Hunold <michael@mihu.de>
  *
@@ -39,6 +43,7 @@
 
 #include <mach/dma.h>
 #include <mach/regs.h>
+#include <mach/cmsi.h>
 
 #define DRIVER_DESC "TMPA9xx CMSI driver"
 
@@ -141,8 +146,14 @@
 	} \
 	mdelay(10);
 
-#define dev_dbg_list(...)
-#define dev_dbg_mm dev_dbg
+#define dev_dbg_list(...)//  dev_dbg // (...)
+#define dev_dbg_mm(...)//    dev_dbg // (...)
+
+struct dmabuf {
+	int		    offset;
+	struct page	    **pages;
+	int                 nr_pages;
+};
 
 struct scatter_dma_t {
 	unsigned long srcaddr;
@@ -150,15 +161,6 @@ struct scatter_dma_t {
 	unsigned long lli;
 	unsigned long control;
 };
-
-struct cmsi_buf
-{
-	void *ptr;
-	size_t len;
-};
-
-#define CMSI_QBUF	_IOW('C', 0x02, struct cmsi_buf)
-#define CMSI_DQBUF	_IOW('C', 0x03, struct cmsi_buf)
 
 struct buf
 {
@@ -170,6 +172,9 @@ struct buf
 	unsigned int desc_bytes;
 	unsigned int dma_phydesc;
 	unsigned int dma_buf;
+
+	struct dmabuf dma;
+	int is_submitted;
 };
 
 struct tmpa9xx_cmsi_priv
@@ -184,6 +189,11 @@ struct tmpa9xx_cmsi_priv
 	struct i2c_client *i2c_client;
 	int type;
 	bool is_running;
+
+	struct cmsi_config config;
+	int w;
+	int h;
+	int bpp;
 
 	struct list_head todo;
 	struct buf *cur;
@@ -215,9 +225,10 @@ static int setup_next_buffer(struct tmpa9xx_cmsi_priv *m)
 	}
 
 	m->cur = list_first_entry(&m->todo, struct buf, item);
+	m->cur->is_submitted = 0;
 	list_del(&m->cur->item);
 
-	dev_dbg_list(m->dev, "%s(): current is now %p\n", __func__, m->cur);
+	dev_dbg(m->dev, "%s(): current is now %p\n", __func__, m->cur);
 	return 0;
 }
 
@@ -251,6 +262,9 @@ static int cmsi_start(struct tmpa9xx_cmsi_priv *m)
 
 static void finish_buf(struct tmpa9xx_cmsi_priv *m, struct buf *b)
 {
+	struct dmabuf *dma;
+	int i;
+
 	if (!b)
 		return;
 
@@ -259,6 +273,15 @@ static void finish_buf(struct tmpa9xx_cmsi_priv *m, struct buf *b)
 	dma_free_coherent(NULL, b->desc_bytes, b->dma_desc, b->dma_phydesc);
 
 	list_del(&b->item);
+
+	dma = &b->dma;
+
+	for (i = 0; i < dma->nr_pages; i++) {
+		set_page_dirty(dma->pages[i]);
+		put_page(dma->pages[i]);
+	}
+
+	kfree(dma->pages);
 
 	kfree(b);
 }
@@ -317,92 +340,209 @@ unsigned int tmpa9xx_cmsi_poll(struct file *file, struct poll_table_struct *wait
 	return mask;
 }
 
-#if 0
-struct dmabuf
-{
-};
-
-static int pin_down_user_pages(struct tmpa9xx_cmsi_priv *m, struct buf *b)
+static int pin_down_user_pages(struct tmpa9xx_cmsi_priv *m, struct buf *b, int pages_needed)
 {
 	unsigned long data = (unsigned long)b->buf.ptr;
-	unsigned long size = b->buf.len;
-        unsigned long first, last;
 	struct dmabuf *dma = &b->dma;
-	int i;
 	int ret;
 
-	first = (data	       & PAGE_MASK) >> PAGE_SHIFT;
-	last  = ((data+size-1) & PAGE_MASK) >> PAGE_SHIFT;
 	dma->offset = data & ~PAGE_MASK;
-	dma->size = size;
-	dma->nr_pages = last-first+1;
-	dma->pages = kmalloc(dma->nr_pages * sizeof(struct page *), GFP_KERNEL);
-	if (NULL == dma->pages)
-		return -ENOMEM;
+	dma->nr_pages = pages_needed;
 
-	dev_dbg(m->dev, "%s(): adr %p, size %d, offset %d, nr_pages %d\n", __func__, b->buf.ptr, dma->size, dma->offset, dma->nr_pages);
-#if 0
+	dma->pages = kzalloc(dma->nr_pages * sizeof(struct page *), GFP_KERNEL);
+	if (NULL == dma->pages) {
+		dev_err(m->dev, "%s(): vmalloc() failed\n", __func__);
+		return -ENOMEM;
+	}
+
+//	dev_dbg_mm(m->dev, "xxx %s(): adr %p, pages %d, offset %4d, nr_pages %d\n", __func__, b->buf.ptr, pages_needed, dma->offset, dma->nr_pages);
+
 	ret = get_user_pages(current, current->mm,
 		data & PAGE_MASK, dma->nr_pages,
 		1, /* write */ 1, /* force */
 		dma->pages, NULL);
+	BUG_ON(!ret);
 
+#if 0
 	for (i = 0; i < dma->nr_pages; i++) {
 		struct page *p = dma->pages[i];
-		dev_dbg(m->dev, "%s(): %d => count %d\n", __func__, i, p->_count.counter);
-#if 0
-		set_page_dirty(dma->pages[i]);
-		page_cache_release(dma->pages[i]);
-#endif
+		dev_dbg_mm(m->dev, "%s(): %d => count %d @ phys 0x%08lx\n", __func__, i, p->_count.counter, page_to_phys(p));
 	}
 #endif
-	kfree(dma->pages);
+
 
 	return 0;
 }
-#endif
+
+static void set_dma_page(struct tmpa9xx_cmsi_priv *m, int offset, struct buf *b, int len, int last)
+{
+	struct scatter_dma_t *d = &b->dma_desc[offset];
+	struct page *p = b->dma.pages[offset];
+	uint32_t control = DMAC_CH_CTRL_DI | DMAC_CH_CTRL_DWIDTH_WORD | DMAC_CH_CTRL_SWIDTH_WORD | len;
+
+	control |= DMAC_CH_CTRL_DBSIZE_16B | DMAC_CH_CTRL_SBSIZE_16B;
+
+	d->srcaddr = (unsigned long)(CMOSCAM_BASE+0x20);
+	if (!offset) {
+		d->dstaddr = page_to_phys(p) + (PAGE_SIZE - len*4);
+	}
+	else {
+		d->dstaddr = page_to_phys(p);
+	}
+	if (!last) {
+		d->lli = (unsigned long)(b->dma_phydesc + (offset + 1) * sizeof(struct scatter_dma_t));
+	} else {
+		d->lli = 0;
+		control |= DMAC_CH_CTRL_I;
+	}
+	d->control = control;
+
+	dev_dbg_mm(m->dev, "%s(): %2d: len %4d, last %d, dst 0x%08lx, control 0x%08lx, lli 0x%08lx \n", __func__, offset, len, last, d->dstaddr, d->control, d->lli);
+}
+
+static int cmsi_config(struct tmpa9xx_cmsi_priv *m, struct cmsi_config *a)
+{
+	uint32_t val;
+	uint8_t mode = 0;
+
+	if (m->is_running) {
+		dev_info(m->dev, "%s(): cannot change config while running\n", __func__);
+		return -1;
+	}
+
+	if (a->p == CMSI_NONE) {
+	}
+	else if (a->p == CMSI_SCALE_1_2) {
+		mode = 0x1;
+	}
+	else if (a->p == CMSI_SCALE_1_4) {
+		dev_info(m->dev, "%s(): CMSI_SCALE_1_4 not supported yet\n", __func__);
+		return -1;
+	}
+	else if (a->p == CMSI_SCALE_1_8) {
+		dev_info(m->dev, "%s(): CMSI_SCALE_1_8 not supported yet\n", __func__);
+		return -1;
+	}
+	else if (a->p == CMSI_TRIM) {
+		dev_info(m->dev, "%s(): CMSI_TRIM not supported yet\n", __func__);
+		return -1;
+	}
+	else {
+		dev_info(m->dev, "%s(): process mode %d not supported\n", __func__, a->p);
+		return -1;
+	}
+
+	m->config = *a;
+
+	val = cmsi_readl(m, CSTR);
+	val &= ~0x3;
+	val |= mode;
+	cmsi_writel(m, CSTR, mode);
+
+	dev_dbg(m->dev, "%s(): mode set to %d\n", __func__, mode);
+
+	return 0;
+}
+
+static int check_buf_against_config(struct tmpa9xx_cmsi_priv *m, struct cmsi_buf *a)
+{
+	int w = m->w;
+	int h = m->h;
+
+	if (m->config.p == CMSI_SCALE_1_2) {
+		w /= 2;
+		h /= 2;
+	}
+	if (m->config.p == CMSI_SCALE_1_4) {
+		w /= 4;
+		h /= 4;
+	}
+	if (m->config.p == CMSI_SCALE_1_8) {
+		w /= 8;
+		h /= 8;
+	}
+	if (m->config.p == CMSI_TRIM) {
+		dev_dbg(m->dev, "%s(): CMSI_TRIM not supported yet\n", __func__);
+		return -1;
+	}
+
+	if (a->len < w * h * m->bpp) {
+		dev_dbg(m->dev, "%s(): len %d too small, expected at least %d\n", __func__, a->len, w * h * m->bpp);
+		return -EINVAL;
+	}
+
+	return 0;
+}
 
 static int cmsi_qbuf(struct tmpa9xx_cmsi_priv *m, struct cmsi_buf *a)
 {
 	struct scatter_dma_t *desc;
 	dma_addr_t addr;
 	struct buf *b;
+	int remain;
+	int val;
 	int i;
 	int ret;
+	int bytes_needed;
+	int pages_needed;
 
-	b = kzalloc(sizeof(b), GFP_KERNEL);
+	ret = check_buf_against_config(m, a);
+	if (ret) {
+		dev_dbg(m->dev, "%s(): check_buf_against_config() failed\n", __func__);
+		return -EINVAL;
+	}
+
+	b = kzalloc(sizeof(*b), GFP_KERNEL);
 	if (!b)
 		return -ENOMEM;
 
 	b->buf = *a;
+	b->buf.status = STATUS_OK;
 
-	b->dma_desc = dma_alloc_coherent(NULL, 240 * sizeof(struct scatter_dma_t), &addr, GFP_USER);
-	BUG_ON(!b->dma_desc);
+	bytes_needed = m->w * m->h * m->bpp;
+	if (m->config.p == CMSI_SCALE_1_2)
+		bytes_needed /= 4;
+	if (m->config.p == CMSI_SCALE_1_4)
+		bytes_needed /= 16;
+
+	pages_needed = DIV_ROUND_UP(bytes_needed, PAGE_SIZE);
+
+	dev_dbg_mm(m->dev, "%s(): bytes_needed %d, pages_needed %d, config %d\n", __func__, bytes_needed, pages_needed, m->config.p);
+
+	b->dma_desc = dma_alloc_coherent(NULL, pages_needed * sizeof(struct scatter_dma_t), &addr, GFP_USER);
+	if (!b->dma_desc) {
+		dev_dbg(m->dev, "%s(): dma_alloc_coherent() failed\n", __func__);
+		kfree(b);
+		return -ENOMEM;
+	}
+
+	ret = pin_down_user_pages(m, b, pages_needed);
+	if (ret) {
+		dev_dbg(m->dev, "%s(): pin_down_user_pages() failed\n", __func__);
+	}
 
 	b->dma_phydesc = addr;
 	b->desc_bytes = 240 * sizeof(struct scatter_dma_t);
 
-#define FB 0x43a00000
-#define BPP 4
-#define W 320
-
 	desc = b->dma_desc;
-	for (i = 0; i < 239; i++) {
-		desc[i].srcaddr = (unsigned long)(CMOSCAM_BASE+0x20);
-		desc[i].dstaddr = (unsigned long)(FB + W * BPP * i);
-		desc[i].lli = (unsigned long)(b->dma_phydesc + (i + 1) * sizeof(struct scatter_dma_t));
-		desc[i].control = 0x0849B140;
-	}
-	desc[i].srcaddr = (unsigned long)(CMOSCAM_BASE+0x20);
-	desc[i].dstaddr = (unsigned long)(FB + W * BPP * i);
-	desc[i].lli = 0;
-	desc[i].control = (1 << 31) | 0x0849B140;
 
-        DMA_SRC_ADDR(m->dma)  = desc[0].srcaddr;
-	DMA_DEST_ADDR(m->dma) = desc[0].dstaddr;
-	DMA_LLI(m->dma)       = desc[0].lli;
-	DMA_CONTROL(m->dma)   = desc[0].control;
-	DMA_CONFIG(m->dma)    = 0x0000D24B;
+	remain = m->w * m->h * m->bpp;
+	if (m->config.p == CMSI_SCALE_1_2)
+		remain /= 4;
+	if (m->config.p == CMSI_SCALE_1_4)
+		remain /= 16;
+	val = (PAGE_SIZE - b->dma.offset);
+	remain -= val;
+	set_dma_page(m, 0, b, val/4, 0);
+
+	val = PAGE_SIZE;
+	for (i = 1; i < b->dma.nr_pages-1; i++) {
+		set_dma_page(m, i, b, val/4, 0);
+		remain -= val;
+	}
+
+	val = remain;
+	set_dma_page(m, b->dma.nr_pages-1, b, remain/4, 1);
 
 	list_add_tail(&b->item, &m->todo);
 
@@ -439,6 +579,24 @@ static long tmpa9xx_cmsi_ioctl(struct file *file, unsigned int cmd, unsigned lon
 	struct tmpa9xx_cmsi_priv *m = g_ma;
 	void __user *argp = (void __user *)arg;
 	int ret;
+
+	if (cmd == CMSI_CONFIG) {
+		struct cmsi_config a;
+
+		ret = copy_from_user(&a, argp, sizeof(a));
+		if (ret) {
+			dev_dbg(m->dev, "%s(): copy_from_user() failed, ret %d\n", __func__, ret);
+			return -EFAULT;
+		}
+
+		ret = cmsi_config(m, &a);
+		if (ret) {
+			dev_dbg(m->dev, "%s(): cmsi_config() failed, ret %d\n", __func__, ret);
+			return -EFAULT;
+		}
+
+		return 0;
+	}
 
 	if (cmd == CMSI_QBUF) {
 		struct cmsi_buf a;
@@ -482,8 +640,6 @@ static long tmpa9xx_cmsi_ioctl(struct file *file, unsigned int cmd, unsigned lon
 
 static int probe_cmsi(struct tmpa9xx_cmsi_priv *m)
 {
-	int i;
-
 	dev_info(m->dev, "%s():\n", __func__);
 
 	i2c_packet_send(OVCAM_COMA,	OVCAM_COMA_SRST);
@@ -524,13 +680,17 @@ static irqreturn_t interrupt_handler(int irq, void *ptr)
 	uint32_t val;
 
 	BUG_ON(!m->cur);
-	desc = m->cur->dma_desc;
 
 	val = cmsi_readl(m, CR);
 	val &= ~(CR_CFINTF | CR_CSINTF);
-	val |= CR_CFPCLR;
 	cmsi_writel(m, CR, val);
 
+	if (m->cur->is_submitted) {
+		dev_dbg(m->dev, "already submitted %p @ %lu\n", m->cur, jiffies);
+		return IRQ_HANDLED;
+	}
+
+	desc = m->cur->dma_desc;
         DMA_SRC_ADDR(m->dma)  = desc[0].srcaddr;
 	DMA_DEST_ADDR(m->dma) = desc[0].dstaddr;
 	DMA_LLI(m->dma)       = desc[0].lli;
@@ -538,6 +698,9 @@ static irqreturn_t interrupt_handler(int irq, void *ptr)
 	DMA_CONFIG(m->dma)    = 0x0000D24B;
 
 	tmpa9xx_dma_enable(m->dma);
+	m->cur->is_submitted = 1;
+
+	dev_dbg(m->dev, "started %p @ %lu\n", m->cur, jiffies);
 
 	return IRQ_HANDLED;
 }
@@ -550,6 +713,12 @@ static void dma_handler(int channel, void *ptr)
 	tmpa9xx_dma_disable(m->dma);
 
 	BUG_ON(!m->cur);
+
+	/* check if todo list is empty. if so, mark that we
+	will lose a frame */
+	if (list_empty(&m->todo)) {
+		m->cur->buf.status = STATUS_FRAME_LOST;
+	}
 
 	list_add_tail(&m->cur->item, &m->done);
 	m->cur = NULL;
@@ -566,7 +735,7 @@ static void dma_handler(int channel, void *ptr)
 	ret = setup_next_buffer(m);
 	if (ret) {
 		cmsi_stop_helper(m);
-		dev_dbg_list(m->dev, "%s(): no more buffers. stopping\n", __func__);
+		dev_dbg(m->dev, "%s(): no more buffers. stopping\n", __func__);
 		return;
 	}
 }
@@ -615,6 +784,10 @@ static int cmsi_i2c_probe(struct i2c_client *i2c_client, const struct i2c_device
 	INIT_LIST_HEAD(&m->todo);
 	INIT_LIST_HEAD(&m->done);
 	init_waitqueue_head(&m->queue);
+	m->config.p = CMSI_NONE;
+	m->w = 320;
+	m->h = 240;
+	m->bpp = 4;
 
 	m->irq = platform_get_irq(pdev, 0);
 	if (m->irq <= 0) {
