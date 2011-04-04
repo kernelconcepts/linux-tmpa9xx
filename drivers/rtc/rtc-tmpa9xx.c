@@ -1,432 +1,301 @@
+#define DEBUG
 /*
- *  Driver for Toshiba tmpa9xx Real Time Clock unit.
- *  derived from rtc_tmpa9xx.c
- *  Copyright (C) 2003-2006  Yoichi Yuasa <yoichi_yuasa@tripeaks.co.jp>
+ * Real-time clock (RTC) driver for TMPA9xx
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * Copyright (c) 2009 Michael Hasselberg <mh@open-engineering.de>
+ * Copyright (c) 2011 Michael Hunold <michael@mihu.de>
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ * This program is free software; you may redistribute and/or modify
+ * it under the terms of the GNU General Public License Version 2, as
+ * published by the Free Software Foundation.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
+ * USA
  */
-#include <linux/err.h>
-#include <linux/fs.h>
-#include <linux/init.h>
-#include <linux/platform_device.h>
-#include <linux/rtc.h>
-#include <linux/spinlock.h>
-#include <linux/types.h>
+
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/moduleparam.h>
+#include <linux/slab.h>
+#include <linux/io.h>
+#include <linux/platform_device.h>
 #include <linux/interrupt.h>
-#include <linux/time.h>
+#include <linux/rtc.h>
 #include <linux/delay.h>
 
-
-#include <asm/system.h>
-#include <asm/irq.h>
-#include <asm/io.h>
-#include <mach/regs.h>
-#include <mach/irqs.h>
-
-MODULE_AUTHOR("Michael Hasselberg <mh@open-engineering.de>");
-MODULE_DESCRIPTION("Toshiba tmpa9xx RTC driver");
-MODULE_LICENSE("GPL");
-
-/*
- * This is the initial release of the tmpa9xx RTC driver
- * it currently only supports set / read time and set / read alarm
- * TODO:
- * implement RTC_WKLAM_xxx and RTC_PIE_xxx ioctls and functionality
- * RTC_UIE_xxx is not available on tmpa9xx
- *
- */
-
-static unsigned long epoch = 1970;	/* Jan 1 1970 00:00:00 */
-
-static DEFINE_SPINLOCK(rtc_lock);
-static unsigned long rtc_alarm_value;
-static unsigned int rtc_irq_enabled;
-static int rtc_irq = -1;
-/* static int pie_irq = -1; */
-static void __iomem *rtc_base,*rtc_base2;
-
-static inline unsigned long read_elapsed_second(void)
+struct tmpa9xx_rtc
 {
-	return _in32(RTCDATA);
-}
+	void __iomem *regs1;
+	void __iomem *regs2;
+	struct device *dev;
+	int irq;
 
-static inline void write_elapsed_second(unsigned long sec)
+	struct rtc_device *rtc;
+};
+
+#define DATA	     (0x000) /* RTC Data Register */
+#define COMP	     (0x004) /* RTC Compare Register */
+#define PRST	     (0x008) /* RTC Preset Register */
+#define ALMINTCTR    (0x200) /* RTC ALM Interrupt Control Register */
+#define ALMMIS       (0x204) /* RTC ALM Interrupt Status Register */
+
+#define ALMINTCLR 	(1 << 7)
+#define RTCINTCLR 	(1 << 6)
+#define AINTEN1		(1 << 5)
+#define AINTEN2		(1 << 4)
+#define AINTEN64	(1 << 3)
+#define AINTEN512	(1 << 2)
+#define AINTEN8192	(1 << 1)
+#define RTCINTEN	(1 << 0)
+
+#define rtc_writel(b, o, v)	writel(v, (o < ALMINTCTR ? b->regs1 : (b->regs2 - 0x200)) + o)
+#define rtc_readl(b, o)		readl((o < ALMINTCTR ? b->regs1 :(b->regs2 - 0x200)) + o)
+
+static int tmp9xx_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
-	spin_lock_irq(&rtc_lock);
+	struct platform_device *pdev = to_platform_device(dev);
+	struct tmpa9xx_rtc *r = platform_get_drvdata(pdev);
 
-	_out32(RTCCOMP, 0);
-	udelay(100);
-	_out32(RTCPRST, sec);
-	udelay(100);
-	while (_in32(RTCDATA) != sec);
+	dev_dbg(r->dev, "%s():\n", __func__);
 
-	spin_unlock_irq(&rtc_lock);
-}
-
-static void tmpa9xx_rtc_release(struct device *dev)
-{
-	uint32_t reg;
-//printk("rtc: release\n");
-	spin_lock_irq(&rtc_lock);
-
-	if (rtc_irq_enabled) {
-//printk("rtc: ioctl alarm disable\n");
-		reg = _in32(RTCALMINTCTR);
-		reg &= 0x3e;
-		_out32(RTCALMINTCTR, reg);
-		disable_irq(rtc_irq);
-		rtc_irq_enabled = 0;
-	}
-
-	spin_unlock_irq(&rtc_lock);
-
-}
-
-static int tmpa9xx_rtc_read_time(struct device *dev, struct rtc_time *time)
-{
-	unsigned long epoch_sec, elapsed_sec;
-//printk("rtc: read time\n");
-	epoch_sec = mktime(epoch, 1, 1, 0, 0, 0);
-	elapsed_sec = read_elapsed_second();
-
-	rtc_time_to_tm(epoch_sec + elapsed_sec, time);
+	/* nothing to be done here */
 
 	return 0;
 }
 
-static int tmpa9xx_rtc_set_time(struct device *dev, struct rtc_time *time)
+static int tmp9xx_rtc_alarm_irq_enable(struct device *dev, unsigned int enable)
 {
-	unsigned long epoch_sec, current_sec;
-//printk("rtc: set time\n");
-	epoch_sec = mktime(epoch, 1, 1, 0, 0, 0);
-	current_sec = mktime(time->tm_year + 1900, time->tm_mon + 1, time->tm_mday,
-	                     time->tm_hour, time->tm_min, time->tm_sec);
+	struct platform_device *pdev = to_platform_device(dev);
+	struct tmpa9xx_rtc *r = platform_get_drvdata(pdev);
+	uint32_t val;
 
-	write_elapsed_second(current_sec - epoch_sec);
+	dev_dbg(r->dev, "%s(): enable %d\n", __func__, enable);
+
+	val = rtc_readl(r, ALMINTCTR);
+
+	if (enable)
+		val |= (RTCINTEN | RTCINTCLR);
+	else
+		val &= ~RTCINTEN;
+
+	rtc_writel(r, ALMINTCTR, val);
 
 	return 0;
 }
 
-static int tmpa9xx_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *wkalrm)
+static int tmp9xx_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
-	struct rtc_time *time = &wkalrm->time;
-//printk("rtc: read alarm\n");
-	spin_lock_irq(&rtc_lock);
+	struct platform_device *pdev = to_platform_device(dev);
+	struct tmpa9xx_rtc *r = platform_get_drvdata(pdev);
+	unsigned long secs;
 
-	wkalrm->enabled = rtc_irq_enabled;
+	rtc_tm_to_time(&alrm->time, &secs);
 
-	spin_unlock_irq(&rtc_lock);
+	rtc_writel(r, COMP, secs);
 
-	rtc_time_to_tm(rtc_alarm_value, time);
+	/* wait at least 3/32k s */
+	udelay(92);
+
+	tmp9xx_rtc_alarm_irq_enable(dev, alrm->enabled);
+
+	dev_dbg(r->dev, "%s(): enabled %d, pending %d, secs %lu\n", __func__, alrm->enabled, alrm->pending, secs);
 
 	return 0;
 }
 
-static int tmpa9xx_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *wkalrm)
+static int tmp9xx_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
-	unsigned long alarm_sec;
-	uint32_t reg;
+	struct platform_device *pdev = to_platform_device(dev);
+	struct tmpa9xx_rtc *r = platform_get_drvdata(pdev);
+	uint32_t secs;
 
-	struct rtc_time *time = &wkalrm->time;
-//printk("rtc: set alarm 1\n");
-	alarm_sec = mktime(time->tm_year + 1900, time->tm_mon + 1, time->tm_mday,
-	                   time->tm_hour, time->tm_min, time->tm_sec);
+	secs = rtc_readl(r, DATA);
 
-	spin_lock_irq(&rtc_lock);
+	dev_dbg(r->dev, "%s(): secs %d\n", __func__, secs);
 
-	rtc_alarm_value = alarm_sec;
-//reg = _in32(RTCDATA);
-//udelay(100);
-//printk("rtc: set alarm 2 rtc: %u, alm: %u\n",reg,alarm_sec);
-	_out32(RTCCOMP, alarm_sec);
-	udelay(100);
-
-	if (wkalrm->enabled) {
-		reg = _in32(RTCALMINTCTR);
-		reg |= 0x41;
-		_out32(RTCALMINTCTR, reg);
-		enable_irq(rtc_irq);
-	}
-	rtc_irq_enabled = wkalrm->enabled;
-//printk("rtc: enable alarm %u\n", rtc_irq_enabled);
-	spin_unlock_irq(&rtc_lock);
+	rtc_time_to_tm(secs, tm);
 
 	return 0;
 }
 
-static int tmpa9xx_rtc_ioctl(struct device *dev, unsigned int cmd, unsigned long arg)
+static int tmp9xx_rtc_set_mmss(struct device *dev, unsigned long secs)
 {
-	uint32_t reg;
-/*
-	unsigned long count;
-*/
-//printk("rtc: ioctl\n");
-	switch (cmd) {
-	case RTC_AIE_ON:
-//printk("rtc: ioctl RTC_AIE_ON\n");
-		spin_lock_irq(&rtc_lock);
+	struct platform_device *pdev = to_platform_device(dev);
+	struct tmpa9xx_rtc *r = platform_get_drvdata(pdev);
+	uint32_t val;
 
-		if (!rtc_irq_enabled) {
-//printk("rtc: ioctl alarm enable\n");
-			enable_irq(rtc_irq);
-//printk("rtc: RTCALMMIS=0x%02x\n",_in32(RTCALMMIS));
-			reg = _in32(RTCALMINTCTR);
-//printk("rtc: RTCALMINTCTR=0x%02x\n",reg);
-			reg &= 0x3f;
-			reg |= 0x41;
-			_out32(RTCALMINTCTR, reg);
-//printk("rtc: RTCALMINTCTR=0x%02x\n",reg);
-			rtc_irq_enabled = 1;
-		}
-		spin_unlock_irq(&rtc_lock);
-		break;
-	case RTC_AIE_OFF:
-//printk("rtc: ioctl RTC_AIE_OFF\n");
-		spin_lock_irq(&rtc_lock);
+	dev_dbg(r->dev, "%s(): secs %lu\n", __func__, secs);
 
-		if (rtc_irq_enabled) {
-//printk("rtc: ioctl alarm disable\n");
-			reg = _in32(RTCALMINTCTR);
-			reg &= 0x3e;
-			_out32(RTCALMINTCTR, reg);
-			disable_irq(rtc_irq);
-			rtc_irq_enabled = 0;
-		}
+	rtc_writel(r, PRST, secs);
 
-		spin_unlock_irq(&rtc_lock);
-		break;
-#if 0
-	case RTC_PIE_ON:
-		enable_irq(pie_irq);
-		break;
-	case RTC_PIE_OFF:
-		disable_irq(pie_irq);
-		break;
-	case RTC_IRQP_READ:
-		return put_user(periodic_frequency, (unsigned long __user *)arg);
-		break;
-	case RTC_IRQP_SET:
-		if (arg > MAX_PERIODIC_RATE)
-			return -EINVAL;
-
-		periodic_frequency = arg;
-
-		count = RTC_FREQUENCY;
-		do_div(count, arg);
-
-		periodic_count = count;
-
-		spin_lock_irq(&rtc_lock);
-
-		rtc1_write(RTCL1LREG, count);
-		rtc1_write(RTCL1HREG, count >> 16);
-
-		spin_unlock_irq(&rtc_lock);
-		break;
-#endif
-	case RTC_EPOCH_READ:
-		return put_user(epoch, (unsigned long __user *)arg);
-	case RTC_EPOCH_SET:
-		/* Doesn't support before 1900 */
-		if (arg < 1900)
-			return -EINVAL;
-		epoch = arg;
-		break;
-	default:
-		return -ENOIOCTLCMD;
+	while(1) {
+		val = rtc_readl(r, DATA);
+		if (val == secs)
+			break;
 	}
 
 	return 0;
 }
 
-static irqreturn_t elapsedtime_interrupt(int irq, void *dev_id)
+static const struct rtc_class_ops tmp9xx_rtc_ops = {
+	.read_time = tmp9xx_rtc_read_time,
+	.read_alarm = tmp9xx_rtc_read_alarm,
+	.set_alarm = tmp9xx_rtc_set_alarm,
+	.set_mmss = tmp9xx_rtc_set_mmss,
+	.alarm_irq_enable = tmp9xx_rtc_alarm_irq_enable,
+};
+
+static irqreturn_t tmp9xx_rtc_interrupt(int irq, void *data)
 {
-	struct platform_device *pdev = (struct platform_device *)dev_id;
-	struct rtc_device *rtc = platform_get_drvdata(pdev);
-	uint32_t reg, reg2;
-//printk("rtc: interrupt\n");
-	reg2 = _in32(RTCALMMIS);
-//printk("rtc: RTCALMMIS=0x%02x\n",reg2);
-	if (reg2 & 0x01) {
-//printk("rtc: interrupt 1\n");
-		reg = _in32(RTCALMINTCTR);
-//printk("rtc: RTCALMINTCTR=0x%02x\n",reg);
-		reg &= 0x3f;
-		reg |= 0x40;
-		_out32(RTCALMINTCTR, reg);
-//printk("rtc: RTCALMINTCTR=0x%02x\n",reg);
-		rtc_update_irq(rtc, 1, RTC_AF);
-	}
-	if (reg2 & 0x02) {
-//printk("rtc: interrupt 2\n");
-		reg = _in32(RTCALMINTCTR);
-		reg &= 0x3f;
-		reg |= 0x80;
-		_out32(RTCALMINTCTR, reg);
-		//printk(KERN_INFO "tmpa9xx_rtc: GLITCH! ALM irq triggered\n");
-	}
+	struct tmpa9xx_rtc *r = data;
+	uint32_t val;
+
+	val = rtc_readl(r, ALMINTCTR);
+	dev_dbg(r->dev, "%s(): ALMINTCTR 0x%08x\n", __func__, val);
+
+	val |= RTCINTCLR;
+	rtc_writel(r, ALMINTCTR, val);
+
+	rtc_update_irq(r->rtc, 1, RTC_AF | RTC_IRQF);
 
 	return IRQ_HANDLED;
 }
 
-static const struct rtc_class_ops tmpa9xx_rtc_ops = {
-	.release	= tmpa9xx_rtc_release,
-	.ioctl		= tmpa9xx_rtc_ioctl,
-	.read_time	= tmpa9xx_rtc_read_time,
-	.set_time	= tmpa9xx_rtc_set_time,
-	.read_alarm	= tmpa9xx_rtc_read_alarm,
-	.set_alarm	= tmpa9xx_rtc_set_alarm,
-};
-
-static int __devinit tmpa9xx_rtc_probe(struct platform_device *pdev)
+static int __devinit probe(struct platform_device *pdev)
 {
+	struct tmpa9xx_rtc *r;
 	struct resource *res;
-	struct rtc_device *rtc;
-	int retval;
-	uint32_t reg;
+	int ret;
 
-//printk("rtc: rtc_probe start\n");
+	r = kzalloc(sizeof(*r), GFP_KERNEL);
+	if (!r) {
+		dev_err(r->dev, "kzalloc() failed\n");
+		ret = -ENOMEM;
+		goto err0;
+	}
+
+	r->dev = &pdev->dev;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res)
-		return -EBUSY;
+	if (!res) {
+		dev_err(r->dev, "platform_get_resource() failed @ IORESOURCE_MEM\n");
+		ret = -ENODEV;
+		goto err1;
+	}
 
-	rtc_base = ioremap(res->start, res->end - res->start + 1);
-	if (!rtc_base)
-		return -EBUSY;
+	r->regs1 = ioremap(res->start, resource_size(res));
+	if (!r->regs1) {
+		dev_err(r->dev, "ioremap() failed\n");
+		ret = -ENODEV;
+		goto err2;
+	}
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	if (!res)
-		return -EBUSY;
-
- 	rtc_base2 = ioremap(res->start, res->end - res->start + 1);
-	if (!rtc_base2)
-		return -EBUSY;
-
-	rtc = rtc_device_register("tmpa9xx", &pdev->dev, &tmpa9xx_rtc_ops, THIS_MODULE);
-	if (IS_ERR(rtc)) {
-		retval = PTR_ERR(rtc);
-		goto err_iounmap_all;
+	if (!res) {
+		dev_err(r->dev, "platform_get_resource() failed @ IORESOURCE_MEM\n");
+		ret = -ENODEV;
+		goto err3;
 	}
 
-	spin_lock_irq(&rtc_lock);
-
-	reg = _in32(RTCALMINTCTR);
-	reg &= 0x3e;
-	reg |= 0xc0;
-	_out32(RTCALMINTCTR, reg);
-	udelay(100);
-	_out32(RTCCOMP, 0);
-	udelay(100);
-	_out32(RTCPRST, 0);
-	udelay(100);
-	while (_in32(RTCDATA) != 0);
-
-	spin_unlock_irq(&rtc_lock);
-
-	rtc_irq = platform_get_irq(pdev, 0);
-	if (rtc_irq < 0 || rtc_irq >= NR_IRQS) {
-		retval = -EBUSY;
-		goto err_device_unregister;
+	r->regs2 = ioremap(res->start, resource_size(res));
+	if (!r->regs2) {
+		dev_err(r->dev, "ioremap() failed\n");
+		ret = -ENODEV;
+		goto err4;
 	}
 
-	retval = request_irq(rtc_irq, elapsedtime_interrupt, 0,
-	                     "tmpa9xx-rtc", pdev);
-	if (retval < 0)
-		goto err_device_unregister;
+	r->irq = platform_get_irq(pdev, 0);
+	if (r->irq <= 0) {
+		dev_err(r->dev, "platform_get_irq() failed\n");
+		ret = -ENODEV;
+		goto err5;
+	}
 
-	platform_set_drvdata(pdev, rtc);
+	ret = request_irq(r->irq, tmp9xx_rtc_interrupt, IRQF_DISABLED, "tmpa9xx_rtc", r);
+	if (ret) {
+		dev_err(r->dev, "request_irq() failed\n");
+		ret = -ENODEV;
+		goto err6;
+	}
 
-	disable_irq(rtc_irq);
+	platform_set_drvdata(pdev, r);
 
-	//printk(KERN_INFO "rtc: Toshiba TMPA9xx Real Time Clock\n");
+	r->rtc = rtc_device_register(KBUILD_MODNAME, &pdev->dev, &tmp9xx_rtc_ops, THIS_MODULE);
+	if (IS_ERR(r->rtc)) {
+		dev_err(r->dev, "rtc_device_register() failed\n");
+		ret = PTR_ERR(r->rtc);
+		goto err7;
+	}
+
+        dev_info(r->dev, "ready, io %p/%p. irq %d\n", r->regs1, r->regs2, r->irq);
 
 	return 0;
 
-err_device_unregister:
-	rtc_device_unregister(rtc);
-
-err_iounmap_all:
-	iounmap(rtc_base);
-	iounmap(rtc_base2);
-	rtc_base = NULL;
-	rtc_base2 = NULL;
-
-	return retval;
+err7:
+	platform_set_drvdata(pdev, NULL);
+	free_irq(r->irq, r);
+err6:
+err5:
+	iounmap(r->regs2);
+err4:
+err3:
+	iounmap(r->regs1);
+err2:
+err1:
+	kfree(r);
+err0:
+	return ret;
 }
 
-static int __devexit tmpa9xx_rtc_remove(struct platform_device *pdev)
+static int __devexit remove(struct platform_device *pdev)
 {
-	struct rtc_device *rtc;
-
-	rtc = platform_get_drvdata(pdev);
-	if (rtc)
-		rtc_device_unregister(rtc);
+	struct tmpa9xx_rtc *r = platform_get_drvdata(pdev);
 
 	platform_set_drvdata(pdev, NULL);
 
-	free_irq(rtc_irq, pdev);
-	/* free_irq(pie_irq, pdev); */
-	if (rtc_base)
-        {
-		iounmap(rtc_base);
-		iounmap(rtc_base2);
-        }
+	rtc_device_unregister(r->rtc);
+
+	disable_irq(r->irq);
+
+	free_irq(r->irq, r);
+
+	iounmap(r->regs2);
+
+	iounmap(r->regs1);
+
+	kfree(r);
 
 	return 0;
 }
-#ifdef CONFIG_PM
 
-/* RTC Power management control */
-#define tmpa9xx_rtc_suspend NULL
-#define tmpa9xx_rtc_resume  NULL
-
-#else
-#define tmpa9xx_rtc_suspend NULL
-#define tmpa9xx_rtc_resume  NULL
-#endif
-
-
-/* work with hotplug and coldplug */
-MODULE_ALIAS("platform:RTC");
-
-static struct platform_driver tmpa9xx_rtc_platform_driver = {
-	.probe		= tmpa9xx_rtc_probe,
-	.remove		= __devexit_p(tmpa9xx_rtc_remove),
-	.suspend	= tmpa9xx_rtc_suspend,
-	.resume		= tmpa9xx_rtc_resume,
-	.driver		= {
-		.name	= "tmpa9xx-rtc",
-		.owner	= THIS_MODULE
+static struct platform_driver tmpa9xx_rtc_driver = {
+	.probe = probe,
+	.remove = __devexit_p(remove),
+	.driver = {
+		.name  = "tmpa9xx-rtc",
+		.owner = THIS_MODULE,
 	},
-
 };
 
 static int __init tmpa9xx_rtc_init(void)
-{	
-	return platform_driver_register(&tmpa9xx_rtc_platform_driver);
+{
+	return platform_driver_register(&tmpa9xx_rtc_driver);
 }
 
 static void __exit tmpa9xx_rtc_exit(void)
 {
-	platform_driver_unregister(&tmpa9xx_rtc_platform_driver);
+	platform_driver_unregister(&tmpa9xx_rtc_driver);
 }
 
 module_init(tmpa9xx_rtc_init);
 module_exit(tmpa9xx_rtc_exit);
 
+MODULE_AUTHOR("Michael Hunold <michael@mihu.de>");
+MODULE_DESCRIPTION("RTC driver for TMPA9xx");
+MODULE_LICENSE("GPL");

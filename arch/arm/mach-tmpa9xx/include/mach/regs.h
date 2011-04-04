@@ -303,11 +303,6 @@
 
 /* RTC */
 #define RTC_BASE	(0xf0030000)
-#define RTCDATA		(RTC_BASE + 0x0000)	   /* RTC Data Register */
-#define RTCCOMP		(RTC_BASE + 0x0004)	   /* RTC Compare Register */
-#define RTCPRST		(RTC_BASE + 0x0008)	   /* RTC Preset Register */
-#define RTCALMINTCTR	(RTC_BASE + 0x0200)	   /* RTC ALM Interrupt Control Register */
-#define RTCALMMIS	(RTC_BASE + 0x0204)	   /* RTC ALM Interrupt Status Register */
 
 /* Melody / Alarm */
 #define MA_BASE                   (0xf0030100)
