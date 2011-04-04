@@ -25,14 +25,10 @@
 #include <linux/slab.h>
 #include <linux/device.h>
 #include <linux/fs.h>
-#include <linux/completion.h>
-#include <linux/workqueue.h>
-#include <linux/list.h>
 #include <linux/sched.h>
 #include <linux/pwm/pwm.h>
 
 static const char *REQUEST_SYSFS = "sysfs";
-static DEFINE_MUTEX(device_list_mutex);
 static struct class pwm_class;
 
 void pwm_set_drvdata(struct pwm_device *p, void *data)
@@ -89,25 +85,6 @@ err_flag_requested:
 	return ret;
 }
 
-static struct pwm_device *__pwm_request_byname(const char *name,
-					       const char *label)
-{
-	struct device *d;
-	struct pwm_device *p;
-	int ret;
-
-	d = class_find_device(&pwm_class, NULL, (char*)name, pwm_match_name);
-	if (IS_ERR_OR_NULL(d))
-		return ERR_PTR(-EINVAL);
-
-	p = to_pwm_device(d);
-	ret = __pwm_request(p, label);
-
-	if (ret)
-		return ERR_PTR(ret);
-	return p;
-}
-
 /**
  * pwm_request - request a PWM device by name
  *
@@ -123,11 +100,21 @@ static struct pwm_device *__pwm_request_byname(const char *name,
  */
 struct pwm_device *pwm_request(const char *name, const char *label)
 {
+	struct device *d;
 	struct pwm_device *p;
+	int ret;
 
-	mutex_lock(&device_list_mutex);
-	p = __pwm_request_byname(name, label);
-	mutex_unlock(&device_list_mutex);
+	d = class_find_device(&pwm_class, NULL, (char*)name, pwm_match_name);
+	if (!d)
+		return ERR_PTR(-EINVAL);
+
+	p = to_pwm_device(d);
+	ret = __pwm_request(p, label);
+	if (ret) {
+		put_device(d);
+		return ERR_PTR(ret);
+	}
+
 	return p;
 }
 EXPORT_SYMBOL(pwm_request);
@@ -139,12 +126,10 @@ EXPORT_SYMBOL(pwm_request);
  */
 void pwm_release(struct pwm_device *p)
 {
-	mutex_lock(&device_list_mutex);
-
 	if (!test_and_clear_bit(PWM_FLAG_REQUESTED, &p->flags)) {
 		WARN(1, "%s: releasing unrequested PWM device %s\n",
 		     __func__, dev_name(&p->dev));
-		goto done;
+		return;
 	}
 
 	pwm_stop(p);
@@ -154,10 +139,8 @@ void pwm_release(struct pwm_device *p)
 	if (p->ops->release)
 		p->ops->release(p);
 
+	put_device(&p->dev);
 	module_put(p->ops->owner);
-
-done:
-	mutex_unlock(&device_list_mutex);
 }
 EXPORT_SYMBOL(pwm_release);
 
@@ -361,7 +344,6 @@ static ssize_t pwm_run_store(struct device *dev,
 			     const char *buf, size_t len)
 {
 	struct pwm_device *p = to_pwm_device(dev);
-	int ret;
 
 	if (!pwm_is_exported(p))
 		return -EPERM;
@@ -424,12 +406,16 @@ static ssize_t pwm_period_ns_store(struct device *dev,
 {
 	unsigned long period_ns;
 	struct pwm_device *p = to_pwm_device(dev);
+	int ret;
 
 	if (!pwm_is_exported(p))
 		return -EPERM;
 
-	if (!strict_strtoul(buf, 10, &period_ns))
-		pwm_set_period_ns(p, period_ns);
+	ret = strict_strtoul(buf, 10, &period_ns);
+	if (ret)
+		return ret;
+
+	pwm_set_period_ns(p, period_ns);
 	return len;
 }
 
@@ -447,12 +433,16 @@ static ssize_t pwm_polarity_store(struct device *dev,
 {
 	unsigned long polarity;
 	struct pwm_device *p = to_pwm_device(dev);
+	int ret;
 
 	if (!pwm_is_exported(p))
 		return -EPERM;
 
-	if (!strict_strtoul(buf, 10, &polarity))
-		pwm_set_polarity(p, polarity);
+	ret = strict_strtoul(buf, 10, &polarity);
+	if (ret)
+		return ret;
+
+	pwm_set_polarity(p, polarity);
 	return len;
 }
 
@@ -462,10 +452,8 @@ static ssize_t pwm_export_show(struct device *dev,
 {
 	struct pwm_device *p = to_pwm_device(dev);
 
-	if (pwm_is_exported(p))
+	if (pwm_is_requested(p))
 		return sprintf(buf, "%s\n", p->label);
-	else if (pwm_is_requested(p))
-		return -EBUSY;
 	return 0;
 }
 
@@ -476,15 +464,15 @@ static ssize_t pwm_export_store(struct device *dev,
 	struct pwm_device *p = to_pwm_device(dev);
 	int ret;
 
-	mutex_lock(&device_list_mutex);
-	if (pwm_is_exported(p))
-		ret = -EBUSY;
-	else
-		ret = __pwm_request(p, REQUEST_SYSFS);
+	get_device(dev);
+	ret = __pwm_request(p, REQUEST_SYSFS);
 
 	if (!ret)
 		set_bit(PWM_FLAG_EXPORTED, &p->flags);
-	mutex_unlock(&device_list_mutex);
+	else {
+		put_device(dev);
+		ret = -EBUSY;
+	}
 
 	return ret ? ret : len;
 }
@@ -495,7 +483,7 @@ static ssize_t pwm_unexport_store(struct device *dev,
 {
 	struct pwm_device *p = to_pwm_device(dev);
 
-	if (!pwm_is_exported(p) || !pwm_is_requested(p))
+	if (!pwm_is_exported(p))
 		return -EINVAL;
 
 	pwm_release(p);
@@ -549,7 +537,6 @@ struct pwm_device *pwm_register(const struct pwm_device_ops *ops,
 
 	p->ops = ops;
 
-	p->dev.devt = MKDEV(0, 0);
 	p->dev.class = &pwm_class;
 	p->dev.parent = parent;
 	p->dev.release = __pwm_release;
