@@ -106,7 +106,7 @@ config ATMEL_TCB_CLKSRC_BLOCK
 
 config TMPA9XX_MLDALM
 	tristate "Melody/Alarm driver for TMPA9xx"
-	depends on ARCH_TMPA9XX
+	depends on ARCH_TMPA9XX && !TMPA9XX_PWM_CANNEL_0
 	help
           Enable Melody/Alarm output on Pin MLDALM
           ATTENTION: Pin Sharing with SPI Channel 0

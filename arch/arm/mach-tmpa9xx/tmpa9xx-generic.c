@@ -756,14 +756,19 @@ static int setup_port_c(void)
         HCBCR0     = 0;
 #endif
 #if defined CONFIG_TMPA9XX_MLDALM || defined CONFIG_TMPA9XX_MLDALM_MODULE
+#if defined CONFIG_TMPA9XX_PWM_CANNEL_0 || defined CONFIG_TMPA9XX_PWM_CANNEL_0_MODULE
+#error "port c configuration mismatch. melody/alarm vs. pwm channel 0"
+#endif
         GPIOCFR1 |=  (0x1<<3);
         GPIOCFR2 &= ~(0x1<<3);
         GPIOCIE  &= ~(0x1<<3);
         GPIOCODE &= ~(0x1<<3);
 #endif
 
-#if (defined CONFIG_TMPA9XX_PWM_CANNEL_0 || defined CONFIG_TMPA9XX_PWM_CANNEL_0_MODULE) \
- && (!defined CONFIG_TMPA9XX_MLDALM && !defined CONFIG_TMPA9XX_MLDALM_MODULE)
+#if defined CONFIG_TMPA9XX_PWM_CANNEL_0 || defined CONFIG_TMPA9XX_PWM_CANNEL_0_MODULE
+#if defined CONFIG_TMPA9XX_MLDALM || defined CONFIG_TMPA9XX_MLDALM_MODULE
+#error "port c configuration mismatch. melody/alarm vs. pwm channel 0"
+#endif
         GPIOCFR1 &= ~(0x1<<3);
         GPIOCFR2 |=  (0x1<<3);
         GPIOCIE  &= ~(0x1<<3);
