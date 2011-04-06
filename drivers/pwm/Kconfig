@@ -30,7 +30,7 @@ config TMPA9XX_PWM
 
 config TMPA9XX_PWM_CANNEL_0
        bool "Enable PWM Channel 0"
-       depends on TMPA9XX_PWM && !TMPA9XX_MLDALM
+       depends on TMPA9XX_PWM
        help
          Make use of Channel 0 (on Timer 0)
 
