@@ -42,37 +42,37 @@
 void tmpa9xx_ofd_enable(void)
 {
 	int i;
-	
+
 	/* Initialize the OFD Module */
 	OFD_CLKSCR1 = CLK_WRITE_ENABLE;	/* Enable writing to the OFD registers */
 	OFD_CLKSCR2 = CLK_S_DISABLE;	/* Enable OFD operation */
         udelay(1);
         OFD_CLKSCR3 = OFD_RESET_ENABLE 	/* RESEN Enable & Clear OSC Flag */
                       |OFD_CLEAR_CLKSF;
-        
+
         for (i=0;i<100;i++)
         {
         	if ( (OFD_CLKSCR3 & OFD_RESET_ENABLE) == OFD_RESET_ENABLE)
         		break;
                 udelay(1);
 	}
-        
+
         if (i>=99)
         	goto err;
 
         OFD_CLKSMN = (unsigned long) ((float)FOSCH * 0.9 / 32768.0 / 4.0 +0.5 );
-        OFD_CLKSMX = (unsigned long) ((float)FOSCH * 1.1 / 32768.0 / 4.0 +0.5 ); 
+        OFD_CLKSMX = (unsigned long) ((float)FOSCH * 1.1 / 32768.0 / 4.0 +0.5 );
 
         udelay(1);
 	OFD_CLKSCR2 = CLK_S_ENABLE;		/* Enable OFD operation */
 	OFD_CLKSCR1 = CLK_WRITE_DISABLE;	/* Disable writing to the OFD registers */
 	printk(KERN_INFO "Enable OFD - success\n");
-        
+
         return;
 err:
 	printk(KERN_INFO "Enable OFD - failed\n");
         return;
-       
+
 }
 
 void tmpa9xx_ofd_disable(void)
@@ -83,14 +83,14 @@ void tmpa9xx_ofd_disable(void)
 	OFD_CLKSCR2 = CLK_S_DISABLE;	/* Enable OFD operation */
         udelay(1);
         OFD_CLKSCR3 = OFD_CLEAR_CLKSF; 	/* RESEN Enable & Clear OSC Flag */
-        
+
         for (i=0;i<100;i++)
         {
         	if ( (OFD_CLKSCR3 & OFD_RESET_ENABLE) != OFD_RESET_ENABLE)
         		break;
                 udelay(1);
 	}
-        
+
         if (i>=99)
         	goto err;
 
