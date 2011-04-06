@@ -28,13 +28,13 @@ config TMPA9XX_PWM
          peripheral channels found TMPA9xx based processors.
          If unsure, say N.
 
-config TMPA9XX_PWM_CANNEL_0
+config TMPA9XX_PWM_CHANNEL_0
        bool "Enable PWM Channel 0"
        depends on TMPA9XX_PWM
        help
          Make use of Channel 0 (on Timer 0)
 
-config TMPA9XX_PWM_CANNEL_1
+config TMPA9XX_PWM_CHANNEL_1
        bool "Enable PWM Channel 1"
        depends on TMPA9XX_PWM
        help
