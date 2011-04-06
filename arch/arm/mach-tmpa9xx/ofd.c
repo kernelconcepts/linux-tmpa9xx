@@ -110,6 +110,3 @@ static int __init tmpa9xx_ofd_init(void)
 }
 
 arch_initcall(tmpa9xx_ofd_init);
-
-EXPORT_SYMBOL(tmpa9xx_ofd_enable);
-EXPORT_SYMBOL(tmpa9xx_ofd_disable);
