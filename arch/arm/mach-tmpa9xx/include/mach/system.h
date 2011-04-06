@@ -20,10 +20,10 @@
 #ifndef __TMPA9XX_SYSTEM_H__
 #define __TMPA9XX_SYSTEM_H__
 
+#include <mach/regs.h>
 #include <asm/io.h>
 
-static void
-arch_idle(void)
+static void arch_idle(void)
 {
 	/*
 	 * This should do all the clock switching
@@ -32,22 +32,12 @@ arch_idle(void)
 	cpu_do_idle();
 }
 
-static inline void
-arch_reset(char mode,const char * cmd)
+static inline void arch_reset(char mode,const char *cmd)
 {
-  uint8_t *wdt_base;
+  void __iomem *wdt_base = (void *)WDT_BASE_ADDRESS;
 
-  printk("Issue reset\n");
-
-  wdt_base = (char *) (0xf0010000);
-
-  if (wdt_base==NULL )
-  {
-          wdt_base = (uint8_t *) 0xf0010000;
-  }
-
-  outl( 0x1, (uint32_t *) (wdt_base + 0));
-  outl( 0x3, (uint32_t *) (wdt_base + 8));
+  writel(0x1, wdt_base + 0x0);
+  writel(0x3, wdt_base + 0x8);
 
   /* Bye ! */
 }
