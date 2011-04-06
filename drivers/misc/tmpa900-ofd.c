@@ -35,87 +35,77 @@ struct tmpa900_ofd
 	struct device *dev;
 };
 
-#define OFD_CLKSCR1            __REG(OFD_BASE_ADDRESS + 0x0000)
-#define OFD_CLKSCR2            __REG(OFD_BASE_ADDRESS + 0x0004)
-#define OFD_CLKSCR3            __REG(OFD_BASE_ADDRESS + 0x0008)
-#define OFD_CLKSMN             __REG(OFD_BASE_ADDRESS + 0x0010)
-#define OFD_CLKSMX             __REG(OFD_BASE_ADDRESS + 0x0020)
+#define OFD_CLKSCR1	__REG(OFD_BASE_ADDRESS + 0x0000)
+#define OFD_CLKSCR2	__REG(OFD_BASE_ADDRESS + 0x0004)
+#define OFD_CLKSCR3	__REG(OFD_BASE_ADDRESS + 0x0008)
+#define OFD_CLKSMN	__REG(OFD_BASE_ADDRESS + 0x0010)
+#define OFD_CLKSMX	__REG(OFD_BASE_ADDRESS + 0x0020)
 
 #define FOSCH 24000000		/* 24 MHz oscillator clock */
 
-#define CLK_WRITE_ENABLE  0xf9 /*  Enable writing to the clock registers */
-#define CLK_WRITE_DISABLE 0x06 /* Disable writing to the clock registers */
+#define CLK_WRITE_ENABLE	0xf9 /* Enable writing to the clock registers */
+#define CLK_WRITE_DISABLE	0x06 /* Disable writing to the clock registers */
 
-#define CLK_S_ENABLE      0xe4 /*  Enable OFD operation */
-#define CLK_S_DISABLE     0x00 /* Disable OFD operation */
+#define CLK_S_ENABLE	0xe4 /* Enable OFD operation */
+#define CLK_S_DISABLE	0x00 /* Disable OFD operation */
 
-#define OFD_RESET_ENABLE (1<<1)/* Enable OFD reset */
-#define OFD_CLEAR_CLKSF  (1<<0)/* Clear High speed oscillation frequency detection flag */
+#define OFD_RESET_ENABLE	(1<<1) /* Enable OFD reset */
+#define OFD_CLEAR_CLKSF		(1<<0) /* Clear High speed oscillation frequency detection flag */
 
 static int ofd_enable(struct tmpa900_ofd *o)
 {
-	int i;
+	/* see trm chapter 3.28.5, programming example */
 
-	/* Initialize the OFD Module */
-	OFD_CLKSCR1 = CLK_WRITE_ENABLE;	/* Enable writing to the OFD registers */
-	OFD_CLKSCR2 = CLK_S_DISABLE;	/* Enable OFD operation */
-        udelay(1);
-        OFD_CLKSCR3 = OFD_RESET_ENABLE 	/* RESEN Enable & Clear OSC Flag */
-                      |OFD_CLEAR_CLKSF;
+	/* Enable writing to the OFD registers */
+	OFD_CLKSCR1 = CLK_WRITE_ENABLE;
+	/* Disable OFD operation */
+	OFD_CLKSCR2 = CLK_S_DISABLE;
+	udelay(1);
 
-        for (i=0;i<100;i++)
-        {
-        	if ( (OFD_CLKSCR3 & OFD_RESET_ENABLE) == OFD_RESET_ENABLE)
-        		break;
-                udelay(1);
+	OFD_CLKSCR3 = OFD_RESET_ENABLE | OFD_CLEAR_CLKSF;
+
+	while(1) {
+		if (OFD_CLKSCR3 & OFD_RESET_ENABLE)
+			break;
 	}
-
-        if (i>=99)
-        	goto err;
 
 #define FIXED_DIVIDER (32768UL*4UL)
 	OFD_CLKSMN = (((FOSCH * 90UL)  / 100) + FIXED_DIVIDER-1) / FIXED_DIVIDER;
 	OFD_CLKSMX = (((FOSCH * 110UL) / 100) + FIXED_DIVIDER-1) / FIXED_DIVIDER;
 
-        udelay(1);
-	OFD_CLKSCR2 = CLK_S_ENABLE;		/* Enable OFD operation */
-	OFD_CLKSCR1 = CLK_WRITE_DISABLE;	/* Disable writing to the OFD registers */
+	/* Enable OFD operation */
+	OFD_CLKSCR2 = CLK_S_ENABLE;
+	udelay(1);
+
+	/* Disable writing to the OFD registers */
+	OFD_CLKSCR1 = CLK_WRITE_DISABLE;
 
 	dev_dbg(o->dev, "%s(): ok\n", __func__);
 
-        return 0;
-err:
-	dev_err(o->dev, "%s(): ofd enable failed\n", __func__);
-        return -EFAULT;
+	return 0;
 }
 
 static int ofd_disable(struct tmpa900_ofd *o)
 {
-	int i;
+	/* Enable writing to the OFD registers */
+	OFD_CLKSCR1 = CLK_WRITE_ENABLE;
+	/* Disable OFD operation */
+	OFD_CLKSCR2 = CLK_S_DISABLE;
+	udelay(1);
 
-	OFD_CLKSCR1 = CLK_WRITE_ENABLE;	/* Enable writing to the OFD registers */
-	OFD_CLKSCR2 = CLK_S_DISABLE;	/* Enable OFD operation */
-        udelay(1);
-        OFD_CLKSCR3 = OFD_CLEAR_CLKSF; 	/* RESEN Enable & Clear OSC Flag */
+	OFD_CLKSCR3 = OFD_CLEAR_CLKSF;
 
-        for (i=0;i<100;i++)
-        {
-        	if ( (OFD_CLKSCR3 & OFD_RESET_ENABLE) != OFD_RESET_ENABLE)
-        		break;
-                udelay(1);
+	while(1) {
+		if (OFD_CLKSCR3 & OFD_RESET_ENABLE)
+			break;
 	}
 
-        if (i>=99)
-        	goto err;
-
-	OFD_CLKSCR1 = CLK_WRITE_DISABLE;	/* Disable writing to the OFD registers */
+	/* Disable writing to the OFD registers */
+	OFD_CLKSCR1 = CLK_WRITE_DISABLE;
 
 	dev_dbg(o->dev, "%s(): ok\n", __func__);
 
-        return 0;
-err:
-	dev_err(o->dev, "%s(): ofd disable failed\n", __func__);
-	return -EFAULT;
+	return 0;
 }
 
 static int __devinit probe(struct platform_device *pdev)
@@ -156,7 +146,7 @@ static int __devinit probe(struct platform_device *pdev)
 		goto err3;
 	}
 
-        dev_info(&pdev->dev, "ready\n");
+	dev_info(&pdev->dev, "ready\n");
 
 	return 0;
 
