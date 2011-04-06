@@ -210,6 +210,7 @@ static struct platform_pwm_backlight_data tonga_backlight_data = {
 	.max_brightness  = 255,
 	.dft_brightness  = 255,
 	.pwm_period_ns   = 7968750, /* fixme: depends on the clock of the pwm */
+	.inverted_polarity = true;
 	.init            = tonga_backlight_init,
 	.notify          = tonga_backlight_notify,
 	.exit            = tonga_backlight_exit,
