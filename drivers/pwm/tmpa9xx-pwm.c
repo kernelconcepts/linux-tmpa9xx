@@ -195,7 +195,13 @@ static void reconfigure(struct pwm_device *p)
 	p->period_ticks = c.period_ticks;
 	p->duty_ticks = c.duty_ticks;
 
-	tmr_writel(pp, TIMER_COMPARE_1, c.duty_ticks);
+	if (pp->polarity) {
+		val = c.period_ticks - c.duty_ticks;
+		tmr_writel(pp, TIMER_COMPARE_1, val);
+		dev_dbg(pp->dev, "%s(): honouring inverted polarity, val %d\n", __func__, val);
+	} else {
+		tmr_writel(pp, TIMER_COMPARE_1, c.duty_ticks);
+	}
 
 	val = tmr_readl(pp, TIMER_MODE);
 	val &= ~(0x3 << 4);
