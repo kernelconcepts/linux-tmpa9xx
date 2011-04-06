@@ -631,7 +631,7 @@ static struct platform_device tmpa9xx_pwm1_device = {
 static struct resource tmpa900_resource_ofd[] = {
         {
 		.start = OFD_BASE_ADDRESS,
-		.end   = OFD_BASE_ADDRESS + SZ_16 - 1,
+		.end   = OFD_BASE_ADDRESS + SZ_64 - 1,
 		.flags = IORESOURCE_MEM,
 	},
 };
