@@ -73,8 +73,9 @@ static int ofd_enable(struct tmpa900_ofd *o)
         if (i>=99)
         	goto err;
 
-        OFD_CLKSMN = (unsigned long) ((float)FOSCH * 0.9 / 32768.0 / 4.0 +0.5 );
-        OFD_CLKSMX = (unsigned long) ((float)FOSCH * 1.1 / 32768.0 / 4.0 +0.5 );
+#define FIXED_DIVIDER (32768UL*4UL)
+	OFD_CLKSMN = (((FOSCH * 90UL)  / 100) + FIXED_DIVIDER-1) / FIXED_DIVIDER;
+	OFD_CLKSMX = (((FOSCH * 110UL) / 100) + FIXED_DIVIDER-1) / FIXED_DIVIDER;
 
         udelay(1);
 	OFD_CLKSCR2 = CLK_S_ENABLE;		/* Enable OFD operation */
