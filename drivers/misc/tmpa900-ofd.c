@@ -1,7 +1,7 @@
 /*
  *  Oscillation frequency detection (OFD) driver for TMPA900
  *
- *  Copyright (C) 2010 Thomas Haase <Thomas.Haase@web.de>
+ *  Copyright (c) 2010 Thomas Haase <Thomas.Haase@web.de>
  *  Copyright (c) 2011 Michael Hunold <michael@mihu.de>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -52,7 +52,7 @@ struct tmpa900_ofd
 #define OFD_RESET_ENABLE (1<<1)/* Enable OFD reset */
 #define OFD_CLEAR_CLKSF  (1<<0)/* Clear High speed oscillation frequency detection flag */
 
-static int ofd_enable(void)
+static int ofd_enable(struct tmpa900_ofd *o)
 {
 	int i;
 
@@ -87,7 +87,7 @@ err:
         return -EFAULT;
 }
 
-static int ofd_disable(void)
+static int ofd_disable(struct tmpa900_ofd *o)
 {
 	int i;
 
@@ -117,18 +117,18 @@ err:
 
 static int __devinit probe(struct platform_device *pdev)
 {
-	struct tmpa900_ofd *c;
+	struct tmpa900_ofd *o;
 	struct resource *res;
 	int ret;
 
-	c = kzalloc(sizeof(*c), GFP_KERNEL);
-	if (!c) {
+	o = kzalloc(sizeof(*o), GFP_KERNEL);
+	if (!o) {
 		dev_err(&pdev->dev, "kzalloc() failed\n");
 		ret = -ENOMEM;
 		goto err0;
 	}
 
-	c->dev = &pdev->dev;
+	o->dev = &pdev->dev;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -137,16 +137,16 @@ static int __devinit probe(struct platform_device *pdev)
 		goto err1;
 	}
 
-	c->regs = ioremap(res->start, resource_size(res));
-	if (!c->regs) {
+	o->regs = ioremap(res->start, resource_size(res));
+	if (!o->regs) {
 		dev_err(&pdev->dev, "ioremap() failed\n");
 		ret = -ENODEV;
 		goto err2;
 	}
 
-	platform_set_drvdata(pdev, c);
+	platform_set_drvdata(pdev, o);
 
-	ret = ofd_enable();
+	ret = ofd_enable(o);
 	if (ret) {
 		dev_err(&pdev->dev, "ofd_enable() failed\n");
 		ret = -ENODEV;
@@ -159,25 +159,25 @@ static int __devinit probe(struct platform_device *pdev)
 
 err3:
 	platform_set_drvdata(pdev, NULL);
-	iounmap(c->regs);
+	iounmap(o->regs);
 err2:
 err1:
-	kfree(c);
+	kfree(o);
 err0:
 	return ret;
 }
 
 static int __devexit remove(struct platform_device *pdev)
 {
-	struct tmpa900_ofd *c = platform_get_drvdata(pdev);
+	struct tmpa900_ofd *o = platform_get_drvdata(pdev);
 
-	ofd_disable();
+	ofd_disable(o);
 
 	platform_set_drvdata(pdev, NULL);
 
-	iounmap(c->regs);
+	iounmap(o->regs);
 
-	kfree(c);
+	kfree(o);
 
 	return 0;
 }
