@@ -39,8 +39,6 @@ static int prescaler_clock_khz_1;
 module_param(prescaler_clock_khz_1, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(prescaler_clock_khz_1, "pwm prescaler clock in khz");
 
-#define DRIVER_NAME KBUILD_MODNAME
-
 #define tmr_writel(b, o, v)	writel(v, b->regs + o)
 #define tmr_readl(b, o)		readl(b->regs + o)
 
@@ -340,7 +338,7 @@ static int __devinit tmpa9xx_pwm_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, pp);
 
-	pp->pwm = pwm_register(&device_ops, &pdev->dev, "%s:%d", DRIVER_NAME, pdev->id);
+	pp->pwm = pwm_register(&device_ops, &pdev->dev, "tmpa9xx-pwm:%d", pdev->id);
 	if (IS_ERR_OR_NULL(pp->pwm)) {
 		dev_err(&pdev->dev, "pwm_register() failed\n");
 		ret = PTR_ERR(pp->pwm);
