@@ -33,7 +33,7 @@ struct pwm_bl_data {
 static int pwm_backlight_update_status(struct backlight_device *bl)
 {
 	struct pwm_bl_data *pb = dev_get_drvdata(&bl->dev);
-	int brightness = bl->props.brightness;
+	unsigned long long brightness = bl->props.brightness;
 	int max = bl->props.max_brightness;
 
 	if (bl->props.power != FB_BLANK_UNBLANK)
@@ -48,8 +48,8 @@ static int pwm_backlight_update_status(struct backlight_device *bl)
 	if (brightness == 0) {
 		pwm_set_duty_ns(pb->pwm, 0);
 	} else {
-		brightness = pb->lth_brightness +
-			(brightness * (pb->period - pb->lth_brightness) / max);
+		brightness = pb->lth_brightness + (brightness * (pb->period - pb->lth_brightness));
+		do_div(brightness, max);
 		pwm_set_duty_ns(pb->pwm, brightness);
 	}
 
@@ -106,7 +106,11 @@ static int pwm_backlight_probe(struct platform_device *pdev)
 	} else
 		dev_dbg(&pdev->dev, "got pwm for backlight\n");
 
-	pwm_set_polarity(pb->pwm, 1);
+	if (data->inverted_polarity)
+		pwm_set_polarity(pb->pwm, 1);
+	else
+		pwm_set_polarity(pb->pwm, 0);
+
 	pwm_set_period_ns(pb->pwm, pb->period);
 
 	memset(&props, 0, sizeof(struct backlight_properties));
