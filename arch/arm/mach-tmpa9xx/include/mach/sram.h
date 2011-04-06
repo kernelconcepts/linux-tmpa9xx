@@ -13,8 +13,9 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
-#ifndef __ASM_ARM_ARCH_SRAM_H
-#define __ASM_ARM_ARCH_SRAM_H
+
+#ifndef __TMPA9XX_SRAM_H__
+#define __TMPA9XX_SRAM_H__
 
 void *tmpa9xx_sram_alloc(int size);
 void tmpa9xx_sram_free(void *virt);

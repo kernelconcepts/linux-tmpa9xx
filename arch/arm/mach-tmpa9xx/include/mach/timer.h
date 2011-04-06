@@ -1,6 +1,4 @@
 /*
- * Timer defintions for TMPA9xx
- *
  * This program is free software; you may redistribute and/or modify
  * it under the terms of the GNU General Public License Version 2, as
  * published by the Free Software Foundation.
@@ -16,8 +14,8 @@
  * USA
  */
 
-#ifndef __TMPA9XX_TIMER__
-#define __TMPA9XX_TIMER__
+#ifndef __TMPA9XX_TIMER_H__
+#define __TMPA9XX_TIMER_H__
 
 #define TIMER_LOAD		(0x00)
 #define TIMER_VALUE		(0x04)

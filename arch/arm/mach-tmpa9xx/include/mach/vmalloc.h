@@ -1,6 +1,4 @@
 /*
- *  linux/include/asm-arm/arch-topas910/vmalloc.h
- *
  *  Copyright (C) 2000 Russell King.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -17,6 +15,10 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
-//#define VMALLOC_OFFSET    (8*1024*1024)
-//#define VMALLOC_START     (((unsigned long)high_memory + VMALLOC_OFFSET) & ~(VMALLOC_OFFSET-1))
+
+#ifndef __TMPA9XX_VMALLOC_H__
+#define __TMPA9XX_VMALLOC_H__
+
 #define VMALLOC_END       (PAGE_OFFSET + 0x20000000)
+
+#endif

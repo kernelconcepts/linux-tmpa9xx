@@ -1,6 +1,4 @@
 /*
- *  linux/include/asm-arm/arch-tmpa9xx/uncompress.h
- *
  *  Copyright (C) 2004 Metrowerks Corp.
  *
  *  Based on linux/include/asm-arm/arch-mx1ads/uncompress.h, which is:
@@ -22,8 +20,10 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#ifndef __TMPA9XX_UNCOMPRESS_H__
+#define __TMPA9XX_UNCOMPRESS_H__
 
-static void flush(void) 
+static void flush(void)
 {
 
 }
@@ -65,3 +65,5 @@ static void putc(int c)
  */
 #define arch_decomp_setup()
 #define arch_decomp_wdog()
+
+#endif

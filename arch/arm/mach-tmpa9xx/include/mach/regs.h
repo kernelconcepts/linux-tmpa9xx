@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2008 bplan GmbH. All rights reserved.
- * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
+ *  Copyright (C) 2008 bplan GmbH. All rights reserved.
+ *  Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,11 +16,10 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  * 
- * TMPA9xx register header
  */
 
-#ifndef __TMPA9XX_REGS__
-#define __TMPA9XX_REGS__
+#ifndef __TMPA9XX_REGS_H__
+#define __TMPA9XX_REGS_H__
 
 /* GPIO Ports */
 
@@ -501,4 +500,4 @@
 #define SSP0_BASE_ADDRESS       (0xF2002000)
 #define SSP1_BASE_ADDRESS       (0xF2003000)
 
-#endif /* __TMPA9XX_REGS__ */
+#endif

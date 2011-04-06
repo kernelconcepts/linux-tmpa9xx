@@ -1,6 +1,4 @@
 /*
- *  arch/arm/mach-tmpa9xx/include/mach/system.h
- *
  *  Copyright (C) 1999 ARM Limited
  *  Copyright (C) 2000 Deep Blue Solutions Ltd
  *
@@ -18,8 +16,9 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
-#ifndef __ASM_ARCH_SYSTEM_H
-#define __ASM_ARCH_SYSTEM_H
+
+#ifndef __TMPA9XX_SYSTEM_H__
+#define __TMPA9XX_SYSTEM_H__
 
 #include <asm/io.h>
 

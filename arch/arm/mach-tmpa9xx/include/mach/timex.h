@@ -1,6 +1,4 @@
 /*
- *  linux/include/asm-arm/imx/timex.h
- *
  *  Copyright (C) 1999 ARM Limited
  *
  * This program is free software; you can redistribute it and/or modify
@@ -18,9 +16,11 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef __ASM_ARCH_TIMEX_H
-#define __ASM_ARCH_TIMEX_H
+#ifndef __TMPA9XX_TIMEX_H__
+#define __TMPA9XX_TIMEX_H__
+
 #include <mach/hardware.h>
-#define CLOCK_TICK_RATE         (CLK32)
+
+#define CLOCK_TICK_RATE (32768)
 
 #endif

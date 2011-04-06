@@ -1,13 +1,5 @@
 /*
- *  mach/irqs.h
- *
- *  Copyright (C) 2004 Metrowerks Corp.
- *
- *  based on arch-mx1ads/irqs.h, which is:
- *    Copyright (C) 1999 ARM Limited
- *    Copyright (C) 2000 Deep Blue Solutions Ltd.
- *    Copyright (C) 2006 Jochen Karrer
- *    Copyright (C) 2008 bplan GmbH
+ *  Copyright (C) 2008 bplan GmbH
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,14 +16,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef __ARM_IRQS_H__
-#define __ARM_IRQS_H__
-
-/* ------------------------------------------------------------
- *  Interrupts
- * ------------------------------------------------------------
- */
-
+#ifndef __TMPA9XX_IRQS_H__
+#define __TMPA9XX_IRQS_H__
 
 #define TMPA9XX_NUM_IRQS	32
 
@@ -142,7 +128,6 @@
 
 #endif /* CONFIG_CPU_TMPA910 */
 
-
 #ifdef CONFIG_CPU_TMPA900
 
 /* Port C */
@@ -167,6 +152,5 @@
 #define TMPA9XX_NUM_GPIO_IRQS  13
 
 #endif /* CONFIG_CPU_TMPA900 */
-
 
 #endif
