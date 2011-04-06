@@ -79,11 +79,12 @@ static int ofd_enable(struct tmpa900_ofd *o)
         udelay(1);
 	OFD_CLKSCR2 = CLK_S_ENABLE;		/* Enable OFD operation */
 	OFD_CLKSCR1 = CLK_WRITE_DISABLE;	/* Disable writing to the OFD registers */
-	printk(KERN_INFO "Enable OFD - success\n");
+
+	dev_dbg(o->dev, "%s(): ok\n", __func__);
 
         return 0;
 err:
-	printk(KERN_INFO "Enable OFD - failed\n");
+	dev_err(o->dev, "%s(): ofd enable failed\n", __func__);
         return -EFAULT;
 }
 
@@ -107,11 +108,12 @@ static int ofd_disable(struct tmpa900_ofd *o)
         	goto err;
 
 	OFD_CLKSCR1 = CLK_WRITE_DISABLE;	/* Disable writing to the OFD registers */
-	printk(KERN_INFO "Disable OFD - success\n");
+
+	dev_dbg(o->dev, "%s(): ok\n", __func__);
 
         return 0;
 err:
-	printk(KERN_INFO "Disable OFD - failed\n");
+	dev_err(o->dev, "%s(): ofd disable failed\n", __func__);
 	return -EFAULT;
 }
 
