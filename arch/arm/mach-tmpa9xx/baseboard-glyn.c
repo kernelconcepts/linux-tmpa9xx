@@ -187,41 +187,39 @@ static struct spi_board_info spi_board_info[] = {
 
 #endif /* defined CONFIG_SPI_PL022 || defined CONFIG_SPI_PL022_MODULE */
 
-#if defined CONFIG_BACKLIGHT_PWM
+#if defined CONFIG_BACKLIGHT_PWM || defined CONFIG_BACKLIGHT_PWM_MODULE
 static int tonga_backlight_init(struct device *dev)
 {
-        int ret=0;
-        return ret;
+	pr_debug("%s():\n", __func__);
+	return 0;
 }
 
 static int tonga_backlight_notify(struct device *dev, int brightness)
 {
-        /* printk(KERN_ERR "tonga_backlight_notify() brightness=%d (-> %d)\n", brightness, !brightness); */
-        /* Backlight is on pin port C4 */
-        /* we could also power down the LCD or do other things here... */
-
-        return brightness;
+	pr_debug("%s(): brightness %d\n", __func__, brightness);
+	return brightness;
 }
 
 static void tonga_backlight_exit(struct device *dev)
 {
+	pr_debug("%s():\n", __func__);
 }
 
 static struct platform_pwm_backlight_data tonga_backlight_data = {
-        .pwm_id          = 0,
-        .max_brightness  = 100,
-        .dft_brightness  = 100,
-        .pwm_period_ns   = 255,
-        .init            = tonga_backlight_init,
-        .notify          = tonga_backlight_notify,
-        .exit            = tonga_backlight_exit,
+	.name            = "tmpa9xx-pwm:1",
+	.max_brightness  = 255,
+	.dft_brightness  = 255,
+	.pwm_period_ns   = 7968750, /* fixme: depends on the clock of the pwm */
+	.init            = tonga_backlight_init,
+	.notify          = tonga_backlight_notify,
+	.exit            = tonga_backlight_exit,
 };
 
 static struct platform_device tonga_backlight_device = {
-        .name = "pwm-backlight",
-        .dev  = {
-                 .platform_data  = &tonga_backlight_data,
-        },
+	.name = "pwm-backlight",
+	.dev  = {
+		.platform_data  = &tonga_backlight_data,
+	},
 };
 #endif
 
@@ -253,7 +251,7 @@ static struct platform_device tmpa900_lcdcop_device = {
 };
 
 static struct platform_device *devices_baseboard[] __initdata = {
-#if defined CONFIG_BACKLIGHT_PWM
+#if defined CONFIG_BACKLIGHT_PWM || defined CONFIG_BACKLIGHT_PWM_MODULE
         &tonga_backlight_device,
 #endif
 #if defined CONFIG_SND_SOC_TMPA9XX_I2S
