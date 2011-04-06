@@ -627,12 +627,36 @@ static struct platform_device tmpa9xx_pwm1_device = {
 };
 #endif
 
+#if defined CONFIG_TMPA900_OFD || defined CONFIG_TMPA900_OFD_MODULE
+static struct resource tmpa900_resource_ofd[] = {
+        {
+		.start = OFD_BASE_ADDRESS,
+		.end   = OFD_BASE_ADDRESS + SZ_16 - 1,
+		.flags = IORESOURCE_MEM,
+	},
+};
+
+static struct platform_device tmpa900_device_ofd = {
+        .name          = "tmpa900-ofd",
+        .id            = -1,
+        .resource      = tmpa900_resource_ofd,
+        .num_resources = ARRAY_SIZE(tmpa900_resource_ofd),
+        .dev           = {
+		.platform_data = NULL,
+        }
+};
+#endif
+
 static struct platform_device *devices_tmpa9xx[] __initdata = {
 #if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
         &tmpa9xx_device_i2c_channel_0,
 #endif
 #if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
         &tmpa9xx_device_i2c_channel_1,
+#endif
+
+#if defined CONFIG_TMPA900_OFD || defined CONFIG_TMPA900_OFD_MODULE
+	&tmpa900_device_ofd,
 #endif
 
 #if defined CONFIG_MMC_TMPA9XX_SDHC || defined CONFIG_MMC_TMPA9XX_SDHC_MODULE

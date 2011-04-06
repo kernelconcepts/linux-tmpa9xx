@@ -118,6 +118,13 @@ config TMPA9XX_CMSI
           Enables support for CMOS image sensor driver
 	  for TMPA9xx
 
+config TMPA900_OFD
+	tristate "Osciallation frequency detector (OFD) driver for TMPA900"
+	depends on CPU_TMPA900
+	help
+	  Enable support for sciallation frequency detector (OFD)
+	  on Toshiba TMPA900 CPU
+
 config IBM_ASM
 	tristate "Device driver for IBM RSA service processor"
 	depends on X86 && PCI && INPUT && EXPERIMENTAL
