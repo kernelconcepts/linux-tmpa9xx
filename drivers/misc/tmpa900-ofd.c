@@ -27,8 +27,13 @@
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 
-#include <asm/system.h>
 #include <mach/regs.h>
+
+struct tmpa900_ofd
+{
+	void __iomem *regs;
+	struct device *dev;
+};
 
 #define OFD_CLKSCR1            __REG(OFD_BASE_ADDRESS + 0x0000)
 #define OFD_CLKSCR2            __REG(OFD_BASE_ADDRESS + 0x0004)
@@ -47,7 +52,7 @@
 #define OFD_RESET_ENABLE (1<<1)/* Enable OFD reset */
 #define OFD_CLEAR_CLKSF  (1<<0)/* Clear High speed oscillation frequency detection flag */
 
-static int tmpa9xx_ofd_enable(void)
+static int ofd_enable(void)
 {
 	int i;
 
@@ -82,7 +87,7 @@ err:
         return -EFAULT;
 }
 
-static int tmpa9xx_ofd_disable(void)
+static int ofd_disable(void)
 {
 	int i;
 
@@ -112,12 +117,69 @@ err:
 
 static int __devinit probe(struct platform_device *pdev)
 {
-	return tmpa9xx_ofd_enable();
+	struct tmpa900_ofd *c;
+	struct resource *res;
+	int ret;
+
+	c = kzalloc(sizeof(*c), GFP_KERNEL);
+	if (!c) {
+		dev_err(&pdev->dev, "kzalloc() failed\n");
+		ret = -ENOMEM;
+		goto err0;
+	}
+
+	c->dev = &pdev->dev;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
+		dev_err(&pdev->dev, "platform_get_resource() failed @ IORESOURCE_MEM\n");
+		ret = -ENODEV;
+		goto err1;
+	}
+
+	c->regs = ioremap(res->start, resource_size(res));
+	if (!c->regs) {
+		dev_err(&pdev->dev, "ioremap() failed\n");
+		ret = -ENODEV;
+		goto err2;
+	}
+
+	platform_set_drvdata(pdev, c);
+
+	ret = ofd_enable();
+	if (ret) {
+		dev_err(&pdev->dev, "ofd_enable() failed\n");
+		ret = -ENODEV;
+		goto err3;
+	}
+
+        dev_info(&pdev->dev, "ready\n");
+
+	return 0;
+
+err3:
+	platform_set_drvdata(pdev, NULL);
+	iounmap(c->regs);
+err2:
+err1:
+	kfree(c);
+err0:
+	return ret;
 }
 
 static int __devexit remove(struct platform_device *pdev)
 {
-	return tmpa9xx_ofd_disable();
+	struct tmpa900_ofd *c = platform_get_drvdata(pdev);
+
+	ofd_disable();
+
+	platform_set_drvdata(pdev, NULL);
+
+	iounmap(c->regs);
+
+	kfree(c);
+
+	return 0;
 }
 
 static struct platform_driver tmpa900_ofd_driver = {
@@ -142,7 +204,7 @@ static void __exit tmpa900_ofd_exit(void)
 module_init(tmpa900_ofd_init);
 module_exit(tmpa900_ofd_exit);
 
-MODULE_AUTHOR("Michael Hunold <michael@mihu.de>");
 MODULE_AUTHOR("Thomas Haase <Thomas.Haase@web.de>");
+MODULE_AUTHOR("Michael Hunold <michael@mihu.de>");
 MODULE_DESCRIPTION("OFD driver for TMPA900");
 MODULE_LICENSE("GPL");
