@@ -19,8 +19,6 @@
 #ifndef __TMPA9XX_TIMEX_H__
 #define __TMPA9XX_TIMEX_H__
 
-#include <mach/hardware.h>
-
 #define CLOCK_TICK_RATE (32768)
 
 #endif

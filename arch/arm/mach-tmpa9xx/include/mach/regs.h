@@ -21,6 +21,8 @@
 #ifndef __TMPA9XX_REGS_H__
 #define __TMPA9XX_REGS_H__
 
+#include <mach/hardware.h>
+
 /* GPIO Ports */
 
 #define PORT_BASE                 (0xF0800000)
