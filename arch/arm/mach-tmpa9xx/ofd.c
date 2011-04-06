@@ -28,6 +28,12 @@
 #include <asm/system.h>
 #include <mach/regs.h>
 
+#define OFD_CLKSCR1            __REG(OFD_BASE_ADDRESS + 0x0000)
+#define OFD_CLKSCR2            __REG(OFD_BASE_ADDRESS + 0x0004)
+#define OFD_CLKSCR3            __REG(OFD_BASE_ADDRESS + 0x0008)
+#define OFD_CLKSMN             __REG(OFD_BASE_ADDRESS + 0x0010)
+#define OFD_CLKSMX             __REG(OFD_BASE_ADDRESS + 0x0020)
+
 #define FOSCH 24000000		/* 24 MHz oscillator clock */
 
 #define CLK_WRITE_ENABLE  0xf9 /*  Enable writing to the clock registers */

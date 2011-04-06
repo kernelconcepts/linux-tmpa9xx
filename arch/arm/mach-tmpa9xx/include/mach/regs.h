@@ -492,11 +492,6 @@
 
 /* OFD */
 #define OFD_BASE_ADDRESS       (0xF0090000)
-#define OFD_CLKSCR1            __REG(OFD_BASE_ADDRESS + 0x0000)
-#define OFD_CLKSCR2            __REG(OFD_BASE_ADDRESS + 0x0004)
-#define OFD_CLKSCR3            __REG(OFD_BASE_ADDRESS + 0x0008)
-#define OFD_CLKSMN             __REG(OFD_BASE_ADDRESS + 0x0010)
-#define OFD_CLKSMX             __REG(OFD_BASE_ADDRESS + 0x0020)
 
 /* SSP */
 #define SSP0_BASE_ADDRESS       (0xF2002000)
