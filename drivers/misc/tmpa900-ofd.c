@@ -27,19 +27,20 @@
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 
-#include <mach/regs.h>
-
 struct tmpa900_ofd
 {
 	void __iomem *regs;
 	struct device *dev;
 };
 
-#define OFD_CLKSCR1	__REG(OFD_BASE_ADDRESS + 0x0000)
-#define OFD_CLKSCR2	__REG(OFD_BASE_ADDRESS + 0x0004)
-#define OFD_CLKSCR3	__REG(OFD_BASE_ADDRESS + 0x0008)
-#define OFD_CLKSMN	__REG(OFD_BASE_ADDRESS + 0x0010)
-#define OFD_CLKSMX	__REG(OFD_BASE_ADDRESS + 0x0020)
+#define CLKSCR1     (0x00)
+#define CLKSCR2     (0x04)
+#define CLKSCR3     (0x08)
+#define CLKSMN      (0x10)
+#define CLKSMX      (0x20)
+
+#define ofd_writel(b, o, v)	writel(v, b->regs + o)
+#define ofd_readl(b, o)		readl(b->regs + o)
 
 #define FOSCH 24000000		/* 24 MHz oscillator clock */
 
@@ -54,31 +55,34 @@ struct tmpa900_ofd
 
 static int ofd_enable(struct tmpa900_ofd *o)
 {
+	uint32_t val;
+
 	/* see trm chapter 3.28.5, programming example */
 
 	/* Enable writing to the OFD registers */
-	OFD_CLKSCR1 = CLK_WRITE_ENABLE;
+	ofd_writel(o, CLKSCR1, CLK_WRITE_ENABLE);
 	/* Disable OFD operation */
-	OFD_CLKSCR2 = CLK_S_DISABLE;
+	ofd_writel(o, CLKSCR2, CLK_S_DISABLE);
 	udelay(1);
 
-	OFD_CLKSCR3 = OFD_RESET_ENABLE | OFD_CLEAR_CLKSF;
+	ofd_writel(o, CLKSCR3, OFD_RESET_ENABLE | OFD_CLEAR_CLKSF);
 
 	while(1) {
-		if (OFD_CLKSCR3 & OFD_RESET_ENABLE)
+		val = ofd_readl(o, CLKSCR3);
+		if ((val & OFD_RESET_ENABLE))
 			break;
 	}
 
 #define FIXED_DIVIDER (32768UL*4UL)
-	OFD_CLKSMN = (((FOSCH * 90UL)  / 100) + FIXED_DIVIDER-1) / FIXED_DIVIDER;
-	OFD_CLKSMX = (((FOSCH * 110UL) / 100) + FIXED_DIVIDER-1) / FIXED_DIVIDER;
+	ofd_writel(o, CLKSMN, (((FOSCH * 90UL)  / 100) + FIXED_DIVIDER-1) / FIXED_DIVIDER);
+	ofd_writel(o, CLKSMX, (((FOSCH * 110UL) / 100) + FIXED_DIVIDER-1) / FIXED_DIVIDER);
 
 	/* Enable OFD operation */
-	OFD_CLKSCR2 = CLK_S_ENABLE;
+	ofd_writel(o, CLKSCR2, CLK_S_ENABLE);
 	udelay(1);
 
 	/* Disable writing to the OFD registers */
-	OFD_CLKSCR1 = CLK_WRITE_DISABLE;
+	ofd_writel(o, CLKSCR1, CLK_WRITE_DISABLE);
 
 	dev_dbg(o->dev, "%s(): ok\n", __func__);
 
@@ -87,21 +91,24 @@ static int ofd_enable(struct tmpa900_ofd *o)
 
 static int ofd_disable(struct tmpa900_ofd *o)
 {
+	uint32_t val;
+
 	/* Enable writing to the OFD registers */
-	OFD_CLKSCR1 = CLK_WRITE_ENABLE;
+	ofd_writel(o, CLKSCR1, CLK_WRITE_ENABLE);
 	/* Disable OFD operation */
-	OFD_CLKSCR2 = CLK_S_DISABLE;
+	ofd_writel(o, CLKSCR2, CLK_S_DISABLE);
 	udelay(1);
 
-	OFD_CLKSCR3 = OFD_CLEAR_CLKSF;
+	ofd_writel(o, CLKSCR3, OFD_CLEAR_CLKSF);
 
 	while(1) {
-		if (OFD_CLKSCR3 & OFD_RESET_ENABLE)
+		val = ofd_readl(o, CLKSCR3);
+		if (!(val & OFD_RESET_ENABLE))
 			break;
 	}
 
 	/* Disable writing to the OFD registers */
-	OFD_CLKSCR1 = CLK_WRITE_DISABLE;
+	ofd_writel(o, CLKSCR1, CLK_WRITE_DISABLE);
 
 	dev_dbg(o->dev, "%s(): ok\n", __func__);
 
