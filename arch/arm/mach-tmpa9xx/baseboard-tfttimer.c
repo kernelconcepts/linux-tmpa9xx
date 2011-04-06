@@ -172,9 +172,25 @@ static struct platform_device tmpa900_lcdcop_device = {
         }
 };
 
+#if defined CONFIG_BACKLIGHT_PWM || defined CONFIG_BACKLIGHT_PWM_MODULE
+static struct platform_pwm_backlight_data backlight_data = {
+	.name            = "tmpa9xx-pwm:1",
+	.max_brightness  = 16368, /* usable range is below 1023, needs investigation */
+	.dft_brightness  = 16368,
+	.pwm_period_ns   = 341000, /* fixme: depends on the clock of the pwm */
+};
+
+static struct platform_device backlight_device = {
+	.name = "pwm-backlight",
+	.dev  = {
+		.platform_data  = &backlight_data,
+	},
+};
+#endif
+
 static struct platform_device *devices_baseboard[] __initdata = {
-#if defined CONFIG_BACKLIGHT_PWM
-        &tonga_backlight_device,
+#if defined CONFIG_BACKLIGHT_PWM || defined CONFIG_BACKLIGHT_PWM_MODULE
+        &backlight_device,
 #endif
 #if defined CONFIG_SND_TMPA910_WM8974 || defined CONFIG_SND_TMPA910_WM8974_MODULE || defined CONFIG_SND_SOC_TMPA9XX_I2S
         &baseboard_i2s_device,    
