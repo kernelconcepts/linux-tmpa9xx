@@ -39,7 +39,7 @@
 #define OFD_RESET_ENABLE (1<<1)/* Enable OFD reset */
 #define OFD_CLEAR_CLKSF  (1<<0)/* Clear High speed oscillation frequency detection flag */
 
-void tmpa9xx_ofd_enable(void)
+static int tmpa9xx_ofd_enable(void)
 {
 	int i;
 
@@ -68,11 +68,10 @@ void tmpa9xx_ofd_enable(void)
 	OFD_CLKSCR1 = CLK_WRITE_DISABLE;	/* Disable writing to the OFD registers */
 	printk(KERN_INFO "Enable OFD - success\n");
 
-        return;
+        return 0;
 err:
 	printk(KERN_INFO "Enable OFD - failed\n");
-        return;
-
+        return -EFAULT;
 }
 
 void tmpa9xx_ofd_disable(void)
@@ -105,8 +104,7 @@ err:
 
 static int __init tmpa9xx_ofd_init(void)
 {
-	tmpa9xx_ofd_enable();
-        return 0;
+	return tmpa9xx_ofd_enable();
 }
 
 arch_initcall(tmpa9xx_ofd_init);
