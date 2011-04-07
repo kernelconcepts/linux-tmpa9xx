@@ -1,7 +1,6 @@
 /*
- *  arch/arm/mach-tmpa9xx/led-topasbb.c 
- *
  * Copyright (C) 2009 Florian Boor <florian.boor@kernelconcepts.de>
+ * Copyright (C) 2011 Michael Hunold <michael@mihu.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- * 
+ *
  * Toshiba Topas 910, LED driver, mainly for GPIO testing
  *
  */
@@ -64,10 +63,10 @@ static int saved_state;
 static void segments_set(int value)
 {
 	int i;
-    
+
 	if (value >= num_pattern)
 		return;
-    
+
 	if (value < 0)
 		return;
 
@@ -78,14 +77,14 @@ static void segments_set(int value)
 static int segments_get(void)
 {
 	int i, p = 0;
-    
+
 	for (i=0; i<NUM_GPIOS; i++)
 		p |= (gpio_get_value(GPIO_LED_SEG_A + i) ? 0 : (1 << i));
-    
+
 	for (i=0; i<num_pattern; i++)
 		if (p == pattern[i])
 			return i;
-    
+
 	return -1;
 }
 
@@ -98,8 +97,8 @@ ssize_t led_segment_store(struct device *pdev, struct device_attribute *attr, co
 {
 	if (count) {
 		int i = simple_strtol(buf, NULL, 10);
-	        
-	        segments_set(i);
+
+		segments_set(i);
 	}
 	return count;
 }
@@ -109,9 +108,9 @@ DEVICE_ATTR(led_segment, 0644, led_segment_show, led_segment_store);
 static int __devinit topas_led_probe(struct platform_device *pdev)
 {
 	int ret = 0;
-    
+
 	platform_set_drvdata(pdev, NULL);
-    
+
 	/* Yes we could have this easier, but I need a 'customer' for the GPIO implementation */
 	ret += gpio_request(GPIO_LED_SEG_A, "LED_SEG_A"); gpio_direction_output(GPIO_LED_SEG_A, 0);
 	ret += gpio_request(GPIO_LED_SEG_B, "LED_SEG_B"); gpio_direction_output(GPIO_LED_SEG_B, 0);
@@ -126,15 +125,15 @@ static int __devinit topas_led_probe(struct platform_device *pdev)
 
 	if (ret < 0) {
 		printk(KERN_ERR "Topas910 LED: Unable to get GPIO for LEDs %i\n", ret);
-	    	return -1;
+		return -1;
 	}
-		
-    
+
+
 	/* Clear state, bootloader leaves it undefined */
-        segments_set(10);
-	
+	segments_set(10);
+
 	ret = device_create_file(&pdev->dev, &dev_attr_led_segment);
-    
+
 	return 0;
 }
 
@@ -165,14 +164,14 @@ static int topas_led_suspend(struct platform_device *pdev, pm_message_t state)
 #else
 	segments_set(1); /* most power saving value...  */
 #endif
-    
+
 	return 0;
 }
 
 static int topas_led_resume(struct platform_device *pdev)
 {
 	segments_set(saved_state);
-    
+
 	return 0;
 }
 #else
@@ -207,4 +206,5 @@ module_exit(topas_led_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Florian Boor <florian.boor@kernelconcepts.de>");
+MODULE_AUTHOR("Michael Hunold <michael@mihu.de>");
 MODULE_DESCRIPTION("LED driver for TOPAS 910");
