@@ -12,6 +12,7 @@ obj-$(CONFIG_ATMEL_TCLIB)	+= atmel_tclib.o
 obj-$(CONFIG_TMPA9XX_MLDALM)	+= tmpa9xx-mldalm.o
 obj-$(CONFIG_TMPA9XX_CMSI)	+= tmpa9xx-cmsi.o
 obj-$(CONFIG_TMPA900_OFD)	+= tmpa900-ofd.o
+obj-$(CONFIG_TOPAS_LED) 	+= topas-led.o
 obj-$(CONFIG_BMP085)		+= bmp085.o
 obj-$(CONFIG_ICS932S401)	+= ics932s401.o
 obj-$(CONFIG_LKDTM)		+= lkdtm.o

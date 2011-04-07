@@ -34,8 +34,6 @@
 #include <mach/hardware.h>
 #include <mach/regs.h>
 
-#include "tmpa9xx.h"
-
 #define GPIO_LED_SEG_A       8
 #define GPIO_LED_SEG_B       9
 #define GPIO_LED_SEG_C      10
@@ -142,6 +140,8 @@ static int __devinit topas_led_probe(struct platform_device *pdev)
 
 static int __devexit topas_led_remove(struct platform_device *pdev)
 {
+	device_remove_file(&pdev->dev, &dev_attr_led_segment);
+
 	gpio_free(GPIO_LED_SEG_A);
 	gpio_free(GPIO_LED_SEG_B);
 	gpio_free(GPIO_LED_SEG_C);

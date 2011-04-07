@@ -125,6 +125,12 @@ config TMPA900_OFD
 	  Enable support for sciallation frequency detector (OFD)
 	  on Toshiba TMPA900 CPU
 
+config TOPAS_LED
+	tristate "LED driver for TMPA9xx Topas development boards"
+	depends on MACH_TOPASA900 || MACH_TOPASA910
+	help
+	  Enable support LED driver for TMPA9xx Topas development boards
+
 config IBM_ASM
 	tristate "Device driver for IBM RSA service processor"
 	depends on X86 && PCI && INPUT && EXPERIMENTAL
