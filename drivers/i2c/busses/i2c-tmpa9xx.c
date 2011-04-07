@@ -405,7 +405,7 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 
 	i2c_writel(priv, AR, 0);
 
-	priv->pclk = clk_get(&pdev->dev, "apb_pclk");
+	priv->pclk = clk_get(&pdev->dev, NULL);
 	if (IS_ERR(priv->pclk)) {
 		dev_dbg(&pdev->dev, "clk_get() failed\n");
 		ret = PTR_ERR(priv->pclk);

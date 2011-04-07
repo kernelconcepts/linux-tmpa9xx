@@ -31,67 +31,6 @@
 
 #include <mach/regs.h>
 
-struct clk
-{
-	unsigned long rate;
-	unsigned long (*get_rate)(struct clk *clk);
-	int (*set_rate)(struct clk *clk, unsigned long rate);
-	int offset;
-};
-
-static struct clk ssp_clk = {
-	.rate = 96000000,
-};
-
-static struct clk uart_clk = {
-	.rate = 96000000,
-};
-
-static struct clk clcd_clk = {
-	.rate = 96000000,
-};
-
-static struct clk dummy_apb_pclk = {
-	.rate = 96000000,
-};
-
-int clk_enable(struct clk *clk)
-{
-	return 0;
-}
-EXPORT_SYMBOL(clk_enable);
-
-void clk_disable(struct clk *clk)
-{
-}
-EXPORT_SYMBOL(clk_disable);
-
-unsigned long clk_get_rate(struct clk *clk)
-{
-	if (clk->get_rate)
-		return clk->get_rate(clk);
-
-	return clk->rate;
-}
-EXPORT_SYMBOL(clk_get_rate);
-
-long clk_round_rate(struct clk *clk, unsigned long rate)
-{
-	/*TODO*/
-	return rate;
-}
-EXPORT_SYMBOL(clk_round_rate);
-
-int clk_set_rate(struct clk *clk, unsigned long rate)
-{
-	if (clk->set_rate)
-		return clk->set_rate(clk, rate);
-
-	clk->rate = rate;
-	return 0;
-}
-EXPORT_SYMBOL(clk_set_rate);
-
 #define SYSCR1 (0x04)
 #define SYSCR2 (0x08)
 #define SYSCR3 (0x0C)
@@ -103,6 +42,56 @@ EXPORT_SYMBOL(clk_set_rate);
 
 #define clk_writel(b, o, v)	writel(v, PLL_BASE_ADDRESS + o)
 #define clk_readl(b, o)		readl(PLL_BASE_ADDRESS + o)
+
+struct clk
+{
+	const char *name;
+	unsigned long rate;
+	unsigned long (*get_rate)(struct clk *clk);
+	int (*set_rate)(struct clk *clk, unsigned long rate);
+	int offset;
+};
+
+static struct clk apb_pclk;
+
+int clk_enable(struct clk *clk)
+{
+	BUG_ON(!clk->rate);
+	/* apb_clk is always on and cannot be enabled */
+	return 0;
+}
+EXPORT_SYMBOL(clk_enable);
+
+void clk_disable(struct clk *clk)
+{
+	/* apb_clk is always on and cannot be disabled */
+	BUG_ON(!clk->rate);
+}
+EXPORT_SYMBOL(clk_disable);
+
+unsigned long clk_get_rate(struct clk *clk)
+{
+	BUG_ON(!clk->rate);
+
+	if (clk->get_rate)
+		return clk->get_rate(clk);
+
+	pr_debug("%s(): '%s'\n", __func__, clk->name);
+
+	return clk->rate;
+}
+EXPORT_SYMBOL(clk_get_rate);
+
+int clk_set_rate(struct clk *clk, unsigned long rate)
+{
+	if (clk->set_rate)
+		return clk->set_rate(clk, rate);
+
+	pr_info("%s(): setting rate of clock '%s' not supported\n", __func__, clk->name);
+
+	return -EINVAL;
+}
+EXPORT_SYMBOL(clk_set_rate);
 
 static int timer_set_rate(struct clk *clk, unsigned long rate)
 {
@@ -116,7 +105,7 @@ static int timer_set_rate(struct clk *clk, unsigned long rate)
 
 	/* timer can be set to either 32kHz or fHCLK/2 */
 
-	if (rate == clk_get_rate(&dummy_apb_pclk)/2) {
+	if (rate == clk_get_rate(&apb_pclk)/2) {
 		val |= (1 << clk->offset);
 	} else if (rate == 32*1000) {
 		val |= (0 << clk->offset);
@@ -138,15 +127,41 @@ static unsigned long timer_get_rate(struct clk *clk)
 {
 	uint32_t val = clk_readl(clk, CLKCR5);
 
-	clk->rate = (val & (1 << clk->offset)) ? clk_get_rate(&dummy_apb_pclk)/2 : 32 * 1000;
+	clk->rate = (val & (1 << clk->offset)) ? clk_get_rate(&apb_pclk)/2 : 32 * 1000;
 
 	pr_debug("%s(): offset %d, rate %lu\n", __func__, clk->offset, clk->rate);
 
 	return clk->rate;
 }
 
+static int pix_clk_set_rate(struct clk *clk, unsigned long rate)
+{
+	/* dummy implementation to make the clcd driver happy */
+
+	clk->rate = rate;
+
+	pr_debug("%s(): rate %lu\n", __func__, clk->rate);
+
+	return 0;
+}
+
+static struct clk apb_pclk = {
+	.name = "apb_clk",
+};
+
+static struct clk fosch = {
+	.name = "fosch",
+	.rate = fOSCH,
+};
+
+static struct clk pix_clk = {
+	.name = "pix_clk",
+	.set_rate = pix_clk_set_rate,
+};
+
 static struct clk tim01_clk =
 {
+	.name = "tim01_clk",
 	.set_rate = timer_set_rate,
 	.get_rate = timer_get_rate,
 	.offset = 0,
@@ -154,55 +169,60 @@ static struct clk tim01_clk =
 
 static struct clk tim23_clk =
 {
+	.name = "tim23_clk",
 	.set_rate = timer_set_rate,
 	.get_rate = timer_get_rate,
 	.offset = 1,
 };
 
 static struct clk_lookup lookups[] = {
-        {
-		/* Bus clock */
-                .con_id         = "apb_pclk",
-                .clk            = &dummy_apb_pclk,
-        }, {
-		/* UART0 */
+	{
+		.con_id		= "fOSCH",
+		.clk		= &fosch,
+	}, {
 		.dev_id		= "uart0",
-		.clk		= &uart_clk,
-	}, {	/* UART1 */
+		.clk		= &apb_pclk,
+	}, {
 		.dev_id		= "uart1",
-		.clk		= &uart_clk,
-	}, {	/* UART2 */
+		.clk		= &apb_pclk,
+	}, {
 		.dev_id		= "uart2",
-		.clk		= &uart_clk,
-	}, {	/* SSP0 */
+		.clk		= &apb_pclk,
+	}, {
 		.dev_id		= "tmpa9xx-spi0",
-		.clk		= &ssp_clk,
-	}, {	/* SSP1 */
+		.clk		= &apb_pclk,
+	}, {
 		.dev_id		= "tmpa9xx-spi1",
-		.clk		= &ssp_clk,
-	}, {	/* CLCD */
+		.clk		= &apb_pclk,
+	}, {
 		.dev_id		= "tmpa9xx-clcd",
-		.clk		= &clcd_clk,
-	}, {	/* PWM */
+		.clk		= &pix_clk,
+	}, {
+		.dev_id		= "tmpa9xx-wdt",
+		.clk		= &apb_pclk,
+	}, {
+		.dev_id		= "tmpa9xx-i2c.0",
+		.clk		= &apb_pclk,
+	}, {
+		.dev_id		= "tmpa9xx-i2c.1",
+		.clk		= &apb_pclk,
+	}, {
 		.dev_id		= "tmpa9xx-pwm.0",
 		.clk		= &tim01_clk,
-	}, {	/* PWM */
+	}, {
 		.dev_id		= "tmpa9xx-pwm.1",
 		.clk		= &tim23_clk,
-	}, {	/* WDT */
-		.dev_id		= "tmpa9xx-wdt",
-		.clk		= &dummy_apb_pclk,
 	}
 };
 
 int __init clk_init(void)
 {
 	uint32_t val;
-#define fOSCH (24 * 1000 * 1000)
 	uint32_t input_to_fcsel = fOSCH;
 	uint32_t clock_gear;
 	uint32_t fCLK;
 	uint32_t fHCLK;
+	uint32_t fPCLK;
 
 	val = clk_readl(clk, SYSCR3);
 	if ((val & (1 << 7))) {
@@ -224,7 +244,12 @@ int __init clk_init(void)
 	pr_debug("%s(): clock gear set to fc/%d\n", __func__, clock_gear);
 	fCLK = input_to_fcsel / clock_gear;
 	fHCLK = fCLK / 2;
-	pr_debug("%s(): fCLK is %d Hz, fHCLK is %d Hz\n", __func__, fCLK, fHCLK);
+	fPCLK = fHCLK;
+	pr_debug("%s(): fCLK is %d Hz, fHCLK is %d Hz, fPCLK is %d Hz\n", __func__, fCLK, fHCLK, fPCLK);
+
+	/* setup clocks to defaults */
+	apb_pclk.rate = fPCLK;
+	pix_clk.rate = fPCLK;
 
 	/* register the clock lookups */
 	clkdev_add_table(lookups, ARRAY_SIZE(lookups));

@@ -20,5 +20,6 @@
 #define __TMPA9XX_TIMEX_H__
 
 #define CLOCK_TICK_RATE (32768)
+#define fOSCH (24*1000*1000)
 
 #endif
