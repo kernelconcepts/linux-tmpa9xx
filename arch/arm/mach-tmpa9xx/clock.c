@@ -264,7 +264,7 @@ static struct clk tim23_clk =
 
 static struct clk_lookup lookups[] = {
 	{
-		.con_id		= "fOSCH",
+		.dev_id		= "tmpa900-ofd",
 		.clk		= &fosch,
 	}, {
 		.dev_id		= "tmpa9xx-usb",

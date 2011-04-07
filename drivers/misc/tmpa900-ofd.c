@@ -1,4 +1,3 @@
-#define DEBUG
 /*
  *  Oscillation frequency detection (OFD) driver for TMPA900
  *
@@ -27,11 +26,14 @@
 #include <linux/io.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
+#include <linux/clk.h>
+#include <linux/err.h>
 
 struct tmpa900_ofd
 {
 	void __iomem *regs;
 	struct device *dev;
+	struct clk *clk;
 };
 
 #define CLKSCR1     (0x00)
@@ -42,8 +44,6 @@ struct tmpa900_ofd
 
 #define ofd_writel(b, o, v)	writel(v, b->regs + o)
 #define ofd_readl(b, o)		readl(b->regs + o)
-
-#define FOSCH 24000000		/* 24 MHz oscillator clock */
 
 #define CLK_WRITE_ENABLE	0xf9 /* Enable writing to the clock registers */
 #define CLK_WRITE_DISABLE	0x06 /* Disable writing to the clock registers */
@@ -57,6 +57,7 @@ struct tmpa900_ofd
 static int ofd_enable(struct tmpa900_ofd *o, int deviation)
 {
 	uint32_t val;
+	uint32_t fosch;
 	uint32_t clksmn;
 	uint32_t clksmx;
 
@@ -76,9 +77,11 @@ static int ofd_enable(struct tmpa900_ofd *o, int deviation)
 			break;
 	}
 
+	fosch = clk_get_rate(o->clk);
+
 #define FIXED_DIVIDER (32768UL*4UL)
-	clksmn = (((FOSCH * (100UL - deviation)) / 100) + FIXED_DIVIDER/2) / FIXED_DIVIDER;
-	clksmx = (((FOSCH * (100UL + deviation)) / 100) + FIXED_DIVIDER/2) / FIXED_DIVIDER;
+	clksmn = (((fosch * (100UL - deviation)) / 100) + FIXED_DIVIDER/2) / FIXED_DIVIDER;
+	clksmx = (((fosch * (100UL + deviation)) / 100) + FIXED_DIVIDER/2) / FIXED_DIVIDER;
 	ofd_writel(o, CLKSMN, clksmn);
 	ofd_writel(o, CLKSMX, clksmx);
 
@@ -89,7 +92,7 @@ static int ofd_enable(struct tmpa900_ofd *o, int deviation)
 	/* Disable writing to the OFD registers */
 	ofd_writel(o, CLKSCR1, CLK_WRITE_DISABLE);
 
-	dev_dbg(o->dev, "%s(): ok, min %d, max %d\n", __func__, clksmn, clksmx);
+	dev_dbg(o->dev, "%s(): ok, fosch %d, min %d, max %d\n", __func__, fosch, clksmn, clksmx);
 
 	return 0;
 }
@@ -135,37 +138,55 @@ static int __devinit probe(struct platform_device *pdev)
 
 	o->dev = &pdev->dev;
 
+	o->clk = clk_get(&pdev->dev, NULL);
+	if (IS_ERR(o->clk)) {
+		dev_err(o->dev, "clk_get() failed\n");
+		ret = -ENOENT;
+		goto err1;
+	}
+
+	ret = clk_enable(o->clk);
+	if (ret) {
+		dev_err(o->dev, "clk_enable() failed\n");
+		ret = -ENOENT;
+		goto err2;
+	}
+
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
-		dev_err(&pdev->dev, "platform_get_resource() failed @ IORESOURCE_MEM\n");
+		dev_err(o->dev, "platform_get_resource() failed @ IORESOURCE_MEM\n");
 		ret = -ENODEV;
-		goto err1;
+		goto err3;
 	}
 
 	o->regs = ioremap(res->start, resource_size(res));
 	if (!o->regs) {
-		dev_err(&pdev->dev, "ioremap() failed\n");
+		dev_err(o->dev, "ioremap() failed\n");
 		ret = -ENODEV;
-		goto err2;
+		goto err4;
 	}
 
 	platform_set_drvdata(pdev, o);
 
 	ret = ofd_enable(o, 10);
 	if (ret) {
-		dev_err(&pdev->dev, "ofd_enable() failed\n");
+		dev_err(o->dev, "ofd_enable() failed\n");
 		ret = -ENODEV;
-		goto err3;
+		goto err5;
 	}
 
-	dev_info(&pdev->dev, "ready\n");
+	dev_info(o->dev, "ready\n");
 
 	return 0;
 
-err3:
+err5:
 	platform_set_drvdata(pdev, NULL);
 	iounmap(o->regs);
+err4:
+err3:
+	clk_disable(o->clk);
 err2:
+	clk_put(o->clk);
 err1:
 	kfree(o);
 err0:
@@ -181,6 +202,10 @@ static int __devexit remove(struct platform_device *pdev)
 	platform_set_drvdata(pdev, NULL);
 
 	iounmap(o->regs);
+
+	clk_disable(o->clk);
+
+	clk_put(o->clk);
 
 	kfree(o);
 
