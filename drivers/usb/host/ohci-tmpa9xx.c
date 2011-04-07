@@ -16,8 +16,11 @@
 #include <linux/jiffies.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
+#include <linux/clk.h>
 
 #include <mach/sram.h>
+
+static struct clk *clk;
 
 static int ohci_tmpa9xx_init(struct usb_hcd *hcd)
 {
@@ -102,53 +105,78 @@ static int ohci_hcd_tmpa9xx_drv_probe(struct platform_device *pdev)
 	struct usb_hcd *hcd = NULL;
 
 	irq = retval = platform_get_irq(pdev, 0);
-	if (retval < 0)
-		goto err0;
-
-	/* allocate, reserve and remap resources for registers */
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (res == NULL) {
-		dev_err(dev, "no resource definition for registers\n");
+	if (retval < 0) {
+		dev_err(dev, "platform_get_irq() failed\n");
 		retval = -ENOENT;
 		goto err0;
 	}
 
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (res == NULL) {
+		dev_err(dev, "platform_get_resource() failed\n");
+		retval = -ENOENT;
+		goto err1;
+	}
+
+	clk = clk_get(&pdev->dev, NULL);
+	if (IS_ERR(clk)) {
+		dev_err(dev, "clk_get() failed\n");
+		retval = -ENOENT;
+		goto err2;
+	}
+
+	retval = clk_enable(clk);
+	if (retval) {
+		dev_err(dev, "clk_enable() failed\n");
+		retval = -ENOENT;
+		goto err3;
+	}
+
 	hcd = usb_create_hcd(driver, &pdev->dev, "tmpa9xx");
 	if (!hcd) {
+		dev_err(dev, "usb_create_hcd() failed\n");
 		retval = -ENOMEM;
-		goto err0;
+		goto err4;
 	}
 
 	hcd->rsrc_start = res->start;
 	hcd->rsrc_len = res->end - res->start + 1;
 
 	if (!request_mem_region(hcd->rsrc_start, hcd->rsrc_len,	pdev->name)) {
-		dev_err(dev, "request_mem_region failed\n");
+		dev_err(dev, "request_mem_region() failed\n");
 		retval = -EBUSY;
-		goto err1;
+		goto err5;
 	}
 
 	hcd->regs = ioremap(hcd->rsrc_start, hcd->rsrc_len);
 	if (hcd->regs == NULL) {
-		dev_err(dev, "cannot remap registers\n");
+		dev_err(dev, "ioremap() failed\n");
 		retval = -ENXIO;
-		goto err2;
+		goto err6;
 	}
 
 	ohci_hcd_init(hcd_to_ohci(hcd));
 
 	retval = usb_add_hcd(hcd, irq, IRQF_DISABLED);
-	if (retval)
-		goto err3;
+	if (retval) {
+		dev_err(dev, "usb_add_hcd() failed\n");
+		goto err7;
+	}
 
 	return 0;
 
-err3:
+err7:
 	iounmap(hcd->regs);
-err2:
+err6:
 	release_mem_region(hcd->rsrc_start, hcd->rsrc_len);
-err1:
+err5:
 	usb_put_hcd(hcd);
+err4:
+	clk_disable(clk);
+err3:
+	clk_put(clk);
+err2:
+err1:
 err0:
 	return retval;
 }
@@ -164,6 +192,10 @@ static int ohci_hcd_tmpa9xx_drv_remove(struct platform_device *pdev)
 	release_mem_region(hcd->rsrc_start, hcd->rsrc_len);
 
 	usb_put_hcd(hcd);
+
+	clk_disable(clk);
+
+	clk_put(clk);
 
 	platform_set_drvdata(pdev, NULL);
 

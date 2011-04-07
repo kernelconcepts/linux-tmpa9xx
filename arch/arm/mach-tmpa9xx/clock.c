@@ -38,6 +38,7 @@
 #define SYSCR5 (0x14)
 #define SYSCR6 (0x18)
 #define SYSCR7 (0x1C)
+#define SYSCR8 (0x20)
 #define CLKCR5 (0x54)
 
 #define clk_writel(b, o, v)	writel(v, PLL_BASE_ADDRESS + o)
@@ -49,6 +50,8 @@ struct clk
 	unsigned long rate;
 	unsigned long (*get_rate)(struct clk *clk);
 	int (*set_rate)(struct clk *clk, unsigned long rate);
+	int (*enable)(struct clk *clk);
+	void (*disable)(struct clk *clk);
 	int offset;
 };
 
@@ -57,14 +60,23 @@ static struct clk apb_pclk;
 int clk_enable(struct clk *clk)
 {
 	BUG_ON(!clk->rate);
+
+	if (clk->enable)
+		return clk->enable(clk);
+
 	/* apb_clk is always on and cannot be enabled */
+
 	return 0;
 }
 EXPORT_SYMBOL(clk_enable);
 
 void clk_disable(struct clk *clk)
 {
+	if (clk->disable)
+		clk->disable(clk);
+
 	/* apb_clk is always on and cannot be disabled */
+
 	BUG_ON(!clk->rate);
 }
 EXPORT_SYMBOL(clk_disable);
@@ -145,6 +157,67 @@ static int pix_clk_set_rate(struct clk *clk, unsigned long rate)
 	return 0;
 }
 
+int host_enable(struct clk *clk)
+{
+	uint32_t val;
+
+	if (clk->rate != 48000000) {
+		pr_err("%s(): rate %lu not allowed for '%s'\n", __func__, clk->rate, clk->name);
+		return -EINVAL;
+	}
+
+	/* set to 1/4 fPLL which is hopefully 48MhZ */
+	val  = clk_readl(clk, SYSCR8);
+	val &= ~0x7;
+	val |=  0x4;
+	clk_writel(clk, SYSCR8, val);
+
+	/* enable */
+	val  = clk_readl(clk, CLKCR5);
+	val |= (1 << 4);
+	clk_writel(clk, CLKCR5, val);
+
+	pr_debug("%s():\n", __func__);
+
+	return 0;
+}
+
+void host_disable(struct clk *clk)
+{
+	uint32_t val;
+
+	val  = clk_readl(clk, CLKCR5);
+	val &= ~(1 << 4);
+	clk_writel(clk, CLKCR5, val);
+
+	pr_debug("%s():\n", __func__);
+}
+
+static int gadget_enable(struct clk *clk)
+{
+	uint32_t val;
+
+	if (clk->rate != 24000000) {
+		pr_err("%s(): rate %lu not allowed for '%s'\n", __func__, clk->rate, clk->name);
+		return -EINVAL;
+	}
+
+	/* set to clock of X1 which is hopefully 24MhZ */
+	val  = clk_readl(clk, SYSCR8);
+	val &= ~(0x3 << 4);
+	val |=  (0x3 << 4);
+	clk_writel(clk, SYSCR8, val);
+
+	pr_debug("%s(): rate %lu\n", __func__, clk->rate);
+
+	return 0;
+}
+
+void gadget_disable(struct clk *clk)
+{
+	pr_debug("%s():\n", __func__);
+}
+
 static struct clk apb_pclk = {
 	.name = "apb_clk",
 };
@@ -152,6 +225,20 @@ static struct clk apb_pclk = {
 static struct clk fosch = {
 	.name = "fosch",
 	.rate = fOSCH,
+};
+
+static struct clk host = {
+	.name = "usb-host",
+	.rate = 48000000,
+	.enable = host_enable,
+	.disable = host_disable,
+};
+
+static struct clk gadget = {
+	.name = "usb-gadget",
+	.rate = 24000000,
+	.enable = gadget_enable,
+	.disable = gadget_disable,
 };
 
 static struct clk pix_clk = {
@@ -179,6 +266,12 @@ static struct clk_lookup lookups[] = {
 	{
 		.con_id		= "fOSCH",
 		.clk		= &fosch,
+	}, {
+		.dev_id		= "tmpa9xx-usb",
+		.clk		= &host,
+	}, {
+		.dev_id		= "tmpa9xx-udc",
+		.clk		= &gadget,
 	}, {
 		.dev_id		= "uart0",
 		.clk		= &apb_pclk,
@@ -253,6 +346,7 @@ int __init clk_init(void)
 
 	/* register the clock lookups */
 	clkdev_add_table(lookups, ARRAY_SIZE(lookups));
+
 	return 0;
 }
 core_initcall(clk_init);

@@ -41,6 +41,7 @@
 #include <linux/delay.h>
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
+#include <linux/clk.h>
 
 #include <asm/byteorder.h>
 #include <asm/io.h>
@@ -1718,12 +1719,30 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	/* init software state */
 	udc = &controller;
+
+	udc->clk = clk_get(&pdev->dev, NULL);
+	if (IS_ERR(udc->clk)) {
+		dev_err(&pdev->dev, "clk_get() failed\n");
+		release_mem_region(res->start, res->end - res->start + 1);
+		return -ENOENT;
+	}
+
+	retval = clk_enable(udc->clk);
+	if (retval) {
+		dev_err(&pdev->dev, "clk_enable() failed\n");
+		clk_put(udc->clk);
+		release_mem_region(res->start, res->end - res->start + 1);
+		return -ENOENT;
+	}
+
 	udc->gadget.dev.parent = dev;
 	udc->pdev = pdev;
 	udc->enabled = 0;
 	dev_set_name(&udc->gadget.dev, "gadget");
 	udc->udp_baseaddr = ioremap(res->start, res->end - res->start + 1);
 	if (!udc->udp_baseaddr) {
+		clk_disable(udc->clk);
+		clk_put(udc->clk);
 		release_mem_region(res->start, res->end - res->start + 1);
 		return -ENOMEM;
 	}
@@ -1783,6 +1802,8 @@ fail1:
 fail0:
 	iounmap(udc->udp_baseaddr);
 	release_mem_region(res->start, res->end - res->start + 1);
+	clk_disable(udc->clk);
+	clk_put(udc->clk);
 	return retval;
 }
 
@@ -1807,6 +1828,10 @@ static int __devexit tmpa9xx_udc_remove(struct platform_device *pdev)
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	release_mem_region(res->start, res->end - res->start + 1);
+
+	clk_disable(udc->clk);
+	clk_put(udc->clk);
+
 	return 0;
 }
 
