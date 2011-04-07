@@ -1,3 +1,4 @@
+#define DEBUG
 /*
  *  Oscillation frequency detection (OFD) driver for TMPA900
  *
@@ -53,9 +54,11 @@ struct tmpa900_ofd
 #define OFD_RESET_ENABLE	(1<<1) /* Enable OFD reset */
 #define OFD_CLEAR_CLKSF		(1<<0) /* Clear High speed oscillation frequency detection flag */
 
-static int ofd_enable(struct tmpa900_ofd *o)
+static int ofd_enable(struct tmpa900_ofd *o, int deviation)
 {
 	uint32_t val;
+	uint32_t clksmn;
+	uint32_t clksmx;
 
 	/* see trm chapter 3.28.5, programming example */
 
@@ -74,8 +77,10 @@ static int ofd_enable(struct tmpa900_ofd *o)
 	}
 
 #define FIXED_DIVIDER (32768UL*4UL)
-	ofd_writel(o, CLKSMN, (((FOSCH * 90UL)  / 100) + FIXED_DIVIDER-1) / FIXED_DIVIDER);
-	ofd_writel(o, CLKSMX, (((FOSCH * 110UL) / 100) + FIXED_DIVIDER-1) / FIXED_DIVIDER);
+	clksmn = (((FOSCH * (100UL - deviation)) / 100) + FIXED_DIVIDER/2) / FIXED_DIVIDER;
+	clksmx = (((FOSCH * (100UL + deviation)) / 100) + FIXED_DIVIDER/2) / FIXED_DIVIDER;
+	ofd_writel(o, CLKSMN, clksmn);
+	ofd_writel(o, CLKSMX, clksmx);
 
 	/* Enable OFD operation */
 	ofd_writel(o, CLKSCR2, CLK_S_ENABLE);
@@ -84,7 +89,7 @@ static int ofd_enable(struct tmpa900_ofd *o)
 	/* Disable writing to the OFD registers */
 	ofd_writel(o, CLKSCR1, CLK_WRITE_DISABLE);
 
-	dev_dbg(o->dev, "%s(): ok\n", __func__);
+	dev_dbg(o->dev, "%s(): ok, min %d, max %d\n", __func__, clksmn, clksmx);
 
 	return 0;
 }
@@ -146,7 +151,7 @@ static int __devinit probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, o);
 
-	ret = ofd_enable(o);
+	ret = ofd_enable(o, 10);
 	if (ret) {
 		dev_err(&pdev->dev, "ofd_enable() failed\n");
 		ret = -ENODEV;
