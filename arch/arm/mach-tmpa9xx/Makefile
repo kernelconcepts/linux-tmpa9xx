@@ -8,7 +8,6 @@
 # Object file lists.
 
 obj-y				        += irq.o time.o gpio.o dma.o clock.o sram.o tmpa9xx-generic.o
-#obj-$(CONFIG_HAVE_PWM)		        += pwm.o
 obj-$(CONFIG_MACH_TOPAS910)	        += topas910.o baseboard-topas910.o led-topasbb.o 
 obj-$(CONFIG_MACH_TOPASA900)	        += topasa900.o baseboard-topasa900.o led-topasbb.o 
 obj-$(CONFIG_MACH_TONGA)	        += tonga.o baseboard-glyn.o
