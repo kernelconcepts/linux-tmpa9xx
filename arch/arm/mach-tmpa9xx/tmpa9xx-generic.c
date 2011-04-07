@@ -768,9 +768,13 @@ static int setup_port_c(void)
         GPIOCODE  &= ~(0xc0);
         GPIOCIE   &= ~(0xc0);
 
+#warning "fix me"
+#define CLKCR5                  __REG(PLL_BASE_ADDRESS + 0x054)
         /* Enable USB Host Controller Clock Domain */
         CLKCR5    |= (1<<4);
 
+#warning "fix me"
+#define SYSCR8                  __REG(PLL_BASE_ADDRESS + 0x020)
         /* Set appropriate clock seting for USB in SYSCR8.
            For USB device, 24Mhz directly from quartz: [5:4]  11 / 0x3
            For USB host  , 48Mhz from F PPL / 4      : [3:0] 100 / 0x4 */

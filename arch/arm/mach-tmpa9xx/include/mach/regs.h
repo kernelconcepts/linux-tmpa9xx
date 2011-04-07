@@ -374,16 +374,6 @@
 
 /* System Control / PLL */
 #define PLL_BASE_ADDRESS        0xF0050000
-#define SYSCR0                  __REG(PLL_BASE_ADDRESS + 0x000)
-#define SYSCR1                  __REG(PLL_BASE_ADDRESS + 0x004)
-#define SYSCR2                  __REG(PLL_BASE_ADDRESS + 0x008)
-#define SYSCR3                  __REG(PLL_BASE_ADDRESS + 0x00C)
-#define SYSCR4                  __REG(PLL_BASE_ADDRESS + 0x010)
-#define SYSCR5                  __REG(PLL_BASE_ADDRESS + 0x014)
-#define SYSCR6                  __REG(PLL_BASE_ADDRESS + 0x018)
-#define SYSCR7                  __REG(PLL_BASE_ADDRESS + 0x01C)
-#define SYSCR8                  __REG(PLL_BASE_ADDRESS + 0x020)
-#define CLKCR5                  __REG(PLL_BASE_ADDRESS + 0x054)
 
 /* Watchdog Timer registers */
 #define WDT_BASE_ADDRESS        (0xF0010000)

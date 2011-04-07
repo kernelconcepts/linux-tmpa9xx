@@ -91,6 +91,8 @@ static void __init tmpa9xx_timer_init(void)
 	struct tmpa9xx_time_priv *t = &g_tmpa9xx_time_priv;
 	struct timespec tv;
 
+#warning "fix me"
+#define CLKCR5                  __REG(PLL_BASE_ADDRESS + 0x054)
 	CLKCR5 &= ~(1<<2);		/* Select 32kHz Clock for Timer*/
 
 	memset(t, 0, sizeof(*t));

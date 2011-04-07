@@ -92,7 +92,14 @@ int clk_set_rate(struct clk *clk, unsigned long rate)
 }
 EXPORT_SYMBOL(clk_set_rate);
 
-#define CR5	(0x54)
+#define SYSCR1 (0x04)
+#define SYSCR2 (0x08)
+#define SYSCR3 (0x0C)
+#define SYSCR4 (0x10)
+#define SYSCR5 (0x14)
+#define SYSCR6 (0x18)
+#define SYSCR7 (0x1C)
+#define CLKCR5 (0x54)
 
 #define clk_writel(b, o, v)	writel(v, PLL_BASE_ADDRESS + o)
 #define clk_readl(b, o)		readl(PLL_BASE_ADDRESS + o)
@@ -104,7 +111,7 @@ static int timer_set_rate(struct clk *clk, unsigned long rate)
 	if (rate == clk->rate)
 		return 0;
 
-	val = clk_readl(clk, CR5);
+	val = clk_readl(clk, CLKCR5);
 	val &= ~(1 << clk->offset);
 
 	/* timer can be set to either 32kHz or fHCLK/2 */
@@ -118,7 +125,7 @@ static int timer_set_rate(struct clk *clk, unsigned long rate)
 		return -EINVAL;
 	}
 
-	clk_writel(clk, CR5, val);
+	clk_writel(clk, CLKCR5, val);
 
 	clk->rate = rate;
 
@@ -129,7 +136,7 @@ static int timer_set_rate(struct clk *clk, unsigned long rate)
 
 static unsigned long timer_get_rate(struct clk *clk)
 {
-	uint32_t val = clk_readl(clk, CR5);
+	uint32_t val = clk_readl(clk, CLKCR5);
 
 	clk->rate = (val & (1 << clk->offset)) ? clk_get_rate(&dummy_apb_pclk)/2 : 32 * 1000;
 
@@ -190,6 +197,35 @@ static struct clk_lookup lookups[] = {
 
 int __init clk_init(void)
 {
+	uint32_t val;
+#define fOSCH (24 * 1000 * 1000)
+	uint32_t input_to_fcsel = fOSCH;
+	uint32_t clock_gear;
+	uint32_t fCLK;
+	uint32_t fHCLK;
+
+	val = clk_readl(clk, SYSCR3);
+	if ((val & (1 << 7))) {
+		int multiplier = (val & 0x7) == 0x5 ? 6 : 8;
+		val = clk_readl(clk, SYSCR2);
+		if (val & 0x1) {
+			pr_debug("%s(): PLL output clock is on, input to fcsel is fPLL x%d\n", __func__, multiplier);
+			input_to_fcsel = multiplier * fOSCH;
+		}
+		else {
+			pr_debug("%s(): PLL output clock is on, input to fcsel is fOSCH\n", __func__);
+		}
+	}
+
+	val = clk_readl(clk, SYSCR1);
+	BUG_ON(val & 0x4);
+
+	clock_gear = (1 << (val & 0x3));
+	pr_debug("%s(): clock gear set to fc/%d\n", __func__, clock_gear);
+	fCLK = input_to_fcsel / clock_gear;
+	fHCLK = fCLK / 2;
+	pr_debug("%s(): fCLK is %d Hz, fHCLK is %d Hz\n", __func__, fCLK, fHCLK);
+
 	/* register the clock lookups */
 	clkdev_add_table(lookups, ARRAY_SIZE(lookups));
 	return 0;
