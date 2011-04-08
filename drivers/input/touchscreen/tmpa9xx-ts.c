@@ -92,6 +92,7 @@ static inline void disable_interrupt(struct tmpa9xx_ts_priv *t)
 static void backend_irq_work(struct work_struct *work)
 {
 	struct tmpa9xx_ts_priv *t = container_of(work, struct tmpa9xx_ts_priv, wq_irq);
+	int extra_sync_required = 1;
 	int x;
 	int y;
 	int ret;
@@ -102,7 +103,6 @@ static void backend_irq_work(struct work_struct *work)
 
 	input_report_key(t->input_dev, BTN_TOUCH, 1);
 	input_report_abs(t->input_dev, ABS_PRESSURE, 1);
-	input_sync(t->input_dev);
 
 	while(1) {
 		ts_writel(t, TSI_CR0, 0xc5);
@@ -120,6 +120,7 @@ static void backend_irq_work(struct work_struct *work)
 		input_report_abs(t->input_dev, ABS_X, x);
 		input_report_abs(t->input_dev, ABS_Y, y);
 		input_sync(t->input_dev);
+		extra_sync_required = 0;
 
 		ts_init(t);
 		set_current_state(TASK_UNINTERRUPTIBLE);
@@ -128,6 +129,9 @@ static void backend_irq_work(struct work_struct *work)
 		if (!ret)
 			break;
 	}
+
+	if (extra_sync_required)
+		input_sync(t->input_dev);
 
 	input_report_key(t->input_dev, BTN_TOUCH, 0);
 	input_report_abs(t->input_dev, ABS_PRESSURE, 0);
