@@ -30,12 +30,6 @@
 
 #define DRIVER_DESC "TMPA9xx touchscreen driver"
 
-static int threshold_x = 25;
-module_param(threshold_x, int, S_IRUGO);
-
-static int threshold_y = 25;
-module_param(threshold_y, int, S_IRUGO);
-
 #define TS_CR0_TSI7     (1<<7) /* TSI7  R/W 0y0 pull-down resistor(refer to Explanation) */
 #define TS_CR0_INGE     (1<<6) /* INGE  R/W 0y0 Input gate control of Port PD6, PD7 */
 #define TS_CR0_PTST     (1<<5) /* PTST  R   0y0 Detection condition */
@@ -55,7 +49,6 @@ struct tmpa9xx_ts_priv
 {
 	void __iomem *regs;
 	struct input_dev *input_dev;
-	int pen_is_down;
 	int irq;
 	int delay;
 	struct workqueue_struct *wq;
@@ -96,71 +89,51 @@ static inline void disable_interrupt(struct tmpa9xx_ts_priv *t)
 	ts_disable_interrupt(t);
 }
 
-static int ts_update_pendown(struct tmpa9xx_ts_priv *t)
-{
-	int pen_is_down;
-	uint32_t val = ts_readl(t, TSI_CR0);
-
-	/* ts_init() must have been called before */
-
-	pen_is_down = val & TS_CR0_PTST ? 1 : 0;
-
-	if (t->pen_is_down == pen_is_down)
-		return 0;
-
-	t->pen_is_down = pen_is_down;
-
-	input_report_key(t->input_dev, BTN_TOUCH, pen_is_down);
-	input_report_abs(t->input_dev, ABS_PRESSURE, pen_is_down);
-
-	return 1;
-}
-
-static int ts_update_pos(struct tmpa9xx_ts_priv *t)
-{
-	int x;
-	int y;
-
-	ts_writel(t, TSI_CR0, 0xc5);
-	x = tmpa9xx_adc_read(5, 1);
-
-	ts_writel(t, TSI_CR0, 0xca);
-	y = tmpa9xx_adc_read(4, 1);
-
-	if (x < threshold_x || y < threshold_y)
-		return 0;
-
-	input_report_abs(t->input_dev, ABS_X, x);
-	input_report_abs(t->input_dev, ABS_Y, y);
-
-	return 1;
-}
-
 static void backend_irq_work(struct work_struct *work)
 {
 	struct tmpa9xx_ts_priv *t = container_of(work, struct tmpa9xx_ts_priv, wq_irq);
-	int have_reports;
+	int x;
+	int y;
+	int ret;
+
+	ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST ? 1 : 0;
+	if (!ret)
+		goto out;
+
+	input_report_key(t->input_dev, BTN_TOUCH, 1);
+	input_report_abs(t->input_dev, ABS_PRESSURE, 1);
+	input_sync(t->input_dev);
 
 	while(1) {
-		have_reports = ts_update_pendown(t);
+		ts_writel(t, TSI_CR0, 0xc5);
+		x = tmpa9xx_adc_read(5, 1);
 
-		if (!t->pen_is_down) {
-			if (have_reports)
-				input_sync(t->input_dev);
-			ts_enable_interrupt(t);
-			break;
-		}
-
-		have_reports |= ts_update_pos(t);
-
-		if (have_reports)
-			input_sync(t->input_dev);
+		ts_writel(t, TSI_CR0, 0xca);
+		y = tmpa9xx_adc_read(4, 1);
 
 		ts_init(t);
+		udelay(1000);
+		ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST ? 1 : 0;
+		if (!ret)
+			break;
 
+		input_report_abs(t->input_dev, ABS_X, x);
+		input_report_abs(t->input_dev, ABS_Y, y);
+		input_sync(t->input_dev);
+
+		ts_init(t);
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(t->delay));
+		ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST ? 1 : 0;
+		if (!ret)
+			break;
 	}
+
+	input_report_key(t->input_dev, BTN_TOUCH, 0);
+	input_report_abs(t->input_dev, ABS_PRESSURE, 0);
+	input_sync(t->input_dev);
+out:
+	ts_enable_interrupt(t);
 }
 
 static irqreturn_t topas910_ts_interrupt(int irq, void *dev_id)
