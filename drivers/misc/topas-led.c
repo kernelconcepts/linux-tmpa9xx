@@ -33,15 +33,7 @@
 #include <mach/hardware.h>
 #include <mach/regs.h>
 
-#define GPIO_LED_SEG_A       8
-#define GPIO_LED_SEG_B       9
-#define GPIO_LED_SEG_C      10
-#define GPIO_LED_SEG_D      11
-#define GPIO_LED_SEG_E      12
-#define GPIO_LED_SEG_F      13
-#define GPIO_LED_SEG_G      14
-#define GPIO_LED_SEG_DP     15
-
+#define GPIO_LED_SEG_START 8
 
 #ifdef CONFIG_MACH_TOPAS910
 # define NUM_GPIOS  8
@@ -60,9 +52,11 @@ static unsigned int num_pattern = ARRAY_SIZE(pattern);
 static int saved_state;
 #endif
 
-static void segments_set(int value)
+static void segments_set(struct device *dev, int value)
 {
 	int i;
+
+	dev_info(dev, "%s(): value %d\n", __func__, value);
 
 	if (value >= num_pattern)
 		return;
@@ -71,15 +65,15 @@ static void segments_set(int value)
 		return;
 
 	for (i=0; i<NUM_GPIOS; i++)
-		gpio_set_value(GPIO_LED_SEG_A + i, (pattern[value] & (1 << i)) ? 0 : 1);
+		gpio_set_value(GPIO_LED_SEG_START + i, (pattern[value] & (1 << i)) ? 0 : 1);
 }
 
-static int segments_get(void)
+static int segments_get(struct device *dev)
 {
 	int i, p = 0;
 
 	for (i=0; i<NUM_GPIOS; i++)
-		p |= (gpio_get_value(GPIO_LED_SEG_A + i) ? 0 : (1 << i));
+		p |= (gpio_get_value(GPIO_LED_SEG_START + i) ? 0 : (1 << i));
 
 	for (i=0; i<num_pattern; i++)
 		if (p == pattern[i])
@@ -88,49 +82,46 @@ static int segments_get(void)
 	return -1;
 }
 
-ssize_t led_segment_show(struct device *pdev, struct device_attribute *attr, char *buf)
+ssize_t led_segment_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, "%i\n", segments_get());
+	return snprintf(buf, PAGE_SIZE, "%i\n", segments_get(dev));
 }
 
-ssize_t led_segment_store(struct device *pdev, struct device_attribute *attr, const char *buf, size_t count)
+ssize_t led_segment_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	if (count) {
 		int i = simple_strtol(buf, NULL, 10);
 
-		segments_set(i);
+		segments_set(dev, i);
 	}
 	return count;
 }
 
 DEVICE_ATTR(led_segment, 0644, led_segment_show, led_segment_store);
 
+static struct gpio array[NUM_GPIOS];
+
 static int __devinit topas_led_probe(struct platform_device *pdev)
 {
+	int i;
 	int ret = 0;
+
+	for (i = 0; i < NUM_GPIOS; i++) {
+		array[i].gpio = GPIO_LED_SEG_START + i;
+		array[i].flags = GPIOF_OUT_INIT_LOW;
+		array[i].label = "topas-led";
+	}
 
 	platform_set_drvdata(pdev, NULL);
 
-	/* Yes we could have this easier, but I need a 'customer' for the GPIO implementation */
-	ret += gpio_request(GPIO_LED_SEG_A, "LED_SEG_A"); gpio_direction_output(GPIO_LED_SEG_A, 0);
-	ret += gpio_request(GPIO_LED_SEG_B, "LED_SEG_B"); gpio_direction_output(GPIO_LED_SEG_B, 0);
-	ret += gpio_request(GPIO_LED_SEG_C, "LED_SEG_C"); gpio_direction_output(GPIO_LED_SEG_C, 0);
-	ret += gpio_request(GPIO_LED_SEG_D, "LED_SEG_D"); gpio_direction_output(GPIO_LED_SEG_D, 0);
-#ifdef CONFIG_MACH_TOPAS910
-	ret += gpio_request(GPIO_LED_SEG_E, "LED_SEG_E"); gpio_direction_output(GPIO_LED_SEG_E, 0);
-	ret += gpio_request(GPIO_LED_SEG_F, "LED_SEG_F"); gpio_direction_output(GPIO_LED_SEG_F, 0);
-	ret += gpio_request(GPIO_LED_SEG_G, "LED_SEG_G"); gpio_direction_output(GPIO_LED_SEG_G, 0);
-	ret += gpio_request(GPIO_LED_SEG_DP,"LED_SEG_DP"); gpio_direction_output(GPIO_LED_SEG_DP, 0);
-#endif
-
-	if (ret < 0) {
-		printk(KERN_ERR "Topas910 LED: Unable to get GPIO for LEDs %i\n", ret);
-		return -1;
+	ret = gpio_request_array(&array[0], NUM_GPIOS);
+	if (ret) {
+		dev_err(&pdev->dev, "gpio_request_array() failed\n");
+		return ret;
 	}
 
-
 	/* Clear state, bootloader leaves it undefined */
-	segments_set(10);
+	segments_set(&pdev->dev, 10);
 
 	ret = device_create_file(&pdev->dev, &dev_attr_led_segment);
 
@@ -141,16 +132,7 @@ static int __devexit topas_led_remove(struct platform_device *pdev)
 {
 	device_remove_file(&pdev->dev, &dev_attr_led_segment);
 
-	gpio_free(GPIO_LED_SEG_A);
-	gpio_free(GPIO_LED_SEG_B);
-	gpio_free(GPIO_LED_SEG_C);
-	gpio_free(GPIO_LED_SEG_D);
-#ifdef CONFIG_MACH_TOPAS910
-	gpio_free(GPIO_LED_SEG_E);
-	gpio_free(GPIO_LED_SEG_F);
-	gpio_free(GPIO_LED_SEG_G);
-	gpio_free(GPIO_LED_SEG_DP);
-#endif
+	gpio_free_array(&array[0], NUM_GPIOS);
 
 	return 0;
 }
@@ -207,4 +189,4 @@ module_exit(topas_led_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Florian Boor <florian.boor@kernelconcepts.de>");
 MODULE_AUTHOR("Michael Hunold <michael@mihu.de>");
-MODULE_DESCRIPTION("LED driver for TOPAS 910");
+MODULE_DESCRIPTION("LED driver for Topas development boards");
