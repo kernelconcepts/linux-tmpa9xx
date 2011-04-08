@@ -20,18 +20,11 @@
  *
  */
 
-#include <linux/device.h>
-#include <linux/init.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/slab.h>
 #include <linux/platform_device.h>
-
-#include <asm/system.h>
-#include <mach/hardware.h>
-
-#include <mach/gpio.h>
-
-#include <asm/mach/arch.h>
-#include <mach/hardware.h>
-#include <mach/regs.h>
+#include <linux/gpio.h>
 
 #define GPIO_LED_SEG_START 8
 
@@ -39,100 +32,132 @@
 # define NUM_GPIOS  8
 /* Pattern for digits from 0 to 9, "L.", clear, all on, dp on */
 static const unsigned char pattern[] = {0x3F, 0x06/*1*/, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F/*9*/, 0xB8, 0x00, 0xFF, 0x08};
-
-#else   /* CONFIG_MACH_TOPASA900 */
+#else
 # define NUM_GPIOS  4
 /* Pattern for digits from 0 to 9, a to f. The a900 can only do this. */
 static const unsigned char pattern[] = { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, };
 #endif
 
-static unsigned int num_pattern = ARRAY_SIZE(pattern);
+struct tmpa9xx_led
+{
+	struct device *dev;
+	struct gpio array[NUM_GPIOS];
+	int state;
+};
 
-#ifdef CONFIG_PM
-static int saved_state;
-#endif
-
-static void segments_set(struct device *dev, int value)
+static int segments_set(struct tmpa9xx_led *l, int value)
 {
 	int i;
 
-	dev_info(dev, "%s(): value %d\n", __func__, value);
+	if (value >= ARRAY_SIZE(pattern)) {
+		dev_err(l->dev, "%s(): value %d too large\n", __func__, value);
+		return -1;
+	}
 
-	if (value >= num_pattern)
-		return;
+	if (value < 0) {
+		dev_err(l->dev, "%s(): value %d out of bounds\n", __func__, value);
+		return -1;
+	}
 
-	if (value < 0)
-		return;
-
-	for (i=0; i<NUM_GPIOS; i++)
+	for (i = 0; i < ARRAY_SIZE(l->array); i++)
 		gpio_set_value(GPIO_LED_SEG_START + i, (pattern[value] & (1 << i)) ? 0 : 1);
-}
 
-static int segments_get(struct device *dev)
-{
-	int i, p = 0;
+	l->state = value;
 
-	for (i=0; i<NUM_GPIOS; i++)
-		p |= (gpio_get_value(GPIO_LED_SEG_START + i) ? 0 : (1 << i));
+	dev_dbg(l->dev, "%s(): value %d\n", __func__, value);
 
-	for (i=0; i<num_pattern; i++)
-		if (p == pattern[i])
-			return i;
-
-	return -1;
+	return 0;
 }
 
 ssize_t led_segment_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, "%i\n", segments_get(dev));
+	struct tmpa9xx_led *l = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%i\n", l->state);
 }
 
 ssize_t led_segment_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-	if (count) {
-		int i = simple_strtol(buf, NULL, 10);
+	struct tmpa9xx_led *l = dev_get_drvdata(dev);
+	int value;
+	int ret;
 
-		segments_set(dev, i);
-	}
+	value = simple_strtol(buf, NULL, 10);
+
+	ret = segments_set(l, value);
+	if (ret)
+		return -EFAULT;
+
 	return count;
 }
 
 DEVICE_ATTR(led_segment, 0644, led_segment_show, led_segment_store);
 
-static struct gpio array[NUM_GPIOS];
-
 static int __devinit topas_led_probe(struct platform_device *pdev)
 {
+	struct tmpa9xx_led *l;
 	int i;
-	int ret = 0;
+	int ret;
 
-	for (i = 0; i < NUM_GPIOS; i++) {
-		array[i].gpio = GPIO_LED_SEG_START + i;
-		array[i].flags = GPIOF_OUT_INIT_LOW;
-		array[i].label = "topas-led";
+	l = kzalloc(sizeof(*l), GFP_KERNEL);
+	if (!l) {
+		dev_err(&pdev->dev, "kzalloc() failed\n");
+		ret = -ENOMEM;
+		goto err0;
 	}
 
-	platform_set_drvdata(pdev, NULL);
+	l->dev = &pdev->dev;
 
-	ret = gpio_request_array(&array[0], NUM_GPIOS);
+	for (i = 0; i < ARRAY_SIZE(l->array); i++) {
+		struct gpio *g = &l->array[i];
+		g->gpio = GPIO_LED_SEG_START + i;
+		g->flags = GPIOF_OUT_INIT_LOW;
+		g->label = "topas-led";
+	}
+
+
+	platform_set_drvdata(pdev, l);
+
+	ret = gpio_request_array(&l->array[0], ARRAY_SIZE(l->array));
 	if (ret) {
-		dev_err(&pdev->dev, "gpio_request_array() failed\n");
-		return ret;
+		dev_err(l->dev, "gpio_request_array() failed\n");
+		goto err1;
 	}
 
 	/* Clear state, bootloader leaves it undefined */
-	segments_set(&pdev->dev, 10);
+	segments_set(l, 10);
 
-	ret = device_create_file(&pdev->dev, &dev_attr_led_segment);
+	ret = device_create_file(l->dev, &dev_attr_led_segment);
+	if (ret) {
+		dev_err(l->dev, "device_create_file() failed\n");
+		ret = -EFAULT;
+		goto err2;
+	}
+
+        dev_info(l->dev, "ready\n");
 
 	return 0;
+
+err2:
+	gpio_free_array(&l->array[0], ARRAY_SIZE(l->array));
+err1:
+	platform_set_drvdata(pdev, NULL);
+	kfree(l);
+err0:
+	return ret;
 }
 
 static int __devexit topas_led_remove(struct platform_device *pdev)
 {
-	device_remove_file(&pdev->dev, &dev_attr_led_segment);
+	struct tmpa9xx_led *l = platform_get_drvdata(pdev);
 
-	gpio_free_array(&array[0], NUM_GPIOS);
+	device_remove_file(l->dev, &dev_attr_led_segment);
+
+	gpio_free_array(&l->array[0], ARRAY_SIZE(l->array));
+
+	platform_set_drvdata(pdev, NULL);
+
+	kfree(l);
 
 	return 0;
 }
@@ -140,20 +165,22 @@ static int __devexit topas_led_remove(struct platform_device *pdev)
 #ifdef CONFIG_PM
 static int topas_led_suspend(struct platform_device *pdev, pm_message_t state)
 {
-	saved_state = segments_get();
+	struct tmpa9xx_led *l = platform_get_drvdata(pdev);
+	int old_state = l->state;
+
 #ifdef CONFIG_MACH_TOPAS910
-	segments_set(11); /* all led off */
+	segments_set(l, 11); /* all led off */
 #else
-	segments_set(1); /* most power saving value...  */
+	segments_set(l, 1); /* most power saving value...  */
 #endif
+	l->state = old_state;
 
 	return 0;
 }
 
 static int topas_led_resume(struct platform_device *pdev)
 {
-	segments_set(saved_state);
-
+	segments_set(l, l->state);
 	return 0;
 }
 #else
