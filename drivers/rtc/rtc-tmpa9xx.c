@@ -36,6 +36,8 @@ struct tmpa9xx_rtc
 	int irq;
 
 	struct rtc_device *rtc;
+	int alarm_enabled;
+	int alarm_pending;
 };
 
 #define DATA	     (0x000) /* RTC Data Register */
@@ -60,10 +62,15 @@ static int tmp9xx_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct tmpa9xx_rtc *r = platform_get_drvdata(pdev);
+	unsigned long secs;
 
-	dev_dbg(r->dev, "%s():\n", __func__);
+	secs = rtc_readl(r, COMP);
 
-	/* nothing to be done here */
+	rtc_time_to_tm(secs, &alrm->time);
+	alrm->enabled = r->alarm_enabled;
+	alrm->pending = r->alarm_pending;
+
+	dev_dbg(r->dev, "%s(): secs %lu\n", __func__, secs);
 
 	return 0;
 }
@@ -83,6 +90,8 @@ static int tmp9xx_rtc_alarm_irq_enable(struct device *dev, unsigned int enable)
 	else
 		val &= ~RTCINTEN;
 
+	r->alarm_enabled = enable;
+
 	rtc_writel(r, ALMINTCTR, val);
 
 	return 0;
@@ -100,6 +109,8 @@ static int tmp9xx_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 
 	/* wait at least 3/32k s */
 	udelay(92);
+
+	r->alarm_pending = 1;
 
 	tmp9xx_rtc_alarm_irq_enable(dev, alrm->enabled);
 
@@ -160,6 +171,8 @@ static irqreturn_t tmp9xx_rtc_interrupt(int irq, void *data)
 
 	val |= RTCINTCLR;
 	rtc_writel(r, ALMINTCTR, val);
+
+	r->alarm_pending = 0;
 
 	rtc_update_irq(r->rtc, 1, RTC_AF | RTC_IRQF);
 
