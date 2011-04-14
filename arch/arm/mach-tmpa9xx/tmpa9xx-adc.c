@@ -93,10 +93,8 @@ int tmpa9xx_adc_read(int num, int delay)
 	val = (adc_readl(t, ADC_ADMOD1) & ~0x0f) | num;
 	adc_writel(t, ADC_ADMOD1, val);
 
-	if (delay) {
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout (msecs_to_jiffies(delay));
-	}
+	if (delay)
+		mdelay(delay);
 
 	val = (adc_readl(t, ADC_ADMOD0)) | (1 << 0);
 	adc_writel(t, ADC_ADMOD0, val);
