@@ -280,12 +280,9 @@ static struct clcd_panel qvga = {
 		.sync		= 0,
 		.vmode  	= 0,
 	},
-	.width  	= -1,
-	.height 	= -1,
 	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER_QVGA,
 	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK | 0,
 	.bpp		= 16,
-	.grayscale	= 0,
 };
 
 #define PIX_CLOCK_DIVIDER_WQVGA 11
@@ -304,12 +301,9 @@ static struct clcd_panel wqvga = {
 		.sync		= 0,
 		.vmode  	= 0,
 	},
-	.width  	= -1,
-	.height 	= -1,
 	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER_WQVGA,
 	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK | 0,
 	.bpp		= 16,
-	.grayscale	= 0,
 };
 
 #define PIX_CLOCK_DIVIDER_VGA 4
@@ -328,12 +322,9 @@ static struct clcd_panel vga = {
 		.sync		= 0,
 		.vmode  	= 0,
 	},
-	.width  	= -1,
-	.height 	= -1,
 	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER_VGA,
 	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK | 0,
 	.bpp		= 16,
-	.grayscale	= 0,
 };
 
 #define PIX_CLOCK_DIVIDER_WVGA 2
@@ -352,12 +343,9 @@ static struct clcd_panel wvga = {
 		.sync		= FB_SYNC_HOR_HIGH_ACT | 0,
 		.vmode  	= 0,
 	},
-	.width  	= -1,
-	.height 	= -1,
 	.tim2		= TIM2_IPC | PIX_CLOCK_DIVIDER_WVGA,
 	.cntl		= CNTL_LCDTFT | CNTL_WATERMARK | 0,
 	.bpp		= 16,
-	.grayscale	= 0,
 };
 
 struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {

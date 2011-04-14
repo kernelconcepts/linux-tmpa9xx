@@ -218,12 +218,9 @@ struct clcd_panel default_panel = {
 		.sync           = FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT | 0,
 		.vmode          = 0,
 	},
-	.width          = -1,
-	.height         = -1,
 	.tim2           = PIX_CLOCK_DIVIDER,
 	.cntl           = CNTL_LCDTFT | CNTL_WATERMARK,
 	.bpp            = 16,
-	.grayscale      = 0,
 };
 
 struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {

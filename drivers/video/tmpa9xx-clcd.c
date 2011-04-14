@@ -721,6 +721,12 @@ static int setup_display(struct platform_device *pdev)
 	c->panel.tim2      = timer2;
 
 out:
+	/* set some default values */
+	c->panel.width = -1;
+	c->panel.height = -1;
+	c->panel.grayscale = 0;
+	c->panel.fixedtimings = 1;
+
 #ifdef DEBUG
 	dev_info(&pdev->dev, "#define PIX_CLOCK_DIVIDER_xxx %d\n", c->panel.tim2 & ~(TIM2_IPC));
 	dev_info(&pdev->dev, "static struct clcd_panel xxx = {\n");
