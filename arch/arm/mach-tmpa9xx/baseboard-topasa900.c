@@ -319,7 +319,7 @@ struct clcd_panel tmpa9xx_panel = {
 struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {
 	{
 		.panel = &tmpa9xx_panel,
-		.fuzz = 0,
+		.fuzz = 16,
 		.rate = 200,
 	},
 	{
