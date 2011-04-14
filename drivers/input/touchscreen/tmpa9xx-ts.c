@@ -55,38 +55,19 @@ struct tmpa9xx_ts_priv
 	struct work_struct wq_irq;
 };
 
-static inline void ts_init(struct tmpa9xx_ts_priv *t)
-{
-	ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_PYEN);
-}
-
-static inline void ts_clear_interrupt(void)
+static inline void ts_clear_interrupt(struct tmpa9xx_ts_priv *t)
 {
 	_out32(PORTD_GPIOIC, _in32(PORTD_GPIOMIS));
 }
 
 static inline void ts_enable_interrupt(struct tmpa9xx_ts_priv *t)
 {
-	uint32_t val = ts_readl(t, TSI_CR0);
-	ts_writel(t, TSI_CR0, val | TS_CR0_TWIEN);
+	_out32(PORTD_GPIOIE, 0xc0);
 }
 
 static inline void ts_disable_interrupt(struct tmpa9xx_ts_priv *t)
 {
-	uint32_t val = ts_readl(t, TSI_CR0);
-	ts_writel(t, TSI_CR0, val & ~TS_CR0_TWIEN);
-}
-
-static inline void enable_interrupt(struct tmpa9xx_ts_priv *t)
-{
-	_out32(PORTD_GPIOIE, 0xc0);
-	ts_enable_interrupt(t);
-}
-
-static inline void disable_interrupt(struct tmpa9xx_ts_priv *t)
-{
 	_out32(PORTD_GPIOIE, 0x00);
-	ts_disable_interrupt(t);
 }
 
 static void backend_irq_work(struct work_struct *work)
@@ -95,6 +76,7 @@ static void backend_irq_work(struct work_struct *work)
 	int extra_sync_required = 1;
 	int x;
 	int y;
+	uint32_t val;
 	int ret;
 
 	ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST ? 1 : 0;
@@ -105,14 +87,15 @@ static void backend_irq_work(struct work_struct *work)
 	input_report_abs(t->input_dev, ABS_PRESSURE, 1);
 
 	while(1) {
-		ts_writel(t, TSI_CR0, 0xc5);
+		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_INGE | TS_CR0_PXEN | TS_CR0_MXEN);
 		x = tmpa9xx_adc_read(5, 1);
 
-		ts_writel(t, TSI_CR0, 0xca);
+		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_INGE | TS_CR0_PYEN | TS_CR0_MYEN);
 		y = tmpa9xx_adc_read(4, 1);
 
-		ts_init(t);
+		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_PYEN);
 		udelay(1000);
+
 		ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST ? 1 : 0;
 		if (!ret)
 			break;
@@ -122,7 +105,6 @@ static void backend_irq_work(struct work_struct *work)
 		input_sync(t->input_dev);
 		extra_sync_required = 0;
 
-		ts_init(t);
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(t->delay));
 		ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST ? 1 : 0;
@@ -136,16 +118,19 @@ static void backend_irq_work(struct work_struct *work)
 	input_report_key(t->input_dev, BTN_TOUCH, 0);
 	input_report_abs(t->input_dev, ABS_PRESSURE, 0);
 	input_sync(t->input_dev);
+
 out:
-	ts_enable_interrupt(t);
+	val = ts_readl(t, TSI_CR0);
+	ts_writel(t, TSI_CR0, val | TS_CR0_TWIEN);
+
+	return;
 }
 
 static irqreturn_t topas910_ts_interrupt(int irq, void *dev_id)
 {
 	struct tmpa9xx_ts_priv *t = dev_id;
 
-	ts_clear_interrupt();
-	ts_disable_interrupt(t);
+	ts_clear_interrupt(t);
 
 	queue_work(t->wq, &t->wq_irq);
 
@@ -240,11 +225,11 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, t);
 
 	/* setup ts controller */
+	ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_PYEN | TS_CR0_TWIEN);
 	ts_writel(t, TSI_CR1, 0xc5);
 
-	ts_init(t);
-
-	enable_interrupt(t);
+	ts_clear_interrupt(t);
+	ts_enable_interrupt(t);
 
 	dev_info(dev, DRIVER_DESC " (fuzz=%d, rate=%d Hz) ready\n", tmpa9xx_ts_fuzz, tmpa9xx_ts_rate);
 
@@ -271,7 +256,7 @@ static int __devexit tmpa9xx_ts_remove(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct tmpa9xx_ts_priv *t = dev_get_drvdata(dev);
 
-	disable_interrupt(t);
+	ts_disable_interrupt(t);
 
 	ts_writel(t, TSI_CR0, 0x00);
 	ts_writel(t, TSI_CR1, 0x00);
