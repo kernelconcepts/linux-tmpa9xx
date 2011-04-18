@@ -353,30 +353,34 @@ struct tmpa9xx_panel_ts_info tmpa9xx_panels[] = {
 		.panel = &qvga,
 		.fuzz = 0,
 		.rate = 200,
+		.lcd_power = 97, /* port m1 */
+		.lcd_reset = 96, /* port m0 */
 	},
 	{
 		.panel = &wqvga,
 		.fuzz = 0,
 		.rate = 200,
+		.lcd_power = 97, /* port m1 */
+		.lcd_reset = 96, /* port m0 */
 	},
 	{
 		.panel = &vga,
 		.fuzz = 0,
 		.rate = 200,
+		.lcd_power = 97, /* port m1 */
+		.lcd_reset = 96, /* port m0 */
 	},
 	{
 		.panel = &wvga,
 		.fuzz = 0,
 		.rate = 200,
+		.lcd_power = 97, /* port m1 */
+		.lcd_reset = 96, /* port m0 */
 	},
 	{
 		.panel = NULL,
 	},
 };
-
-#define LCD_BACKLIGHT_GPIO	20	/* PORTC4 */
-#define LCD_RESET_GPIO		96	/* PORTM0 */
-#define LCD_PWR_GPIO		97	/* PORTM1 */
 
 struct tmpa9xx_i2s_cfg tmpa9xx_i2s_cfg =
 {
@@ -443,29 +447,6 @@ void __init baseboard_init(void)
 
         /* Add devices */
         platform_add_devices(devices_baseboard, ARRAY_SIZE(devices_baseboard));
-
-	/* PWR Enable, PORTM1, high active */
-	if (gpio_request(LCD_PWR_GPIO, "LCD power") != 0) {
-		printk(KERN_ERR "Glyn Baseboard init: failed to request GPIO%d for LCD power\n", LCD_PWR_GPIO);
-	} else {
-		gpio_direction_output(LCD_PWR_GPIO, 1);
-	}
-
-	/* Reset LCD, low active*/
-	if (gpio_request(LCD_RESET_GPIO, "LCD reset") != 0) {
-		printk(KERN_ERR "Glyn Baseboard init: failed to request GPIO%d for LCD reset\n", LCD_RESET_GPIO);
-	} else {
-		gpio_direction_output(LCD_RESET_GPIO, 0);
-		udelay(1000);
-		gpio_set_value(LCD_RESET_GPIO, 1);
-	}
-
-	/* Backlight, low active */
-	if (gpio_request(LCD_BACKLIGHT_GPIO, "LCD backlight") != 0) {
-		printk(KERN_ERR "Glyn Baseboard init: failed to request GPIO%d for LCD backlight\n", LCD_BACKLIGHT_GPIO);
-	} else {
-		gpio_direction_output(LCD_BACKLIGHT_GPIO, 0);
-	}
 
         PMCCTL &= ~PMCCTL_PMCPWE;
         PMCWV1 |= PMCWV1_PMCCTLV;

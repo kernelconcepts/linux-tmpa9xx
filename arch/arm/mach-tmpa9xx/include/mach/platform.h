@@ -25,6 +25,8 @@ struct tmpa9xx_panel_ts_info
 	struct clcd_panel *panel;
 	int fuzz;
 	int rate;
+	int lcd_power;
+	int lcd_reset;
 };
 
 extern int tmpa9xx_ts_fuzz;

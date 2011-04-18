@@ -13,6 +13,7 @@
 
 #include <linux/kernel.h>
 #include <linux/dma-mapping.h>
+#include <linux/gpio.h>
 
 #include <linux/amba/bus.h>
 #include <linux/amba/pl022.h>
@@ -88,6 +89,8 @@ struct tmpa9xx_clcd
 #endif
 	struct clcd_panel panel;
 	struct mutex mutex;
+	int lcd_power;
+	int lcd_reset;
 };
 
 struct tmpa9xx_lcdda g_tmpa9xx_lcdda;
@@ -605,9 +608,32 @@ static int tmpa9xx_clcd_ioctl(struct clcd_fb *fb, unsigned int cmd, unsigned lon
 	return ret;
 }
 
+static void tmpa9xx_clcd_enable(struct clcd_fb *fb)
+{
+	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
+
+	if (c->lcd_power)
+		gpio_set_value(c->lcd_power, 1);
+
+	if (c->lcd_reset)
+		gpio_set_value(c->lcd_reset, 1);
+}
+
+static void tmpa9xx_clcd_disable(struct clcd_fb *fb)
+{
+	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
+
+	if (c->lcd_reset)
+		gpio_set_value(c->lcd_reset, 0);
+
+	if (c->lcd_power)
+		gpio_set_value(c->lcd_power, 0);
+}
 
 static struct clcd_board clcd_platform_data = {
 	.name		= "tmpa9xx fb",
+	.enable		= tmpa9xx_clcd_enable,
+	.disable	= tmpa9xx_clcd_disable,
 	.check		= tmpa9xx_clcd_check,
 	.decode		= tmpa9xx_clcd_decode,
 	.setup		= tmpa9xx_clcd_setup,
@@ -652,6 +678,8 @@ static int setup_display(struct platform_device *pdev)
 		c->panel = *panels[0].panel;
 		tmpa9xx_ts_rate = panels[0].rate;
 		tmpa9xx_ts_fuzz = panels[0].fuzz;
+		c->lcd_power = panels[0].lcd_power;
+		c->lcd_reset = panels[0].lcd_reset;
 		goto out;
 	}
 
@@ -668,6 +696,8 @@ static int setup_display(struct platform_device *pdev)
 			c->panel = *p->panel;
 			tmpa9xx_ts_rate = p->rate;
 			tmpa9xx_ts_fuzz = p->fuzz;
+			c->lcd_power = p->lcd_power;
+			c->lcd_reset = p->lcd_reset;
 			goto out;
 		}
 	}
@@ -719,6 +749,12 @@ static int setup_display(struct platform_device *pdev)
 
 	c->panel.mode.sync = sync;
 	c->panel.tim2      = timer2;
+
+	tmpa9xx_ts_rate = 200;
+	tmpa9xx_ts_fuzz = 16;
+
+	c->lcd_power = 97; /* port m1 */
+	c->lcd_reset = 96; /* port m1 */
 
 out:
 	/* set some default values */
@@ -804,6 +840,53 @@ static struct amba_device clcd_device =
 	.periphid = ARM_CLCD_PERIPH_ID,
 };
 
+static int lcd_gpio_probe(struct platform_device *pdev)
+{
+	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
+	int ret;
+
+	if (c->lcd_power) {
+		ret = gpio_request(c->lcd_power, "LCD power");
+		if (ret) {
+			dev_err(&pdev->dev, "gpio_request() @ power failed, gpio %d\n", c->lcd_power);
+			ret = -EINVAL;
+			goto err0;
+		}
+		/* keep disabled */
+		gpio_direction_output(c->lcd_power, 0);
+	}
+
+	if (c->lcd_reset) {
+		ret = gpio_request(c->lcd_reset, "LCD reset");
+		if (ret) {
+			dev_err(&pdev->dev, "gpio_request() @ reset failed, gpio %d\n", c->lcd_reset);
+			ret = -EINVAL;
+			goto err1;
+		}
+		/* keep in reset, low active */
+		gpio_direction_output(c->lcd_reset, 0);
+	}
+
+	dev_info(&pdev->dev, "lcd_power @ %d, lcd_reset @ %d\n", c->lcd_power, c->lcd_reset);
+	return 0;
+err1:
+err0:
+	return ret;
+}
+
+static int lcd_gpio_remove(struct platform_device *pdev)
+{
+	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
+
+	if (c->lcd_reset)
+		gpio_free(c->lcd_reset);
+
+	if (c->lcd_power)
+		gpio_free(c->lcd_power);
+
+	return 0;
+}
+
 static int __devinit probe(struct platform_device *pdev)
 {
 	struct amba_device *d;
@@ -814,6 +897,13 @@ static int __devinit probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "setup_display() failed\n");
 		ret = -ENODEV;
+		goto err0;
+	}
+
+	ret = lcd_gpio_probe(pdev);
+	if (ret) {
+		dev_err(&pdev->dev, "lcd_gpio_probe() failed\n");
+		ret = -ENODEV;
 		goto err1;
 	}
 
@@ -821,7 +911,7 @@ static int __devinit probe(struct platform_device *pdev)
 	if (!d) {
 		dev_err(&pdev->dev, "kzalloc() failed\n");
 		ret = -ENOMEM;
-		goto err2;
+		goto err3;
 	}
 
 	/* copy over template */
@@ -834,7 +924,7 @@ static int __devinit probe(struct platform_device *pdev)
 	if (!res) {
 		dev_err(&pdev->dev, "platform_get_resource() failed @ IORESOURCE_MEM\n");
 		ret = -ENODEV;
-		goto err3;
+		goto err4;
 	}
 
 	d->res.start = res->start;
@@ -844,14 +934,14 @@ static int __devinit probe(struct platform_device *pdev)
 	if (d->irq[0] <= 0) {
 		dev_err(&pdev->dev, "platform_get_irq() failed\n");
 		ret = -ENODEV;
-		goto err4;
+		goto err5;
 	}
 
 	ret = lcdda_probe(pdev);
 	if (ret) {
 		dev_err(&pdev->dev, "lcdda_probe() failed\n");
 		ret = -ENODEV;
-		goto err5;
+		goto err6;
 	}
 
 	platform_set_drvdata(pdev, d);
@@ -860,21 +950,23 @@ static int __devinit probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "amba_device_register() failed\n");
 		ret = -ENODEV;
-		goto err6;
+		goto err7;
 	}
 
 	return 0;
 
-err6:
+err7:
 	platform_set_drvdata(pdev, NULL);
 	lcdda_remove(pdev);
+err6:
 err5:
 err4:
-err3:
 	kfree(d);
-err2:
-	shutdown_display();
+err3:
+	lcd_gpio_remove(pdev);
 err1:
+	shutdown_display();
+err0:
 	return ret;
 }
 
@@ -894,6 +986,8 @@ static int __devexit remove(struct platform_device *pdev)
 	amba_device_unregister(d);
 
 	lcdda_remove(pdev);
+
+	lcd_gpio_remove(pdev);
 
 	shutdown_display();
 
