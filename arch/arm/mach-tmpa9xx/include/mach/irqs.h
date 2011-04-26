@@ -28,7 +28,6 @@
  *  TMPA9xx IRQ definitions
  *  TODO: Move to a board definitions specific file.
  */
-#define TOPAS_INT_DM9000       INT_GPIO_INTH
 #define TONGA_INT_SMSC911X     INT_GPIO_INTH
 
 /*

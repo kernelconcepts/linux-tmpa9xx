@@ -64,8 +64,8 @@ static struct resource dm9000_resources[] = {
                 .flags  = IORESOURCE_MEM,
         },
         [2] = {
-                .start  = TOPAS_INT_DM9000,
-                .end    = TOPAS_INT_DM9000,
+                .start  = INT_GPIO_INTH,
+                .end    = INT_GPIO_INTH,
                 .flags  = IORESOURCE_IRQ | IRQF_TRIGGER_LOW,
         },
 };
