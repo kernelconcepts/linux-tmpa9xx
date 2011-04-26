@@ -25,12 +25,6 @@
 #define NR_FIQS		(MAXFIQNUM + 1)
 
 /*
- *  TMPA9xx IRQ definitions
- *  TODO: Move to a board definitions specific file.
- */
-#define TONGA_INT_SMSC911X     INT_GPIO_INTH
-
-/*
  * Chip internal -> not of the board
  */
 #define INTR_VECT_WDT         0

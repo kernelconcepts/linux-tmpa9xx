@@ -44,6 +44,7 @@
 #include <mach/gpio.h>
 #include <mach/regs.h>
 #include <asm/mach/map.h>
+#include <mach/irqs.h>
 
 /* 
  * Ethernet 
@@ -65,8 +66,8 @@ static struct resource smsc911x_resources[] = {
                 .flags = IORESOURCE_MEM,
         },
         [2] = {
-                .start = TONGA_INT_SMSC911X,
-                .end   = TONGA_INT_SMSC911X,
+                .start = INT_GPIO_INTH,
+                .end   = INT_GPIO_INTH,
                 .flags = IORESOURCE_IRQ | IRQF_TRIGGER_LOW,
         },
 };
