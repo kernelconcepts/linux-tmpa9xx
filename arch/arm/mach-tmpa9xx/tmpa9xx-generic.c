@@ -734,11 +734,7 @@ static int setup_port_b(void)
 {
         /* Port B can be used not only as general-purpose output pins but also as key output pins. */
 
-        TMPA9XX_CFG_PORT_GPIO(PORTB);
         GPIOBODE  = 0x00;
-        GPIOBDIR  = 0x00;
-        GPIOBFR1  = 0x00;
-        GPIOBFR2  = 0x00;
         GPIOBDATA = 0x00;
 
 	return 0;
