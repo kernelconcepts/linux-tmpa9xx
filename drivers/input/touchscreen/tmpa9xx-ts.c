@@ -9,7 +9,6 @@
  * under the terms of the GNU General Public License version 2 as published by
  * the Free Software Foundation.
  */
-
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -47,12 +46,19 @@
 
 struct tmpa9xx_ts_priv
 {
+	struct device *dev;
 	void __iomem *regs;
 	struct input_dev *input_dev;
 	int irq;
-	int delay;
 	struct workqueue_struct *wq;
 	struct work_struct wq_irq;
+
+	/* post processing */
+	int init;
+	int x;
+	int y;
+	int down;
+	int oob;
 };
 
 static inline void ts_clear_interrupt(struct tmpa9xx_ts_priv *t)
@@ -62,7 +68,9 @@ static inline void ts_clear_interrupt(struct tmpa9xx_ts_priv *t)
 
 static inline void ts_enable_interrupt(struct tmpa9xx_ts_priv *t)
 {
-	_out32(PORTD_GPIOIE, 0xc0);
+	_out32(PORTD_GPIOIBE, 0x00);
+	_out32(PORTD_GPIOIEV, 0x40);
+	_out32(PORTD_GPIOIE, 0x40);
 }
 
 static inline void ts_disable_interrupt(struct tmpa9xx_ts_priv *t)
@@ -70,58 +78,136 @@ static inline void ts_disable_interrupt(struct tmpa9xx_ts_priv *t)
 	_out32(PORTD_GPIOIE, 0x00);
 }
 
+static void measure_init(struct tmpa9xx_ts_priv *t)
+{
+	t->init = 0;
+	t->down = 0;
+	t->oob = 0;
+}
+
+static void measure_put(struct tmpa9xx_ts_priv *t, int x, int y)
+{
+	if (t->init == 0) {
+		dev_dbg(t->dev, "x %3d, y %3d, drop 1st\n", x, y);
+		t->x = x;
+		t->y = y;
+		t->init++;
+		return;
+	}
+
+	if (t->init == 1) {
+		dev_dbg(t->dev, "x %3d, y %3d, drop 2nd\n", x, y);
+		t->x = x;
+		t->y = y;
+		t->init++;
+		return;
+	}
+
+	if (t->init == 2) {
+		dev_dbg(t->dev, "x %3d, y %3d, store value\n", x, y);
+		t->x = x;
+		t->y = y;
+		t->oob = 0;
+		t->init++;
+		return;
+	}
+
+#define THRESHOLD 50
+	if (abs(t->x-x) > THRESHOLD || abs(t->y-y) > THRESHOLD) {
+		if (t->oob >= 2) {
+			dev_dbg(t->dev, "x %3d, y %3d, too many out of bounds\n", x, y);
+			t->init = 2;
+			return;
+		} else {
+			dev_dbg(t->dev, "x %3d, y %3d, out of bounds\n", x, y);
+			t->oob++;
+			return;
+		}
+	}
+	t->oob = 0;
+
+	if (!t->down) {
+		input_report_key(t->input_dev, BTN_TOUCH, 1);
+		input_report_abs(t->input_dev, ABS_PRESSURE, 1);
+		t->down = 1;
+	}
+	input_report_abs(t->input_dev, ABS_X, t->x);
+	input_report_abs(t->input_dev, ABS_Y, t->y);
+	input_sync(t->input_dev);
+
+	dev_dbg(t->dev, "x %3d, y %3d, next\n", x, y);
+
+	t->x = x;
+	t->y = y;
+}
+
+static void measure_exit(struct tmpa9xx_ts_priv *t)
+{
+	/* if there were just one or two values measured, report it */
+	if (t->init >= 0 && t->init <= 1) {
+		dev_dbg(t->dev, "just one/two values, reporting\n");
+		input_report_key(t->input_dev, BTN_TOUCH, 1);
+		input_report_abs(t->input_dev, ABS_PRESSURE, 1);
+		input_report_abs(t->input_dev, ABS_X, t->x);
+		input_report_abs(t->input_dev, ABS_Y, t->y);
+		input_sync(t->input_dev);
+		t->down = 1;
+	}
+
+	if (t->down) {
+		input_report_key(t->input_dev, BTN_TOUCH, 0);
+		input_report_abs(t->input_dev, ABS_PRESSURE, 0);
+		input_sync(t->input_dev);
+	}
+	dev_dbg(t->dev, "finished this turn\n");
+}
+
 static void backend_irq_work(struct work_struct *work)
 {
 	struct tmpa9xx_ts_priv *t = container_of(work, struct tmpa9xx_ts_priv, wq_irq);
-	int extra_sync_required = 1;
 	int x;
 	int y;
-	uint32_t val;
 	int ret;
 
-	ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST ? 1 : 0;
-	if (!ret)
-		goto out;
-
-	input_report_key(t->input_dev, BTN_TOUCH, 1);
-	input_report_abs(t->input_dev, ABS_PRESSURE, 1);
+	measure_init(t);
 
 	while(1) {
-		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_INGE | TS_CR0_PXEN | TS_CR0_MXEN);
-		x = tmpa9xx_adc_read(5, 1);
 
+		ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST;
+		if (!ret)
+			break;
+
+		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_INGE | TS_CR0_PXEN | TS_CR0_MXEN);
+		udelay(25);
+		x = tmpa9xx_adc_read(5, 0);
+#if 0
+	        GPIOLDATA = 1;
+#endif
 		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_INGE | TS_CR0_PYEN | TS_CR0_MYEN);
-		y = tmpa9xx_adc_read(4, 1);
+		udelay(25);
+		y = tmpa9xx_adc_read(4, 0);
+
+#if 0
+	        GPIOLDATA = 0;
+#endif
+		measure_put(t, x, y);
+
+		/* make sure to wait approx. 1ms between setting TSI_CR0 
+		and checking the touch condition at the beginning of loop */
 
 		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_PYEN);
-		udelay(1000);
 
-		ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST ? 1 : 0;
-		if (!ret)
-			break;
-
-		input_report_abs(t->input_dev, ABS_X, x);
-		input_report_abs(t->input_dev, ABS_Y, y);
-		input_sync(t->input_dev);
-		extra_sync_required = 0;
+		/* this delay does not depend on the panel. it should be small
+		enough to give good responsiveness withouth hogging the cpu */
 
 		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(t->delay));
-		ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST ? 1 : 0;
-		if (!ret)
-			break;
+		schedule_timeout(1);
 	}
 
-	if (extra_sync_required)
-		input_sync(t->input_dev);
+	measure_exit(t);
 
-	input_report_key(t->input_dev, BTN_TOUCH, 0);
-	input_report_abs(t->input_dev, ABS_PRESSURE, 0);
-	input_sync(t->input_dev);
-
-out:
-	val = ts_readl(t, TSI_CR0);
-	ts_writel(t, TSI_CR0, val | TS_CR0_TWIEN);
+	ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_PYEN | TS_CR0_TWIEN);
+	ts_enable_interrupt(t);
 
 	return;
 }
@@ -131,6 +217,7 @@ static irqreturn_t topas910_ts_interrupt(int irq, void *dev_id)
 	struct tmpa9xx_ts_priv *t = dev_id;
 
 	ts_clear_interrupt(t);
+  	ts_disable_interrupt(t);
 
 	queue_work(t->wq, &t->wq_irq);
 
@@ -139,14 +226,13 @@ static irqreturn_t topas910_ts_interrupt(int irq, void *dev_id)
 
 static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
 	struct tmpa9xx_ts_priv *t;
 	struct resource *res;
 	int ret;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
-		dev_err(dev, "platform_get_resource() failed\n");
+		dev_err(&pdev->dev, "platform_get_resource() failed\n");
 		ret = -ENXIO;
 		return ret;
 	}
@@ -154,30 +240,30 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 	/* Now allocate some memory for our private handle */
 	t = kzalloc(sizeof(struct tmpa9xx_ts_priv), GFP_KERNEL);
 	if (!t) {
-		dev_err(dev, "kzalloc() failed\n");
+		dev_err(&pdev->dev, "kzalloc() failed\n");
 		ret = -ENOMEM;
 		goto err0;
 	}
 
+	t->dev = &pdev->dev;
+
 	t->irq = platform_get_irq(pdev, 0);
 	if (t->irq == NO_IRQ) {
-		dev_err(dev, "platform_get_irq() failed\n");
+		dev_err(t->dev, "platform_get_irq() failed\n");
 		ret = -ENXIO;
 		goto err1;
 	}
 
-	t->delay = 1000 / tmpa9xx_ts_rate;
-
 	t->regs = ioremap(res->start, resource_size(res));
 	if (!t->regs) {
-		dev_err(dev, "ioremap() failed\n");
+		dev_err(t->dev, "ioremap() failed\n");
 		ret = -ENOMEM;
 		goto err2;
 	}
 
 	t->input_dev = input_allocate_device();
 	if (!t->input_dev) {
-		dev_err(dev, "input_allocate_device() failed\n");
+		dev_err(t->dev, "input_allocate_device() failed\n");
 		ret = -ENOMEM;
 		goto err3;
 	}
@@ -193,7 +279,7 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 
 	t->wq = create_workqueue("tmpa9xx-ts-wq");
 	if (!t->wq) {
-		dev_err(dev, "create_workqueue() failed\n");
+		dev_err(t->dev, "create_workqueue() failed\n");
 		ret = -ENOMEM;
 		goto err4;
 	}
@@ -201,7 +287,7 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 
 	ret = request_irq(t->irq, topas910_ts_interrupt, IRQF_SHARED, "tmpa9xx-ts-irq", t);
 	if (ret) {
-		dev_err(dev, "request_irq() failed\n");
+		dev_err(t->dev, "request_irq() failed\n");
 		ret = -ENOMEM;
 		goto err5;
 	}
@@ -213,7 +299,7 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 
 	ret = input_register_device(t->input_dev);
 	if (ret) {
-		dev_err(dev, "input_register_device() failed\n");
+		dev_err(t->dev, "input_register_device() failed\n");
 		ret = -ENOMEM;
 		goto err6;
 	}
@@ -222,7 +308,14 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 	input_report_key(t->input_dev, BTN_TOUCH, 0);
 	input_sync(t->input_dev);
 
-	dev_set_drvdata(dev, t);
+	dev_set_drvdata(t->dev, t);
+
+#if 0
+        GPIOLFR1 = 0x0;
+        GPIOLFR2 = 0x0;
+        GPIOLDATA = 0x0;
+        GPIOLDIR = 0x1;
+#endif
 
 	/* setup ts controller */
 	ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_PYEN | TS_CR0_TWIEN);
@@ -231,7 +324,7 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 	ts_clear_interrupt(t);
 	ts_enable_interrupt(t);
 
-	dev_info(dev, DRIVER_DESC " (fuzz=%d, rate=%d Hz) ready\n", tmpa9xx_ts_fuzz, tmpa9xx_ts_rate);
+	dev_info(t->dev, DRIVER_DESC " ready, fuzz %d\n", tmpa9xx_ts_fuzz);
 
 	return 0;
 
@@ -253,8 +346,7 @@ err0:
 
 static int __devexit tmpa9xx_ts_remove(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	struct tmpa9xx_ts_priv *t = dev_get_drvdata(dev);
+	struct tmpa9xx_ts_priv *t = dev_get_drvdata(&pdev->dev);
 
 	ts_disable_interrupt(t);
 
@@ -273,9 +365,9 @@ static int __devexit tmpa9xx_ts_remove(struct platform_device *pdev)
 
 	iounmap(t->regs);
 
-	kfree(t);
+	dev_set_drvdata(t->dev, NULL);
 
-	dev_set_drvdata(dev, NULL);
+	kfree(t);
 
 	return 0;
 }
