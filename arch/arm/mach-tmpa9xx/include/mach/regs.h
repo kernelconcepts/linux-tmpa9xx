@@ -196,7 +196,7 @@
 #define GPIOEFR2                  __REG(GPIO_E_BASE + 0x428)
 #endif
 
-#define GPIOFDATA                 __REG(GPIO_F_BASE + 0x000)
+#define GPIOFDATA                 __REG(GPIO_F_BASE + 0x3FC)
 #define GPIOFDIR                  __REG(GPIO_F_BASE + 0x400)
 #define GPIOFFR1                  __REG(GPIO_F_BASE + 0x424)
 #define GPIOFFR2                  __REG(GPIO_F_BASE + 0x428)
