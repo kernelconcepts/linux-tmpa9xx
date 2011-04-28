@@ -196,6 +196,11 @@ static int tonga_backlight_init(struct device *dev)
 
 static int tonga_backlight_notify(struct device *dev, int brightness)
 {
+	/* values below 62 result in a voltage > 2.5V. according
+	to the datasheet this is not allowed, so we just cap it here */
+	if (brightness < 62)
+		brightness = 62;
+
 	pr_debug("%s(): brightness %d\n", __func__, brightness);
 	return brightness;
 }
