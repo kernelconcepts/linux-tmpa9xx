@@ -112,6 +112,11 @@ static int tmpa9xx_clcd_setup(struct clcd_fb *fb)
 	len = roundup(3 * framesize + CONFIG_FB_TMPA9XX_CLCD_MEM * 1024, PAGE_SIZE);
 #endif
 
+	if (get_order(len) >= MAX_ORDER) {
+		len = PAGE_SIZE * MAX_ORDER_NR_PAGES;
+		dev_info(&fb->dev->dev, "limiting framebuffer size to %ld\n", len);
+	}
+
 	fb->panel = &c->panel;
 
 	mem = dma_alloc_writecombine(&fb->dev->dev, len, &dma, GFP_KERNEL);
