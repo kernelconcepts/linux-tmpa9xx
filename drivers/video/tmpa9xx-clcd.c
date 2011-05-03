@@ -59,8 +59,6 @@
 #define lcdda_writel(b, o, v)	writel(v, b->regs + o)
 #define lcdda_readl(b, o)	readl(b->regs + o)
 
-// #define TMPA9XX_PORTRAIT
-
 struct tmpa9xx_lcdda
 {
 	void __iomem *regs;
@@ -77,16 +75,6 @@ struct tmpa9xx_lcdda
 
 struct tmpa9xx_clcd
 {
-#ifdef TMPA9XX_PORTRAIT
-	void *mem;
-	unsigned long len;
-	dma_addr_t dma;
-	struct workqueue_struct *wq;
-	struct work_struct wq_irq;
-	struct tmpa9xx_blit b;
-	spinlock_t lock;
-	bool shutdown;
-#endif
 	struct clcd_panel panel;
 	struct mutex mutex;
 	int lcd_power;
@@ -106,11 +94,7 @@ static int tmpa9xx_clcd_setup(struct clcd_fb *fb)
 
 	/* add additional memory for data and round up to page size */
 	framesize = roundup(c->panel.mode.xres * c->panel.mode.yres * c->panel.bpp/8, PAGE_SIZE);
-#ifdef TMPA9XX_PORTRAIT
-	len = framesize;
-#else
 	len = roundup(3 * framesize + CONFIG_FB_TMPA9XX_CLCD_MEM * 1024, PAGE_SIZE);
-#endif
 
 	if (get_order(len) >= MAX_ORDER) {
 		len = PAGE_SIZE * MAX_ORDER_NR_PAGES;
@@ -129,16 +113,6 @@ static int tmpa9xx_clcd_setup(struct clcd_fb *fb)
 	fb->fb.fix.smem_start = dma;
 	fb->fb.fix.smem_len   = len;
 
-#ifdef TMPA9XX_PORTRAIT
-	c->len = framesize;
-	c->mem = dma_alloc_writecombine(&fb->dev->dev, c->len, &c->dma, GFP_KERNEL);
-	if (!c->mem) {
-		dev_err(&fb->dev->dev, "dma_alloc_writecombine() @ size %ld failed\n", c->len);
-		dma_free_writecombine(&fb->dev->dev, fb->fb.fix.smem_len, fb->fb.screen_base, fb->fb.fix.smem_start);
-		return -ENOMEM;
-	}
-#endif
-
 	return 0;
 }
 
@@ -152,10 +126,6 @@ static int tmpa9xx_clcd_mmap(struct clcd_fb *fb, struct vm_area_struct *vma)
 
 static void tmpa9xx_clcd_remove(struct clcd_fb *fb)
 {
-#ifdef TMPA9XX_PORTRAIT
-	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
-	dma_free_writecombine(&fb->dev->dev, c->len, c->mem, c->dma);
-#endif
 	dma_free_writecombine(&fb->dev->dev, fb->fb.fix.smem_len, fb->fb.screen_base, fb->fb.fix.smem_start);
 }
 
@@ -522,80 +492,9 @@ static void lcdda_remove(struct platform_device *pdev)
 }
 #endif
 
-#ifdef TMPA9XX_PORTRAIT
-static void tmpa9xx_clcd_display(struct clcd_fb *fb, unsigned long ustart, unsigned long offset)
-{
-	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
-	unsigned long flags;
-
-	writel(c->dma, fb->regs + CLCD_UBAS);
-
-	spin_lock_irqsave(&c->lock, flags);
-
-	memset(&c->b, 0, sizeof(c->b));
-	c->b.src = ustart;
-	c->b.dst = c->dma;
-	c->b.w = fb->fb.var.xres;
-	c->b.h = fb->fb.var.yres;
-	c->b.bpp = 2;
-	c->b.src_pitch = fb->fb.var.xres * c->b.bpp;
-	c->b.dst_pitch = fb->fb.var.yres * c->b.bpp;
-	c->b.rotation = 90;
-
-	spin_unlock_irqrestore(&c->lock, flags);
-}
-
-static void tmpa9xx_clcd_vsync(struct clcd_fb *fb)
-{
-	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
-
-	if (!c->shutdown)
-		queue_work(c->wq, &c->wq_irq);
-}
-
-static void backend_clcd_work(struct work_struct *work)
-{
-	struct tmpa9xx_clcd *c = container_of(work, struct tmpa9xx_clcd, wq_irq);
-	struct tmpa9xx_lcdda *l = &g_tmpa9xx_lcdda;
-	struct tmpa9xx_blit b;
-	int ret;
-
-	spin_lock(&c->lock);
-	b = c->b;
-	spin_unlock(&c->lock);
-
-	if (!b.src)
-		return;
-
-	ret = lcdda_frect_fct(c, l, &b);
-	if (ret) {
-		dev_err(l->dev, "lcdda_frect_fct() @ backend failed\n");
-	}
-}
-#endif
-
 static void tmpa9xx_clcd_decode(struct clcd_fb *fb, struct clcd_regs *regs)
 {
-#ifdef TMPA9XX_PORTRAIT
-	int val;
-
-	val = fb->fb.var.xres;
-	fb->fb.var.xres = fb->fb.var.yres;
-	fb->fb.var.yres = val;
-
-	val = fb->fb.var.xres_virtual;
-	fb->fb.var.xres_virtual = fb->fb.var.xres;
-#endif
-
 	clcdfb_decode(fb, regs);
-
-#ifdef TMPA9XX_PORTRAIT
-	fb->fb.var.xres_virtual = val;
-
-	val = fb->fb.var.xres;
-	fb->fb.var.xres = fb->fb.var.yres;
-	fb->fb.var.yres = val;
-#endif
 }
 
 static int tmpa9xx_clcd_ioctl(struct clcd_fb *fb, unsigned int cmd, unsigned long arg)
@@ -644,10 +543,6 @@ static struct clcd_board clcd_platform_data = {
 	.setup		= tmpa9xx_clcd_setup,
 	.mmap		= tmpa9xx_clcd_mmap,
 	.ioctl		= tmpa9xx_clcd_ioctl,
-#ifdef TMPA9XX_PORTRAIT
-	.display	= tmpa9xx_clcd_display,
-	.vsync		= tmpa9xx_clcd_vsync,
-#endif
 	.remove		= tmpa9xx_clcd_remove,
 };
 
@@ -805,20 +700,6 @@ out:
 	dev_info(&pdev->dev, "\t.bpp\t\t= %d,\n", c->panel.bpp);
 	dev_info(&pdev->dev, "\t.grayscale\t= %d,\n", c->panel.grayscale);
 	dev_info(&pdev->dev, "};\n");
-#endif
-
-#ifdef TMPA9XX_PORTRAIT
-	c->wq = create_workqueue("tmpa9xx-clcd-wq");
-	if (!c->wq) {
-		dev_err(dev, "create_workqueue() failed\n");
-		/* fixme: add error handling */
-	}
-	INIT_WORK(&c->wq_irq, backend_clcd_work);
-	spin_lock_init(&c->lock);
-
-	ret = c->panel.mode.xres;
-	c->panel.mode.xres = c->panel.mode.yres;
-	c->panel.mode.yres = ret;
 #endif
 
 	return 0;
@@ -979,15 +860,6 @@ static int __devexit remove(struct platform_device *pdev)
 {
 	struct amba_device *d = platform_get_drvdata(pdev);
 
-#ifdef TMPA9XX_PORTRAIT
-	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
-
-	c->shutdown = true;
-
-	flush_workqueue(c->wq);
-
-	destroy_workqueue(c->wq);
-#endif
 	amba_device_unregister(d);
 
 	lcdda_remove(pdev);
