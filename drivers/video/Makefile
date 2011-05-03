@@ -96,6 +96,7 @@ obj-$(CONFIG_FB_PVR2)             += pvr2fb.o
 obj-$(CONFIG_FB_VOODOO1)          += sstfb.o
 obj-$(CONFIG_FB_ARMCLCD)	  += amba-clcd.o
 obj-$(CONFIG_FB_TMPA9XX_CLCD)	  += tmpa9xx-clcd.o
+obj-$(CONFIG_FB_TMPA9XX_LCDDA)	  += tmpa9xx-lcdda.o
 obj-$(CONFIG_FB_TMPA900_LCDCOP)	  += tmpa900-lcdcop.o
 obj-$(CONFIG_FB_ACCELERATOR_ALTIA)+= altia.o
 obj-$(CONFIG_FB_68328)            += 68328fb.o

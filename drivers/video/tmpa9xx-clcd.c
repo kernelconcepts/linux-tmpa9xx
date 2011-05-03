@@ -25,26 +25,15 @@
 
 #define ARM_CLCD_PERIPH_ID 0x00041110
 
-#define BLIT_MODE_NORMAL 0x00
-#define BLIT_MODE_BLEND  0x10
-
-#define BLIT_START	(1<<30)
-#define BLIT_ISR	((1<<16)|(1<<17))
-#define BLIT_ISR_MASK	(~((1<<20)|(1<<21)))
-#define BLIT_DMA_MASK	(~0x00008800)
-#define BLIT_FIRST_LINE	(0x0800)
-#define BLIT_LAST_LINE	(0x8000)
-#define BLIT_X_PAD	(0x0200)
-
-#define ISR_ERROR	(1<<21)
-#define ISR_LINE	(1<<20)
-
 struct tmpa9xx_clcd
 {
 	struct clcd_panel panel;
-	struct mutex mutex;
 	int lcd_power;
 	int lcd_reset;
+
+	/* lcdda ioctl helper */
+	int (*ioctl)(void *priv, unsigned int cmd, unsigned long arg);
+	void *priv;
 };
 
 struct tmpa9xx_clcd *g_tmpa9xx_clcd;
@@ -59,8 +48,11 @@ static int tmpa9xx_clcd_setup(struct clcd_fb *fb)
 
 	/* add additional memory for data and round up to page size */
 	framesize = roundup(c->panel.mode.xres * c->panel.mode.yres * c->panel.bpp/8, PAGE_SIZE);
-	len = roundup(3 * framesize + CONFIG_FB_TMPA9XX_CLCD_MEM * 1024, PAGE_SIZE);
-
+#ifdef CONFIG_FB_TMPA9XX_LCDDA
+	len = roundup(CONFIG_FB_TMPA9XX_NUM_FBS * framesize + CONFIG_FB_TMPA9XX_CLCD_MEM * 1024, PAGE_SIZE);
+#else
+	len = framesize;
+#endif
 	if (get_order(len) >= MAX_ORDER) {
 		len = PAGE_SIZE * MAX_ORDER_NR_PAGES;
 		dev_info(&fb->dev->dev, "limiting framebuffer size to %ld\n", len);
@@ -126,7 +118,11 @@ static void tmpa9xx_clcd_decode(struct clcd_fb *fb, struct clcd_regs *regs)
 
 static int tmpa9xx_clcd_ioctl(struct clcd_fb *fb, unsigned int cmd, unsigned long arg)
 {
+	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
 	int ret = -ENOIOCTLCMD;
+
+	if (c->ioctl)
+		ret = c->ioctl(c->priv, cmd, arg);
 
 	return ret;
 }
@@ -165,6 +161,35 @@ static struct clcd_board clcd_platform_data = {
 	.remove		= tmpa9xx_clcd_remove,
 };
 
+int tmpa9xx_clcd_register_ioctl(int (*ioctl)(void *priv, unsigned int cmd, unsigned long arg), void *priv)
+{
+	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
+
+	BUG_ON(c->ioctl);
+
+	c->ioctl = ioctl;
+	c->priv = priv;
+
+	return 0;
+}
+
+EXPORT_SYMBOL(tmpa9xx_clcd_register_ioctl);
+
+int tmpa9xx_clcd_unregister_ioctl(void *priv)
+{
+	struct tmpa9xx_clcd *c = g_tmpa9xx_clcd;
+
+	BUG_ON(!c->ioctl);
+	BUG_ON(c->priv != priv);
+
+	c->ioctl = NULL;
+	c->priv = NULL;
+
+	return 0;
+}
+
+EXPORT_SYMBOL(tmpa9xx_clcd_unregister_ioctl);
+
 static int setup_display(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -185,8 +210,6 @@ static int setup_display(struct platform_device *pdev)
 		return -1;
 	}
 	g_tmpa9xx_clcd = c;
-
-	mutex_init(&c->mutex);
 
 	fb_get_options("tmpa9xxfb", &options);
 

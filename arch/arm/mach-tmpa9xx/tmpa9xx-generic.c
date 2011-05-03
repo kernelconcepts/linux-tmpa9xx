@@ -229,16 +229,8 @@ static struct resource tmpa9xx_resource_clcd[] = {
 		.end   = LCDC_BASE + SZ_1K - 1,
 		.flags = IORESOURCE_MEM,
         }, {
-		.start = LCDDA_BASE,
-		.end   = LCDDA_BASE + SZ_64 - 1,
-		.flags = IORESOURCE_MEM,
-        }, {
 		.start = INTR_VECT_LCDC,
 		.end   = INTR_VECT_LCDC,
-		.flags = IORESOURCE_IRQ
-        }, {
-		.start = INTR_VECT_LCDDA,
-		.end   = INTR_VECT_LCDDA,
 		.flags = IORESOURCE_IRQ
         }
 };
@@ -257,6 +249,29 @@ static struct platform_device tmpa9xx_clcd_device = {
         }
 };
 #endif
+
+static struct resource tmpa9xx_resource_lcdda[] = {
+        {
+		.start = LCDDA_BASE,
+		.end   = LCDDA_BASE + SZ_64 - 1,
+		.flags = IORESOURCE_MEM,
+        }, {
+		.start = INTR_VECT_LCDDA,
+		.end   = INTR_VECT_LCDDA,
+		.flags = IORESOURCE_IRQ
+        }
+};
+
+static struct platform_device tmpa9xx_lcdda_device = {
+        .name          = "tmpa9xx-lcdda",
+        .id            = -1,
+        .resource      = tmpa9xx_resource_lcdda,
+        .num_resources = ARRAY_SIZE(tmpa9xx_resource_lcdda),
+        .dev           = {
+                .coherent_dma_mask	= ~0,
+		.platform_data		= NULL,
+        }
+};
 
 /*
  * AMBA Devices
@@ -560,33 +575,6 @@ static struct platform_device tmpa9xx_iio_adc_device = {
 };
 #endif
 
-#if defined CONFIG_FB_ACCELERATOR_ALTIA || defined CONFIG_FB_ACCELERATOR_ALTIA_MODULE
-static struct resource tmpa9xx_lcdda_resource[] = {
-        [0] = {
-                .start = 0xF2050000,
-                .end   = 0xF2050000 + 0x4000,
-                .flags = IORESOURCE_MEM,
-        },
-        [1] = {
-                .start = INTR_VECT_LCDDA,
-                .end   = INTR_VECT_LCDDA,
-                .flags = IORESOURCE_IRQ,
-        },
-};
-
-static u64 tmpa9xx_lcdda_device_dmamask = 0xffffffffUL;
-static struct platform_device tmpa9xx_lcdda_device = {
-        .name = "tmpa9xx-lcdda",
-        .id = -1,
-        .num_resources = ARRAY_SIZE(tmpa9xx_lcdda_resource),
-        .resource = tmpa9xx_lcdda_resource,
-        .dev		  = {
-                .dma_mask                = &tmpa9xx_lcdda_device_dmamask,
-                .coherent_dma_mask       = 0xffffffffUL
-        }
-};
-#endif
-
 #if defined CONFIG_TMPA9XX_PWM_CHANNEL_0 || defined CONFIG_TMPA9XX_PWM_CHANNEL_0_MODULE
 static struct resource tmpa9xx_pwm0_resource[] = {
         [0] = {
@@ -698,9 +686,7 @@ static struct platform_device *devices_tmpa9xx[] __initdata = {
        &tmpa9xx_clcd_device,
 #endif
 
-#if defined CONFIG_FB_ACCELERATOR_ALTIA || defined CONFIG_FB_ACCELERATOR_ALTIA_MODULE
        &tmpa9xx_lcdda_device,
-#endif
 
 #if defined CONFIG_SND_TMPA9XX_I2S || defined CONFIG_SND_TMPA9XX_I2S_MODULE
        &tmpa9xx_i2s_device,

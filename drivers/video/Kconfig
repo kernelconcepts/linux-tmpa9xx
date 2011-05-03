@@ -340,24 +340,51 @@ config FB_TMPA900_LCDCOP
 	tristate
 	depends on FB_TMPA9XX_CLCD
 
+config FB_TMPA9XX_DA
+	bool "TMPA9xx display accelerator support"
+	depends on FB_TMPA9XX_CLCD
+
+choice
+	prompt "Select TMPA9xx display accelerator"
+	depends on FB_TMPA9XX_DA
+	default FB_TMPA9XX_LCDDA
+
+config FB_TMPA9XX_LCDDA
+	bool "TMPA9xx LCDDA"
+	help
+	  This device driver is for the Toshiba TMPA9xx
+	  LCD display accelerator (LCDDA).
+
+	  If you want to compile this as a module (=code which can be
+	  inserted into and removed from the running kernel), say M
+	  here and read <file:Documentation/kbuild/modules.txt>.  The module
+	  will be called tmpa9xx-lcdda.
+
+config FB_TMPA9XX_NUM_FBS
+	int "Framebuffer quantity multiplier"
+	depends on FB_TMPA9XX_LCDDA
+	default 3
+	help
+	  The framebuffer size is automatically calculated based on the
+	  width, height and depth of the panel attached. This number
+	  describes the multiplier that will be used when allocating that
+	  memory. x2 gives you enough room for double-buffering, x3 for
+	  triple-buffering and so on.
+
 config FB_TMPA9XX_CLCD_MEM
 	int "Additional video memory size in kB"
-	depends on FB_TMPA9XX_CLCD
+	depends on FB_TMPA9XX_LCDDA
 	default 1024
 	help
 	  This is the amount of *additional* video memory reserved for
 	  the framebuffer, which can be used by DirectFB for example.
 
 config FB_ACCELERATOR_ALTIA
-        tristate "Altia LCDDA implementation"
-	depends on FB_TMPA9XX_CLCD
-	select FB_TMPA9XX_CLCD_NO_LCDDA
+        bool "Altia LCDDA"
 	help
           Use the Altia LCDDDA implementation with /dev/altia
 
-config FB_TMPA9XX_CLCD_NO_LCDDA
-	bool
-	depends on FB_ACCELERATOR_ALTIA
+endchoice
 
 choice
 

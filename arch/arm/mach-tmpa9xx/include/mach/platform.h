@@ -39,4 +39,7 @@ struct tmpa9xx_i2s_cfg
 	bool common_rx_tx_clock;
 };
 
+int tmpa9xx_clcd_register_ioctl(int (*ioctl)(void *priv, unsigned int cmd, unsigned long arg), void *priv);
+int tmpa9xx_clcd_unregister_ioctl(void *priv);
+
 #endif
