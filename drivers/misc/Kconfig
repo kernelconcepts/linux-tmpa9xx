@@ -127,7 +127,7 @@ config TMPA900_OFD
 
 config TOPAS_LED
 	tristate "LED driver for TMPA9xx Topas development boards"
-	depends on MACH_TOPASA900 || MACH_TOPASA910
+	depends on MACH_TOPASA900 || MACH_TOPAS910
 	help
 	  Enable support LED driver for TMPA9xx Topas development boards
 
