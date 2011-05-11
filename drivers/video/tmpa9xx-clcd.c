@@ -248,9 +248,17 @@ static int setup_display(struct platform_device *pdev)
 	ret = sscanf(options, "%08x:%08x:%08x:%08x",
 		&videoparams[0], &videoparams[1], &videoparams[2], &videoparams[3]);
 	if (ret != 4) {
-		dev_err(&pdev->dev, "sscanf() @ tmpa9xxfb options failed\n");
-		kfree(c);
-		return -1;
+		/* be nice and automatically add a 4th parameter, if possible */
+		ret = sscanf(options, "%08x:%08x:%08x",
+			&videoparams[0], &videoparams[1], &videoparams[2]);
+		if (ret != 3) {
+			dev_err(&pdev->dev, "sscanf() @ tmpa9xxfb options failed\n");
+			kfree(c);
+			return -1;
+		}
+		dev_info(&pdev->dev, "tmpa9xxfb options only contain 3 configuration values\n");
+		dev_info(&pdev->dev, "please update your bootloader configuration\n");
+		videoparams[3] = 0x00010828;
 	}
 
 	dev_info(&pdev->dev, "options from cmdline: \n" \
