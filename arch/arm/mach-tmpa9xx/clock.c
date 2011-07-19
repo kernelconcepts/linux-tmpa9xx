@@ -294,6 +294,9 @@ static struct clk_lookup lookups[] = {
 		.dev_id		= "tmpa9xx-wdt",
 		.clk		= &apb_pclk,
 	}, {
+		.dev_id		= "tmpa9xx-adc",
+		.clk		= &apb_pclk,
+	}, {
 		.dev_id		= "tmpa9xx-i2c.0",
 		.clk		= &apb_pclk,
 	}, {

@@ -22,6 +22,8 @@
 #include <linux/delay.h>
 #include <linux/sched.h>
 #include <linux/io.h>
+#include <linux/err.h>
+#include <linux/clk.h>
 
 #define DRIVER_NAME "tmpa9xx-adc"
 
@@ -66,6 +68,7 @@ struct tmpa9xx_adc_core
 	struct device *dev;
 	void __iomem *regs;
 	int irq;
+	struct clk *clk;
 	struct mutex lock;
 	struct completion complete;
 	int value;
@@ -131,6 +134,8 @@ static int tmpa9xx_adc_probe(struct platform_device *pdev)
 	struct tmpa9xx_adc_core *t;
 	struct resource	*mem;
 	uint32_t val;
+	unsigned long rate;
+	int i;
 	int ret;
 
 	t = kzalloc(sizeof(*t), GFP_KERNEL);
@@ -154,6 +159,22 @@ static int tmpa9xx_adc_probe(struct platform_device *pdev)
 		goto err1;
 	}
 
+	t->clk = clk_get(t->dev, NULL);
+	if (IS_ERR_OR_NULL(t->clk)) {
+		dev_err(t->dev, "clk_get() failed\n");
+		ret = PTR_ERR(t->clk);
+		if (!ret)
+			ret = -EINVAL;
+		goto err2;
+	}
+
+	ret = clk_enable(t->clk);
+	if (ret) {
+		dev_err(t->dev, "clk_enable() failed\n");
+		ret = -ENODEV;
+		goto err3;
+	}
+
 	/* reset */
 	adc_writel(t, ADC_ADMOD4, 0x2);
 	udelay(10);
@@ -165,35 +186,51 @@ static int tmpa9xx_adc_probe(struct platform_device *pdev)
 	t->irq = platform_get_irq(pdev, 0);
 	if (t->irq <= 0) {
 		dev_err(t->dev, "platform_get_irq() failed\n");
-		goto err2;
+		goto err4;
 	}
 
 	ret = request_irq(t->irq, interrupt_handler, 0, DRIVER_NAME, t);
 	if (ret) {
 		dev_err(t->dev, "request_irq() failed\n");
-		goto err3;
+		goto err5;
 	}
 
 	platform_set_drvdata(pdev, t);
 
+        /* setup prescaler. conversion clock must be below < 32MHz */
+	rate = clk_get_rate(t->clk);
+	for (i = 0; i < 5; i++) {
+		if ((rate / (1 << i)) < 32000000)
+			break;
+	}
+	if (i == 5) {
+		dev_err(t->dev, "prescaler cannot be setup\n");
+		goto err6;
+	}
+        adc_writel(t, ADC_ADCLK, (0x01 << 7) | i);
+
 	val = adc_readl(t, ADC_ADMOD1) | 0x80;
 	adc_writel(t, ADC_ADMOD1, 0x80);
-
-        /* setup ADCCLK */
-        adc_writel(t, ADC_ADCLK, (0x01 << 7) | 0x02);
 
 	/* enable IRQs */
 	adc_writel(t, ADC_ADIE, (0x01 << 0));
 
 	platform_set_drvdata(pdev, t);
 
-	dev_info(t->dev, "tmpa9xx adc driver registered\n");
+	dev_info(t->dev, "tmpa9xx adc driver registered, prescaler set to %d\n", i);
 
 	g_h = t;
 
 	return 0;
 
+err6:
+	platform_set_drvdata(pdev, NULL);
+	free_irq(t->irq, t);
+err5:
+err4:
+	clk_disable(t->clk);
 err3:
+	clk_put(t->clk);
 err2:
 	iounmap(t->regs);
 err1:
@@ -210,6 +247,10 @@ static int __devexit tmpa9xx_adc_remove(struct platform_device *pdev)
 	adc_writel(t, ADC_ADIE, 0x0);
 
 	free_irq(t->irq, t);
+
+	clk_disable(t->clk);
+
+	clk_put(t->clk);
 
 	iounmap(t->regs);
 
