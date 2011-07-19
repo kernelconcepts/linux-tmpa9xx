@@ -86,6 +86,22 @@ static struct irqaction tmpa9xx_timer_irq = {
 	.handler	= tmpa9xx_timer_interrupt,
 };
 
+static void tmpa9xx_suspend(void)
+{
+	struct tmpa9xx_time_priv *t = &g_tmpa9xx_time_priv;
+
+	/* disable timer */
+	tmr_writel(t, TIMER_CONTROL, 0);
+}
+
+static void tmpa9xx_resume(void)
+{
+	struct tmpa9xx_time_priv *t = &g_tmpa9xx_time_priv;
+
+	/* enable timer, periodic, enable interrupts, no prescaler, 16 bit */
+	tmr_writel(t, TIMER_CONTROL, TIMxEN | TIMxMOD_PER | TIMxINTE | TIMxPRS_1 | TIMxSIZE_16B);
+}
+
 static void __init tmpa9xx_timer_init(void)
 {
 	struct tmpa9xx_time_priv *t = &g_tmpa9xx_time_priv;
@@ -121,4 +137,6 @@ static void __init tmpa9xx_timer_init(void)
 struct sys_timer tmpa9xx_timer = {
 	.init		= tmpa9xx_timer_init,
 	.offset		= tmpa9xx_gettimeoffset,
+	.suspend	= tmpa9xx_suspend,
+	.resume		= tmpa9xx_resume,
 };
