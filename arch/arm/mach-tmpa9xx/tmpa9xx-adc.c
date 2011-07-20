@@ -264,14 +264,15 @@ static int __devexit tmpa9xx_adc_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM
-
 static int tmpa9xx_adc_suspend(struct platform_device *pdev, pm_message_t mesg)
 {
 	struct tmpa9xx_adc_core *t = g_h;
+	uint32_t val;
 
 	mutex_lock(&t->lock);
 
-	ADC_ADMOD1 &= ~0x80;
+	val = adc_readl(t, ADC_ADMOD1) & ~0x80;
+	adc_writel(t, ADC_ADMOD1, val);
 
 	mutex_unlock(&t->lock);
 
@@ -281,10 +282,12 @@ static int tmpa9xx_adc_suspend(struct platform_device *pdev, pm_message_t mesg)
 static int tmpa9xx_adc_resume(struct platform_device *pdev)
 {
 	struct tmpa9xx_adc_core *t = g_h;
+	uint32_t val;
 
 	mutex_lock(&t->lock);
 
-	ADC_ADMOD1 |= 0x80;
+	val = adc_readl(t, ADC_ADMOD1) | 0x80;
+	adc_writel(t, ADC_ADMOD1, val);
 
 	mutex_unlock(&t->lock);
 
