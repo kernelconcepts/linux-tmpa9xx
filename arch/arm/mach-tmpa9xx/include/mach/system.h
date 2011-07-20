@@ -23,7 +23,7 @@
 #include <mach/regs.h>
 #include <asm/io.h>
 
-static void arch_idle(void)
+static inline void arch_idle(void)
 {
 	/*
 	 * This should do all the clock switching
