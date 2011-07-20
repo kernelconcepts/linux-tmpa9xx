@@ -52,6 +52,7 @@ struct tmpa9xx_ts_priv
 	int irq;
 	struct workqueue_struct *wq;
 	struct work_struct wq_irq;
+	bool is_suspended;
 
 	/* post processing */
 	int init;
@@ -217,9 +218,14 @@ static irqreturn_t topas910_ts_interrupt(int irq, void *dev_id)
 	struct tmpa9xx_ts_priv *t = dev_id;
 
 	ts_clear_interrupt(t);
-  	ts_disable_interrupt(t);
 
-	queue_work(t->wq, &t->wq_irq);
+	/* if we are in suspend mode, adc is suspended as well.
+	so don't schedule our workqueue, but wait for the system to
+	be fully resumed. todo: improve this handling */
+	if (t->is_suspended == false) {
+		ts_disable_interrupt(t);
+		queue_work(t->wq, &t->wq_irq);
+	}
 
 	return IRQ_HANDLED;
 }
@@ -324,6 +330,8 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 	ts_clear_interrupt(t);
 	ts_enable_interrupt(t);
 
+	device_set_wakeup_capable(t->dev, true);
+
 	dev_info(t->dev, DRIVER_DESC " ready, fuzz %d\n", tmpa9xx_ts_fuzz);
 
 	return 0;
@@ -372,10 +380,41 @@ static int __devexit tmpa9xx_ts_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int tmpa9xx_ts_suspend(struct platform_device *pdev, pm_message_t mesg)
+{
+	struct tmpa9xx_ts_priv *t = dev_get_drvdata(&pdev->dev);
+
+	t->is_suspended = true;
+
+        if (!device_may_wakeup(t->dev))
+		ts_disable_interrupt(t);
+
+	return 0;
+}
+
+static int tmpa9xx_ts_resume(struct platform_device *pdev)
+{
+	struct tmpa9xx_ts_priv *t = dev_get_drvdata(&pdev->dev);
+
+        if (!device_may_wakeup(t->dev))
+		ts_enable_interrupt(t);
+
+	t->is_suspended = false;
+
+	return 0;
+}
+#else
+#define tmpa9xx_ts_suspend     NULL
+#define tmpa9xx_ts_resume      NULL
+#endif
+
+
 static struct platform_driver tmpa9xx_ts_driver = {
 	.probe		= tmpa9xx_ts_probe,
 	.remove		= __devexit_p(tmpa9xx_ts_remove),
-
+	.suspend	= tmpa9xx_ts_suspend,
+	.resume		= tmpa9xx_ts_resume,
 	.driver		= {
 		.name	= "tmpa9xx-ts",
 		.owner	= THIS_MODULE,
