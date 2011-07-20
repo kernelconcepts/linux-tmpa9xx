@@ -635,12 +635,26 @@ static struct platform_device tmpa900_device_ofd = {
 };
 #endif
 
+#if defined CONFIG_PM
+static struct platform_device tmpa9xx_device_pm = {
+        .name          = "tmpa9xx-pm",
+        .id            = -1,
+        .dev           = {
+               .platform_data = NULL,
+        }
+};
+#endif
+
 static struct platform_device *devices_tmpa9xx[] __initdata = {
 #if defined CONFIG_I2C_TMPA9XX_CHANNEL_0
         &tmpa9xx_device_i2c_channel_0,
 #endif
 #if defined CONFIG_I2C_TMPA9XX_CHANNEL_1
         &tmpa9xx_device_i2c_channel_1,
+#endif
+
+#if defined CONFIG_PM
+       &tmpa9xx_device_pm,
 #endif
 
 #if defined CONFIG_TMPA900_OFD || defined CONFIG_TMPA900_OFD_MODULE
