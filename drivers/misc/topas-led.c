@@ -180,7 +180,10 @@ static int topas_led_suspend(struct platform_device *pdev, pm_message_t state)
 
 static int topas_led_resume(struct platform_device *pdev)
 {
+	struct tmpa9xx_led *l = platform_get_drvdata(pdev);
+
 	segments_set(l, l->state);
+
 	return 0;
 }
 #else
