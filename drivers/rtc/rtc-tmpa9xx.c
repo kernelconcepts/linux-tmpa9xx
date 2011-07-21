@@ -245,7 +245,9 @@ static int __devinit probe(struct platform_device *pdev)
 		goto err7;
 	}
 
-        dev_info(r->dev, "ready, io %p/%p. irq %d\n", r->regs1, r->regs2, r->irq);
+	device_set_wakeup_capable(r->dev, true);
+
+        dev_info(r->dev, "ready, io @ %p/%p, irq %d\n", r->regs1, r->regs2, r->irq);
 
 	return 0;
 
@@ -286,9 +288,36 @@ static int __devexit remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int tmpa9xx_rtc_suspend(struct platform_device *pdev, pm_message_t mesg)
+{
+	struct tmpa9xx_rtc *r = platform_get_drvdata(pdev);
+
+        if (device_may_wakeup(r->dev))
+		enable_irq_wake(r->irq);
+
+	return 0;
+}
+
+static int tmpa9xx_rtc_resume(struct platform_device *pdev)
+{
+	struct tmpa9xx_rtc *r = platform_get_drvdata(pdev);
+
+        if (device_may_wakeup(r->dev))
+		disable_irq_wake(r->irq);
+
+	return 0;
+}
+#else
+#define tmpa9xx_rtc_suspend     NULL
+#define tmpa9xx_rtc_resume      NULL
+#endif
+
 static struct platform_driver tmpa9xx_rtc_driver = {
 	.probe = probe,
 	.remove = __devexit_p(remove),
+	.suspend = tmpa9xx_rtc_suspend,
+	.resume	 = tmpa9xx_rtc_resume,
 	.driver = {
 		.name  = "tmpa9xx-rtc",
 		.owner = THIS_MODULE,
