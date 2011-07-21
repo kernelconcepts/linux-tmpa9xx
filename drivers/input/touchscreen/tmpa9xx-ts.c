@@ -387,8 +387,8 @@ static int tmpa9xx_ts_suspend(struct platform_device *pdev, pm_message_t mesg)
 
 	t->is_suspended = true;
 
-        if (!device_may_wakeup(t->dev))
-		ts_disable_interrupt(t);
+        if (device_may_wakeup(t->dev))
+		enable_irq_wake(t->irq);
 
 	return 0;
 }
@@ -397,8 +397,8 @@ static int tmpa9xx_ts_resume(struct platform_device *pdev)
 {
 	struct tmpa9xx_ts_priv *t = dev_get_drvdata(&pdev->dev);
 
-        if (!device_may_wakeup(t->dev))
-		ts_enable_interrupt(t);
+        if (device_may_wakeup(t->dev))
+		disable_irq_wake(t->irq);
 
 	t->is_suspended = false;
 
