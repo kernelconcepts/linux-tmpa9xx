@@ -40,6 +40,8 @@
 
 #define VIC_PL192_VECT_ADDR		0xF00
 
+#define VIC_PL192_PARTNUMBER		0x192
+
 #ifndef __ASSEMBLY__
 void vic_init(void __iomem *base, unsigned int irq_start, u32 vic_sources, u32 resume_sources);
 #endif

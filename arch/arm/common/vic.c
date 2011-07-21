@@ -53,6 +53,7 @@ struct vic_device {
 	u32		int_enable;
 	u32		soft_int;
 	u32		protect;
+	u32		cellid;
 };
 
 /* we cannot allocate memory when VICs are initially registered */
@@ -73,9 +74,12 @@ static inline struct vic_device *to_vic(struct sys_device *sys)
  * Common initialisation code for registration
  * and resume.
 */
-static void vic_init2(void __iomem *base)
+static void vic_init2(void __iomem *base, u32 cellid)
 {
 	int i;
+
+	if ((cellid & 0xfff) == VIC_PL192_PARTNUMBER)
+		return;
 
 	for (i = 0; i < 16; i++) {
 		void __iomem *reg = base + VIC_VECT_CNTL0 + (i * 4);
@@ -94,7 +98,7 @@ static int vic_class_resume(struct sys_device *dev)
 	printk(KERN_DEBUG "%s: resuming vic at %p\n", __func__, base);
 
 	/* re-initialise static settings */
-	vic_init2(base);
+	vic_init2(base, vic->cellid);
 
 	writel(vic->int_select, base + VIC_INT_SELECT);
 	writel(vic->protect, base + VIC_PROTECT);
@@ -186,7 +190,7 @@ late_initcall(vic_pm_init);
  * of suspend and resume requests and ensure that the correct actions are
  * taken to re-instate the settings on resume.
  */
-static void __init vic_pm_register(void __iomem *base, unsigned int irq, u32 resume_sources)
+static void __init vic_pm_register(void __iomem *base, unsigned int irq, u32 resume_sources, u32 cellid)
 {
 	struct vic_device *v;
 
@@ -197,20 +201,32 @@ static void __init vic_pm_register(void __iomem *base, unsigned int irq, u32 res
 		v->base = base;
 		v->resume_sources = resume_sources;
 		v->irq = irq;
+		v->cellid = cellid;
 		vic_id++;
 	}
 }
 #else
-static inline void vic_pm_register(void __iomem *base, unsigned int irq, u32 arg1) { }
+static inline void vic_pm_register(void __iomem *base, unsigned int irq, u32 arg1, u32 id) { }
 #endif /* CONFIG_PM */
 
-static void vic_ack_irq(struct irq_data *d)
+static void vic_ack_irq_pl190(struct irq_data *d)
 {
 	void __iomem *base = irq_data_get_irq_chip_data(d);
 	unsigned int irq = d->irq & 31;
 	writel(1 << irq, base + VIC_INT_ENABLE_CLEAR);
 	/* moreover, clear the soft-triggered, in case it was the reason */
 	writel(1 << irq, base + VIC_INT_SOFT_CLEAR);
+}
+
+static void vic_ack_irq_pl192(struct irq_data *d)
+{
+	void __iomem *base = irq_data_get_irq_chip_data(d);
+	unsigned int irq = d->irq & 31;
+	writel(1 << irq, base + VIC_INT_ENABLE_CLEAR);
+	/* moreover, clear the soft-triggered, in case it was the reason */
+	writel(1 << irq, base + VIC_INT_SOFT_CLEAR);
+	/* clear this interrupt */
+	writel(1, base + VIC_PL192_VECT_ADDR);
 }
 
 static void vic_mask_irq(struct irq_data *d)
@@ -267,7 +283,7 @@ static int vic_set_wake(struct irq_data *d, unsigned int on)
 
 static struct irq_chip vic_chip = {
 	.name		= "VIC",
-	.irq_ack	= vic_ack_irq,
+	.irq_ack	= vic_ack_irq_pl190,
 	.irq_mask	= vic_mask_irq,
 	.irq_unmask	= vic_unmask_irq,
 	.irq_set_wake	= vic_set_wake,
@@ -283,9 +299,17 @@ static void __init vic_disable(void __iomem *base)
 	writel(~0, base + VIC_INT_SOFT_CLEAR);
 }
 
-static void __init vic_clear_interrupts(void __iomem *base)
+static void __init vic_clear_interrupts(void __iomem *base, u32 cellid)
 {
 	unsigned int i;
+
+	if ((cellid & 0xfff) == VIC_PL192_PARTNUMBER) {
+		for (i = 0; i < 32; i++) {
+			void __iomem *reg = base + VIC_VECT_ADDR0 + (i * 4);
+			writel(i, reg);
+		}
+		return;
+	}
 
 	writel(0, base + VIC_PL190_VECT_ADDR);
 	for (i = 0; i < 19; i++) {
@@ -297,9 +321,13 @@ static void __init vic_clear_interrupts(void __iomem *base)
 }
 
 static void __init vic_set_irq_sources(void __iomem *base,
-				unsigned int irq_start, u32 vic_sources)
+				unsigned int irq_start, u32 vic_sources, u32 id)
 {
 	unsigned int i;
+
+	if ((id & 0xfff) == VIC_PL192_PARTNUMBER) {
+		vic_chip.irq_ack = vic_ack_irq_pl192;
+	}
 
 	for (i = 0; i < 32; i++) {
 		if (vic_sources & (1 << i)) {
@@ -321,7 +349,7 @@ static void __init vic_set_irq_sources(void __iomem *base,
  *  and 020 within the page. We call this "second block".
  */
 static void __init vic_init_st(void __iomem *base, unsigned int irq_start,
-				u32 vic_sources)
+				u32 vic_sources, u32 id)
 {
 	unsigned int i;
 	int vic_2nd_block = ((unsigned long)base & ~PAGE_MASK) != 0;
@@ -336,7 +364,7 @@ static void __init vic_init_st(void __iomem *base, unsigned int irq_start,
 	 * the second base address, which is 0x20 in the page
 	 */
 	if (vic_2nd_block) {
-		vic_clear_interrupts(base);
+		vic_clear_interrupts(base, id);
 
 		/* ST has 16 vectors as well, but we don't enable them by now */
 		for (i = 0; i < 16; i++) {
@@ -347,7 +375,7 @@ static void __init vic_init_st(void __iomem *base, unsigned int irq_start,
 		writel(32, base + VIC_PL190_DEF_VECT_ADDR);
 	}
 
-	vic_set_irq_sources(base, irq_start, vic_sources);
+	vic_set_irq_sources(base, irq_start, vic_sources, id);
 }
 
 /**
@@ -375,7 +403,7 @@ void __init vic_init(void __iomem *base, unsigned int irq_start,
 
 	switch(vendor) {
 	case AMBA_VENDOR_ST:
-		vic_init_st(base, irq_start, vic_sources);
+		vic_init_st(base, irq_start, vic_sources, cellid);
 		return;
 	default:
 		printk(KERN_WARNING "VIC: unknown vendor, continuing anyways\n");
@@ -388,11 +416,11 @@ void __init vic_init(void __iomem *base, unsigned int irq_start,
 	vic_disable(base);
 
 	/* Make sure we clear all existing interrupts */
-	vic_clear_interrupts(base);
+	vic_clear_interrupts(base, cellid);
 
-	vic_init2(base);
+	vic_init2(base, cellid);
 
-	vic_set_irq_sources(base, irq_start, vic_sources);
+	vic_set_irq_sources(base, irq_start, vic_sources, cellid);
 
-	vic_pm_register(base, irq_start, resume_sources);
+	vic_pm_register(base, irq_start, resume_sources, cellid);
 }
