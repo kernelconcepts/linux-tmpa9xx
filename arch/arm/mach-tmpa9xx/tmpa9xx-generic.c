@@ -45,6 +45,7 @@
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
+#include <asm/hardware/vic.h>
 
 #define ARM_UART_PERIPH_ID  0x00041011
 #define ARM_SSP_PERIPH_ID   0x00041022
@@ -1028,4 +1029,14 @@ void __init tmpa9xx_init(void)
 
         /* Add chip devices */
         platform_add_devices(devices_tmpa9xx, ARRAY_SIZE(devices_tmpa9xx));
+}
+
+void __init tmpa9xx_init_irq(void)
+{
+	/* exclude reserved interrupts, see 3.7.4 */
+	u32 sources = ~((1<<19) | (1<<24) | (1<<25));
+
+	vic_init((void __iomem *)INTR_BASE, 0, sources, sources);
+
+	tmpa9xx_gpio_init();
 }
