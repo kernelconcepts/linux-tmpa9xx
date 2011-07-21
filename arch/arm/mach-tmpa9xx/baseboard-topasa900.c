@@ -239,28 +239,28 @@ static struct gpio_keys_button topas_buttons[] = {
 		.active_low	= 1,
 		.desc		= "Joystick Bit 0",
 		.type		= EV_KEY,
-		.wakeup		= 0,
+		.wakeup		= 1,
 	}, {
 		.code		= KEY_LEFTCTRL,
 		.gpio		= 1,
 		.active_low	= 1,
 		.desc		= "Joystick Bit 1",
 		.type		= EV_KEY,
-		.wakeup		= 0,
+		.wakeup		= 1,
 	}, {
 		.code		= KEY_LEFTALT,
 		.gpio		= 2,
 		.active_low 	= 1,
 		.desc		= "Joystick Bit 2",
 		.type		= EV_KEY,
-		.wakeup		= 0,
+		.wakeup		= 1,
 	}, {
 		.code		= KEY_SELECT,
 		.gpio		= 3,
 		.active_low	= 1,
 		.desc		= "Joystick strobe",
 		.type		= EV_KEY,
-		.wakeup		= 0,
+		.wakeup		= 1,
 	},
 };
 
