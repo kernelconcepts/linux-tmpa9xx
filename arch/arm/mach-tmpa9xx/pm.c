@@ -43,11 +43,18 @@ static void tmpa9xx_sram_push(void *dest, void *src, unsigned int size)
 	flush_icache_range((unsigned long)dest, (unsigned long)(dest + size));
 }
 
+void tmpa9xx_clock_pll_output_clock_fosch(void);
+void tmpa9xx_clock_pll_output_clock_pll(void);
+
 static void tmpa9xx_pm_suspend(void)
 {
 	void *adr = tmpa9xx_sram_suspend + ((tmpa9xx_cpu_suspend_sz + 31) / 32) * 32;
 
+	tmpa9xx_clock_pll_output_clock_fosch();
+
 	tmpa9xx_sram_suspend(adr);
+
+	tmpa9xx_clock_pll_output_clock_pll();
 }
 
 static int tmpa9xx_pm_enter(suspend_state_t state)
