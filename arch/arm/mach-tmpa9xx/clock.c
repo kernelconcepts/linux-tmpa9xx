@@ -311,7 +311,41 @@ static struct clk_lookup lookups[] = {
 	}
 };
 
-int __init clk_init(void)
+static void unlock_syscr(void)
+{
+	uint32_t val;
+
+	val = clk_readl(clk, SYSCR5);
+	if (!(val & 0x1))
+		return;
+
+	clk_writel(clk, SYSCR6, 0x5a);
+	clk_writel(clk, SYSCR7, 0xa5);
+	clk_writel(clk, SYSCR6, 0xa5);
+	clk_writel(clk, SYSCR7, 0x5a);
+}
+
+/* set pll output clock to the output of the pll */
+void tmpa9xx_clock_pll_output_clock_pll(void)
+{
+	pr_debug("%s():\n", __func__);
+
+	unlock_syscr();
+
+	clk_writel(clk, SYSCR2, (1 << 1));
+}
+
+/* set pll output clock to the oscillator clock */
+void tmpa9xx_clock_pll_output_clock_fosch(void)
+{
+	unlock_syscr();
+
+	clk_writel(clk, SYSCR2, (0 << 1));
+
+	pr_debug("%s():\n", __func__);
+}
+
+uint32_t decode_fpclk(void)
 {
 	uint32_t val;
 	uint32_t input_to_fcsel = fOSCH;
@@ -319,29 +353,40 @@ int __init clk_init(void)
 	uint32_t fCLK;
 	uint32_t fHCLK;
 	uint32_t fPCLK;
+	int multiplier;
 
 	val = clk_readl(clk, SYSCR3);
-	if ((val & (1 << 7))) {
-		int multiplier = (val & 0x7) == 0x5 ? 6 : 8;
-		val = clk_readl(clk, SYSCR2);
-		if (val & 0x1) {
-			pr_debug("%s(): PLL output clock is on, input to fcsel is fPLL x%d\n", __func__, multiplier);
-			input_to_fcsel = multiplier * fOSCH;
-		}
-		else {
-			pr_debug("%s(): PLL output clock is on, input to fcsel is fOSCH\n", __func__);
-		}
+	if (!(val & (1 << 7))) {
+		pr_debug("%s(): PLL output clock is off\n", __func__);
+		return fOSCH;
 	}
+
+	multiplier = (val & 0x7) == 0x5 ? 6 : 8;
+	val = clk_readl(clk, SYSCR2);
+	if (!(val & (1 << 1))) {
+		pr_debug("%s(): PLL output clock is on, input to fcsel is fOSCH\n", __func__);
+		return fOSCH;
+	}
+
+	pr_debug("%s(): PLL output clock is on, input to fcsel is fPLL x%d\n", __func__, multiplier);
+	input_to_fcsel = multiplier * fOSCH;
 
 	val = clk_readl(clk, SYSCR1);
 	BUG_ON(val & 0x4);
 
 	clock_gear = (1 << (val & 0x3));
-	pr_debug("%s(): clock gear set to fc/%d\n", __func__, clock_gear);
+	pr_info("%s(): clock gear set to fc/%d\n", __func__, clock_gear);
 	fCLK = input_to_fcsel / clock_gear;
 	fHCLK = fCLK / 2;
 	fPCLK = fHCLK;
 	pr_debug("%s(): fCLK is %d Hz, fHCLK is %d Hz, fPCLK is %d Hz\n", __func__, fCLK, fHCLK, fPCLK);
+
+	return fPCLK;
+}
+
+int __init clk_init(void)
+{
+	uint32_t fPCLK = decode_fpclk();
 
 	/* setup clocks to defaults */
 	apb_pclk.rate = fPCLK;
