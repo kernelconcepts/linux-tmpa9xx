@@ -34,7 +34,6 @@
 #include <asm/gpio.h>
 #include <mach/irqs.h>
 
-
 struct tmpa9xx_gpio_chip {
 	struct gpio_chip chip;
 
@@ -50,7 +49,6 @@ struct tmpa9xx_gpio_chip {
 };
 
 #define to_tmpa9xx_gpio_chip(c) container_of(c, struct tmpa9xx_gpio_chip, chip)
-
 
 static int tmpa9xx_gpio_direction_input(struct gpio_chip *chip, unsigned offset)
 {
@@ -161,8 +159,8 @@ struct tmpa9xx_gpio_irq {
 	unsigned int port;
 	unsigned int bit;
 	int intr_vect;
+	int irq;
 };
-
 
 /* Nothing is obvious here. We need to know quite a lot. */
 #ifdef CONFIG_CPU_TMPA900
@@ -254,70 +252,53 @@ static irqreturn_t interrupt_handler(int irq, void *ptr)
 	return IRQ_HANDLED;
 }
 
-static void tmpa9xx_gpio_irq_ack(unsigned int irq)
+static void irq_ack(struct irq_data *data)
 {
-	unsigned int gpio_irq = irq - TMPA9XX_NUM_IRQS;
-	struct tmpa9xx_gpio_irq girq;
+	struct tmpa9xx_gpio_irq *g = irq_data_get_irq_chip_data(data);
 
-	BUG_ON((irq < TMPA9XX_NUM_IRQS) || (gpio_irq >= TMPA9XX_NUM_GPIO_IRQS));
-
-	girq = irq_gpio_desc[gpio_irq];
-
-	__raw_writeb(1 << girq.bit, TMPA9XX_GPIO_REG_IC(girq.port));
+	__raw_writeb(1 << g->bit, TMPA9XX_GPIO_REG_IC(g->port));
 }
 
-static void tmpa9xx_gpio_irq_mask(unsigned int irq)
+static void irq_mask(struct irq_data *data)
 {
-	unsigned int gpio_irq = irq - TMPA9XX_NUM_IRQS;
-	struct tmpa9xx_gpio_irq girq;
+	struct tmpa9xx_gpio_irq *g = irq_data_get_irq_chip_data(data);
 	unsigned char reg;
 
-	BUG_ON((irq < TMPA9XX_NUM_IRQS) || (gpio_irq >= TMPA9XX_NUM_GPIO_IRQS));
-
-	girq = irq_gpio_desc[gpio_irq];
-        reg = __raw_readb(TMPA9XX_GPIO_REG_IE(girq.port));
-        reg &= ~(1 << girq.bit);
-	__raw_writeb(reg, TMPA9XX_GPIO_REG_IE(girq.port));
+        reg = __raw_readb(TMPA9XX_GPIO_REG_IE(g->port));
+        reg &= ~(1 << g->bit);
+	__raw_writeb(reg, TMPA9XX_GPIO_REG_IE(g->port));
 }
 
-static void tmpa9xx_gpio_irq_unmask(unsigned int irq)
+static void irq_unmask(struct irq_data *data)
 {
-	unsigned int gpio_irq = irq - TMPA9XX_NUM_IRQS;
-	struct tmpa9xx_gpio_irq girq;
+	struct tmpa9xx_gpio_irq *g = irq_data_get_irq_chip_data(data);
 	unsigned char reg;
-
-	BUG_ON((irq < TMPA9XX_NUM_IRQS) || (gpio_irq >= TMPA9XX_NUM_GPIO_IRQS));
-
-	girq = irq_gpio_desc[gpio_irq];
 
 	/* Make sure pin is input */
-        reg = __raw_readb(TMPA9XX_GPIO_REG_DIR(girq.port));
-        reg &= ~(1 << girq.bit);
-	__raw_writeb(reg, TMPA9XX_GPIO_REG_DIR(girq.port));
+        reg = __raw_readb(TMPA9XX_GPIO_REG_DIR(g->port));
+        reg &= ~(1 << g->bit);
+	__raw_writeb(reg, TMPA9XX_GPIO_REG_DIR(g->port));
 	/* Enable interrupt function */
-        reg = __raw_readb(TMPA9XX_GPIO_REG_IE(girq.port));
-        reg |= (1 << girq.bit);
-	__raw_writeb(reg, TMPA9XX_GPIO_REG_IE(girq.port));
+        reg = __raw_readb(TMPA9XX_GPIO_REG_IE(g->port));
+        reg |= (1 << g->bit);
+	__raw_writeb(reg, TMPA9XX_GPIO_REG_IE(g->port));
 }
 
-static int tmpa9xx_gpio_irq_set_wake(struct irq_data *d, unsigned int on)
+static int irq_set_wake(struct irq_data *data, unsigned int on)
 {
-	struct tmpa9xx_gpio_irq *i = irq_data_get_irq_chip_data(d);
+	struct tmpa9xx_gpio_irq *g = irq_data_get_irq_chip_data(data);
 
 	if (on)
-		enable_irq_wake(i->intr_vect);
+		enable_irq_wake(g->intr_vect);
 	else
-		disable_irq_wake(i->intr_vect);
+		disable_irq_wake(g->intr_vect);
 
 	return 0;
 }
 
-static int tmpa9xx_gpio_irq_type(unsigned int irq, unsigned int type)
+static int irq_set_type(struct irq_data *data, unsigned int flow_type)
 {
-	struct irq_desc *desc = irq_desc + irq;
-	const int gpio = irq_to_gpio(irq);
-	struct tmpa9xx_gpio_irq girq;
-	unsigned int gpio_irq = irq - TMPA9XX_NUM_IRQS;
+	struct tmpa9xx_gpio_irq *g = irq_data_get_irq_chip_data(data);
 	unsigned char reg_level_sel;
 	unsigned char reg_dir_sel;
 	unsigned char reg_edge_both;
@@ -326,87 +307,80 @@ static int tmpa9xx_gpio_irq_type(unsigned int irq, unsigned int type)
 	unsigned char port_mask;
 	unsigned long flags;
 
-	BUG_ON((irq < TMPA9XX_NUM_IRQS) || (gpio_irq >= TMPA9XX_NUM_GPIO_IRQS));
+        reg_level_sel  = __raw_readb(TMPA9XX_GPIO_REG_IS(g->port));
+        reg_edge_both  = __raw_readb(TMPA9XX_GPIO_REG_IBE(g->port));
+        reg_raise_high = __raw_readb(TMPA9XX_GPIO_REG_IEV(g->port));
 
-	girq = irq_gpio_desc[gpio_irq];
-        reg_level_sel = __raw_readb(TMPA9XX_GPIO_REG_IS(girq.port));
-        reg_edge_both = __raw_readb(TMPA9XX_GPIO_REG_IBE(girq.port));
-        reg_raise_high = __raw_readb(TMPA9XX_GPIO_REG_IEV(girq.port));
-
-	port_mask = (1 << girq.bit);
+	port_mask = (1 << g->bit);
 
 	/* we following the prodcedure mentioned in section 3.9.3 of the data sheet */
 
 	local_irq_save(flags);
-	reg_dir_sel = __raw_readb(TMPA9XX_GPIO_REG_DIR(girq.port));
-	reg_dir_sel &= ~(1 << girq.bit);
-	__raw_writeb(reg_dir_sel, TMPA9XX_GPIO_REG_DIR(girq.port));
+	reg_dir_sel = __raw_readb(TMPA9XX_GPIO_REG_DIR(g->port));
+	reg_dir_sel &= ~(1 << g->bit);
+	__raw_writeb(reg_dir_sel, TMPA9XX_GPIO_REG_DIR(g->port));
 	local_irq_restore(flags);
 
-	tmpa9xx_gpio_irq_mask(irq); /* disable interrupt */
+	irq_mask(data); /* disable interrupt */
 
-	switch (type) {
+	switch (flow_type) {
 	case IRQ_TYPE_EDGE_RISING:
 		reg_level_sel &= ~port_mask;
 		reg_edge_both &= ~port_mask;
 		reg_raise_high |= port_mask;
-		desc->handle_irq = handle_edge_irq;
+		set_irq_handler(g->irq, handle_edge_irq);
 		break;
 	case IRQ_TYPE_EDGE_FALLING:
 		reg_level_sel &= ~port_mask;
 		reg_edge_both &= ~port_mask;
 		reg_raise_high &= ~port_mask;
-		desc->handle_irq = handle_edge_irq;
+		set_irq_handler(g->irq, handle_edge_irq);
 		break;
 	case IRQ_TYPE_LEVEL_HIGH:
 		reg_level_sel |= port_mask;
 		reg_edge_both &= ~port_mask;
 		reg_raise_high |= port_mask;
-		desc->handle_irq = handle_level_irq;
+		set_irq_handler(g->irq, handle_level_irq);
 		break;
 	case IRQ_TYPE_LEVEL_LOW:
 		reg_level_sel |= port_mask;
 		reg_edge_both &= ~port_mask;
 		reg_raise_high &= ~port_mask;
-		desc->handle_irq = handle_level_irq;
+		set_irq_handler(g->irq, handle_level_irq);
 		break;
 	case IRQ_TYPE_EDGE_BOTH:
 		reg_level_sel &= ~port_mask;
 		reg_edge_both |= port_mask;
-		desc->handle_irq = handle_edge_irq;
+		set_irq_handler(g->irq, handle_edge_irq);
 		break;
 	default:
 		pr_err("tmpa9xx: failed to set irq type %d for gpio %d\n",
-		       type, gpio);
+		       flow_type, g->irq);
 		return -EINVAL;
 	}
 
 	/* apply settings */
-	__raw_writeb(reg_level_sel, TMPA9XX_GPIO_REG_IS(girq.port));
-	__raw_writeb(reg_edge_both, TMPA9XX_GPIO_REG_IBE(girq.port));
-	__raw_writeb(reg_raise_high, TMPA9XX_GPIO_REG_IEV(girq.port));
+	__raw_writeb(reg_level_sel,  TMPA9XX_GPIO_REG_IS(g->port));
+	__raw_writeb(reg_edge_both,  TMPA9XX_GPIO_REG_IBE(g->port));
+	__raw_writeb(reg_raise_high, TMPA9XX_GPIO_REG_IEV(g->port));
 
-	tmpa9xx_gpio_irq_ack(irq); /* clear interrupt state */
+	irq_ack(data); /* clear interrupt state */
 
-	desc->status &= ~IRQ_TYPE_SENSE_MASK;
-	desc->status |= type & IRQ_TYPE_SENSE_MASK;
-
-        reg_enable = __raw_readb(TMPA9XX_GPIO_REG_IE(girq.port));
+        reg_enable = __raw_readb(TMPA9XX_GPIO_REG_IE(g->port));
         reg_enable |= port_mask;
-	__raw_writeb(reg_enable, TMPA9XX_GPIO_REG_IE(girq.port));
+	__raw_writeb(reg_enable, TMPA9XX_GPIO_REG_IE(g->port));
 
 	return 0;
 }
 
 static struct irq_chip tmpa9xx_gpio_irq_chip = {
-	.name		= "GPIO",
-	.ack		= tmpa9xx_gpio_irq_ack,
-	.mask		= tmpa9xx_gpio_irq_mask,
-	.unmask		= tmpa9xx_gpio_irq_unmask,
-	.set_type	= tmpa9xx_gpio_irq_type,
-	.irq_set_wake	= tmpa9xx_gpio_irq_set_wake,
+	.name		= "gpio",
+	.irq_ack	= irq_ack,
+	.irq_mask	= irq_mask,
+	.irq_unmask	= irq_unmask,
+	.irq_set_type	= irq_set_type,
+	.irq_set_wake	= irq_set_wake,
 };
-
 
 #define TMPA9XX_GPIO_BANK(name, port_base, base_gpio, im, om, irqm, iv)	\
 	{								\
@@ -515,7 +489,7 @@ int __init tmpa9xx_gpio_init(void)
 	/* Now the interrupts */
 	for (i = 0; i < TMPA9XX_NUM_GPIO_IRQS; i++) {
 		gpio_irq = gpio_to_irq(0) + i;
-	   	tmpa9xx_gpio_irq_mask(gpio_irq);
+		irq_gpio_desc[i].irq = gpio_irq;
 		set_irq_chip_data(gpio_irq, (void *)&irq_gpio_desc[i]);
 		set_irq_chip(gpio_irq, &tmpa9xx_gpio_irq_chip);
 		set_irq_handler(gpio_irq, handle_level_irq);
