@@ -127,7 +127,7 @@ struct pl022_config_chip spidev1_info = {
 };
 #endif
 
-#if defined CONFIG_MMC_SPI && defined CONFIG_SPI_PL022_CHANNEL_0
+#if (defined CONFIG_MMC_SPI || defined CONFIG_MMC_SPI_MODULE) && defined CONFIG_SPI_PL022_CHANNEL_0
 static struct mmc_spi_platform_data mmc_spi_info = {
         .caps     = MMC_CAP_NEEDS_POLL | MMC_CAP_SPI,
         .ocr_mask = MMC_VDD_32_33      | MMC_VDD_33_34, /* 3.3V only */
