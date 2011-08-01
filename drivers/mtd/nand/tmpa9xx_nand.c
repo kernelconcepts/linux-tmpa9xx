@@ -1,5 +1,5 @@
 /*
- *  drivers/mtd/nand/tmpa9xx_nand.c 
+ *  drivers/mtd/nand/tmpa9xx_nand.c
  *
  * Copyright (C) 2008 ?. All rights reserved. (?)
  * Copyright (C) 2009, 2010 Florian Boor <florian.boor@kernelconcepts.de>
@@ -17,7 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- * 
+ *
  * TMPA 9xx NAND controller driver
  */
 
@@ -150,7 +150,6 @@ static struct mtd_partition mtd_parts_builtin[] = {
 };
 
 static const char *part_probes[] = { "cmdlinepart", NULL };
-
 #endif
 
 void tmpa9xx_nand_dma_read(struct tmpa9xx_nand_private *priv, unsigned int buf,
@@ -186,7 +185,7 @@ void tmpa9xx_nand_dma_write(struct tmpa9xx_nand_private *priv,
 				     (size / 4));	// TransferSize[11:0]
 
 	DMA_CONFIG(priv->dma_ch) = (DMAC_CH_CONF_E |	// E              - Channel Enable
-				    (0x1 << 8) |	// DestPeripheral - Peripheral 
+				    (0x1 << 8) |	// DestPeripheral - Peripheral
 				    DMAC_CH_CONF_FLOWCNTRL_MEM2PER |	// FlowCntrl      - Memory to Peripheral
 				    DMAC_CH_CONF_ITC);	// ITC            - Terminal count interrupt enable
 }
@@ -199,8 +198,8 @@ static int tmpa9xx_nand_wait_dma_complete(struct tmpa9xx_nand_private *priv,
 	timeleft =
 	    wait_for_completion_timeout(&priv->dma_completion,
 						      timeout);
-	if (timeleft <= 0)                                                      
-		printk(KERN_ERR "DMA Completion Timeout - Timeleft:%d\n",timeleft);	                                                      
+	if (timeleft <= 0)
+		printk(KERN_ERR "DMA Completion Timeout - Timeleft:%d\n",timeleft);
 	tmpa9xx_dma_disable(priv->dma_ch);
 
 	return !timeleft;
@@ -248,98 +247,12 @@ static void tmpa9xx_nand_set_rw_mode(unsigned int read)
 		NDFMCR0 |= NDFMCR0_WE;	/* Set write mode */
 }
 
-#if 0
-static int tmpa9xx_nand_waitreedsolomon(void)
-{
-	unsigned int reg;
-	unsigned short nCnt;
-
-	for (nCnt = 0; nCnt < 0xffff; nCnt++) {
-		reg = NDFINTC;
-
-		if ((reg & NDFINTC_RSERIS) == NDFINTC_RSERIS) {
-			NDFINTC = NDFINTC_RSEIC;	// latch clear
-			return 0;
-		}
-	}
-	return -1;
-}
-
-static int tmpa9xx_nand_chkreedsolomon(unsigned char *databuf)
-{
-	unsigned short sts_work;
-	unsigned short err_count;
-	unsigned short chkaddr;
-	unsigned char chkbit;
-	unsigned char i;
-
-	NDFINTC = NDFINTC_LATCH_CLEAR;	// latch clear
-	NDFMCR0 = NDFMCR0_ECC_RSM_ON;	/* Error bit calculation circuit start */
-
-	if (tmpa9xx_nand_waitreedsolomon() == -1) {
-		return -1;
-	}
-
-	sts_work = ((NDFMCR1 & 0xf000) >> 12);
-
-	if (sts_work == 0) {	/* 0:NO ERROR */
-		return 0;
-	}
-	if (sts_work == 1) {	/* 1:OVER 5 ERRORS */
-		return -2;
-	}
-	if ((sts_work == 2) || (sts_work == 3)) {
-		err_count = ((NDFMCR1 & 0x0c00) >> 10);
-
-		for (i = 0; i < err_count + 1; i++) {
-			switch (i) {
-			case 0:
-				chkaddr = NDRSCA0;
-				chkbit = NDRSCD0;
-				break;
-			case 1:
-				chkaddr = NDRSCA1;
-				chkbit = NDRSCD1;
-				break;
-			case 2:
-				chkaddr = NDRSCA2;
-				chkbit = NDRSCD2;
-				break;
-			case 3:
-				chkaddr = NDRSCA3;
-				chkbit = NDRSCD3;
-				break;
-			default:
-				return -3;
-			}
-
-			if (0x0007 < chkaddr) {
-				chkaddr = 0x207 - chkaddr;
-				databuf[chkaddr] = databuf[chkaddr] ^ chkbit;
-			}
-		}
-	} else {
-		return -4;	/* OTHER: ERROR */
-	}
-	return 0;
-}
-
-static void tmpa9xx_nand_rson(void)
-{
-	NDFMCR0 = NDFMCR0_ECC_RSECGW_ON;
-}
-
-static void tmpa9xx_nand_rsoff(void)
-{
-	NDFMCR0 = NDFMCR0_ECC_RSECGW_OFF;
-}
-#endif
 
 static int tmpa9xx_wait_nand_dev_ready(struct mtd_info *mtd)
 {
 	int count = 0;
-        
-        
+
+
 	while ( ((NDFMCR0 & NDFMCR0_BUSY)==NDFMCR0_BUSY) && count < MAX_WAIT_FOR_HW)
         	count++;
 
@@ -348,25 +261,8 @@ static int tmpa9xx_wait_nand_dev_ready(struct mtd_info *mtd)
         	printk(KERN_ERR " tmpa9xx_wait_nand_dev_ready timeout\n");
                 return 0;
 	}
-        return 1;                
+        return 1;
 }
-
-#if 0
-static int tmpa9xx_wait_nand_als_ready(struct mtd_info *mtd)
-{
-	int count = 0;
-	while( ((NDFMCR1 & NDFMCR1_ALS)==NDFMCR1_ALS) && count < MAX_WAIT_FOR_HW)
-        	count++;
-                
-	if (count>= MAX_WAIT_FOR_HW)
-        {
-        	printk(KERN_ERR " tmpa9xx_wait_nand_als_ready timeout\n");
-                return 0;
-	}
-        
-        return tmpa9xx_wait_nand_dev_ready(mtd);
-}
-#endif
 
 /* Set WP on deselect, write enable on select */
 static void tmpa9xx_nand_select_chip(struct mtd_info *mtd, int chip)
@@ -758,17 +654,17 @@ static int tmpa9xx_nand_correct_data(struct mtd_info *mtd, u_char * data,
 static void tmpa9xx_nand_set_timing(struct tmpa9xx_nand_private *priv)
 {
 	NDFMCR2 =
-	    ((priv->timing.splw << 12) | (priv->timing.sphw << 8) | (priv->
-								     timing.
-								     splr << 4)
-	     | (priv->timing.sphr << 0));
+	    ((priv->timing.splw << 12)
+	   | (priv->timing.sphw << 8)
+	   | (priv->timing.splr << 4)
+	   | (priv->timing.sphr << 0));
 }
 
 static void tmpa9xx_nand_dma_handler(int dma_ch, void *data)
 {
 	struct tmpa9xx_nand_private *priv;
-
 	priv = (struct tmpa9xx_nand_private *)data;
+
 	complete(&priv->dma_completion);
 
 	return;
@@ -777,10 +673,12 @@ static void tmpa9xx_nand_dma_handler(int dma_ch, void *data)
 static void tmpa9xx_nand_dma_error_handler(int dma_ch, void *data)
 {
 	struct tmpa9xx_nand_private *priv;
-
 	priv = (struct tmpa9xx_nand_private *)data;
+
 	complete(&priv->dma_completion);
+
 	printk(KERN_ERR "DMA Error happens at DMA channel %d\n", dma_ch);
+
 	return;
 }
 
@@ -879,14 +777,17 @@ static void tmpa9xx_nand_get_internal_structure(struct tmpa9xx_nand_private
 	unsigned char id_code[4];
 
 	tmpa9xx_nand_set_cmd(NAND_CMD_RESET);
-	while (!tmpa9xx_wait_nand_dev_ready(NULL)) ;
+	while (!tmpa9xx_wait_nand_dev_ready(NULL))
+		;
 	tmpa9xx_nand_set_cmd(NAND_CMD_READID);
-	while (!tmpa9xx_wait_nand_dev_ready(NULL)) ;
+	while (!tmpa9xx_wait_nand_dev_ready(NULL))
+		;
 	NDFMCR0 |= NDFMCR0_ALE | NDFMCR0_WE;
 	NDFDTR = 0x00;
 	/* Latch in address */
 	NDFMCR0 &= ~(NDFMCR0_ALE | NDFMCR0_WE);
-	while (!tmpa9xx_wait_nand_dev_ready(NULL)) ;
+	while (!tmpa9xx_wait_nand_dev_ready(NULL))
+		;
 
 	NDFMCR0 &= ~NDFMCR0_WE;
 
@@ -923,9 +824,9 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
                               // NDREn L = 4clks,H = 3clks
         NDFINTC = 0x00000000; // ALL Interrupt Disable
 
-	/* We only get one Nand Controller, so we do not modify CFG_NAND_BASE_LIST 
+	/* We only get one Nand Controller, so we do not modify CFG_NAND_BASE_LIST
 	   to get the multiple IO address for the controllers */
-	/* Remeber to set CFG_MAX_NAND_DEVICE in the board config file to be the 
+	/* Remeber to set CFG_MAX_NAND_DEVICE in the board config file to be the
 	   controller number. Now we only have one controller, so set it to be 1 */
 
 	mtd =
@@ -1096,8 +997,8 @@ static struct platform_driver tmpa9xx_nand_driver = {
 	.suspend = tmpa9xx_nand_suspend,
 	.resume = tmpa9xx_nand_resume,
 	.driver = {
-		   .name = "tmpa9xx-nand",
-		   },
+		.name = "tmpa9xx-nand",
+	},
 };
 
 static int __init tmpa9xx_nand_init(void)
