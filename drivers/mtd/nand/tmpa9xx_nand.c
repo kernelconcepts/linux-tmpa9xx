@@ -958,6 +958,7 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	return 0;
 
 err5:
+	nand_release(mtd);
 err4:
 	dma_free_coherent(&pdev->dev, INTERNAL_BUFFER_SIZE, priv->buf,
 			  priv->phy_buf);
@@ -977,6 +978,14 @@ static int __devexit tmpa9xx_nand_remove(struct platform_device *pdev)
 	struct mtd_info *mtd = platform_get_drvdata(pdev);
 	struct nand_chip *nand = mtd->priv;
 	struct tmpa9xx_nand_private *priv = nand->priv;
+
+	nand_release(mtd);
+
+#ifdef CONFIG_MTD_PARTITIONS
+	del_mtd_partitions(mtd);
+#else
+	del_mtd_device(mtd);
+#endif
 
 	dma_free_coherent(&pdev->dev, INTERNAL_BUFFER_SIZE, priv->buf,
 			  priv->phy_buf);
