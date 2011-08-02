@@ -75,17 +75,6 @@ struct tmpa9xx_nand_private {
 	spinlock_t lock;	/* Lock for Pageread needed due to HW implementation */
 };
 
-/* Nand Control */
-struct tmpa9xx_nand_private tmpa9xx_nand = {
-	.dma = 1,		/* Use driver with DMA */
-	.timing = {
-		   .splw = 0x2,	/* NDWEn Low pulse width setting  */
-		   .sphw = 0x2,	/* NDWEn High pulse width setting */
-		   .splr = 0x2,	/* NDREn Low pulse width setting  */
-		   .sphr = 0x2,	/* NDREn High pulse width setting */
-		   },
-};
-
 /* NAND OOB layout for different chip types */
 static struct nand_ecclayout nand_oob_hamming_512 = {
 	.eccbytes = 6,
@@ -829,21 +818,32 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	/* Remeber to set CFG_MAX_NAND_DEVICE in the board config file to be the
 	   controller number. Now we only have one controller, so set it to be 1 */
 
-	mtd =
-	    (struct mtd_info *)kzalloc(sizeof(struct mtd_info) +
-				       sizeof(struct tmpa9xx_nand_private),
-				       GFP_KERNEL);
-	if (mtd == NULL) {
-		printk(KERN_ERR "tmpa9xx_NAND: not enough memory");
+	mtd = kzalloc(sizeof(*mtd), GFP_KERNEL);
+	if (!mtd) {
+		dev_err(&pdev->dev, "kzalloc() @ mtd failed\n");
 		ret = -ENOMEM;
-		goto error;
+		goto err0;
 	}
 
-	priv = (struct tmpa9xx_nand_private *)(mtd + 1);
+	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	if (!priv) {
+		dev_err(&pdev->dev, "kzalloc() @ priv failed\n");
+		ret = -ENOMEM;
+		goto err1;
+	}
+
+	priv->dma = 1; /* Use driver with DMA */
+	priv->timing.splw = 0x2; /* NDWEn Low pulse width setting  */
+	priv->timing.sphw = 0x2; /* NDWEn High pulse width setting */
+	priv->timing.splr = 0x2; /* NDREn Low pulse width setting  */
+	priv->timing.sphr = 0x2; /* NDREn High pulse width setting */
+
+	spin_lock_init(&priv->lock);
+	init_completion(&priv->dma_completion);
 
 	nand = &priv->chip;
-	priv = &tmpa9xx_nand;
 	nand->priv = priv;
+	mtd->priv = nand;
 
 	nand->IO_ADDR_R = (void __iomem *)(&NDFDTR);
 	nand->IO_ADDR_W = (void __iomem *)(&NDFDTR);
@@ -898,38 +898,39 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	NDFMCR0 = 0x0;
 	NDFMCR1 = 0x0;
 
-	mtd->priv = nand;
 	platform_set_drvdata(pdev, mtd);
 
-	spin_lock_init(&priv->lock);
-
-	init_completion(&priv->dma_completion);
 	priv->dma_ch =
 	    tmpa9xx_dma_request(tmpa9xx_nand_dma_handler,
 				tmpa9xx_nand_dma_error_handler, priv);
 	if (priv->dma_ch < 0) {
+		dev_err(&pdev->dev, "tmpa9xx_dma_request() failed\n");
 		ret = -ENODEV;
-		goto free_mtd;
+		goto err2;
 	}
 
-	priv->buf =
-	    (unsigned char *)dma_alloc_coherent(NULL, INTERNAL_BUFFER_SIZE,
-						&priv->phy_buf, GFP_KERNEL);
-	if (priv->buf == NULL) {
+	priv->buf = dma_alloc_coherent(&pdev->dev, INTERNAL_BUFFER_SIZE,
+				       &priv->phy_buf, GFP_KERNEL);
+	if (!priv->buf) {
+		dev_err(&pdev->dev, "dma_alloc_coherent() failed\n");
 		ret = -ENOMEM;
-		goto free_dma_ch;
+		goto err3;
 	}
 
 	mtd->owner = THIS_MODULE;
 	/* Many callers got this wrong, so check for it for a while... */
 	ret = nand_scan_ident(mtd, 1, NULL);
 	if (ret) {
-		goto free_dma_buf;
+		dev_info(&pdev->dev, "nand_scan_ident() failed\n");
+		ret = -ENODEV;
+		goto err4;
 	}
 
 	ret = nand_scan_tail(mtd);
 	if (ret) {
-		goto free_dma_buf;
+		dev_info(&pdev->dev, "nand_scan_tail() failed\n");
+		ret = -ENODEV;
+		goto err5;
 	}
 
 /* Partitions:
@@ -954,30 +955,40 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	add_mtd_device(mtd);
 #endif // CONFIG_MTD_PARTITIONS
 
-	return (0);
+	return 0;
 
-free_dma_buf:
+err5:
+err4:
 	dma_free_coherent(&pdev->dev, INTERNAL_BUFFER_SIZE, priv->buf,
 			  priv->phy_buf);
-free_dma_ch:
+err3:
 	tmpa9xx_dma_free(priv->dma_ch);
-free_mtd:
+err2:
+	platform_set_drvdata(pdev, NULL);
+	kfree(priv);
+err1:
 	kfree(mtd);
-error:
+err0:
 	return ret;
 }
 
 static int __devexit tmpa9xx_nand_remove(struct platform_device *pdev)
 {
-	struct mtd_info *mtd;
-	struct tmpa9xx_nand_private *priv;
+	struct mtd_info *mtd = platform_get_drvdata(pdev);
+	struct nand_chip *nand = mtd->priv;
+	struct tmpa9xx_nand_private *priv = nand->priv;
 
-	mtd = platform_get_drvdata(pdev);
-	priv = (struct tmpa9xx_nand_private *)(mtd->priv);
 	dma_free_coherent(&pdev->dev, INTERNAL_BUFFER_SIZE, priv->buf,
 			  priv->phy_buf);
 
+	tmpa9xx_dma_free(priv->dma_ch);
+
+	kfree(priv);
+
 	kfree(mtd);
+
+	platform_set_drvdata(pdev, NULL);
+
 	return 0;
 }
 

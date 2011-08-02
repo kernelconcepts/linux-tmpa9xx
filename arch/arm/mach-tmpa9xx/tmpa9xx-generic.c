@@ -430,6 +430,9 @@ static struct platform_device tmpa9xx_nand_device = {
         .id            = -1,
         .num_resources = ARRAY_SIZE(tmpa9xx_nand_resources),
         .resource      = tmpa9xx_nand_resources,
+	.dev = {
+		.coherent_dma_mask = DMA_BIT_MASK(32),
+	}
 };
 #endif
 
