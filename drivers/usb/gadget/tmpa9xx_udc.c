@@ -204,20 +204,20 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 	length = req->req.length - req->req.actual;
 
 	if (length > ep->ep.maxpacket) {
-                udelay(20);
+		udelay(20);
 		/* STATUS NAK Interrupt Enable. */
 		udc2_reg_read(udc, UD2INT, &interrupt_status);
 		interrupt_status &= STATUS_NAK_E;
-                udelay(40);
+		udelay(40);
 		udc2_reg_write(udc, UD2INT, interrupt_status);
-                udelay(40);
+		udelay(40);
 		length = ep->ep.maxpacket;
 		req->req.actual += length;
-                
+
 		while (length > 0) {	/* write transmit data to endpoint0's Fifo */
-                        udelay(20);
+			udelay(20);
 			udc2_reg_write(udc, UD2EP0_FIFO, *buf);
-                       	udelay(40);
+			udelay(40);
 			buf++;
 			length -= WORD_SIZE;
 		}
@@ -255,7 +255,7 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		udelay(20);	//never kill
 		udc2_reg_write(udc, UD2INT, interrupt_status);
 		udelay(20);
-		udelay(20);//never kill
+		udelay(20);	//never kill
 		is_last = 1;
 	}
 	if (is_last)
@@ -627,7 +627,7 @@ tmpa9xx_ep_enable(struct usb_ep *_ep,
 		DBG("bogus device state\n");
 		return -ESHUTDOWN;
 	}
-        
+
 	tmp = desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK;
 	switch (tmp) {
 	case USB_ENDPOINT_XFER_CONTROL:
@@ -1595,7 +1595,8 @@ static irqreturn_t tmpa9xx_udc_irq(int irq, void *_udc)
 
 }
 
-int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind)(struct usb_gadget *))
+int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
+			    int (*bind) (struct usb_gadget *))
 {
 	struct tmpa9xx_udc *udc;
 	int retval;
@@ -1664,7 +1665,7 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	mdelay(1);
 	driver->unbind(&udc->gadget);
 	udc->driver = NULL;
-        udc->gadget.dev.driver=NULL;
+	udc->gadget.dev.driver = NULL;
 	DBG("unbound from %s\n", driver->driver.name);
 	return 0;
 }
