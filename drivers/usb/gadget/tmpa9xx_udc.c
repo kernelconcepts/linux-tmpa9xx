@@ -302,10 +302,17 @@ static int read_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		req->req.actual += length;
 		while (length != 0) {	/* write transmit data to endpoint0's Fifo */
 			if (length == 1) {
-				udc2_reg_read(udc, UD2EP0_MaxPacketSize,
-					      &PacketSize);
+				u16 tmp;
+				u8 *ptr = (u8 *)buf;
+				udc2_reg_read(udc, UD2EP0_FIFO, &tmp);
+				*ptr = tmp & 0xff;
+				udc2_reg_read(udc, UD2EP0_MaxPacketSize, &PacketSize);
+				udelay(10);
 				udc2_reg_write(udc, UD2EP0_MaxPacketSize, 1);	/* process of EOP */
-				udc2_reg_write(udc, UD2EP0_MaxPacketSize, PacketSize);	/* process of EOP */
+				udelay(10);
+				udc2_reg_write(udc, UD2EP0_MaxPacketSize, PacketSize & 0x7ff);	/* process of EOP */
+				udelay(10);
+				break;
 			} else {
 				udc2_reg_read(udc, UD2EP0_FIFO, buf);
 				buf++;
@@ -696,8 +703,6 @@ static void udc_reinit(struct tmpa9xx_udc *udc)
 //              ep->creg = (void __iomem *) udc->udp_baseaddr + tmpa9xx_UDP_CSR(i);
 		// initialiser une queue par endpoint
 		INIT_LIST_HEAD(&ep->queue);
-		if (list_empty(&ep->queue))
-			_ND("linit list ep->queue=%x\n", ep->queue);
 	}
 }
 
@@ -807,16 +812,11 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 
 		index = (u8) (pkt.r.wValue & MASK_UINT16_LOWER_8BIT);
 
-		if (index > NUM_CONFIG) {
-			goto stall;
-		}
-
 		if (udc->addr == 0) {
 			goto stall;
 		}
 
 		if (index == 0) {	/* Config 0 */
-			udc2_reg_write(udc, UD2CMD, All_EP_INVALID);	/*  INVALID */
 #if 1				//
 			udc->config_bak = index;
 			udc->state_bak = ADDRESSED;
@@ -824,9 +824,9 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 
 #endif
 		} else {
-			udc2_reg_write(udc, UD2CMD, All_EP_INVALID);	/*  INVALID */
-			udelay(50);
-			if (index == 1) {
+				udc2_reg_write(udc, UD2CMD, All_EP_INVALID);    /*  INVALID */
+				udelay(50);
+
 				udc2_reg_write(udc, UD2EP1_MaxPacketSize,
 					       udc->ep[1].maxpacket);
 				udelay(50);
@@ -839,12 +839,11 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 				udc2_reg_write(udc, UD2EP2_Status,
 					       EP_DUAL_BULK_OUT);
 				udelay(50);
+
 				udc2_reg_write(udc, UD2CMD, EP1_RESET);	/*EP1 Reset */
 				udelay(50);
 				udc2_reg_write(udc, UD2CMD, EP2_RESET);	/*EP2 Reset */
-			} else {
-				goto stall;
-			}
+				udelay(50);
 #if 1				//
 
 			udc->state_bak = CONFIGURED;
