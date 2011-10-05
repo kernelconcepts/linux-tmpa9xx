@@ -89,8 +89,10 @@ static const char debug_filename[] = "driver/udc";
 
 #define tmpa9xx_ud2ab_read(dev, reg) \
 	__raw_readl((dev)->udp_baseaddr + (reg))
+
 #define tmpa9xx_ud2ab_write(dev, reg, val) \
 	__raw_writel((val), (dev)->udp_baseaddr + (reg))
+
 #define CLKCR4          __REG(0xf0050050)
 #define	USB_ENABLE			0x00000001
 
@@ -110,16 +112,11 @@ static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 reqdadr, u16 * data
 
 	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDVL);
 	*data_p = (u16) (reg_data & MASK_UINT32_LOWER_16BIT);
-
-	return;
-
 }
 
 static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 reqAddr, const u16 data)
 {
-
 	tmpa9xx_ud2ab_write(udc, reqAddr, (u32) data);
-	return;
 }
 
 static void usb_bulk_in(struct tmpa9xx_ep *ep, unsigned char *buf, int length)
@@ -135,9 +132,7 @@ static void usb_bulk_in(struct tmpa9xx_ep *ep, unsigned char *buf, int length)
 		tmpa9xx_ud2ab_write(udc, UD2AB_MRSADR, udc->phy_buf);
 		tmpa9xx_ud2ab_write(udc, UD2AB_MREADR, (udc->phy_buf + length - 1));
 		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_ENABLE);
-
 	}
-	return;
 }
 
 static void usb_bulk_out(struct tmpa9xx_ep *ep)
@@ -155,11 +150,7 @@ static void usb_bulk_out(struct tmpa9xx_ep *ep)
 		tmpa9xx_ud2ab_write(udc, UD2AB_MWEADR, (int)(udc->phy_buf + ep->datasize - 1));
 		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MW_ENABLE);
 	}
-
-	return;
 }
-
-/*-------------------------------------------------------------------------*/
 
 static void done(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req, int status)
 {
@@ -194,7 +185,6 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 	struct tmpa9xx_udc *udc = ep->udc;
 	FN_B;
 	buf = req->req.buf + req->req.actual;
-	//prefetch(buf);
 
 	/* how big will this packet be? */
 	length = req->req.length - req->req.actual;
@@ -265,7 +255,6 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
  */
 static int read_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 {
-
 	u16 PacketSize;
 	u16 length;
 	u16 interrupt_status;
@@ -383,7 +372,6 @@ static int read_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 			is_done = 1;
 
 		PACKET("%s %p out/%d%s\n", ep->ep.name, &req->req, count, is_done ? " (done)" : "");
-		//      }
 	}
 
 	/*
@@ -393,8 +381,6 @@ static int read_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 	if (is_done)
 		done(ep, req, 0);
 	else {
-//              bufferspace -= count;
-//              buf += count;
 		_ND("is_done=%x\n", is_done);
 		ep->datasize = 0;
 		udc2_reg_read(udc, UD2EP2_DataSize, &count);
@@ -415,7 +401,6 @@ static int read_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		} else
 			count = 0;
 		udelay(10);
-//              goto rescan;
 	}
 	return is_done;
 }
@@ -440,7 +425,6 @@ static int write_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 	 * issues normally (IRQ handler fast path).
 	 */
 
-//      if (status ==0 && is_last ==0){
 	buf = req->req.buf + req->req.actual;
 	bufferspace = req->req.length - req->req.actual;
 	_ND("req->req.length=%x,req->req.actual=%x\n", req->req.length, req->req.actual);
@@ -449,7 +433,6 @@ static int write_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		is_last = 0;
 	} else {
 		count = bufferspace;
-//                      is_last = (count < ep->ep.maxpacket) || !req->req.zero;
 	}
 	if (count > 0) {
 
@@ -468,13 +451,11 @@ static int write_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		 */
 
 		usb_bulk_in(ep, buf, count);
-//                      ep->datasize = count;
 		req->req.actual += count;
 
 		PACKET("%s %p in/%d%s\n", ep->ep.name, &req->req, count, is_last ? " (done)" : "");
 		udelay(10);
 	} else {
-//              if (is_last)
 		is_last = 1;
 		done(ep, req, 0);
 	}
@@ -502,24 +483,18 @@ static void usb_ctl_init(struct tmpa9xx_udc *udc)
 	tmpa9xx_ud2ab_write(udc, UD2AB_PWCTL, reg_data);
 	mdelay(1);
 
-	//     reg_data = UD2AB_PWCTL;                                 /* UDPWCTL */
 	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_PWCTL);
-
 	reg_data |= PWCTL_PHY_RESET_OFF;	/* [5][3] <= 1 */
 
-//      UD2AB_PWCTL = reg_data;                                 /* PHY ???Z?b?g??e?? */
 	tmpa9xx_ud2ab_write(udc, UD2AB_PWCTL, reg_data);
 
 	mdelay(1);
 
-	//     reg_data = UD2AB_PWCTL;                                 /* UDPWCTL */
 	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_PWCTL);
 
 	reg_data &= PWCTL_PHY_SUSPEND_OFF;	/* [3] <= 0 */
 
 	tmpa9xx_ud2ab_write(udc, UD2AB_PWCTL, reg_data);
-
-	//    mdelay(1);
 
 /* ----------------------------------------------------------------------
   wait: 1ms
@@ -543,7 +518,6 @@ static void usb_ctl_init(struct tmpa9xx_udc *udc)
 	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_RESET | UDC2AB_MW_RESET);
 
 	mdelay(1);
-	//return TRUE;
 }
 
 /*
@@ -568,7 +542,6 @@ static void tmpa9xx_ep_free_request(struct usb_ep *_ep, struct usb_request *_req
 	struct tmpa9xx_request *req;
 
 	req = container_of(_req, struct tmpa9xx_request, req);
-//      BUG_ON(!list_empty(&req->queue));  gch
 	kfree(req);
 }
 
@@ -683,8 +656,6 @@ static void udc_reinit(struct tmpa9xx_udc *udc)
 		ep->stopped = 0;
 		ep->fifo_bank = 0;
 		ep->ep.maxpacket = ep->maxpacket;
-//              ep->creg = (void __iomem *) udc->udp_baseaddr + tmpa9xx_UDP_CSR(i);
-		// initialiser une queue par endpoint
 		INIT_LIST_HEAD(&ep->queue);
 	}
 }
@@ -693,6 +664,7 @@ union setup {
 	u8 raw[8];
 	struct usb_ctrlrequest r;
 };
+
 static int handle_ep(struct tmpa9xx_ep *ep)
 {
 	struct tmpa9xx_request *req;
@@ -708,6 +680,7 @@ static int handle_ep(struct tmpa9xx_ep *ep)
 	} else {
 		return read_fifo(ep, req);
 	}
+
 	return 0;
 }
 
@@ -785,7 +758,6 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 		return;
 
 	case ((USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_SET_CONFIGURATION:
-//              if (udc->wait_for_config_ack)
 		VDBG("wait for config\n");
 		/* CONFG is toggled later, if gadget driver succeeds */
 
@@ -796,7 +768,7 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 		}
 
 		if (index == 0) {	/* Config 0 */
-#if 1				//
+#if 1
 			udc->config_bak = index;
 			udc->state_bak = ADDRESSED;
 			udc->interface_bak = 0;
@@ -819,7 +791,7 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 			udelay(50);
 			udc2_reg_write(udc, UD2CMD, EP2_RESET);	/*EP2 Reset */
 			udelay(50);
-#if 1				//
+#if 1
 
 			udc->state_bak = CONFIGURED;
 			udc->config_bak = index;
@@ -879,7 +851,6 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 		udc->stage = STATUS_STAGE;
 		goto succeed;
 	case ((USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_CLEAR_FEATURE:
-		//              Rq_Clear_Feature();
 		if (w_value != USB_DEVICE_REMOTE_WAKEUP)
 			goto stall;
 #if 0
@@ -1131,6 +1102,7 @@ stall:
 		VDBG("req %02x.%02x protocol STALL; stat %d\n", pkt.r.bRequestType, pkt.r.bRequest, status);
 		udc->req_pending = 0;
 	}
+
 	return;
 
 succeed:
@@ -1139,7 +1111,6 @@ succeed:
 write_in:
 
 	udc->req_pending = 0;
-	return;
 
 }
 
@@ -1147,7 +1118,7 @@ static void handle_ep0(struct tmpa9xx_udc *udc)
 {
 	struct tmpa9xx_ep *ep0 = &udc->ep[0];
 	struct tmpa9xx_request *req;
-	//      FN_IN;//0421;
+
 	udc2_reg_write(udc, UD2INT, INT_EP0_CLEAR);
 	if (list_empty(&ep0->queue))
 		req = NULL;
@@ -1158,9 +1129,7 @@ static void handle_ep0(struct tmpa9xx_udc *udc)
 	if (ep0->is_in) {	/*Write */
 		/* write more IN DATA? */
 		if (req && ep0->is_in) {
-//                      if (handle_ep(ep0))
 			write_ep0_fifo(ep0, req);
-//                              udc->req_pending = 0;
 
 			/*
 			 * Ack after:
@@ -1172,7 +1141,6 @@ static void handle_ep0(struct tmpa9xx_udc *udc)
 			 */
 		} else {
 			udc->req_pending = 0;
-//                      __raw_writel(csr, creg);
 
 			/*
 			 * SET_ADDRESS takes effect only after the STATUS
@@ -1187,7 +1155,6 @@ static void handle_ep0(struct tmpa9xx_udc *udc)
 		/* OUT DATA stage */
 		if (!ep0->is_in) {
 			if (req) {
-//                              if (handle_ep(ep0)) {
 				if (read_ep0_fifo(ep0, req)) {
 					/* send IN/STATUS */
 					PACKET("ep0 in/status\n");
@@ -1216,7 +1183,7 @@ static int tmpa9xx_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t 
 	struct tmpa9xx_udc *dev;
 	int status;
 	unsigned long flags;
-	FN_IN;			//0421;
+	FN_IN;
 	req = container_of(_req, struct tmpa9xx_request, req);
 	ep = container_of(_ep, struct tmpa9xx_ep, ep);
 
@@ -1318,17 +1285,6 @@ static void nop_release(struct device *dev)
 }
 
 static const struct usb_gadget_ops tmpa9xx_udc_ops = {
-//      .get_frame              = tmpa9xx_get_frame,
-//      .wakeup                 = tmpa9xx_wakeup,
-//      .set_selfpowered        = tmpa9xx_set_selfpowered,
-//      .vbus_session           = tmpa9xx_vbus_session,
-//      .pullup                 = tmpa9xx_pullup,
-
-	/*
-	 * VBUS-powered devices may also also want to support bigger
-	 * power budgets after an appropriate SET_CONFIGURATION.
-	 */
-//      .vbus_power             = tmpa9xx_vbus_power,
 };
 
 static int tmpa9xx_ep_dequeue(struct usb_ep *_ep, struct usb_request *_req)
@@ -1350,7 +1306,6 @@ static const struct usb_ep_ops tmpa9xx_ep_ops = {
 	.queue = tmpa9xx_ep_queue,
 	.dequeue = tmpa9xx_ep_dequeue,
 	.set_halt = tmpa9xx_ep_set_halt,
-	// there's only imprecise fifo status reporting
 };
 
 static struct tmpa9xx_udc controller = {
@@ -1628,7 +1583,6 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 }
 
 EXPORT_SYMBOL(usb_gadget_unregister_driver);
-/*-------------------------------------------------------------------------*/
 
 static void tmpa9xx_udc_dma_handler(int dma_ch, void *data)
 {
@@ -1636,7 +1590,6 @@ static void tmpa9xx_udc_dma_handler(int dma_ch, void *data)
 
 	udc = (struct tmpa9xx_udc *)data;
 	complete(&udc->dma_completion);
-	return;
 }
 
 static void tmpa9xx_udc_dma_error_handler(int dma_ch, void *data)
@@ -1646,7 +1599,6 @@ static void tmpa9xx_udc_dma_error_handler(int dma_ch, void *data)
 	udc = (struct tmpa9xx_udc *)data;
 	complete(&udc->dma_completion);
 	printk("DMA Error happens at DMA channel %d\n", dma_ch);
-	return;
 }
 
 static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
@@ -1827,8 +1779,7 @@ static int tmpa9xx_udc_resume(struct platform_device *pdev)
 	/* maybe reconnect to host; if so, clocks on */
 	if (udc->active_suspend)
 		disable_irq_wake(udc->udp_irq);
-	//else
-	//      pullup(udc, 1);
+
 	return 0;
 }
 #else
