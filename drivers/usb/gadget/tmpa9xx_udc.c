@@ -1584,23 +1584,6 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 
 EXPORT_SYMBOL(usb_gadget_unregister_driver);
 
-static void tmpa9xx_udc_dma_handler(int dma_ch, void *data)
-{
-	struct tmpa9xx_udc *udc;
-
-	udc = (struct tmpa9xx_udc *)data;
-	complete(&udc->dma_completion);
-}
-
-static void tmpa9xx_udc_dma_error_handler(int dma_ch, void *data)
-{
-	struct tmpa9xx_udc *udc;
-
-	udc = (struct tmpa9xx_udc *)data;
-	complete(&udc->dma_completion);
-	printk("DMA Error happens at DMA channel %d\n", dma_ch);
-}
-
 static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -1663,15 +1646,6 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	usb_ctl_init(udc);
 
-	/* request DMA channel */
-	init_completion(&udc->dma_completion);
-	udc->dma_ch = tmpa9xx_dma_request(tmpa9xx_udc_dma_handler, tmpa9xx_udc_dma_error_handler, NULL);
-	if (udc->dma_ch < 0) {
-		printk("Cannot allocate dma channel.");
-		retval = -EBUSY;
-		goto fail1;
-	}
-
 	udc->buf = (unsigned char *)dma_alloc_coherent(NULL, 2112, &udc->phy_buf, GFP_KERNEL);
 	if (udc->buf == NULL) {
 		retval = -ENOMEM;
@@ -1698,7 +1672,6 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	return 0;
 fail2:
-	tmpa9xx_dma_free(udc->dma_ch);
 	dma_free_coherent(&pdev->dev, 2112, udc->buf, udc->phy_buf);
 
 fail1:
@@ -1727,7 +1700,6 @@ static int __devexit tmpa9xx_udc_remove(struct platform_device *pdev)
 
 	iounmap(udc->udp_baseaddr);
 
-	tmpa9xx_dma_free(udc->dma_ch);
 	dma_free_coherent(&pdev->dev, 2112, udc->buf, udc->phy_buf);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);

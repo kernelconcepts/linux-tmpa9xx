@@ -307,7 +307,6 @@ struct tmpa9xx_udc {
 	struct platform_device		*pdev;
 	void __iomem			*udp_baseaddr;
 	int				udp_irq;
-        int 				dma_ch;
         struct completion  		dma_completion;
     	unsigned char		 	*buf;
 	unsigned int 			phy_buf;
