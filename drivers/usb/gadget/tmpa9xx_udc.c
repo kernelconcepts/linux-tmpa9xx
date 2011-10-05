@@ -54,8 +54,6 @@
 #include <mach/regs.h>
 #include "tmpa9xx_udc.h"
 
-#define DRIVER_VERSION  "10 Sep 2010"
-
 static const char driver_name[] = "tmpa9xx-udc";
 static const char *const ep_name[] = {
 	"ep0",
@@ -78,14 +76,6 @@ static const char *const ep_name[] = {
 #define FN_B
 #define FN_IN
 #endif
-
-/*-------------------------------------------------------------------------*/
-#include <linux/seq_file.h>
-
-static const char debug_filename[] = "driver/udc";
-
-#define FOURBITS "%s%s%s%s"
-#define EIGHTBITS FOURBITS FOURBITS
 
 #define tmpa9xx_ud2ab_read(dev, reg) \
 	__raw_readl((dev)->udp_baseaddr + (reg))
@@ -1628,7 +1618,6 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	}
 
 	udc->gadget.dev.parent = dev;
-	udc->pdev = pdev;
 	udc->enabled = 0;
 	dev_set_name(&udc->gadget.dev, "gadget");
 	udc->udp_baseaddr = ioremap(res->start, res->end - res->start + 1);
@@ -1668,7 +1657,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, udc);
 	device_init_wakeup(dev, 1);
 
-	printk(KERN_INFO "%s version %s\n", driver_name, DRIVER_VERSION);
+	printk(KERN_INFO "%s\n", driver_name);
 
 	return 0;
 fail2:

@@ -284,6 +284,7 @@ struct tmpa9xx_ep {
 };
 
 struct tmpa9xx_udc {
+	struct device			*dev;
 	struct usb_gadget		gadget;
 	struct tmpa9xx_ep		ep[NUM_ENDPOINTS];
 	struct usb_gadget_driver	*driver;
@@ -304,7 +305,6 @@ struct tmpa9xx_udc {
 	unsigned int			state_bak;
 	unsigned int			state;
 	unsigned char			stage;
-	struct platform_device		*pdev;
 	void __iomem			*udp_baseaddr;
 	int				udp_irq;
         struct completion  		dma_completion;
