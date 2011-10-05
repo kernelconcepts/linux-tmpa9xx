@@ -94,8 +94,7 @@ static const char debug_filename[] = "driver/udc";
 #define CLKCR4          __REG(0xf0050050)
 #define	USB_ENABLE			0x00000001
 
-static void
-udc2_reg_read(struct tmpa9xx_udc *udc, const u32 reqdadr, u16 * data_p)
+static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 reqdadr, u16 * data_p)
 {
 	u32 read_addr;
 	volatile u32 reg_data;
@@ -116,8 +115,7 @@ udc2_reg_read(struct tmpa9xx_udc *udc, const u32 reqdadr, u16 * data_p)
 
 }
 
-static void
-udc2_reg_write(struct tmpa9xx_udc *udc, const u32 reqAddr, const u16 data)
+static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 reqAddr, const u16 data)
 {
 
 	tmpa9xx_ud2ab_write(udc, reqAddr, (u32) data);
@@ -135,8 +133,7 @@ static void usb_bulk_in(struct tmpa9xx_ep *ep, unsigned char *buf, int length)
 	} else {
 		memcpy((char *)udc->buf, buf, length);
 		tmpa9xx_ud2ab_write(udc, UD2AB_MRSADR, udc->phy_buf);
-		tmpa9xx_ud2ab_write(udc, UD2AB_MREADR,
-				    (udc->phy_buf + length - 1));
+		tmpa9xx_ud2ab_write(udc, UD2AB_MREADR, (udc->phy_buf + length - 1));
 		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_ENABLE);
 
 	}
@@ -155,8 +152,7 @@ static void usb_bulk_out(struct tmpa9xx_ep *ep)
 	} else {
 		udc->dma_status = DMA_READ_START;
 		tmpa9xx_ud2ab_write(udc, UD2AB_MWSADR, udc->phy_buf);
-		tmpa9xx_ud2ab_write(udc, UD2AB_MWEADR,
-				    (int)(udc->phy_buf + ep->datasize - 1));
+		tmpa9xx_ud2ab_write(udc, UD2AB_MWEADR, (int)(udc->phy_buf + ep->datasize - 1));
 		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MW_ENABLE);
 	}
 
@@ -226,14 +222,12 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		req->req.actual += length;
 		while (length > 0) {	/* write transmit data to endpoint0's Fifo */
 			if (length == 1) {
-				udc2_reg_read(udc, UD2EP0_MaxPacketSize,
-					      &PacketSize);
+				udc2_reg_read(udc, UD2EP0_MaxPacketSize, &PacketSize);
 				udelay(30);
 				udc2_reg_write(udc, UD2EP0_MaxPacketSize, 1);	/* process of EOP */
 				udelay(50);	//never kill
 				chardata = (u8) (*buf & MASK_UINT16_LOWER_8BIT);
-				data_p =
-				    (u8 *) (UD2EP0_FIFO + udc->udp_baseaddr);
+				data_p = (u8 *) (UD2EP0_FIFO + udc->udp_baseaddr);
 				*data_p = chardata;
 				length = 0;
 				udelay(50);	//never kill
@@ -303,7 +297,7 @@ static int read_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		while (length != 0) {	/* write transmit data to endpoint0's Fifo */
 			if (length == 1) {
 				u16 tmp;
-				u8 *ptr = (u8 *)buf;
+				u8 *ptr = (u8 *) buf;
 				udc2_reg_read(udc, UD2EP0_FIFO, &tmp);
 				*ptr = tmp & 0xff;
 				udc2_reg_read(udc, UD2EP0_MaxPacketSize, &PacketSize);
@@ -374,14 +368,12 @@ static int read_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		intsts = tmpa9xx_ud2ab_read(udc, UD2AB_INTSTS);
 		if ((intsts & INT_MW_AHBERR) == INT_MW_AHBERR) {
 			tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_MW_AHBERR);
-			tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET,
-					    UDC2AB_MW_RESET);
+			tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MW_RESET);
 			return 0;
 		}
 		if ((intsts & INT_MW_RD_ERR) == INT_MW_RD_ERR) {
 			tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_MW_RD_ERR);
-			tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET,
-					    UDC2AB_MW_RESET);
+			tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MW_RESET);
 			return 0;
 		}
 
@@ -390,8 +382,7 @@ static int read_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		if (ep->datasize == bufferspace)
 			is_done = 1;
 
-		PACKET("%s %p out/%d%s\n", ep->ep.name, &req->req, count,
-		       is_done ? " (done)" : "");
+		PACKET("%s %p out/%d%s\n", ep->ep.name, &req->req, count, is_done ? " (done)" : "");
 		//      }
 	}
 
@@ -452,8 +443,7 @@ static int write_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 //      if (status ==0 && is_last ==0){
 	buf = req->req.buf + req->req.actual;
 	bufferspace = req->req.length - req->req.actual;
-	_ND("req->req.length=%x,req->req.actual=%x\n", req->req.length,
-	    req->req.actual);
+	_ND("req->req.length=%x,req->req.actual=%x\n", req->req.length, req->req.actual);
 	if (ep->ep.maxpacket < bufferspace) {
 		count = ep->ep.maxpacket;
 		is_last = 0;
@@ -481,8 +471,7 @@ static int write_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 //                      ep->datasize = count;
 		req->req.actual += count;
 
-		PACKET("%s %p in/%d%s\n", ep->ep.name, &req->req, count,
-		       is_last ? " (done)" : "");
+		PACKET("%s %p in/%d%s\n", ep->ep.name, &req->req, count, is_last ? " (done)" : "");
 		udelay(10);
 	} else {
 //              if (is_last)
@@ -551,8 +540,7 @@ static void usb_ctl_init(struct tmpa9xx_udc *udc)
 
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTENB, UDC2AB_INT_MASK);
 
-	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET,
-			    UDC2AB_MR_RESET | UDC2AB_MW_RESET);
+	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_RESET | UDC2AB_MW_RESET);
 
 	mdelay(1);
 	//return TRUE;
@@ -563,8 +551,7 @@ static void usb_ctl_init(struct tmpa9xx_udc *udc)
  * interesting for request or buffer allocation.
  */
 
-static struct usb_request *tmpa9xx_ep_alloc_request(struct usb_ep *_ep,
-						    unsigned int gfp_flags)
+static struct usb_request *tmpa9xx_ep_alloc_request(struct usb_ep *_ep, unsigned int gfp_flags)
 {
 	struct tmpa9xx_request *req;
 
@@ -576,8 +563,7 @@ static struct usb_request *tmpa9xx_ep_alloc_request(struct usb_ep *_ep,
 	return &req->req;
 }
 
-static void
-tmpa9xx_ep_free_request(struct usb_ep *_ep, struct usb_request *_req)
+static void tmpa9xx_ep_free_request(struct usb_ep *_ep, struct usb_request *_req)
 {
 	struct tmpa9xx_request *req;
 
@@ -610,9 +596,7 @@ static int tmpa9xx_ep_set_halt(struct usb_ep *_ep, int value)
 	return status;
 }
 
-static int
-tmpa9xx_ep_enable(struct usb_ep *_ep,
-		  const struct usb_endpoint_descriptor *desc)
+static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descriptor *desc)
 {
 	struct tmpa9xx_ep *ep = container_of(_ep, struct tmpa9xx_ep, ep);
 	struct tmpa9xx_udc *dev = ep->udc;
@@ -623,8 +607,7 @@ tmpa9xx_ep_enable(struct usb_ep *_ep,
 
 	maxpacket = le16_to_cpu(desc->wMaxPacketSize);
 	if (!_ep || !ep || !desc || ep->desc || _ep->name == ep_name[0]
-	    || desc->bDescriptorType != USB_DT_ENDPOINT
-	    || maxpacket == 0 || maxpacket > ep->maxpacket) {
+	    || desc->bDescriptorType != USB_DT_ENDPOINT || maxpacket == 0 || maxpacket > ep->maxpacket) {
 
 		DBG("bad ep or descriptor\n");
 		return -EINVAL;
@@ -728,8 +711,7 @@ static int handle_ep(struct tmpa9xx_ep *ep)
 	return 0;
 }
 
-static void
-handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
+static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 {
 	u16 request_reg;
 	u32 tmp;
@@ -742,8 +724,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 	udc2_reg_read(udc, UD2BRQ, &request_reg);
 
 	pkt.r.bRequestType = (u8) (request_reg & MASK_UINT16_LOWER_8BIT);
-	pkt.r.bRequest =
-	    (u8) ((request_reg >> SHIFT_8BIT) & MASK_UINT16_LOWER_8BIT);
+	pkt.r.bRequest = (u8) ((request_reg >> SHIFT_8BIT) & MASK_UINT16_LOWER_8BIT);
 
 	udc2_reg_read(udc, UD2VAL, &pkt.r.wValue);
 	udc2_reg_read(udc, UD2IDX, &pkt.r.wIndex);
@@ -755,8 +736,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 #define w_value		le16_to_cpu(pkt.r.wValue)
 #define w_length		le16_to_cpu(pkt.r.wLength)
 
-	VDBG("SETUP %02x.%02x v%04x i%04x l%04x\n",
-	     pkt.r.bRequestType, pkt.r.bRequest, w_value, w_index, w_length);
+	VDBG("SETUP %02x.%02x v%04x i%04x l%04x\n", pkt.r.bRequestType, pkt.r.bRequest, w_value, w_index, w_length);
 	/*
 	 * A few standard requests get handled here, ones that touch
 	 * hardware ... notably for device and endpoint features.
@@ -771,8 +751,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 	udc2_reg_write(udc, UD2CMD, SETUP_RECEIVED);	/* Recieved Device Request. */
 	switch ((pkt.r.bRequestType << 8) | pkt.r.bRequest) {
 	case ((USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_SET_ADDRESS:
-		udc->addr =
-		    w_value;
+		udc->addr = w_value;
 
 		udc->req_pending = 0;
 		if (udc->addr > USB_ADDRESS_MAX) {
@@ -824,26 +803,22 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 
 #endif
 		} else {
-				udc2_reg_write(udc, UD2CMD, All_EP_INVALID);    /*  INVALID */
-				udelay(50);
+			udc2_reg_write(udc, UD2CMD, All_EP_INVALID);	/*  INVALID */
+			udelay(50);
 
-				udc2_reg_write(udc, UD2EP1_MaxPacketSize,
-					       udc->ep[1].maxpacket);
-				udelay(50);
-				udc2_reg_write(udc, UD2EP1_Status,
-					       EP_DUAL_BULK_IN);
-				udelay(50);
-				udc2_reg_write(udc, UD2EP2_MaxPacketSize,
-					       udc->ep[2].maxpacket);
-				udelay(50);
-				udc2_reg_write(udc, UD2EP2_Status,
-					       EP_DUAL_BULK_OUT);
-				udelay(50);
+			udc2_reg_write(udc, UD2EP1_MaxPacketSize, udc->ep[1].maxpacket);
+			udelay(50);
+			udc2_reg_write(udc, UD2EP1_Status, EP_DUAL_BULK_IN);
+			udelay(50);
+			udc2_reg_write(udc, UD2EP2_MaxPacketSize, udc->ep[2].maxpacket);
+			udelay(50);
+			udc2_reg_write(udc, UD2EP2_Status, EP_DUAL_BULK_OUT);
+			udelay(50);
 
-				udc2_reg_write(udc, UD2CMD, EP1_RESET);	/*EP1 Reset */
-				udelay(50);
-				udc2_reg_write(udc, UD2CMD, EP2_RESET);	/*EP2 Reset */
-				udelay(50);
+			udc2_reg_write(udc, UD2CMD, EP1_RESET);	/*EP1 Reset */
+			udelay(50);
+			udc2_reg_write(udc, UD2CMD, EP2_RESET);	/*EP2 Reset */
+			udelay(50);
 #if 1				//
 
 			udc->state_bak = CONFIGURED;
@@ -862,8 +837,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 		 */
 	case ((USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_GET_STATUS:
 #if 0
-		switch (g_Current_State &
-			CURRENT_STATUS_CHECK) {
+		switch (g_Current_State & CURRENT_STATUS_CHECK) {
 		case DEFAULT:
 			goto stall;
 			/* FALL THROUGH */
@@ -885,8 +859,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 		/* then STATUS starts later, automatically */
 	case ((USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_SET_FEATURE:
 
-		if (w_value !=
-		    USB_DEVICE_REMOTE_WAKEUP)
+		if (w_value != USB_DEVICE_REMOTE_WAKEUP)
 			goto stall;
 #if 0
 		switch (g_Current_State & CURRENT_STATUS_CHECK) {
@@ -907,8 +880,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 		goto succeed;
 	case ((USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_CLEAR_FEATURE:
 		//              Rq_Clear_Feature();
-		if (w_value !=
-		    USB_DEVICE_REMOTE_WAKEUP)
+		if (w_value != USB_DEVICE_REMOTE_WAKEUP)
 			goto stall;
 #if 0
 		index = (UCHAR_t) (w_index & INDEX_CHECK);
@@ -935,8 +907,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 		 * we won't even insist the interface exists...
 		 */
 	case ((USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_INTERFACE) << 8) | USB_REQ_GET_STATUS:
-		switch (udc->state & CURRENT_STATUS_CHECK)
-		{
+		switch (udc->state & CURRENT_STATUS_CHECK) {
 		case DEFAULT:
 		case CONFIGURED:
 			break;
@@ -973,8 +944,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 		 */
 	case ((USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_ENDPOINT) << 8) | USB_REQ_GET_STATUS:
 #if 0
-		switch (g_Current_State &
-			CURRENT_STATUS_CHECK) {
+		switch (g_Current_State & CURRENT_STATUS_CHECK) {
 		case DEFAULT:
 			goto stall;
 			/* FALL THROUGH */
@@ -994,9 +964,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 #endif
 #if 0
 		index = (UCHAR_t) (g_wIndex & INDEX_CHECK);
-		if (((g_Current_Config == 0) && (index > 0)) ||
-		    ((g_Current_Config == 1) && (index > NUM_TOTAL_ENDPOINTS)))
-		{
+		if (((g_Current_Config == 0) && (index > 0)) || ((g_Current_Config == 1) && (index > NUM_TOTAL_ENDPOINTS))) {
 			return FALSE;
 		} else {
 			if (ST_Feature > 0) {
@@ -1023,8 +991,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 		goto write_in;
 		/* then STATUS starts later, automatically */
 	case ((USB_TYPE_STANDARD | USB_RECIP_ENDPOINT) << 8) | USB_REQ_SET_FEATURE:
-		tmp =
-		    w_index & USB_ENDPOINT_NUMBER_MASK;
+		tmp = w_index & USB_ENDPOINT_NUMBER_MASK;
 		ep = &udc->ep[tmp];
 		if (w_value != USB_ENDPOINT_HALT || tmp > NUM_ENDPOINTS)
 			goto stall;
@@ -1161,8 +1128,7 @@ handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 		status = -ENODEV;
 	if (status < 0) {
 stall:
-		VDBG("req %02x.%02x protocol STALL; stat %d\n",
-		     pkt.r.bRequestType, pkt.r.bRequest, status);
+		VDBG("req %02x.%02x protocol STALL; stat %d\n", pkt.r.bRequestType, pkt.r.bRequest, status);
 		udc->req_pending = 0;
 	}
 	return;
@@ -1186,8 +1152,7 @@ static void handle_ep0(struct tmpa9xx_udc *udc)
 	if (list_empty(&ep0->queue))
 		req = NULL;
 	else
-		req =
-		    list_entry(ep0->queue.next, struct tmpa9xx_request, queue);
+		req = list_entry(ep0->queue.next, struct tmpa9xx_request, queue);
 
 	/* host ACKed an IN packet that we sent */
 	if (ep0->is_in) {	/*Write */
@@ -1244,8 +1209,7 @@ static void handle_ep0(struct tmpa9xx_udc *udc)
 	}
 }
 
-static int
-tmpa9xx_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t gfp_flags)
+static int tmpa9xx_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t gfp_flags)
 {
 	struct tmpa9xx_request *req;
 	struct tmpa9xx_ep *ep;
@@ -1310,8 +1274,7 @@ ep0_in_status:
 				dev->req_pending = 0;
 				goto done;
 			} else {
-				_ND("ep0 len=%d, in=%x\n", req->req.length,
-				    ep->is_in);
+				_ND("ep0 len=%d, in=%x\n", req->req.length, ep->is_in);
 				if (ep->is_in)
 					status = write_ep0_fifo(ep, req);
 				else {
@@ -1502,8 +1465,7 @@ static irqreturn_t tmpa9xx_udc_irq(int irq, void *_udc)
 				udc->ep[1].maxpacket = EP_MAX_PACKET_SIZE_FS;
 				udc->ep[2].maxpacket = EP_MAX_PACKET_SIZE_FS;
 			}
-			tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET,
-					    UDC2AB_MR_RESET | UDC2AB_MW_RESET);
+			tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_RESET | UDC2AB_MW_RESET);
 			/* host initiated suspend (3+ms bus idle) */
 		} else if ((status & INT_SUSPEND) == INT_SUSPEND) {
 			u32 state;
@@ -1559,8 +1521,7 @@ static irqreturn_t tmpa9xx_udc_irq(int irq, void *_udc)
 				udelay(100);
 				udc2_reg_write(udc, UD2INT, status);
 				udelay(50);
-				if (udc->wait_for_config_ack
-				    || udc->wait_for_addr_ack) {
+				if (udc->wait_for_config_ack || udc->wait_for_addr_ack) {
 					udc->state = udc->state_bak;
 					udc->state |= udc->addr;
 					udc2_reg_write(udc, UD2ADR, udc->state);
@@ -1569,8 +1530,7 @@ static irqreturn_t tmpa9xx_udc_irq(int irq, void *_udc)
 						udc->wait_for_config_ack = 0;
 					}
 					if (udc->wait_for_addr_ack) {
-						udc->interface =
-						    udc->interface_bak;
+						udc->interface = udc->interface_bak;
 						udc->wait_for_addr_ack = 0;
 					}
 				}
@@ -1594,8 +1554,7 @@ static irqreturn_t tmpa9xx_udc_irq(int irq, void *_udc)
 
 }
 
-int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
-			    int (*bind) (struct usb_gadget *))
+int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind) (struct usb_gadget *))
 {
 	struct tmpa9xx_udc *udc;
 	int retval;
@@ -1603,8 +1562,7 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
 	DBG("usb_gadget_register_driver\n");
 
 	udc = &controller;
-	if (!driver || driver->speed < USB_SPEED_FULL
-	    || !bind || !driver->setup) {
+	if (!driver || driver->speed < USB_SPEED_FULL || !bind || !driver->setup) {
 		DBG("bad parameter.\n");
 		return -EINVAL;
 	}
@@ -1711,8 +1669,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	if (!res)
 		return -ENXIO;
 
-	if (!request_mem_region(res->start,
-				res->end - res->start + 1, driver_name)) {
+	if (!request_mem_region(res->start, res->end - res->start + 1, driver_name)) {
 		DBG("someone's using UDC memory\n");
 		return -EBUSY;
 	}
@@ -1756,18 +1713,14 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	/* request DMA channel */
 	init_completion(&udc->dma_completion);
-	udc->dma_ch =
-	    tmpa9xx_dma_request(tmpa9xx_udc_dma_handler,
-				tmpa9xx_udc_dma_error_handler, NULL);
+	udc->dma_ch = tmpa9xx_dma_request(tmpa9xx_udc_dma_handler, tmpa9xx_udc_dma_error_handler, NULL);
 	if (udc->dma_ch < 0) {
 		printk("Cannot allocate dma channel.");
 		retval = -EBUSY;
 		goto fail1;
 	}
 
-	udc->buf =
-	    (unsigned char *)dma_alloc_coherent(NULL, 2112, &udc->phy_buf,
-						GFP_KERNEL);
+	udc->buf = (unsigned char *)dma_alloc_coherent(NULL, 2112, &udc->phy_buf, GFP_KERNEL);
 	if (udc->buf == NULL) {
 		retval = -ENOMEM;
 		printk("Cannot allocate dma buf.");
@@ -1776,8 +1729,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	/* request UDC irqs */
 	udc->udp_irq = platform_get_irq(pdev, 0);
-	if (request_irq(udc->udp_irq, tmpa9xx_udc_irq,
-			IRQF_DISABLED, driver_name, udc)) {
+	if (request_irq(udc->udp_irq, tmpa9xx_udc_irq, IRQF_DISABLED, driver_name, udc)) {
 		DBG("request irq %d failed\n", udc->udp_irq);
 		retval = -EBUSY;
 		goto fail2;
