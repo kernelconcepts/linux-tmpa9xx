@@ -60,6 +60,11 @@
 #define   UD2EP2_DataSize        0x258
 #define   UD2EP2_FIFO            0x25c
 
+#define   UD2EP3_MaxPacketSize   0x260
+#define   UD2EP3_Status          0x264
+#define   UD2EP3_DataSize        0x268
+#define   UD2EP3_FIFO            0x26c
+
 #define   UD2INTNAK              0x330
 #define   UD2INTNAKMSK           0x334
 
@@ -103,6 +108,7 @@
 #define EP0_RESET		0x0003	/* ENDPOINT0 RESET*/
 #define EP1_RESET		0x0013	/* ENDPOINT1 RESET*/
 #define EP2_RESET		0x0023	/* ENDPOINT2 RESET*/
+#define EP3_RESET		0x0033	/* ENDPOINT3 RESET*/
 
 /* Endpoint stall command.*/
 #define EP0_STALL		0x0004	/* to set STALL for Endpoint0*/
