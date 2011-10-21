@@ -85,42 +85,36 @@ static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 addr, const u16 da
 static void usb_bulk_in(struct tmpa9xx_ep *ep, unsigned char *buf, int length)
 {
 	struct tmpa9xx_udc *udc = ep->udc;
-	volatile u32 reg_data;
+	u32 reg;
+
+	reg = tmpa9xx_ud2ab_read(udc, UD2AB_INTSTS);
+
+	BUG_ON((reg & INT_MR_AHBERR));
+
+	memcpy(udc->buf, buf, length);
+	tmpa9xx_ud2ab_write(udc, UD2AB_MRSADR, udc->phy_buf);
+	tmpa9xx_ud2ab_write(udc, UD2AB_MREADR, (udc->phy_buf + length - 1));
+	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_ENABLE);
 
 	dev_dbg(udc->dev, "%s(): '%s', length %d\n", __func__, ep->ep.name, length);
-
-	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_INTSTS);
-	if ((reg_data & INT_MR_AHBERR) == INT_MR_AHBERR) {
-		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_RESET);
-	} else {
-		memcpy((char *)udc->buf, buf, length);
-		tmpa9xx_ud2ab_write(udc, UD2AB_MRSADR, udc->phy_buf);
-		tmpa9xx_ud2ab_write(udc, UD2AB_MREADR, (udc->phy_buf + length - 1));
-		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_ENABLE);
-	}
-
-	dev_dbg(udc->dev, "%s(): '%s', done\n", __func__, ep->ep.name);
 }
 
 static void usb_bulk_out(struct tmpa9xx_ep *ep)
 {
 	struct tmpa9xx_udc *udc = ep->udc;
-	u32 reg_data;
+	u32 reg;
+
+	reg = tmpa9xx_ud2ab_read(udc, UD2AB_INTSTS);
+
+	BUG_ON((reg & INT_MW_AHBERR));
+	BUG_ON((reg & INT_MW_RD_ERR));
+
+	udc->dma_status = DMA_READ_START;
+	tmpa9xx_ud2ab_write(udc, UD2AB_MWSADR, udc->phy_buf);
+	tmpa9xx_ud2ab_write(udc, UD2AB_MWEADR, (int)(udc->phy_buf + ep->datasize - 1));
+	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MW_ENABLE);
 
 	dev_dbg(udc->dev, "%s(): '%s', datasize %d\n", __func__, ep->ep.name, ep->datasize - 1);
-
-	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_INTSTS);
-	if (((reg_data & INT_MW_AHBERR) == INT_MW_AHBERR)
-	    || ((reg_data & INT_MW_RD_ERR) == INT_MW_RD_ERR)) {
-		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MW_RESET);
-	} else {
-		udc->dma_status = DMA_READ_START;
-		tmpa9xx_ud2ab_write(udc, UD2AB_MWSADR, udc->phy_buf);
-		tmpa9xx_ud2ab_write(udc, UD2AB_MWEADR, (int)(udc->phy_buf + ep->datasize - 1));
-		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MW_ENABLE);
-	}
-
-	dev_dbg(udc->dev, "%s(): '%s', done\n", __func__, ep->ep.name);
 }
 
 static void done(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req, int status)
