@@ -16,7 +16,7 @@
 #define   UD2AB_UDC2RDREQ        0x01c
 #define   UD2AB_UDC2RDVL         0x020
 
-#define   UD2AB_ARBT_SET         0x03c 
+#define   UD2AB_ARBT_SET         0x03c
 #define   UD2AB_MWSADR           0x040
 #define   UD2AB_MWEADR           0x044
 #define   UD2AB_MWCADR           0x048
@@ -31,7 +31,7 @@
 #define   UD2AB_TSTSET           0x08c
 #define   UD2AB_TSTOUT           0x090
 
-/* ADDRESS ACCESS */            
+/* ADDRESS ACCESS */
 #define   UD2ADR                 0x200
 #define   UD2FRM                 0x204
 #define   UD2TMD                 0x208
@@ -227,7 +227,7 @@
 #define UD2EP_DSET		0x1000
 #define UD2EP_DATASIZE_MASK	0x07FF
 
-#define UD2C2STSET_EOP_D	0x00000000L 
+#define UD2C2STSET_EOP_D	0x00000000L
 
 #define EP_DUAL_BULK_IN		0xC088
 #define EP_DUAL_BULK_OUT	0xC008
@@ -248,7 +248,7 @@
 #define	PWCTL_PHY_SUSPEND_ON		0x00000008
 #define	PWCTL_PHY_SUSPEND_OFF		0x000000f7
 #define	PWCTL_PHY_POWER_RESET_ON	0x000000dd
-#define	PWCTL_PHY_RESET_OFF		0x00000028			
+#define	PWCTL_PHY_RESET_OFF		0x00000028
 #define	PWCTL_POWER_RESET_OFF		0x00000002
 #define	PWCTL_POWER_RESET_ON		0xfffffffd
 
@@ -331,26 +331,6 @@ struct tmpa9xx_request {
 	struct usb_request		req;
 	struct list_head		queue;
 };
-
-/*-------------------------------------------------------------------------*/
-
-#ifdef DEBUG
-#define DBG(stuff...)		printk(KERN_DEBUG "udc: " stuff)
-#else
-#define DBG(stuff...)		do{}while(0)
-#endif
-
-#ifdef VERBOSE
-#    define VDBG		DBG
-#else
-#    define VDBG(stuff...)	do{}while(0)
-#endif
-
-#ifdef PACKET_TRACE
-#    define PACKET		VDBG
-#else
-#    define PACKET(stuff...)	do{}while(0)
-#endif
 
 #endif
 

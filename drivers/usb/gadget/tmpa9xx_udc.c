@@ -1,62 +1,36 @@
 /*
- * tmpa9xx_udc -- driver for tmpa9xx-series USB peripheral controller
+ * TMPA9xx USB peripheral controller driver
  *
- * Copyright (C) 2008 
+ * Copyright (c) 2008 
+ *           (c) 2011 Michael Hunold <michael@mihu.de>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the
- * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
- * Boston, MA  02111-1307, USA.
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
  */
 
 #if 0
 #define DEBUG
-#define	VERBOSE_DEBUG
-#define	PACKET_TRACE
 #endif
 
-#include <linux/jiffies.h>
-#include <linux/time.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/platform_device.h>
-#include <linux/delay.h>
-#include <linux/ioport.h>
-#include <linux/slab.h>
-#include <linux/smp_lock.h>
-#include <linux/errno.h>
-#include <linux/init.h>
-#include <linux/list.h>
 #include <linux/interrupt.h>
-#include <linux/proc_fs.h>
 #include <linux/clk.h>
-#include <linux/delay.h>
+#include <linux/platform_device.h>
+#include <linux/dma-mapping.h>
+
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
-#include <linux/clk.h>
 
-#include <asm/byteorder.h>
 #include <asm/io.h>
-#include <asm/irq.h>
-#include <asm/system.h>
-#include <asm/mach-types.h>
 
-#include <linux/dma-mapping.h>
-#include <mach/dma.h>
-#include <mach/regs.h>
 #include "tmpa9xx_udc.h"
 
+#define PACKET(...)	dev_dbg(udc->dev, __VA_ARGS__);
+
 static const char driver_name[] = "tmpa9xx-udc";
+
 static const char *const ep_name[] = {
 	"ep0",
 	"ep1in-bulk",
@@ -69,9 +43,6 @@ static const char *const ep_name[] = {
 
 #define tmpa9xx_ud2ab_write(dev, reg, val) \
 	__raw_writel((val), (dev)->udp_baseaddr + (reg))
-
-#define CLKCR4		__REG(0xf0050050)
-#define	USB_ENABLE	0x00000001
 
 static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 reqdadr, u16 * data_p)
 {
@@ -462,14 +433,11 @@ static void usb_ctl_init(struct tmpa9xx_udc *udc)
 	reg_data |= PWCTL_PHY_SUSPEND_ON;	/* [3] <= 1 */
 
 	tmpa9xx_ud2ab_write(udc, UD2AB_PWCTL, reg_data);
-	mdelay(1);
 
 	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_PWCTL);
 	reg_data |= PWCTL_PHY_RESET_OFF;	/* [5][3] <= 1 */
 
 	tmpa9xx_ud2ab_write(udc, UD2AB_PWCTL, reg_data);
-
-	mdelay(1);
 
 	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_PWCTL);
 
@@ -477,18 +445,11 @@ static void usb_ctl_init(struct tmpa9xx_udc *udc)
 
 	tmpa9xx_ud2ab_write(udc, UD2AB_PWCTL, reg_data);
 
-/* ----------------------------------------------------------------------
-  wait: 1ms
-----------------------------------------------------------------------*/
-	mdelay(1);
-
 	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_PWCTL);
 
 	reg_data |= PWCTL_POWER_RESET_OFF;	/* [2] <= 1 */
 
 	tmpa9xx_ud2ab_write(udc, UD2AB_PWCTL, reg_data);
-
-	mdelay(1);
 
 	udc2_reg_write(udc, UD2INT, UDC2_INT_MASK);	/*INT EPx MASK & Refresh; */
 
@@ -497,8 +458,6 @@ static void usb_ctl_init(struct tmpa9xx_udc *udc)
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTENB, UDC2AB_INT_MASK);
 
 	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_RESET | UDC2AB_MW_RESET);
-
-	mdelay(1);
 }
 
 /*
@@ -707,7 +666,7 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 
 #define w_index		le16_to_cpu(pkt.r.wIndex)
 #define w_value		le16_to_cpu(pkt.r.wValue)
-#define w_length		le16_to_cpu(pkt.r.wLength)
+#define w_length	le16_to_cpu(pkt.r.wLength)
 
 	dev_dbg(udc->dev, "SETUP %02x.%02x v%04x i%04x l%04x\n", pkt.r.bRequestType, pkt.r.bRequest, w_value, w_index, w_length);
 	/*
@@ -1335,6 +1294,7 @@ static int tmpa9xx_ep_dequeue(struct usb_ep *_ep, struct usb_request *_req)
 	req = container_of(_req, struct tmpa9xx_request, req);
 	ep = container_of(_ep, struct tmpa9xx_ep, ep);
 	req->req.complete(&ep->ep, &req->req);
+
 	return 0;
 }
 
@@ -1350,52 +1310,52 @@ static const struct usb_ep_ops tmpa9xx_ep_ops = {
 
 static struct tmpa9xx_udc controller = {
 	.gadget = {
-		   .ops = &tmpa9xx_udc_ops,
-		   .ep0 = &controller.ep[0].ep,
-		   .name = driver_name,
-		   .dev = {
-			   .release = nop_release,
-			   }
-		   },
+		.ops = &tmpa9xx_udc_ops,
+		.ep0 = &controller.ep[0].ep,
+		.name = driver_name,
+		.dev = {
+			.release = nop_release,
+		}
+	},
 	.ep[0] = {
-		  .ep = {
-			 .name = "ep0",
-			 .ops = &tmpa9xx_ep_ops,
-			 },
-		  .udc = &controller,
-		  .maxpacket = 64,
-		  .int_mask = 1 << 0,
-		  },
+		.ep = {
+			.name = "ep0",
+			.ops = &tmpa9xx_ep_ops,
+		},
+		.udc = &controller,
+		.maxpacket = 64,
+		.int_mask = 1 << 0,
+	},
 	.ep[1] = {
-		  .ep = {
-			 .name = "ep1in-bulk",
-			 .ops = &tmpa9xx_ep_ops,
-			 },
-		  .udc = &controller,
-		  .is_pingpong = 1,
-		  .maxpacket = 512,
-		  .int_mask = 1 << 1,
-		  },
+		.ep = {
+			.name = "ep1in-bulk",
+			.ops = &tmpa9xx_ep_ops,
+		},
+		.udc = &controller,
+		.is_pingpong = 1,
+		.maxpacket = 512,
+		.int_mask = 1 << 1,
+	},
 	.ep[2] = {
-		  .ep = {
-			 .name = "ep2out-bulk",
-			 .ops = &tmpa9xx_ep_ops,
-			 },
-		  .udc = &controller,
-		  .is_pingpong = 1,
-		  .maxpacket = 512,
-		  .int_mask = 1 << 2,
-		  },
+		.ep = {
+			.name = "ep2out-bulk",
+			.ops = &tmpa9xx_ep_ops,
+		},
+		.udc = &controller,
+		.is_pingpong = 1,
+		.maxpacket = 512,
+		.int_mask = 1 << 2,
+	},
 	.ep[3] = {
-		  .ep = {
-			 .name = "ep3in-int",
-			 .ops = &tmpa9xx_ep_ops,
-			 },
-		  .udc = &controller,
-		  .is_pingpong = 1,
-		  .maxpacket = 64,
-		  .int_mask = 1 << 3,
-		  },
+		.ep = {
+			.name = "ep3in-int",
+			.ops = &tmpa9xx_ep_ops,
+		},
+		.udc = &controller,
+		.is_pingpong = 1,
+		.maxpacket = 64,
+		.int_mask = 1 << 3,
+	},
 };
 
 static void stop_activity(struct tmpa9xx_udc *udc)
@@ -1424,8 +1384,10 @@ static void stop_activity(struct tmpa9xx_udc *udc)
 static irqreturn_t tmpa9xx_udc_irq(int irq, void *priv)
 {
 	struct tmpa9xx_udc *udc = priv;
+
 	disable_irq_nosync(udc->udp_irq);
 	queue_work(udc->wqs, &udc->ws);
+
 	return IRQ_HANDLED;
 }
 
@@ -1598,10 +1560,8 @@ static void pwctl_power_reset(struct tmpa9xx_udc *udc)
 	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_PWCTL);
 	reg_data &= PWCTL_POWER_RESET_ON;
 	tmpa9xx_ud2ab_write(udc, UD2AB_PWCTL, reg_data);
-	mdelay(1);
 	reg_data |= PWCTL_POWER_RESET_OFF;
 	tmpa9xx_ud2ab_write(udc, UD2AB_PWCTL, reg_data);
-	mdelay(1);
 }
 
 int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
@@ -1821,9 +1781,9 @@ static struct platform_driver tmpa9xx_udc_driver = {
 	.suspend = tmpa9xx_udc_suspend,
 	.resume = tmpa9xx_udc_resume,
 	.driver = {
-		   .name = (char *)driver_name,
-		   .owner = THIS_MODULE,
-		   },
+		.name = (char *)driver_name,
+		.owner = THIS_MODULE,
+	},
 };
 
 static int __init udc_init_module(void)
@@ -1841,5 +1801,5 @@ static void __exit udc_exit_module(void)
 module_exit(udc_exit_module);
 
 MODULE_DESCRIPTION("TMPA9xx udc driver");
-MODULE_AUTHOR("Thomas Haase");
+MODULE_AUTHOR("Michael Hunold");
 MODULE_LICENSE("GPL");
