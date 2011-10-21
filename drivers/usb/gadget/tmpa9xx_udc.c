@@ -147,7 +147,7 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 	u8 chardata;
 	u8 *data_p;
 	u16 *buf;
-	unsigned length, is_last;
+	int length;
 	struct tmpa9xx_udc *udc = ep->udc;
 	buf = req->req.buf + req->req.actual;
 
@@ -169,32 +169,34 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 			buf++;
 			length -= WORD_SIZE;
 		}
-		is_last = 0;
-	} else {
-		req->req.actual += length;
-		while (length > 0) {	/* write transmit data to endpoint0's Fifo */
-			if (length == 1) {
-				chardata = (u8) (*buf & MASK_UINT16_LOWER_8BIT);
-				data_p = (u8 *) (UD2EP0_FIFO + udc->udp_baseaddr);
-				*data_p = chardata;
-				length = 0;
-			} else {
-				udc2_reg_write(udc, UD2EP0_FIFO, *buf);
-				buf++;
-				length -= WORD_SIZE;
-			}
-		}
-		udc->stage = STATUS_STAGE;
-		udc2_reg_write(udc, UD2CMD, EP0_EOP);	/* process of EOP */
-		/* STATUS NAK Interrupt Disable. */
-		udc2_reg_read(udc, UD2INT, &interrupt_status);
-		interrupt_status |= STATUS_NAK_E;
-		udc2_reg_write(udc, UD2INT, interrupt_status);
-		is_last = 1;
+		return 0;
 	}
-	if (is_last)
-		done(ep, req, 0);
-	return is_last;
+
+	req->req.actual += length;
+
+	while (length > 0) {	/* write transmit data to endpoint0's Fifo */
+		if (length == 1) {
+			chardata = (u8) (*buf & MASK_UINT16_LOWER_8BIT);
+			data_p = (u8 *) (UD2EP0_FIFO + udc->udp_baseaddr);
+			*data_p = chardata;
+			length = 0;
+		} else {
+			udc2_reg_write(udc, UD2EP0_FIFO, *buf);
+			buf++;
+			length -= WORD_SIZE;
+		}
+	}
+
+	udc->stage = STATUS_STAGE;
+	udc2_reg_write(udc, UD2CMD, EP0_EOP);	/* process of EOP */
+	/* STATUS NAK Interrupt Disable. */
+	udc2_reg_read(udc, UD2INT, &interrupt_status);
+	interrupt_status |= STATUS_NAK_E;
+	udc2_reg_write(udc, UD2INT, interrupt_status);
+
+	done(ep, req, 0);
+
+	return 1;
 }
 
 /*
@@ -208,7 +210,6 @@ static int read_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 	u16 length;
 	u16 interrupt_status;
 	u16 *buf;
-	unsigned is_last;
 	struct tmpa9xx_udc *udc = ep->udc;
 
 	buf = req->req.buf + req->req.actual;
@@ -231,34 +232,31 @@ static int read_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 			buf++;
 			length -= WORD_SIZE;
 		}
-		is_last = 0;
-	} else {
-		req->req.actual += length;
-		while (length != 0) {	/* write transmit data to endpoint0's Fifo */
-			if (length == 1) {
-				u16 tmp;
-				u8 *ptr = (u8 *) buf;
-				udc2_reg_read(udc, UD2EP0_FIFO, &tmp);
-				*ptr = tmp & 0xff;
-				break;
-			} else {
-				udc2_reg_read(udc, UD2EP0_FIFO, buf);
-				buf++;
-				length -= WORD_SIZE;
-			}
-		}
-		udc->stage = STATUS_STAGE;
-		/* STATUS NAK Interrupt Disable. */
-		udc2_reg_read(udc, UD2INT, &interrupt_status);
-		interrupt_status |= STATUS_NAK_D;
-		udc2_reg_write(udc, UD2INT, interrupt_status);
-		is_last = 1;
+		return 0;
 	}
 
-	if (is_last)
-		done(ep, req, 0);
-	return is_last;
+	req->req.actual += length;
+	while (length != 0) {	/* write transmit data to endpoint0's Fifo */
+		if (length == 1) {
+			u16 tmp;
+			u8 *ptr = (u8 *) buf;
+			udc2_reg_read(udc, UD2EP0_FIFO, &tmp);
+			*ptr = tmp & 0xff;
+			break;
+		} else {
+			udc2_reg_read(udc, UD2EP0_FIFO, buf);
+			buf++;
+			length -= WORD_SIZE;
+		}
+	}
+	udc->stage = STATUS_STAGE;
+	/* STATUS NAK Interrupt Disable. */
+	udc2_reg_read(udc, UD2INT, &interrupt_status);
+	interrupt_status |= STATUS_NAK_D;
+	udc2_reg_write(udc, UD2INT, interrupt_status);
 
+	done(ep, req, 0);
+	return 1;
 }
 
 /* pull OUT packet data from the endpoint's fifo */
