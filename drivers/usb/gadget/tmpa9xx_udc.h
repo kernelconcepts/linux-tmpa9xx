@@ -320,6 +320,7 @@ struct tmpa9xx_udc {
 	struct clk 			*clk;
 	struct work_struct 		ws;
 	struct workqueue_struct 	*wqs;
+	struct semaphore 		sem;
 };
 
 static inline struct tmpa9xx_udc *to_udc(struct usb_gadget *g)

@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/clk.h>
+#include <linux/semaphore.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
 
@@ -48,7 +49,7 @@ static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 addr, u16 *data)
 {
 	u32 reg;
 
-	disable_irq(udc->udp_irq);
+	down(&udc->sem);
 
 	BUG_ON(tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ) & UDC2AB_READ_RQ);
 
@@ -59,7 +60,7 @@ static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 addr, u16 *data)
 	} while ((reg & UDC2AB_READ_RQ));
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_UDC2REG_RD);
 
-	enable_irq(udc->udp_irq);
+	up(&udc->sem);
 
 	*data = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDVL);
 }
@@ -68,7 +69,7 @@ static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 addr, const u16 da
 {
 	u32 reg;
 
-	disable_irq(udc->udp_irq);
+	down(&udc->sem);
 
 	BUG_ON(tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ) & UDC2AB_READ_RQ);
 
@@ -79,7 +80,7 @@ static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 addr, const u16 da
 	} while ((reg & UDC2AB_READ_RQ));
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_UDC2REG_RD);
 
-	enable_irq(udc->udp_irq);
+	up(&udc->sem);
 }
 
 static void usb_bulk_in(struct tmpa9xx_ep *ep, unsigned char *buf, int length)
@@ -1618,6 +1619,8 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	}
 
 	INIT_WORK(&udc->ws, backend_irq_work);
+
+	sema_init(&udc->sem, 1);
 
 	udc->clk = clk_get(&pdev->dev, NULL);
 	if (IS_ERR(udc->clk)) {
