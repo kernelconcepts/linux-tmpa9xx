@@ -165,7 +165,6 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 	u16 interrupt_status;
 	u8 chardata;
 	u8 *data_p;
-	u16 PacketSize;
 	u16 *buf;
 	unsigned length, is_last;
 	struct tmpa9xx_udc *udc = ep->udc;
@@ -199,16 +198,10 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		req->req.actual += length;
 		while (length > 0) {	/* write transmit data to endpoint0's Fifo */
 			if (length == 1) {
-				udc2_reg_read(udc, UD2EP0_MaxPacketSize, &PacketSize);
-				udelay(30);
-				udc2_reg_write(udc, UD2EP0_MaxPacketSize, 1);	/* process of EOP */
-				udelay(50);	//never kill
 				chardata = (u8) (*buf & MASK_UINT16_LOWER_8BIT);
 				data_p = (u8 *) (UD2EP0_FIFO + udc->udp_baseaddr);
 				*data_p = chardata;
 				length = 0;
-				udelay(50);	//never kill
-				udc2_reg_write(udc, UD2EP0_MaxPacketSize, PacketSize);	/* process of EOP */
 				udelay(50);	//never kill
 			} else {
 				udc2_reg_write(udc, UD2EP0_FIFO, *buf);
@@ -242,7 +235,6 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
  */
 static int read_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 {
-	u16 PacketSize;
 	u16 length;
 	u16 interrupt_status;
 	u16 *buf;
@@ -278,12 +270,6 @@ static int read_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 				u8 *ptr = (u8 *) buf;
 				udc2_reg_read(udc, UD2EP0_FIFO, &tmp);
 				*ptr = tmp & 0xff;
-				udc2_reg_read(udc, UD2EP0_MaxPacketSize, &PacketSize);
-				udelay(10);
-				udc2_reg_write(udc, UD2EP0_MaxPacketSize, 1);	/* process of EOP */
-				udelay(10);
-				udc2_reg_write(udc, UD2EP0_MaxPacketSize, PacketSize & 0x7ff);	/* process of EOP */
-				udelay(10);
 				break;
 			} else {
 				udc2_reg_read(udc, UD2EP0_FIFO, buf);
