@@ -334,7 +334,7 @@ static int read_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		return 0;	//busy
 	}
 
-	dev_dbg(udc->dev, "req.length %d, dma status %d\n", req->req.length, udc->dma_status);
+	dev_dbg(udc->dev, "%s(): req.length %d, dma status %d\n", __func__, req->req.length, udc->dma_status);
 
 	buf = req->req.buf + req->req.actual;
 	bufferspace = req->req.length - req->req.actual;
@@ -373,23 +373,23 @@ static int read_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 	if (is_done)
 		done(ep, req, 0);
 	else {
-		dev_dbg(udc->dev, "is_done=%x\n", is_done);
+		dev_dbg(udc->dev, "%s(): is_done=%x\n", __func__, is_done);
 		ep->datasize = 0;
 		udc2_reg_read(udc, UD2EP2_DataSize, &count);
 		count &= UD2EP_DATASIZE_MASK;
 		if (udc->dma_status == 1)
-			printk("count=%x,%x\n", count, udc->dma_status);
+			dev_dbg(udc->dev, "%s(): count=%x,%x\n", __func__, count, udc->dma_status);
 		if (count > 0) {
 			if (count > ep->ep.maxpacket)
 				count = ep->ep.maxpacket;
 			if (count > bufferspace) {
-				dev_dbg(udc->dev, "%s buffer overflow\n", ep->ep.name);
+				dev_dbg(udc->dev, "%s(): '%s' buffer overflow\n", __func__, ep->ep.name);
 				req->req.status = -EOVERFLOW;
 				count = bufferspace;
 			}
 			ep->datasize = count;
 			usb_bulk_out(ep);
-			dev_dbg(udc->dev, "bulk out size=%x\n", ep->datasize);
+			dev_dbg(udc->dev, "%s(): bulk out size=%x\n", __func__, ep->datasize);
 		} else
 			count = 0;
 	}
@@ -571,19 +571,19 @@ static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descr
 	maxpacket = le16_to_cpu(desc->wMaxPacketSize);
 	if (!_ep || !ep || !desc || ep->desc || _ep->name == ep_name[0]
 	    || desc->bDescriptorType != USB_DT_ENDPOINT || maxpacket == 0 || maxpacket > ep->maxpacket) {
-		dev_dbg(udc->dev, "bad ep or descriptor\n");
+		dev_dbg(udc->dev, "%s(): bad ep or descriptor\n", __func__);
 		return -EINVAL;
 	}
 
 	if (!udc->driver || udc->gadget.speed == USB_SPEED_UNKNOWN) {
-		dev_dbg(udc->dev, "bogus device state\n");
+		dev_dbg(udc->dev, "%s(): bogus device state\n", __func__);
 		return -ESHUTDOWN;
 	}
 
 	tmp = desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK;
 	switch (tmp) {
 	case USB_ENDPOINT_XFER_CONTROL:
-		dev_dbg(udc->dev, "only one control endpoint\n");
+		dev_dbg(udc->dev, "%s(): only one control endpoint\n", __func__);
 		return -EINVAL;
 	case USB_ENDPOINT_XFER_INT:
 		if (maxpacket > 64)
@@ -599,11 +599,11 @@ static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descr
 			goto ok;
 		}
 bogus_max:
-		dev_dbg(udc->dev, "bogus maxpacket %d\n", maxpacket);
+		dev_dbg(udc->dev, "%s(): bogus maxpacket %d\n", __func__, maxpacket);
 		return -EINVAL;
 	case USB_ENDPOINT_XFER_ISOC:
 		if (!ep->is_pingpong) {
-			dev_dbg(udc->dev, "iso requires double buffering\n");
+			dev_dbg(udc->dev, "%s(): iso requires double buffering\n", __func__);
 			return -EINVAL;
 		}
 		break;
@@ -1085,7 +1085,7 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 			goto stall;
 		}
 #endif
-		dev_dbg(udc->dev, "w_value=%x,%x\n", w_value, index);
+		dev_dbg(udc->dev, "%s(): w_value=%x,%x\n", __func__, w_value, index);
 		/* DO NOTHING */
 		if (ep->is_in)
 			udc2_reg_write(udc, UD2CMD, EP1_RESET);
@@ -1190,7 +1190,7 @@ static void handle_ep0(struct tmpa9xx_udc *udc)
 					udc->req_pending = 0;
 				}
 			} else if (udc->req_pending) {
-				dev_dbg(udc->dev, "no control-OUT deferred responses!\n");
+				dev_dbg(udc->dev, "%s(): no control-OUT deferred responses!\n", __func__);
 				udc->req_pending = 0;
 			}
 
@@ -1221,17 +1221,17 @@ static int tmpa9xx_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t 
 	udc = ep->udc;
 
 	if (!_req || !_req->complete || !_req->buf || !list_empty(&req->queue)) {
-		dev_dbg(udc->dev, "invalid request\n");
+		dev_dbg(udc->dev, "%s(): invalid request\n", __func__);
 		return -EINVAL;
 	}
 
 	if (!ep->desc && ep->ep.name != ep_name[0]) {
-		dev_dbg(udc->dev, "invalid ep\n");
+		dev_dbg(udc->dev, "%s(): invalid ep\n", __func__);
 		return -EINVAL;
 	}
 
 	if (!udc->driver || udc->gadget.speed == USB_SPEED_UNKNOWN) {
-		dev_dbg(udc->dev, "invalid device\n");
+		dev_dbg(udc->dev, "%s(): invalid device\n", __func__);
 		return -EINVAL;
 	}
 
@@ -1276,7 +1276,7 @@ ep0_in_status:
 				dev_dbg(udc->dev, "%s(): '%s', req.length == 0\n", __func__, ep->ep.name);
 				goto done;
 			} else {
-				dev_dbg(udc->dev, "ep0 len=%d, in=%x\n", req->req.length, ep->is_in);
+				dev_dbg(udc->dev, "%s(): ep0 len=%d, in=%x\n", __func__, req->req.length, ep->is_in);
 				if (ep->is_in)
 					status = write_ep0_fifo(ep, req);
 				else {
@@ -1441,7 +1441,7 @@ static void backend_irq_work(struct work_struct *work)
 	/* USB reset irq:  not maskable */
 	if ((status & INT_RESET) == INT_RESET) {
 		tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_RESET);
-		dev_dbg(udc->dev, "end bus reset\n");
+		dev_dbg(udc->dev, "%s(): end bus reset\n", __func__);
 		udc->addr = 0;
 		stop_activity(udc);	//GCH
 		/* enable ep0 */
@@ -1457,7 +1457,7 @@ static void backend_irq_work(struct work_struct *work)
 		udc->wait_for_addr_ack = 0;
 		udc->wait_for_config_ack = 0;
 		if (state == HIGH_SPEED) {
-			dev_dbg(udc->dev, "high speed\n");
+			dev_dbg(udc->dev, "%s(): high speed\n", __func__);
 			udc->gadget.speed = USB_SPEED_HIGH;
 			udc->ep[1].maxpacket = EP_MAX_PACKET_SIZE_HS;
 			udc->ep[2].maxpacket = EP_MAX_PACKET_SIZE_HS;
@@ -1554,7 +1554,7 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind) (struc
 	struct tmpa9xx_udc *udc = &controller;
 	int retval;
 
-	dev_dbg(udc->dev, "usb_gadget_register_driver\n");
+	dev_dbg(udc->dev, "%s(): usb_gadget_register_driver\n", __func__);
 
 	if (!driver || driver->speed < USB_SPEED_FULL || !bind || !driver->setup) {
 		dev_dbg(udc->dev, "bad parameter.\n");
@@ -1562,7 +1562,7 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind) (struc
 	}
 
 	if (udc->driver) {
-		dev_dbg(udc->dev, "UDC already has a gadget driver\n");
+		dev_dbg(udc->dev, "%s(): UDC already has a gadget driver\n", __func__);
 		return -EBUSY;
 	}
 
@@ -1574,7 +1574,7 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind) (struc
 
 	retval = bind(&udc->gadget);
 	if (retval) {
-		dev_dbg(udc->dev, "driver->bind() returned %d\n", retval);
+		dev_dbg(udc->dev, "%s(): driver->bind() returned %d\n", __func__, retval);
 		udc->driver = NULL;
 		udc->gadget.dev.driver = NULL;
 		dev_set_drvdata(&udc->gadget.dev, NULL);
@@ -1585,7 +1585,7 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind) (struc
 	udc2_reg_write(udc, UD2CMD, USB_READY);	//GCH
 	enable_irq(udc->udp_irq);
 
-	dev_dbg(udc->dev, "bound to %s\n", driver->driver.name);
+	dev_dbg(udc->dev, "%s(): bound to %s\n", __func__, driver->driver.name);
 	return 0;
 }
 
@@ -1608,7 +1608,7 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 {
 	struct tmpa9xx_udc *udc = &controller;
 
-	dev_dbg(udc->dev, "usb_gadget_unregister_driver\n");
+	dev_dbg(udc->dev, "%s(): usb_gadget_unregister_driver\n", __func__);
 
 	if (!driver || driver != udc->driver || !driver->unbind)
 		return -EINVAL;
@@ -1625,7 +1625,7 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 
 	pwctl_power_reset(udc);
 
-	dev_dbg(udc->dev, "unbound from %s\n", driver->driver.name);
+	dev_dbg(udc->dev, "%s(): unbound from %s\n", __func__, driver->driver.name);
 
 	return 0;
 }
@@ -1663,7 +1663,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	udc->wqs = create_workqueue("tmpa9xx-udc-wq");
 	if (!udc->wqs) {
-		dev_err(udc->dev, "create_workqueue() failed\n");
+		dev_err(udc->dev, "%s(): create_workqueue() failed\n", __func__);
 		/* ah, fixme error handling */
 		return -EBUSY;
 	}
@@ -1706,7 +1706,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	udc->buf = (unsigned char *)dma_alloc_coherent(NULL, 2112, &udc->phy_buf, GFP_KERNEL);
 	if (udc->buf == NULL) {
-		dev_err(udc->dev, "dma_alloc_coherent() failed\n");
+		dev_err(udc->dev, "%s(): dma_alloc_coherent() failed\n", __func__);
 		retval = -ENOMEM;
 		goto fail1;
 	}
@@ -1714,7 +1714,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	/* request UDC irqs */
 	udc->udp_irq = platform_get_irq(pdev, 0);
 	if (request_irq(udc->udp_irq, tmpa9xx_udc_irq, IRQF_DISABLED, driver_name, udc)) {
-		dev_err(udc->dev, "request_irq() failed\n");
+		dev_err(udc->dev, "%s(): request_irq() failed\n", __func__);
 		retval = -EBUSY;
 		goto fail2;
 	}
@@ -1725,7 +1725,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, udc);
 	device_init_wakeup(dev, 1);
 
-	printk(KERN_INFO "%s\n", driver_name);
+	dev_info(udc->dev, "%s ready\n", driver_name);
 
 	return 0;
 fail2:
