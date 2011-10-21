@@ -270,23 +270,7 @@ static int read_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 
 	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
 
-	if (req == NULL) {
-		if (udc->dma_status == DMA_READ_IDLE) {
-			ep->datasize = 0;
-			udc2_reg_read(udc, UD2EP2_DataSize, &count);
-			count &= UD2EP_DATASIZE_MASK;
-			dev_dbg(udc->dev, "%s(): '%s', req null IDLE, count %d\n", __func__, ep->ep.name, count);
-			if (count > 0) {
-				if (count > ep->ep.maxpacket)
-					count = ep->ep.maxpacket;
-				ep->datasize = count;
-				usb_bulk_out(ep);
-			}
-			return 0;
-		}
-		dev_dbg(udc->dev, "%s(): '%s', req null, NOT IDLE\n", __func__, ep->ep.name);
-		return 0;
-	}
+	BUG_ON(!req);
 
 	if (udc->dma_status == DMA_READ_START) {
 		dev_dbg(udc->dev, "%s(): '%s', busy\n", __func__, ep->ep.name);
@@ -360,47 +344,26 @@ static int write_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 {
 	struct tmpa9xx_udc *udc = ep->udc;
 	int bufferspace, count;
-	unsigned is_last = 0;
 	unsigned char *buf;
 
 	buf = req->req.buf + req->req.actual;
 	bufferspace = req->req.length - req->req.actual;
 
-	if (ep->ep.maxpacket < bufferspace) {
-		count = ep->ep.maxpacket;
-		is_last = 0;
-	} else {
-		count = bufferspace;
-	}
-
-	dev_dbg(udc->dev, "%s(): '%s', req.length %d, req.actual %d, count %d\n", __func__, ep->ep.name, req->req.length, req->req.actual, count);
-
-	if (count > 0) {
-
-		/*
-		 * Write the packet, maybe it's a ZLP.
-		 *
-		 * NOTE:  incrementing req->actual before we receive the ACK means
-		 * gadget driver IN bytecounts can be wrong in fault cases.  That's
-		 * fixable with PIO drivers like this one (save "count" here, and
-		 * do the increment later on TX irq), but not for most DMA hardware.
-		 *
-		 * So all gadget drivers must accept that potential error.  Some
-		 * hardware supports precise fifo status reporting, letting them
-		 * recover when the actual bytecount matters (e.g. for USB Test
-		 * and Measurement Class devices).
-		 */
-
-		usb_bulk_in(ep, buf, count);
-		req->req.actual += count;
-
-		PACKET("%s(): '%s' ptr %p in/%d%s\n", __func__, ep->ep.name, &req->req, count, is_last ? " (done)" : "");
-	} else {
-		is_last = 1;
-		dev_dbg(udc->dev, "%s(): '%s'  is_last %d\n", __func__, ep->ep.name, is_last);
+	if (!bufferspace) {
+		dev_dbg(udc->dev, "%s(): %p @ '%s' -- done\n", __func__, &req->req, ep->ep.name);
 		done(ep, req, 0);
+		return 1;
 	}
-	return is_last;
+
+	if (ep->ep.maxpacket < bufferspace)
+		count = ep->ep.maxpacket;
+	else
+		count = bufferspace;
+
+	usb_bulk_in(ep, buf, count);
+	req->req.actual += count;
+	dev_dbg(udc->dev, "%s(): %p @ '%s', count %d\n", __func__, &req->req, ep->ep.name, count);
+	return 0;
 }
 
 static void usb_ctl_init(struct tmpa9xx_udc *udc)
