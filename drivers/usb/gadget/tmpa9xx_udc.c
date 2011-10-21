@@ -76,16 +76,22 @@ static const char *const ep_name[] = {
 static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 reqdadr, u16 * data_p)
 {
 	u32 read_addr;
-	volatile u32 reg_data;
+	u32 reg_data;
+
+	disable_irq(udc->udp_irq);
+
+	BUG_ON(tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ) & UDC2AB_READ_RQ);
 
 	read_addr = (reqdadr & UDC2AB_READ_ADDRESS) | UDC2AB_READ_RQ;
 	tmpa9xx_ud2ab_write(udc, UD2AB_UDC2RDREQ, read_addr);
+
 	do {
 		reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ);
 	}
 	while ((reg_data & UDC2AB_READ_RQ) == UDC2AB_READ_RQ);
-
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_UDC2REG_RD);
+
+	enable_irq(udc->udp_irq);
 
 	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDVL);
 	*data_p = (u16) (reg_data & MASK_UINT32_LOWER_16BIT);
@@ -93,7 +99,21 @@ static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 reqdadr, u16 * data
 
 static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 reqAddr, const u16 data)
 {
+	u32 reg_data;
+
+	disable_irq(udc->udp_irq);
+
+	BUG_ON(tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ) & UDC2AB_READ_RQ);
+
 	tmpa9xx_ud2ab_write(udc, reqAddr, (u32) data);
+
+	do {
+		reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ);
+	}
+	while ((reg_data & UDC2AB_READ_RQ) == UDC2AB_READ_RQ);
+	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_UDC2REG_RD);
+
+	enable_irq(udc->udp_irq);
 }
 
 static void usb_bulk_in(struct tmpa9xx_ep *ep, unsigned char *buf, int length)
@@ -176,20 +196,15 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 	dev_dbg(udc->dev, "%s(): '%s', length %d\n", __func__, ep->ep.name, length);
 
 	if (length > ep->ep.maxpacket) {
-		udelay(20);
 		/* STATUS NAK Interrupt Enable. */
 		udc2_reg_read(udc, UD2INT, &interrupt_status);
 		interrupt_status &= STATUS_NAK_E;
-		udelay(40);
 		udc2_reg_write(udc, UD2INT, interrupt_status);
-		udelay(40);
 		length = ep->ep.maxpacket;
 		req->req.actual += length;
 
 		while (length > 0) {	/* write transmit data to endpoint0's Fifo */
-			udelay(20);
 			udc2_reg_write(udc, UD2EP0_FIFO, *buf);
-			udelay(40);
 			buf++;
 			length -= WORD_SIZE;
 		}
@@ -202,10 +217,8 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 				data_p = (u8 *) (UD2EP0_FIFO + udc->udp_baseaddr);
 				*data_p = chardata;
 				length = 0;
-				udelay(50);	//never kill
 			} else {
 				udc2_reg_write(udc, UD2EP0_FIFO, *buf);
-				udelay(40);	//never kill
 				buf++;
 				length -= WORD_SIZE;
 			}
@@ -213,13 +226,9 @@ static int write_ep0_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		udc->stage = STATUS_STAGE;
 		udc2_reg_write(udc, UD2CMD, EP0_EOP);	/* process of EOP */
 		/* STATUS NAK Interrupt Disable. */
-		udelay(20);	//never kill
 		udc2_reg_read(udc, UD2INT, &interrupt_status);
 		interrupt_status |= STATUS_NAK_E;
-		udelay(20);	//never kill
 		udc2_reg_write(udc, UD2INT, interrupt_status);
-		udelay(20);
-		udelay(20);	//never kill
 		is_last = 1;
 	}
 	if (is_last)
@@ -383,7 +392,6 @@ static int read_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 			dev_dbg(udc->dev, "bulk out size=%x\n", ep->datasize);
 		} else
 			count = 0;
-		udelay(10);
 	}
 	return is_done;
 }
@@ -428,7 +436,6 @@ static int write_fifo(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
 		req->req.actual += count;
 
 		PACKET("%s(): '%s' ptr %p in/%d%s\n", __func__, ep->ep.name, &req->req, count, is_last ? " (done)" : "");
-		udelay(10);
 	} else {
 		is_last = 1;
 		dev_dbg(udc->dev, "%s(): '%s'  is_last %d\n", __func__, ep->ep.name, is_last);
@@ -548,7 +555,6 @@ static int tmpa9xx_ep_set_halt(struct usb_ep *_ep, int value)
 		udc2_reg_write(udc, UD2CMD, EP3_STALL);	/* EP3 STALL */
 	} else
 		udc2_reg_write(udc, UD2CMD, EP0_STALL);	/* EP0 STALL */
-	udelay(500);		//never kill
 
 	local_irq_restore(flags);
 	return status;
@@ -688,7 +694,6 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 	int status = 0;
 
 	status = 1;
-	udelay(10);
 	udc2_reg_read(udc, UD2BRQ, &request_reg);
 
 	pkt.r.bRequestType = (u8) (request_reg & MASK_UINT16_LOWER_8BIT);
@@ -775,27 +780,17 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 #endif
 		} else {
 			udc2_reg_write(udc, UD2CMD, All_EP_INVALID);	/*  INVALID */
-			udelay(50);
 
 			udc2_reg_write(udc, UD2EP1_MaxPacketSize, udc->ep[1].maxpacket);
-			udelay(50);
 			udc2_reg_write(udc, UD2EP1_Status, EP_DUAL_BULK_IN);
-			udelay(50);
 			udc2_reg_write(udc, UD2EP2_MaxPacketSize, udc->ep[2].maxpacket);
-			udelay(50);
 			udc2_reg_write(udc, UD2EP2_Status, EP_DUAL_BULK_OUT);
-			udelay(50);
 			udc2_reg_write(udc, UD2EP3_MaxPacketSize, udc->ep[3].maxpacket);
-			udelay(50);
 			udc2_reg_write(udc, UD2EP3_Status, 0xc08c);
-			udelay(50);
 
 			udc2_reg_write(udc, UD2CMD, EP1_RESET);	/*EP1 Reset */
-			udelay(50);
 			udc2_reg_write(udc, UD2CMD, EP2_RESET);	/*EP2 Reset */
-			udelay(50);
 			udc2_reg_write(udc, UD2CMD, EP3_RESET);	/*EP3 Reset */
-			udelay(50);
 #if 1
 
 			udc->state_bak = CONFIGURED;
@@ -1099,7 +1094,6 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 			/* FALL THROUGH */
 		}
 
-		udelay(50);
 		udc->stage = STATUS_STAGE;
 		udc2_reg_write(udc, UD2CMD, SETUP_FIN);
 #if 0
@@ -1504,19 +1498,16 @@ static void backend_irq_work(struct work_struct *work)
 		struct tmpa9xx_ep *ep2 = &udc->ep[2];
 		struct tmpa9xx_ep *ep1 = &udc->ep[1];
 		udc2_reg_write(udc, UD2INT, INT_EP_CLEAR);
-		udelay(10);
 		udc2_reg_read(udc, UD2EP1_MaxPacketSize, &reg_data);
 		if ((reg_data & UD2EP_DSET) == UD2EP_DSET) {	/*dset? */
 			dev_dbg(udc->dev, "%s(): '%s', irq\n", __func__, ep1->ep.name);
 			handle_ep(ep1);
 		}
-		udelay(10);
 		udc2_reg_read(udc, UD2EP2_MaxPacketSize, &reg_data);
 		if ((reg_data & UD2EP_DSET) == UD2EP_DSET) {	/*dset? */
 			dev_dbg(udc->dev, "%s(): '%s', irq\n", __func__, ep2->ep.name);
 			handle_ep(ep2);
 		}
-		udelay(10);
 		udc2_reg_read(udc, UD2EP3_MaxPacketSize, &reg_data);
 		if ((reg_data & UD2EP_DSET) == UD2EP_DSET) {	/*dset? */
 		dev_dbg(udc->dev, "%s(): '%s', irq\n", __func__, ep3->ep.name);
@@ -1527,14 +1518,11 @@ static void backend_irq_work(struct work_struct *work)
 	} else if ((status & INT_STATUS) == INT_STATUS) {
 		u16 status;
 		udc2_reg_write(udc, UD2INT, INT_STATUS_CLEAR);
-		udelay(100);
 		if (udc->stage == STATUS_STAGE) {
 			/* STATUS NAK Interrupt Enable. */
 			udc2_reg_read(udc, UD2INT, &status);
 			status |= INT_STATUSNAK_MASK;
-			udelay(100);
 			udc2_reg_write(udc, UD2INT, status);
-			udelay(50);
 			if (udc->wait_for_config_ack || udc->wait_for_addr_ack) {
 				udc->state = udc->state_bak;
 				udc->state |= udc->addr;
@@ -1552,9 +1540,7 @@ static void backend_irq_work(struct work_struct *work)
 			udc->stage = IDLE_STAGE;
 		}
 		} else if ((status & INT_STATUSNAK) == INT_STATUSNAK) {
-		udelay(500);	//never kill
 		udc2_reg_write(udc, UD2INT, INT_STATUSNAK_CLEAR);
-		udelay(20);
 		udc2_reg_write(udc, UD2CMD, SETUP_FIN);
 		/* endpoint IRQs are cleared by handling them */
 	}
@@ -1735,7 +1721,6 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	disable_irq(udc->udp_irq);
 	udc2_reg_write(udc, UD2CMD, All_EP_INVALID);
-	udelay(10);
 
 	dev_set_drvdata(dev, udc);
 	device_init_wakeup(dev, 1);
