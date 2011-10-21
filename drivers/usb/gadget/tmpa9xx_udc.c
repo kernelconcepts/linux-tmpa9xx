@@ -44,44 +44,39 @@ static const char *const ep_name[] = {
 #define tmpa9xx_ud2ab_write(dev, reg, val) \
 	__raw_writel((val), (dev)->udp_baseaddr + (reg))
 
-static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 reqdadr, u16 * data_p)
+static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 addr, u16 *data)
 {
-	u32 read_addr;
-	u32 reg_data;
+	u32 reg;
 
 	disable_irq(udc->udp_irq);
 
 	BUG_ON(tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ) & UDC2AB_READ_RQ);
 
-	read_addr = (reqdadr & UDC2AB_READ_ADDRESS) | UDC2AB_READ_RQ;
-	tmpa9xx_ud2ab_write(udc, UD2AB_UDC2RDREQ, read_addr);
+	tmpa9xx_ud2ab_write(udc, UD2AB_UDC2RDREQ, (addr & UDC2AB_READ_ADDRESS) | UDC2AB_READ_RQ);
 
 	do {
-		reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ);
-	}
-	while ((reg_data & UDC2AB_READ_RQ) == UDC2AB_READ_RQ);
+		reg = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ);
+	} while ((reg & UDC2AB_READ_RQ));
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_UDC2REG_RD);
 
 	enable_irq(udc->udp_irq);
 
-	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDVL);
-	*data_p = (u16) (reg_data & MASK_UINT32_LOWER_16BIT);
+	*data = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDVL);
 }
 
-static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 reqAddr, const u16 data)
+static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 addr, const u16 data)
 {
-	u32 reg_data;
+	u32 reg;
 
 	disable_irq(udc->udp_irq);
 
 	BUG_ON(tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ) & UDC2AB_READ_RQ);
 
-	tmpa9xx_ud2ab_write(udc, reqAddr, (u32) data);
+	tmpa9xx_ud2ab_write(udc, addr, data);
 
 	do {
-		reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ);
-	}
-	while ((reg_data & UDC2AB_READ_RQ) == UDC2AB_READ_RQ);
+		reg = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ);
+	} while ((reg & UDC2AB_READ_RQ));
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_UDC2REG_RD);
 
 	enable_irq(udc->udp_irq);
