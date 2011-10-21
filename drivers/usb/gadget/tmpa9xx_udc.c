@@ -1427,147 +1427,131 @@ static void stop_activity(struct tmpa9xx_udc *udc)
 	udc_reinit(udc);
 }
 
-static irqreturn_t tmpa9xx_udc_irq(int irq, void *_udc)
+static irqreturn_t tmpa9xx_udc_irq(int irq, void *priv)
 {
-	struct tmpa9xx_udc *udc = _udc;
-	u32 rescans = 1;
+	struct tmpa9xx_udc *udc = priv;
+	u32 status;
 
-	while (rescans--) {
-		u32 status;
+	status = tmpa9xx_ud2ab_read(udc, UD2AB_INTSTS);
+	if (!status)
+		return IRQ_HANDLED;
 
-		status = tmpa9xx_ud2ab_read(udc, UD2AB_INTSTS);
-		if (!status)
-			break;
-
-		/* USB reset irq:  not maskable */
-		if ((status & INT_RESET) == INT_RESET) {
-			tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_RESET);
-			dev_dbg(udc->dev, "end bus reset\n");
-			udc->addr = 0;
-			stop_activity(udc);	//GCH
-			/* enable ep0 */
+	/* USB reset irq:  not maskable */
+	if ((status & INT_RESET) == INT_RESET) {
+		tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_RESET);
+		dev_dbg(udc->dev, "end bus reset\n");
+		udc->addr = 0;
+		stop_activity(udc);	//GCH
+		/* enable ep0 */
+		udc->gadget.speed = USB_SPEED_HIGH;
+		udc->suspended = 0;
+	} else if ((status & INT_RESET_END) == INT_RESET_END) {
+		u16 state;
+		tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_RESET_END);
+		udc2_reg_read(udc, UD2ADR, &state);
+		state &= CURRENT_SPEED_CHECK;	/* Current_Speed check */
+		udc2_reg_write(udc, UD2INT, UDC2_INT_MASK);	/*INT EPx MASK & Refresh; */
+		udc->suspended = 0;
+		udc->wait_for_addr_ack = 0;
+		udc->wait_for_config_ack = 0;
+		if (state == HIGH_SPEED) {
+			dev_dbg(udc->dev, "high speed\n");
 			udc->gadget.speed = USB_SPEED_HIGH;
-			udc->suspended = 0;
-
-		} else if ((status & INT_RESET_END) == INT_RESET_END) {
-			u16 state;
-			tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_RESET_END);
-			udc2_reg_read(udc, UD2ADR, &state);
-			state &= CURRENT_SPEED_CHECK;	/* Current_Speed check */
-			udc2_reg_write(udc, UD2INT, UDC2_INT_MASK);	/*INT EPx MASK & Refresh; */
-			udc->suspended = 0;
-			udc->wait_for_addr_ack = 0;
-			udc->wait_for_config_ack = 0;
-			if (state == HIGH_SPEED) {
-				dev_dbg(udc->dev, "high speed\n");
-				udc->gadget.speed = USB_SPEED_HIGH;
-				udc->ep[1].maxpacket = EP_MAX_PACKET_SIZE_HS;
-				udc->ep[2].maxpacket = EP_MAX_PACKET_SIZE_HS;
-			} else {
-				udc->gadget.speed = USB_SPEED_FULL;
-				udc->ep[1].maxpacket = EP_MAX_PACKET_SIZE_FS;
-				udc->ep[2].maxpacket = EP_MAX_PACKET_SIZE_FS;
-			}
-			tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_RESET | UDC2AB_MW_RESET);
-			/* host initiated suspend (3+ms bus idle) */
-		} else if ((status & INT_SUSPEND) == INT_SUSPEND) {
-			u32 state;
-			tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_SUSPEND);
-			state = tmpa9xx_ud2ab_read(udc, UD2AB_PWCTL);
-		} else if ((status & INT_SETUP) == INT_SETUP) {
-			struct tmpa9xx_ep *ep0 = &udc->ep[0];
-			udc2_reg_write(udc, UD2INT, INT_SETUP_CLEAR);
-			udc->req_pending = 0;
-			handle_setup(udc, ep0, 0);
-
+			udc->ep[1].maxpacket = EP_MAX_PACKET_SIZE_HS;
+			udc->ep[2].maxpacket = EP_MAX_PACKET_SIZE_HS;
+		} else {
+			udc->gadget.speed = USB_SPEED_FULL;
+			udc->ep[1].maxpacket = EP_MAX_PACKET_SIZE_FS;
+			udc->ep[2].maxpacket = EP_MAX_PACKET_SIZE_FS;
+		}
+		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_RESET | UDC2AB_MW_RESET);
+		/* host initiated suspend (3+ms bus idle) */
+	} else if ((status & INT_SUSPEND) == INT_SUSPEND) {
+		u32 state;
+		tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_SUSPEND);
+		state = tmpa9xx_ud2ab_read(udc, UD2AB_PWCTL);
+	} else if ((status & INT_SETUP) == INT_SETUP) {
+		struct tmpa9xx_ep *ep0 = &udc->ep[0];
+		udc2_reg_write(udc, UD2INT, INT_SETUP_CLEAR);
+		udc->req_pending = 0;
+		handle_setup(udc, ep0, 0);
 		} else if ((status & INT_DATA) == INT_DATA) {
 //                      USB_Int_Rx_Zero(udc);  //GCH
-		} else if ((status & INT_EP0) == INT_EP0) {
-			handle_ep0(udc);
-		} else if ((status & INT_MW_END_ADD) == INT_MW_END_ADD) {
-			struct tmpa9xx_ep *ep = &udc->ep[2];
-			tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_MW_END_ADD);
-			udc->dma_status = DMA_READ_COMPLETE;
-			dev_dbg(udc->dev, "%s(): read complete\n", __func__);
-			handle_ep(ep);
-		} else if ((status & INT_MR_END_ADD) == INT_MR_END_ADD) {
-			struct tmpa9xx_ep *ep = &udc->ep[1];
-			tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_MR_END_ADD);
-			dev_dbg(udc->dev, "%s(): write complete\n", __func__);
-			handle_ep(ep);
-		} else if ((status & INT_EP) == INT_EP) {
-			u16 reg_data;
-			struct tmpa9xx_ep *ep3 = &udc->ep[3];
-			struct tmpa9xx_ep *ep2 = &udc->ep[2];
-			struct tmpa9xx_ep *ep1 = &udc->ep[1];
-
-			udc2_reg_write(udc, UD2INT, INT_EP_CLEAR);
-
-			udelay(10);
-			udc2_reg_read(udc, UD2EP1_MaxPacketSize, &reg_data);
-			if ((reg_data & UD2EP_DSET) == UD2EP_DSET) {	/*dset? */
-				dev_dbg(udc->dev, "%s(): '%s', irq\n", __func__, ep1->ep.name);
-				handle_ep(ep1);
-			}
-
-			udelay(10);
-			udc2_reg_read(udc, UD2EP2_MaxPacketSize, &reg_data);
-			if ((reg_data & UD2EP_DSET) == UD2EP_DSET) {	/*dset? */
-				dev_dbg(udc->dev, "%s(): '%s', irq\n", __func__, ep2->ep.name);
-				handle_ep(ep2);
-			}
-
-			udelay(10);
-			udc2_reg_read(udc, UD2EP3_MaxPacketSize, &reg_data);
-			if ((reg_data & UD2EP_DSET) == UD2EP_DSET) {	/*dset? */
-				dev_dbg(udc->dev, "%s(): '%s', irq\n", __func__, ep3->ep.name);
-				handle_ep(ep3);
-			}
-
-		} else if ((status & INT_SOF) == INT_SOF) {
-			udc2_reg_write(udc, UD2INT, INT_SOF_CLEAR);
-		} else if ((status & INT_STATUS) == INT_STATUS) {
-			u16 status;
-			udc2_reg_write(udc, UD2INT, INT_STATUS_CLEAR);
-			udelay(100);
-			if (udc->stage == STATUS_STAGE) {
-				/* STATUS NAK Interrupt Enable. */
-				udc2_reg_read(udc, UD2INT, &status);
-				status |= INT_STATUSNAK_MASK;
-				udelay(100);
-				udc2_reg_write(udc, UD2INT, status);
-				udelay(50);
-				if (udc->wait_for_config_ack || udc->wait_for_addr_ack) {
-					udc->state = udc->state_bak;
-					udc->state |= udc->addr;
-					udc2_reg_write(udc, UD2ADR, udc->state);
-					if (udc->wait_for_config_ack) {
-						udc->config = udc->config_bak;
-						udc->wait_for_config_ack = 0;
-					}
-					if (udc->wait_for_addr_ack) {
-						udc->interface = udc->interface_bak;
-						udc->wait_for_addr_ack = 0;
-					}
-				}
-				/* DO NOTHING */
-				udc->stage = IDLE_STAGE;
-			}
-
-		} else if ((status & INT_STATUSNAK) == INT_STATUSNAK) {
-			udelay(500);	//never kill
-			udc2_reg_write(udc, UD2INT, INT_STATUSNAK_CLEAR);
-			udelay(20);
-			udc2_reg_write(udc, UD2CMD, SETUP_FIN);
-
-			/* endpoint IRQs are cleared by handling them */
-		} else {
-
+	} else if ((status & INT_EP0) == INT_EP0) {
+		handle_ep0(udc);
+	} else if ((status & INT_MW_END_ADD) == INT_MW_END_ADD) {
+		struct tmpa9xx_ep *ep = &udc->ep[2];
+		tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_MW_END_ADD);
+		udc->dma_status = DMA_READ_COMPLETE;
+		dev_dbg(udc->dev, "%s(): read complete\n", __func__);
+		handle_ep(ep);
+	} else if ((status & INT_MR_END_ADD) == INT_MR_END_ADD) {
+		struct tmpa9xx_ep *ep = &udc->ep[1];
+		tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_MR_END_ADD);
+		dev_dbg(udc->dev, "%s(): write complete\n", __func__);
+		handle_ep(ep);
+	} else if ((status & INT_EP) == INT_EP) {
+		u16 reg_data;
+		struct tmpa9xx_ep *ep3 = &udc->ep[3];
+		struct tmpa9xx_ep *ep2 = &udc->ep[2];
+		struct tmpa9xx_ep *ep1 = &udc->ep[1];
+		udc2_reg_write(udc, UD2INT, INT_EP_CLEAR);
+		udelay(10);
+		udc2_reg_read(udc, UD2EP1_MaxPacketSize, &reg_data);
+		if ((reg_data & UD2EP_DSET) == UD2EP_DSET) {	/*dset? */
+			dev_dbg(udc->dev, "%s(): '%s', irq\n", __func__, ep1->ep.name);
+			handle_ep(ep1);
 		}
+		udelay(10);
+		udc2_reg_read(udc, UD2EP2_MaxPacketSize, &reg_data);
+		if ((reg_data & UD2EP_DSET) == UD2EP_DSET) {	/*dset? */
+			dev_dbg(udc->dev, "%s(): '%s', irq\n", __func__, ep2->ep.name);
+			handle_ep(ep2);
+		}
+		udelay(10);
+		udc2_reg_read(udc, UD2EP3_MaxPacketSize, &reg_data);
+		if ((reg_data & UD2EP_DSET) == UD2EP_DSET) {	/*dset? */
+		dev_dbg(udc->dev, "%s(): '%s', irq\n", __func__, ep3->ep.name);
+			handle_ep(ep3);
+		}
+	} else if ((status & INT_SOF) == INT_SOF) {
+		udc2_reg_write(udc, UD2INT, INT_SOF_CLEAR);
+	} else if ((status & INT_STATUS) == INT_STATUS) {
+		u16 status;
+		udc2_reg_write(udc, UD2INT, INT_STATUS_CLEAR);
+		udelay(100);
+		if (udc->stage == STATUS_STAGE) {
+			/* STATUS NAK Interrupt Enable. */
+			udc2_reg_read(udc, UD2INT, &status);
+			status |= INT_STATUSNAK_MASK;
+			udelay(100);
+			udc2_reg_write(udc, UD2INT, status);
+			udelay(50);
+			if (udc->wait_for_config_ack || udc->wait_for_addr_ack) {
+				udc->state = udc->state_bak;
+				udc->state |= udc->addr;
+				udc2_reg_write(udc, UD2ADR, udc->state);
+				if (udc->wait_for_config_ack) {
+					udc->config = udc->config_bak;
+					udc->wait_for_config_ack = 0;
+				}
+				if (udc->wait_for_addr_ack) {
+					udc->interface = udc->interface_bak;
+					udc->wait_for_addr_ack = 0;
+				}
+			}
+			/* DO NOTHING */
+			udc->stage = IDLE_STAGE;
+		}
+		} else if ((status & INT_STATUSNAK) == INT_STATUSNAK) {
+		udelay(500);	//never kill
+		udc2_reg_write(udc, UD2INT, INT_STATUSNAK_CLEAR);
+		udelay(20);
+		udc2_reg_write(udc, UD2CMD, SETUP_FIN);
+		/* endpoint IRQs are cleared by handling them */
 	}
 
 	return IRQ_HANDLED;
-
 }
 
 int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind) (struct usb_gadget *))
