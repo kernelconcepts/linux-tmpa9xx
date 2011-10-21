@@ -520,19 +520,19 @@ static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descr
 	maxpacket = le16_to_cpu(desc->wMaxPacketSize);
 	if (!_ep || !ep || !desc || ep->desc || _ep->name == ep_name[0]
 	    || desc->bDescriptorType != USB_DT_ENDPOINT || maxpacket == 0 || maxpacket > ep->maxpacket) {
-		dev_dbg(udc->dev, "%s(): bad ep or descriptor\n", __func__);
+		dev_err(udc->dev, "%s(): bad ep or descriptor\n", __func__);
 		return -EINVAL;
 	}
 
 	if (!udc->driver || udc->gadget.speed == USB_SPEED_UNKNOWN) {
-		dev_dbg(udc->dev, "%s(): bogus device state\n", __func__);
+		dev_err(udc->dev, "%s(): bogus device state\n", __func__);
 		return -ESHUTDOWN;
 	}
 
 	tmp = desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK;
 	switch (tmp) {
 	case USB_ENDPOINT_XFER_CONTROL:
-		dev_dbg(udc->dev, "%s(): only one control endpoint\n", __func__);
+		dev_err(udc->dev, "%s(): only one control endpoint\n", __func__);
 		return -EINVAL;
 	case USB_ENDPOINT_XFER_INT:
 		if (maxpacket > 64)
@@ -548,11 +548,11 @@ static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descr
 			goto ok;
 		}
 bogus_max:
-		dev_dbg(udc->dev, "%s(): bogus maxpacket %d\n", __func__, maxpacket);
+		dev_err(udc->dev, "%s(): bogus maxpacket %d\n", __func__, maxpacket);
 		return -EINVAL;
 	case USB_ENDPOINT_XFER_ISOC:
 		if (!ep->is_pingpong) {
-			dev_dbg(udc->dev, "%s(): iso requires double buffering\n", __func__);
+			dev_err(udc->dev, "%s(): iso requires double buffering\n", __func__);
 			return -EINVAL;
 		}
 		break;
@@ -1170,17 +1170,17 @@ static int tmpa9xx_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t 
 	udc = ep->udc;
 
 	if (!_req || !_req->complete || !_req->buf || !list_empty(&req->queue)) {
-		dev_dbg(udc->dev, "%s(): invalid request\n", __func__);
+		dev_err(udc->dev, "%s(): invalid request\n", __func__);
 		return -EINVAL;
 	}
 
 	if (!ep->desc && ep->ep.name != ep_name[0]) {
-		dev_dbg(udc->dev, "%s(): invalid ep\n", __func__);
+		dev_err(udc->dev, "%s(): invalid ep\n", __func__);
 		return -EINVAL;
 	}
 
 	if (!udc->driver || udc->gadget.speed == USB_SPEED_UNKNOWN) {
-		dev_dbg(udc->dev, "%s(): invalid device\n", __func__);
+		dev_err(udc->dev, "%s(): invalid device\n", __func__);
 		return -EINVAL;
 	}
 
@@ -1509,12 +1509,12 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind) (struc
 	dev_dbg(udc->dev, "%s(): usb_gadget_register_driver\n", __func__);
 
 	if (!driver || driver->speed < USB_SPEED_FULL || !bind || !driver->setup) {
-		dev_dbg(udc->dev, "bad parameter.\n");
+		dev_err(udc->dev, "bad parameter.\n");
 		return -EINVAL;
 	}
 
 	if (udc->driver) {
-		dev_dbg(udc->dev, "%s(): UDC already has a gadget driver\n", __func__);
+		dev_err(udc->dev, "%s(): UDC already has a gadget driver\n", __func__);
 		return -EBUSY;
 	}
 
@@ -1590,13 +1590,13 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	struct resource *res;
 
 	if (pdev->num_resources != 2) {
-		dev_dbg(&pdev->dev, "invalid num_resources");
+		dev_err(&pdev->dev, "invalid num_resources");
 		return -ENODEV;
 	}
 
 	if ((pdev->resource[0].flags != IORESOURCE_MEM)
 	    || (pdev->resource[1].flags != IORESOURCE_IRQ)) {
-		dev_dbg(&pdev->dev, "invalid resource type");
+		dev_err(&pdev->dev, "invalid resource type");
 		return -ENODEV;
 	}
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -1604,7 +1604,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 		return -ENXIO;
 
 	if (!request_mem_region(res->start, res->end - res->start + 1, driver_name)) {
-		dev_dbg(&pdev->dev, "someone's using UDC memory\n");
+		dev_err(&pdev->dev, "someone's using UDC memory\n");
 		return -EBUSY;
 	}
 
