@@ -1430,11 +1430,19 @@ static void stop_activity(struct tmpa9xx_udc *udc)
 static irqreturn_t tmpa9xx_udc_irq(int irq, void *priv)
 {
 	struct tmpa9xx_udc *udc = priv;
+	disable_irq_nosync(udc->udp_irq);
+	queue_work(udc->wqs, &udc->ws);
+	return IRQ_HANDLED;
+}
+
+static void backend_irq_work(struct work_struct *work)
+{
+	struct tmpa9xx_udc *udc = container_of(work, struct tmpa9xx_udc, ws);
 	u32 status;
 
 	status = tmpa9xx_ud2ab_read(udc, UD2AB_INTSTS);
 	if (!status)
-		return IRQ_HANDLED;
+		goto out;
 
 	/* USB reset irq:  not maskable */
 	if ((status & INT_RESET) == INT_RESET) {
@@ -1551,7 +1559,8 @@ static irqreturn_t tmpa9xx_udc_irq(int irq, void *priv)
 		/* endpoint IRQs are cleared by handling them */
 	}
 
-	return IRQ_HANDLED;
+out:
+	enable_irq(udc->udp_irq);
 }
 
 int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind) (struct usb_gadget *))
@@ -1665,6 +1674,15 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	/* init software state */
 	udc = &controller;
+
+	udc->wqs = create_workqueue("tmpa9xx-udc-wq");
+	if (!udc->wqs) {
+		dev_err(udc->dev, "create_workqueue() failed\n");
+		/* ah, fixme error handling */
+		return -EBUSY;
+	}
+
+	INIT_WORK(&udc->ws, backend_irq_work);
 
 	udc->clk = clk_get(&pdev->dev, NULL);
 	if (IS_ERR(udc->clk)) {

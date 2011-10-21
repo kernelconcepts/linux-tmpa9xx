@@ -318,6 +318,8 @@ struct tmpa9xx_udc {
 	unsigned int 			phy_buf;
 	unsigned char 			dma_status;
 	struct clk 			*clk;
+	struct work_struct 		ws;
+	struct workqueue_struct 	*wqs;
 };
 
 static inline struct tmpa9xx_udc *to_udc(struct usb_gadget *g)
