@@ -92,6 +92,8 @@ static void usb_bulk_in(struct tmpa9xx_ep *ep, unsigned char *buf, int length)
 
 	BUG_ON((reg & INT_MR_AHBERR));
 
+	udc->dma_ep = ep;
+
 	memcpy(udc->buf, buf, length);
 	tmpa9xx_ud2ab_write(udc, UD2AB_MRSADR, udc->phy_buf);
 	tmpa9xx_ud2ab_write(udc, UD2AB_MREADR, (udc->phy_buf + length - 1));
@@ -1401,10 +1403,9 @@ static void backend_irq_work(struct work_struct *work)
 		dev_dbg(udc->dev, "%s(): read complete\n", __func__);
 		handle_ep(ep);
 	} else if ((status & INT_MR_END_ADD) == INT_MR_END_ADD) {
-		struct tmpa9xx_ep *ep = &udc->ep[1];
 		tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_MR_END_ADD);
 		dev_dbg(udc->dev, "%s(): write complete\n", __func__);
-		handle_ep(ep);
+		handle_ep(udc->dma_ep);
 	} else if ((status & INT_EP) == INT_EP) {
 		u16 reg_data;
 		struct tmpa9xx_ep *ep3 = &udc->ep[3];

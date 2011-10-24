@@ -317,6 +317,7 @@ struct tmpa9xx_udc {
     	unsigned char		 	*buf;
 	unsigned int 			phy_buf;
 	unsigned char 			dma_status;
+	struct tmpa9xx_ep		*dma_ep;
 	struct clk 			*clk;
 	struct work_struct 		ws;
 	struct workqueue_struct 	*wqs;
