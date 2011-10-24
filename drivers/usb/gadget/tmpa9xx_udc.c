@@ -598,12 +598,10 @@ again:
 static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr)
 {
 	u16 request_reg;
-	u32 tmp;
 	union setup pkt;
 	u8 index;
 	int status = 0;
 
-	status = 1;
 	udc2_reg_read(udc, UD2BRQ, &request_reg);
 
 	pkt.r.bRequestType = (u8) (request_reg & MASK_UINT16_LOWER_8BIT);
@@ -682,10 +680,8 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 		}
 
 		if (index == 0) {	/* Config 0 */
-#if 1
 			udc->config_bak = index;
 			udc->state_bak = ADDRESSED;
-#endif
 		} else {
 			udc2_reg_write(udc, UD2CMD, All_EP_INVALID);	/*  INVALID */
 
@@ -699,12 +695,10 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 			udc2_reg_write(udc, UD2CMD, EP1_RESET);	/*EP1 Reset */
 			udc2_reg_write(udc, UD2CMD, EP2_RESET);	/*EP2 Reset */
 			udc2_reg_write(udc, UD2CMD, EP3_RESET);	/*EP3 Reset */
-#if 1
 
 			udc->state_bak = CONFIGURED;
 			udc->config_bak = index;
 			udc->wait_for_config_ack = 1;
-#endif
 		}
 
 		udc->stage = STATUS_STAGE;
@@ -714,296 +708,6 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 		 * Hosts may set or clear remote wakeup status, and
 		 * devices may report they're VBUS powered.
 		 */
-	case ((USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_GET_STATUS:
-
-		dev_dbg(udc->dev, "%s(): '%s', (USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_GET_STATUS\n", __func__, ep->ep.name);
-
-#if 0
-		switch (g_Current_State & CURRENT_STATUS_CHECK) {
-		case DEFAULT:
-			goto stall;
-			/* FALL THROUGH */
-		case ADDRESSED:
-			break;
-		case CONFIGURED:
-			break;
-		default:
-			goto stall;
-			/* FALL THROUGH */
-		}
-#endif
-		request_reg = (udc->selfpowered << USB_DEVICE_SELF_POWERED);
-		PACKET("get device status\n");
-
-		udc2_reg_write(udc, UD2EP0_FIFO, request_reg);
-		goto write_in;
-
-		/* then STATUS starts later, automatically */
-
-	case ((USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_SET_FEATURE:
-
-		dev_dbg(udc->dev, "%s(): '%s', (USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_SET_FEATURE\n", __func__, ep->ep.name);
-
-		if (w_value != USB_DEVICE_REMOTE_WAKEUP)
-			goto stall;
-#if 0
-		switch (g_Current_State & CURRENT_STATUS_CHECK) {
-		case DEFAULT:
-			goto stall;
-			/* FALL THROUGH */
-		case ADDRESSED:
-			goto stall;
-			/* FALL THROUGH */
-		case CONFIGURED:
-			break;
-		default:
-			/* DO NOTHING */
-			break;
-		}
-#endif
-		udc->stage = STATUS_STAGE;
-		goto succeed;
-	case ((USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_CLEAR_FEATURE:
-
-		dev_dbg(udc->dev, "%s(): '%s', (USB_TYPE_STANDARD | USB_RECIP_DEVICE) << 8) | USB_REQ_CLEAR_FEATURE\n", __func__, ep->ep.name);
-
-		if (w_value != USB_DEVICE_REMOTE_WAKEUP)
-			goto stall;
-#if 0
-		index = (UCHAR_t) (w_index & INDEX_CHECK);
-		switch (g_Current_State & CURRENT_STATUS_CHECK) {
-		case DEFAULT:
-			goto stall;
-			/* FALL THROUGH */
-		case ADDRESSED:
-			goto stall;
-			/* FALL THROUGH */
-		case CONFIGURED:
-			break;
-		default:
-			/* DO NOTHING */
-			break;
-		}
-#endif
-		udc->stage = STATUS_STAGE;
-		udc2_reg_write(udc, UD2CMD, SETUP_FIN);
-		goto succeed;
-
-		/*
-		 * Interfaces have no feature settings; this is pretty useless.
-		 * we won't even insist the interface exists...
-		 */
-	case ((USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_INTERFACE) << 8) | USB_REQ_GET_STATUS:
-
-		dev_dbg(udc->dev, "%s(): '%s', (USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_INTERFACE) << 8) | USB_REQ_GET_STATUS\n", __func__, ep->ep.name);
-
-		switch (udc->state & CURRENT_STATUS_CHECK) {
-		case DEFAULT:
-		case CONFIGURED:
-			break;
-		case ADDRESSED:
-			goto stall;
-			/* FALL THROUGH */
-		default:
-			goto stall;
-			/* FALL THROUGH */
-		}
-
-		index = (u8) (w_index & INDEX_CHECK);
-
-		if (index > NUM_CONFIG1_INTERFACE) {
-			goto stall;
-		}
-		/* DO NOTHING */
-
-		udc2_reg_write(udc, UD2EP0_FIFO, 0);
-
-		udc->stage = STATUS_STAGE;
-		udc2_reg_write(udc, UD2CMD, EP0_EOP);	/* process of EOP */
-		PACKET("get interface status\n");
-
-		goto write_in;
-		/* then STATUS starts later, automatically */
-	case ((USB_TYPE_STANDARD | USB_RECIP_INTERFACE) << 8) | USB_REQ_SET_FEATURE:
-		dev_dbg(udc->dev, "%s(): '%s', (USB_TYPE_STANDARD | USB_RECIP_INTERFACE) << 8) | USB_REQ_SET_FEATURE\n", __func__, ep->ep.name);
-		goto stall;
-	case ((USB_TYPE_STANDARD | USB_RECIP_INTERFACE) << 8) | USB_REQ_CLEAR_FEATURE:
-		dev_dbg(udc->dev, "%s(): '%s', (USB_TYPE_STANDARD | USB_RECIP_INTERFACE) << 8) | USB_REQ_CLEAR_FEATURE\n", __func__, ep->ep.name);
-		goto stall;
-
-		/*
-		 * Hosts may clear bulk/intr endpoint halt after the gadget
-		 * driver sets it (not widely used); or set it (for testing)
-		 */
-	case ((USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_ENDPOINT) << 8) | USB_REQ_GET_STATUS:
-
-		dev_dbg(udc->dev, "%s(): '%s', (USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_ENDPOINT) << 8) | USB_REQ_GET_STATUS\n", __func__, ep->ep.name);
-#if 0
-		switch (g_Current_State & CURRENT_STATUS_CHECK) {
-		case DEFAULT:
-			goto stall;
-			/* FALL THROUGH */
-		case ADDRESSED:
-			if (index == EP0) {
-				break;
-			} else {
-				goto stall;
-			}
-			/* FALL THROUGH */
-		case CONFIGURED:
-			break;
-		default:
-			goto stall;
-			/* FALL THROUGH */
-		}
-#endif
-#if 0
-		index = (UCHAR_t) (g_wIndex & INDEX_CHECK);
-		if (((g_Current_Config == 0) && (index > 0)) || ((g_Current_Config == 1) && (index > NUM_TOTAL_ENDPOINTS))) {
-			return FALSE;
-		} else {
-			if (ST_Feature > 0) {
-				udc2_reg_write(udc, UD2EP0_FIFO, STALL_FEATURE);	//GCH
-			} else {
-				udc2_reg_write(udc, UD2EP0_FIFO, 0);
-			}
-		}
-#endif
-		tmp = w_index & USB_ENDPOINT_NUMBER_MASK;
-		ep = &udc->ep[tmp];
-		if (tmp > NUM_ENDPOINTS || (tmp && !ep->desc))
-			goto stall;
-
-		if (tmp) {
-			if ((w_index & USB_DIR_IN)) {
-				if (!ep->is_in)
-					goto stall;
-			} else if (ep->is_in)
-				goto stall;
-		}
-		PACKET("get %s status\n", ep->ep.name);
-
-		goto write_in;
-		/* then STATUS starts later, automatically */
-	case ((USB_TYPE_STANDARD | USB_RECIP_ENDPOINT) << 8) | USB_REQ_SET_FEATURE:
-
-		dev_dbg(udc->dev, "%s(): '%s', (USB_TYPE_STANDARD | USB_RECIP_ENDPOINT) << 8) | USB_REQ_SET_FEATURE\n", __func__, ep->ep.name);
-
-		tmp = w_index & USB_ENDPOINT_NUMBER_MASK;
-		ep = &udc->ep[tmp];
-		if (w_value != USB_ENDPOINT_HALT || tmp > NUM_ENDPOINTS)
-			goto stall;
-		if (!ep->desc || ep->is_iso)
-			goto stall;
-		if ((w_index & USB_DIR_IN)) {
-			if (!ep->is_in)
-				goto stall;
-		} else if (ep->is_in)
-			goto stall;
-#if 0
-		switch (g_Current_State & CURRENT_STATUS_CHECK) {
-		case DEFAULT:
-			goto stall;
-			/* FALL THROUGH */
-		case ADDRESSED:
-			if (index != EP0) {
-				goto stall;
-			}
-			/* DO NOTHING */
-			/* FALL THROUGH */
-		case CONFIGURED:
-			break;
-		default:
-			/* DO NOTHING */
-			break;
-		}
-
-		if ((g_Current_Config == 1) && (w_index > NUM_TOTAL_ENDPOINTS)) {
-			goto stall;
-		}
-
-		/* DO NOTHING */
-
-		if ((w_value != 0) || (w_index >= NUM_BREQRUEST_MAX)) {
-			goto stall;
-		} else {
-			switch (w_index) {
-			case EP0:
-				fEP0_Stall_Feature = FLAG_ON;
-				break;
-			case EP1:
-				fEP1_Stall_Feature = FLAG_ON;
-				udc2_reg_write(udc, UD2CMD, EP1_STALL);
-				break;
-			case EP2:
-				fEP2_Stall_Feature = FLAG_ON;
-				udc2_reg_write(udc, UD2CMD, EP2_STALL);
-				break;
-			default:
-				goto stall;
-				/* FALL THROUGH */
-			}
-		}
-#endif
-		if (ep->is_in)
-			udc2_reg_write(udc, UD2CMD, EP1_STALL);
-		else {
-			udc2_reg_write(udc, UD2CMD, EP2_STALL);
-		}
-
-		goto succeed;
-
-	case ((USB_TYPE_STANDARD | USB_RECIP_ENDPOINT) << 8) | USB_REQ_CLEAR_FEATURE:
-
-		dev_dbg(udc->dev, "%s(): '%s', (USB_TYPE_STANDARD | USB_RECIP_ENDPOINT) << 8) | USB_REQ_CLEAR_FEATURE\n", __func__, ep->ep.name);
-
-		tmp = w_index & USB_ENDPOINT_NUMBER_MASK;
-		ep = &udc->ep[tmp];
-		if (w_value != USB_ENDPOINT_HALT || tmp > NUM_ENDPOINTS)
-			goto stall;
-		if (tmp == 0)
-			goto succeed;
-		if (!ep->desc || ep->is_iso)
-			goto stall;
-		if ((w_index & USB_DIR_IN)) {
-			if (!ep->is_in)
-				goto stall;
-		} else if (ep->is_in)
-			goto stall;
-#if 0
-		switch (g_Current_State & CURRENT_STATUS_CHECK) {
-		case DEFAULT:
-			goto stall;
-			/* FALL THROUGH */
-		case ADDRESSED:
-			if (w_index != EP0) {
-				goto stall;
-			}
-			/* DO NOTHING */
-			break;
-		case CONFIGURED:
-			break;
-		default:
-			/* DO NOTHING */
-			break;
-		}
-
-		if ((g_Current_Config == 1) && (w_index > NUM_TOTAL_ENDPOINTS)) {
-			goto stall;
-		}
-#endif
-		dev_dbg(udc->dev, "%s(): w_value=%x,%x\n", __func__, w_value, index);
-		/* DO NOTHING */
-		if (ep->is_in)
-			udc2_reg_write(udc, UD2CMD, EP1_RESET);
-		else {
-			udc2_reg_write(udc, UD2CMD, EP2_RESET);
-			/* FALL THROUGH */
-		}
-
-		udc->stage = STATUS_STAGE;
-		udc2_reg_write(udc, UD2CMD, SETUP_FIN);
-		goto succeed;
 	default:
 		dev_dbg(udc->dev, "%s(): '%s', request unhandled by udc driver\n", __func__, ep->ep.name);
 		break;
@@ -1028,14 +732,6 @@ stall:
 	}
 
 	return;
-
-succeed:
-	/* immediate successful (IN) STATUS after zero length DATA */
-	PACKET("ep0 in/status\n");
-write_in:
-
-	udc->req_pending = 0;
-
 }
 
 static void handle_ep0(struct tmpa9xx_udc *udc)
