@@ -273,7 +273,6 @@ struct tmpa9xx_ep {
 	struct usb_ep			ep;
 	struct list_head		queue;
 	struct tmpa9xx_udc		*udc;
-	void __iomem			*creg;
 
 	unsigned			maxpacket:16;
 	u8				int_mask;

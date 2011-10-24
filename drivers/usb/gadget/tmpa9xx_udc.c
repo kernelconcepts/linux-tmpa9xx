@@ -1003,16 +1003,6 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 
 		udc->stage = STATUS_STAGE;
 		udc2_reg_write(udc, UD2CMD, SETUP_FIN);
-#if 0
-		at91_udp_write(udc, AT91_UDP_RST_EP, ep->int_mask);
-		at91_udp_write(udc, AT91_UDP_RST_EP, 0);
-		tmp = __raw_readl(ep->creg);
-		tmp |= CLR_FX;
-		tmp &= ~(SET_FX | AT91_UDP_FORCESTALL);
-		__raw_writel(tmp, ep->creg);
-		if (!list_empty(&ep->queue))	//GCH
-			handle_ep(ep);
-#endif
 		goto succeed;
 	default:
 		dev_dbg(udc->dev, "%s(): '%s', request unhandled by udc driver\n", __func__, ep->ep.name);
