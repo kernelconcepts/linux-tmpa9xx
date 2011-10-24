@@ -305,9 +305,7 @@ struct tmpa9xx_udc {
 	unsigned			active_suspend:1;
 	unsigned char			addr;
 	unsigned char			config_bak;
-	unsigned char			interface_bak;
 	unsigned char			config;
-	unsigned char			interface;
 	unsigned int			state_bak;
 	unsigned int			state;
 	unsigned char			stage;

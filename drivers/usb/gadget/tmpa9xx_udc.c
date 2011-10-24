@@ -375,9 +375,7 @@ static void usb_ctl_init(struct tmpa9xx_udc *udc)
 	/* standdard Class initialize    */
 	udc->state = DEFAULT;
 	udc->config = USB_INIT;
-	udc->interface = USB_INIT;
 	udc->config_bak = USB_INIT;
-	udc->interface_bak = USB_INIT;
 	udc->stage = IDLE_STAGE;
 
 	reg_data = tmpa9xx_ud2ab_read(udc, UD2AB_PWCTL);
@@ -687,8 +685,6 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 #if 1
 			udc->config_bak = index;
 			udc->state_bak = ADDRESSED;
-			udc->interface_bak = 0;
-
 #endif
 		} else {
 			udc2_reg_write(udc, UD2CMD, All_EP_INVALID);	/*  INVALID */
@@ -707,7 +703,6 @@ static void handle_setup(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, u32 csr
 
 			udc->state_bak = CONFIGURED;
 			udc->config_bak = index;
-			udc->interface_bak = 0;
 			udc->wait_for_config_ack = 1;
 #endif
 		}
@@ -1446,7 +1441,6 @@ static void backend_irq_work(struct work_struct *work)
 					udc->wait_for_config_ack = 0;
 				}
 				if (udc->wait_for_addr_ack) {
-					udc->interface = udc->interface_bak;
 					udc->wait_for_addr_ack = 0;
 				}
 			}
