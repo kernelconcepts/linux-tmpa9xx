@@ -310,7 +310,6 @@ struct tmpa9xx_udc {
 	unsigned char			stage;
 	void __iomem			*udp_baseaddr;
 	int				udp_irq;
-        struct completion  		dma_completion;
     	unsigned char		 	*buf;
 	unsigned int 			phy_buf;
 	unsigned char 			dma_status;
