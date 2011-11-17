@@ -55,11 +55,9 @@ struct tmpa9xx_ts_priv
 	bool is_suspended;
 
 	/* post processing */
-	int init;
+	int down;
 	int x;
 	int y;
-	int down;
-	int oob;
 };
 
 static inline void ts_clear_interrupt(struct tmpa9xx_ts_priv *t)
@@ -81,86 +79,52 @@ static inline void ts_disable_interrupt(struct tmpa9xx_ts_priv *t)
 
 static void measure_init(struct tmpa9xx_ts_priv *t)
 {
-	t->init = 0;
 	t->down = 0;
-	t->oob = 0;
 }
 
 static void measure_put(struct tmpa9xx_ts_priv *t, int x, int y)
 {
-	if (t->init == 0) {
-		dev_dbg(t->dev, "x %3d, y %3d, drop 1st\n", x, y);
-		t->x = x;
-		t->y = y;
-		t->init++;
-		return;
-	}
+	/* here is the place to put any post processing,
+	if you think this is necessary */
 
-	if (t->init == 1) {
-		dev_dbg(t->dev, "x %3d, y %3d, drop 2nd\n", x, y);
-		t->x = x;
-		t->y = y;
-		t->init++;
-		return;
-	}
-
-	if (t->init == 2) {
-		dev_dbg(t->dev, "x %3d, y %3d, store value\n", x, y);
-		t->x = x;
-		t->y = y;
-		t->oob = 0;
-		t->init++;
-		return;
-	}
-
-#define THRESHOLD 50
-	if (abs(t->x-x) > THRESHOLD || abs(t->y-y) > THRESHOLD) {
-		if (t->oob >= 2) {
-			dev_dbg(t->dev, "x %3d, y %3d, too many out of bounds\n", x, y);
-			t->init = 2;
-			return;
-		} else {
-			dev_dbg(t->dev, "x %3d, y %3d, out of bounds\n", x, y);
-			t->oob++;
-			return;
-		}
-	}
-	t->oob = 0;
-
+	/* always drop first sample */
 	if (!t->down) {
+		t->down++;
+		dev_dbg(t->dev, "x %3d, y %3d (dropping 1st)\n", x, y);
+		return;
+	}
+
+	if (t->down == 1) {
+		t->x = x;
+		t->y = y;
+		t->down++;
+		dev_dbg(t->dev, "x %3d, y %3d (storing 2nd)\n", x, y);
+		return;
+	}
+
+	if (t->down == 2) {
 		input_report_key(t->input_dev, BTN_TOUCH, 1);
 		input_report_abs(t->input_dev, ABS_PRESSURE, 1);
-		t->down = 1;
+		t->down++;
 	}
+
 	input_report_abs(t->input_dev, ABS_X, t->x);
 	input_report_abs(t->input_dev, ABS_Y, t->y);
 	input_sync(t->input_dev);
 
-	dev_dbg(t->dev, "x %3d, y %3d, next\n", x, y);
-
 	t->x = x;
 	t->y = y;
+
+	dev_dbg(t->dev, "x %3d, y %3d (storing)\n", x, y);
 }
 
 static void measure_exit(struct tmpa9xx_ts_priv *t)
 {
-	/* if there were just one or two values measured, report it */
-	if (t->init >= 0 && t->init <= 1) {
-		dev_dbg(t->dev, "just one/two values, reporting\n");
-		input_report_key(t->input_dev, BTN_TOUCH, 1);
-		input_report_abs(t->input_dev, ABS_PRESSURE, 1);
-		input_report_abs(t->input_dev, ABS_X, t->x);
-		input_report_abs(t->input_dev, ABS_Y, t->y);
-		input_sync(t->input_dev);
-		t->down = 1;
-	}
-
 	if (t->down) {
 		input_report_key(t->input_dev, BTN_TOUCH, 0);
 		input_report_abs(t->input_dev, ABS_PRESSURE, 0);
 		input_sync(t->input_dev);
 	}
-	dev_dbg(t->dev, "finished this turn\n");
 }
 
 static void backend_irq_work(struct work_struct *work)
@@ -173,34 +137,37 @@ static void backend_irq_work(struct work_struct *work)
 	measure_init(t);
 
 	while(1) {
-
+		/* check if touch condition is still present */
 		ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST;
 		if (!ret)
 			break;
 
-		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_INGE | TS_CR0_PXEN | TS_CR0_MXEN);
-		udelay(25);
-		x = tmpa9xx_adc_read(5, 0);
-#if 0
-	        GPIOLDATA = 1;
-#endif
-		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_INGE | TS_CR0_PYEN | TS_CR0_MYEN);
-		udelay(25);
+		/* we omit setting TS_CR0_TSI7 even though that is against
+		what the datasheet suggests, because it improves detection
+		accuracy on larger touch panels */
+		ts_writel(t, TSI_CR0, TS_CR0_INGE | TS_CR0_PYEN | TS_CR0_MYEN);
+		mdelay(1);
 		y = tmpa9xx_adc_read(4, 0);
 
-#if 0
-	        GPIOLDATA = 0;
-#endif
-		measure_put(t, x, y);
+		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_INGE | TS_CR0_PXEN | TS_CR0_MXEN);
+		mdelay(1);
+		x = tmpa9xx_adc_read(5, 0);
 
-		/* make sure to wait approx. 1ms between setting TSI_CR0 
-		and checking the touch condition at the beginning of loop */
-
+		/* make sure to wait approx. 2ms between setting TSI_CR0 
+		and checking the touch condition again */
 		ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_PYEN);
+		mdelay(2);
+
+		/* check for touch condition again to see if that sample
+		needs to be dropped or not */
+		ret = ts_readl(t, TSI_CR0) & TS_CR0_PTST;
+		if (!ret)
+			break;
+
+		measure_put(t, x, y);
 
 		/* this delay does not depend on the panel. it should be small
 		enough to give good responsiveness withouth hogging the cpu */
-
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		schedule_timeout(1);
 	}
@@ -315,13 +282,6 @@ static int __devinit tmpa9xx_ts_probe(struct platform_device *pdev)
 	input_sync(t->input_dev);
 
 	dev_set_drvdata(t->dev, t);
-
-#if 0
-        GPIOLFR1 = 0x0;
-        GPIOLFR2 = 0x0;
-        GPIOLDATA = 0x0;
-        GPIOLDIR = 0x1;
-#endif
 
 	/* setup ts controller */
 	ts_writel(t, TSI_CR0, TS_CR0_TSI7 | TS_CR0_PYEN | TS_CR0_TWIEN);
