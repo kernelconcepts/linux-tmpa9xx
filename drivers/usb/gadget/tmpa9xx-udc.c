@@ -914,7 +914,13 @@ static int udc_set_config(struct tmpa9xx_udc *udc, int configuration_value)
 
 static int udc_get_status(struct tmpa9xx_udc *udc, int index)
 {
+	uint16_t buf[1] = { 0 };
+
 	dev_dbg(udc->dev, "%s(): index %d", __func__, index);
+
+	/* fixme: return something meanigful as status here */
+
+	__write_ep0_fifo(udc, &buf[0], sizeof(buf));
 
 	return 0;
 }
@@ -1149,7 +1155,11 @@ static void int_ep0(struct tmpa9xx_udc *udc)
 
 	req = ep->cur;
 
-	BUG_ON(!req);
+	if (!req) {
+		dev_dbg(udc->dev, "%s(): manual setup handling. done\n", __func__);
+		udc2_reg_write(udc, UD2CMD, EP_SETUP_FIN);
+		goto out;
+	}
 
 	length = req->req.length - req->req.actual;
 
