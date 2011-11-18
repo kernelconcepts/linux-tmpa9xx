@@ -1161,11 +1161,10 @@ static void int_ep0(struct tmpa9xx_udc *udc)
 		}
 
 		done(ep, req, 0);
-		ep->cur = 0;
-
+		ep->cur = NULL;
 		udc2_reg_write(udc, UD2CMD, EP_SETUP_FIN);
-
 		dev_dbg(udc->dev, "%s(): finished control msg, req %p\n", __func__, req);
+
 		goto out;
 	}
 
@@ -1176,9 +1175,10 @@ static void int_ep0(struct tmpa9xx_udc *udc)
 
 	ret = read_ep0_fifo(udc, req);
 	if (ret) {
-		dev_dbg(udc->dev, "%s(): received control msg, req %p\n", __func__, req);
 		done(ep, req, 0);
 		ep->cur = NULL;
+		udc2_reg_write(udc, UD2CMD, EP_SETUP_FIN);
+		dev_dbg(udc->dev, "%s(): received control msg, req %p\n", __func__, req);
 	}
 
 out:
