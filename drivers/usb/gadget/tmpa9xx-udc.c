@@ -125,15 +125,43 @@ static void tmpa9xx_ep_free_request(struct usb_ep *_ep, struct usb_request *_req
 	dev_dbg(udc->dev, "%s(): %p\n", __func__, _req);
 }
 
-/* to be implemented */
+static int ep_set_halt(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep)
+{
+	u16 cmd = EP_STALL;
+
+	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
+
+	if (ep->ep.name == ep_name[0])
+		cmd |= EP0;
+	else if (ep->ep.name == ep_name[1])
+		cmd |= EP1;
+	else if (ep->ep.name == ep_name[2])
+		cmd |= EP2;
+	else {
+		BUG_ON(ep->ep.name == ep_name[3]);
+		cmd |= EP3;
+	}
+
+	ep->is_halted = 1;
+
+	/* we cannot really halt any ep here, because we would have to make
+	sure that any dma has finished. this is not possible, because we are
+	handling this request in the workqueue and any dma end handling is done
+	in the workqueue as well. we cannot leave here, wait for the dma to finish
+	and than come back. */
+#if 0
+	udc2_reg_write(udc, UD2CMD, cmd);
+#endif
+
+	return 0;
+}
+
 static int tmpa9xx_ep_set_halt(struct usb_ep *_ep, int value)
 {
 	struct tmpa9xx_ep *ep = container_of(_ep, struct tmpa9xx_ep, ep);
 	struct tmpa9xx_udc *udc = ep->udc;
 
-	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
-
-	return 0;
+	return ep_set_halt(udc, ep);
 }
 
 static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descriptor *desc)
@@ -208,6 +236,7 @@ static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descr
 	/* initialize endpoint to match this descriptor */
 	ep->is_in = (desc->bEndpointAddress & USB_DIR_IN) != 0;
 	ep->is_iso = (tmp == USB_ENDPOINT_XFER_ISOC);
+	ep->is_halted = 0;
 	ep->desc = desc;
 	ep->ep.maxpacket = maxpacket;
 	ep->stopped = 0;
@@ -884,15 +913,68 @@ static int udc_set_address(struct tmpa9xx_udc *udc, int addr)
 	return 0;
 }
 
-static int udc_clear_feature(struct tmpa9xx_udc *udc, int val)
+static void finish_ep0_no_data_stage(struct tmpa9xx_udc *udc)
 {
 	struct tmpa9xx_ep *ep = &udc->ep[0];
-
-	dev_dbg(udc->dev, "%s(): val 0x%04x", __func__, val);
 
 	ep->ackwait = 1;
 	udc2_reg_write(udc, UD2CMD, EP_SETUP_FIN);
 	udc->ignore_status_ack = 0;
+}
+
+static int udc_set_feature(struct tmpa9xx_udc *udc, int type, int feature, int index)
+{
+	dev_err(udc->dev, "%s(): type %d, feature %d, index %d\n", __func__, type, feature, index);
+
+	/* fixme: we only handle endpoints atm */
+	BUG_ON(type != 0x2);
+
+	/* fixme: we only handle feature endpoint halt atm */
+	BUG_ON(feature != 0x0);
+
+	/* fixme: we only handle stalling ep != 0 atm */
+	BUG_ON(index == 0);
+
+	ep_set_halt(udc, &udc->ep[index]);
+
+	finish_ep0_no_data_stage(udc);
+
+	return 0;
+}
+
+static int udc_clear_feature(struct tmpa9xx_udc *udc, int type, int feature, int index)
+{
+	struct tmpa9xx_ep *ep;
+
+	dev_err(udc->dev, "%s(): type %d, feature %d, index %d\n", __func__, type, feature, index);
+
+	/* fixme: we only handle endpoints atm */
+	BUG_ON(type != 0x2);
+
+	/* fixme: we only handle feature endpoint halt atm */
+	BUG_ON(feature != 0x0);
+
+	/* fixme: we only handle clearing halt @ ep != 0 atm */
+	BUG_ON(index == 0);
+
+#if 0
+	ep = &udc->ep[index];
+
+	if (ep->ep.name == ep_name[0]) {
+		/* no reset command necessary */
+	} else if (ep->ep.name == ep_name[1])
+		udc2_reg_write(udc, UD2CMD, EP1 | EP_RESET);
+	else if (ep->ep.name == ep_name[2])
+		udc2_reg_write(udc, UD2CMD, EP2 | EP_RESET);
+	else {
+		BUG_ON(ep->ep.name == ep_name[3]);
+		udc2_reg_write(udc, UD2CMD, EP3 | EP_RESET);
+	}
+#endif
+	ep->is_halted = 0;
+
+	finish_ep0_no_data_stage(udc);
+
 	return 0;
 }
 
@@ -912,15 +994,27 @@ static int udc_set_config(struct tmpa9xx_udc *udc, int configuration_value)
 	return 0;
 }
 
-static int udc_get_status(struct tmpa9xx_udc *udc, int index)
+static int udc_get_status(struct tmpa9xx_udc *udc, int type, int index)
 {
-	uint16_t buf[1] = { 0 };
+	uint16_t status;
 
-	dev_dbg(udc->dev, "%s(): index %d", __func__, index);
+	BUG_ON(index < 0 || index > 2);
 
-	/* fixme: return something meanigful as status here */
+	if (!type) {
+		/* device status */
+		status = 0;
+		dev_dbg(udc->dev, "%s(): device status 0x%04x", __func__, status);
+	} else if (type == 2) {
+		struct tmpa9xx_ep *ep = &udc->ep[index];
+		status = !!ep->is_halted;
+		dev_dbg(udc->dev, "%s(): endpoint %d status 0x%04x", __func__,index, status);
+	} else {
+		/* fixme: we only handle device + endpoints atm */
+		dev_dbg(udc->dev, "%s(): type %d, index %d", __func__, type, index);
+		BUG();
+	}
 
-	__write_ep0_fifo(udc, &buf[0], sizeof(buf));
+	__write_ep0_fifo(udc, &status, sizeof(status));
 
 	return 0;
 }
@@ -1023,14 +1117,14 @@ static void int_setup(struct tmpa9xx_udc *udc)
 		ret = udc_set_config(udc, w_value);
 		break;
 	case USB_REQ_GET_STATUS:
-		ret = udc_get_status(udc, w_value);
+		ret = udc_get_status(udc, pkt.r.bRequestType & 0xf, w_index & 0xf);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
-		ret = udc_clear_feature(udc, w_value);
+		ret = udc_clear_feature(udc, pkt.r.bRequestType & 0xf, w_value, w_index & 0xf);
 		return;
 	case USB_REQ_SET_FEATURE:
-		dev_dbg(udc->dev, "%s(): USB_REQ_SET_FEATURE\n", __func__);
-		break;
+		ret = udc_set_feature(udc, pkt.r.bRequestType & 0xf, w_value, w_index & 0xf);
+		return;
 	case USB_REQ_GET_DESCRIPTOR:
 		dev_dbg(udc->dev, "%s(): USB_REQ_GET_DESCRIPTOR\n", __func__);
 		break;

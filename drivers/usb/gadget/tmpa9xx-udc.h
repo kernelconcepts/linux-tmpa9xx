@@ -154,6 +154,7 @@ struct tmpa9xx_ep {
 	int maxpacket;
 	int is_in;
 	int is_iso;
+	int is_halted;
 };
 
 struct tmpa9xx_udc {
