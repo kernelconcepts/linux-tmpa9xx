@@ -1059,9 +1059,10 @@ static void int_setup(struct tmpa9xx_udc *udc)
 #undef w_length
 
 	ret = udc->driver->setup(&udc->gadget, &pkt.r);
-	if (ret < 0)
-		/* fixme: implement protocol stall */
-		dev_err(udc->dev, "req %02x.%02x protocol STALL; ret %d\n", pkt.r.bRequestType, pkt.r.bRequest, ret);
+	if (ret < 0) {
+		dev_dbg(udc->dev, "req %02x.%02x protocol STALL; ret %d\n", pkt.r.bRequestType, pkt.r.bRequest, ret);
+		udc2_reg_write(udc, UD2CMD, EP0 | EP_STALL);
+	}
 
 	dev_dbg(udc->dev, "%s(): end\n", __func__);
 }
