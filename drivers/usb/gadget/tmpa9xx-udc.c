@@ -478,7 +478,7 @@ out:
 	return 0;
 }
 
-static void ep1_dma_helper(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
+static int ep1_dma_helper(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 {
 	struct tmpa9xx_ep *ep = &udc->ep[1];
 	int len;
@@ -487,38 +487,20 @@ static void ep1_dma_helper(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 	if (len > ep->ep.maxpacket)
 		len = ep->ep.maxpacket;
 
-	dev_dbg(udc->dev, "%s(): req %p, todo %d, len %d\n", __func__, req, req->req.length - req->req.actual, len);
-
 	/* transmit a zero-length packet, no DMA necessary */
 	if (!len) {
+		dev_dbg(udc->dev, "%s(): req %p, todo %d, len %d, (zlp)\n", __func__, req, req->req.length - req->req.actual, len);
 		udc2_reg_write(udc, UD2CMD, EP1 | EP_TX_0DATA);
-		return;
+		return 1;
 	}
+
+	dev_dbg(udc->dev, "%s(): req %p, todo %d, len %d\n", __func__, req, req->req.length - req->req.actual, len);
 
 	memcpy(udc->r_buf, req->req.buf + req->req.actual, len);
 	udc->r_len = len;
 	tmpa9xx_ud2ab_write(udc, UD2AB_MRSADR, udc->phy_r_buf);
 	tmpa9xx_ud2ab_write(udc, UD2AB_MREADR, (udc->phy_r_buf + len - 1));
 	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_ENABLE);
-}
-
-static int handle_ep1_snd(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
-{
-	struct tmpa9xx_ep *ep = &udc->ep[1];
-
-	list_add_tail(&req->queue, &ep->queue);
-
-	if (ep->cur) {
-		dev_dbg(udc->dev, "%s(): busy, req %p, active %p\n", __func__, req, ep->cur);
-		return 0;
-	}
-
-	req = list_entry(ep->queue.next, struct tmpa9xx_request, queue);
-	list_del_init(&req->queue);
-	ep->cur = req;
-	dev_dbg(udc->dev, "%s(): new cur is %p\n", __func__, req);
-
-	ep1_dma_helper(udc, req);
 
 	return 0;
 }
@@ -529,6 +511,7 @@ static int handle_ep1_dma_done(struct tmpa9xx_udc *udc)
 	struct tmpa9xx_request *req;
 	unsigned long flags;
 	int len;
+	int ret;
 
 	spin_lock_irqsave(&ep->s, flags);
 
@@ -537,14 +520,16 @@ static int handle_ep1_dma_done(struct tmpa9xx_udc *udc)
 
 	req->req.actual += udc->r_len;
 	len = req->req.length - req->req.actual;
-
-	dev_dbg(udc->dev, "%s(): finished %d, todo %d\n", __func__, udc->r_len, len);
+	dev_dbg(udc->dev, "%s(): req %p, finished %d, todo %d\n", __func__, req, udc->r_len, len);
 	udc->r_len = 0;
 
 	if (len) {
-		ep1_dma_helper(udc, req);
+		ret = ep1_dma_helper(udc, req);
+		BUG_ON(ret);
 		goto out;
 	}
+
+again:
 
 	done(ep, req, 0);
 	ep->cur = NULL;
@@ -559,7 +544,12 @@ static int handle_ep1_dma_done(struct tmpa9xx_udc *udc)
 	ep->cur = req;
 	dev_dbg(udc->dev, "%s(): new cur is %p\n", __func__, req);
 
-	ep1_dma_helper(udc, req);
+	ret = ep1_dma_helper(udc, ep->cur);
+	if (!ret)
+		goto out;
+
+	goto again;
+
 out:
 	spin_unlock_irqrestore(&ep->s, flags);
 	return 0;
@@ -569,6 +559,7 @@ static int ep1_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 {
 	struct tmpa9xx_ep *ep = &udc->ep[1];
 	unsigned long flags;
+	int ret;
 
 	BUG_ON(!ep->is_in);
 
@@ -580,22 +571,40 @@ static int ep1_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 		goto out;
 	}
 
-	dev_dbg(udc->dev, "%s(): handling req %p\n", __func__, req);
-	handle_ep1_snd(udc, req);
+	if (ep->cur) {
+		dev_dbg(udc->dev, "%s(): busy, req %p, active %p\n", __func__, req, ep->cur);
+		list_add_tail(&req->queue, &ep->queue);
+		goto out;
+	}
+
+	dev_dbg(udc->dev, "%s(): new cur is %p\n", __func__, req);
+	ep->cur = req;
+
+	ret = ep1_dma_helper(udc, ep->cur);
+	if (ret) {
+		done(ep, ep->cur, 0);
+		ep->cur = NULL;
+	}
 
 out:
 	spin_unlock_irqrestore(&ep->s, flags);
 	return 0;
 }
 
-static int handle_ep2_rcv(struct tmpa9xx_udc *udc)
+static int __handle_ep2_rcv(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 {
 	uint16_t len;
+
+	if (udc->w_len) {
+		dev_dbg(udc->dev, "%s(): in progress\n", __func__);
+		return 0;
+	}
 
 	udc2_reg_read(udc, UD2EP2_DataSize, &len);
 
 	dev_dbg(udc->dev, "%s(): len %d\n", __func__, len);
 
+	BUG_ON(udc->w_len);
 	udc->w_len = len;
 	tmpa9xx_ud2ab_write(udc, UD2AB_MWSADR, (uint32_t)udc->phy_w_buf);
 	tmpa9xx_ud2ab_write(udc, UD2AB_MWEADR, (uint32_t)(udc->phy_w_buf + len - 1));
@@ -616,20 +625,29 @@ static int __ep2_dma_copy(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 	BUG_ON(udc->w_len > len);
 
 	memcpy(req->req.buf + req->req.actual, udc->w_buf, udc->w_len);
-	udc->w_pending = 0;
 
 	req->req.actual += udc->w_len;
 	len = req->req.length - req->req.actual;
 
-	if (udc->w_len < ep->ep.maxpacket || !len) {
-		done(ep, req, 0);
+	if (udc->w_len < ep->ep.maxpacket || !len)
 		ret = 1;
-	}
 
 	udc->w_len = 0;
 	return ret;
 }
 
+static int ep2_xfer_pending(struct tmpa9xx_udc *udc)
+{
+	uint16_t mststs;
+	int ret;
+
+	mststs = tmpa9xx_ud2ab_read(udc, UD2AB_MSTSTS);
+
+	ret = !!(mststs & 0x1);
+	dev_dbg(udc->dev, "%s(): state %d\n", __func__, ret);
+
+	return ret;
+}
 
 static int handle_ep2_dma_done(struct tmpa9xx_udc *udc)
 {
@@ -640,22 +658,37 @@ static int handle_ep2_dma_done(struct tmpa9xx_udc *udc)
 
 	spin_lock_irqsave(&ep->s, flags);
 
-	if (ep->cur) {
-		req = ep->cur;
-	} else {
-		if (list_empty(&ep->queue)) {
-			dev_dbg(udc->dev, "%s(): no req to put data to\n", __func__);
-			udc->w_pending = 1;
-			goto out;
-		}
-		req = list_entry(ep->queue.next, struct tmpa9xx_request, queue);
-		list_del_init(&req->queue);
-		ep->cur = req;
-	}
+	BUG_ON(!ep->cur);
+
+	dev_dbg(udc->dev, "%s(): req %p\n", __func__, ep->cur);
 
 	ret = __ep2_dma_copy(udc, ep->cur);
-	if (ret)
-		ep->cur = NULL;
+	if (!ret) {
+		if (ep2_xfer_pending(udc))
+			__handle_ep2_rcv(udc, ep->cur);
+		goto out;
+	}
+
+	done(ep, ep->cur, 0);
+	ep->cur = NULL;
+
+	/* start another transfer right away if necessary */
+	if (!ep2_xfer_pending(udc)) {
+		dev_dbg(udc->dev, "%s(): no pending request\n", __func__);
+		goto out;
+	}
+
+	if (list_empty(&ep->queue)) {
+		dev_dbg(udc->dev, "%s(): pending request, but no buffer\n", __func__);
+		goto out;
+	}
+
+	req = list_entry(ep->queue.next, struct tmpa9xx_request, queue);
+	list_del_init(&req->queue);
+	ep->cur = req;
+
+	dev_dbg(udc->dev, "%s(): new cur %p\n", __func__, ep->cur);
+	__handle_ep2_rcv(udc, ep->cur);
 
 out:
 	spin_unlock_irqrestore(&ep->s, flags);
@@ -666,20 +699,17 @@ static int ep2_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 {
 	struct tmpa9xx_ep *ep = &udc->ep[2];
 	unsigned long flags;
-	int ret;
 
 	spin_lock_irqsave(&ep->s, flags);
 
-	if (!ep->cur && udc->w_pending) {
-		dev_dbg(udc->dev, "%s(): caught pending ep2 xfer to %p\n", __func__, req);
-		ret = __ep2_dma_copy(udc, req);
-		if (!ret)
-			ep->cur = req;
+	if (ep->cur || !ep2_xfer_pending(udc)) {
+		list_add_tail(&req->queue, &ep->queue);
+		dev_dbg(udc->dev, "%s(): req %p added to queue\n", __func__, req);
 		goto out;
 	}
 
-	list_add_tail(&req->queue, &ep->queue);
-	dev_dbg(udc->dev, "%s(): req %p added to queue\n", __func__, req);
+	ep->cur = req;
+	__handle_ep2_rcv(udc, ep->cur);
 
 out:
 	spin_unlock_irqrestore(&ep->s, flags);
@@ -886,6 +916,7 @@ static void reinit(struct tmpa9xx_udc *udc)
 	udc->state = DEFAULT;
 
 	udc2_reg_write(udc, UD2CMD, EP_ALL_INVALID);
+	udc2_reg_write(udc, UD2INT_EP_MASK, (1 << 2) | (1 << 1));
 
 	__nuke(&udc->ep[0], -ESHUTDOWN);
 
@@ -1181,15 +1212,16 @@ static void int_status(struct tmpa9xx_udc *udc)
 			udc->state = CONFIGURED_DONE;
 	}
 
+	spin_lock_irqsave(&ep->s, flags);
+
 	ep->ackwait = 0;
 
 	udc->ignore_status_ack = 1;
 
-	spin_lock_irqsave(&ep->s, flags);
-
 	req = ep->cur;
 	/* handle any pending ep0 stuff */
 	if (req) {
+		dev_dbg(udc->dev, "%s(): finished pending ep0 req %p\n", __func__, ep->cur);
 		BUG_ON(req->req.length);
 		done(ep, req, 0);
 		ep->cur = NULL;
@@ -1212,27 +1244,11 @@ static void int_statusnak(struct tmpa9xx_udc *udc)
 
 static void int_ep(struct tmpa9xx_udc *udc)
 {
-	uint16_t intep;
+	udc2_reg_write(udc, UD2INT_EP, 0x08);
 
-again:
-	udc2_reg_read(udc, UD2INT_EP, &intep);
-	if (!intep)
-		return;
+	dev_dbg(udc->dev, "%s():\n", __func__);
 
-	udc2_reg_write(udc, UD2INT_EP, intep);
-
-	dev_dbg(udc->dev, "%s(): intep 0x%02x\n", __func__, intep);
-
-	if (intep & 0x2)
-		handle_ep1_dma_done(udc);
-
-	if (intep & 0x4)
-		handle_ep2_rcv(udc);
-
-	if (intep & 0x8)
-		handle_ep3_snd(udc);
-
-	goto again;
+	handle_ep3_snd(udc);
 }
 
 static void int_ep0(struct tmpa9xx_udc *udc)
@@ -1295,6 +1311,40 @@ static void int_mr_end_add(struct tmpa9xx_udc *udc)
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_MR_END_ADD);
 
 	dev_dbg(udc->dev, "%s():\n", __func__);
+
+	handle_ep1_dma_done(udc);
+}
+
+static void int_mw_set_add(struct tmpa9xx_udc *udc)
+{
+	struct tmpa9xx_ep *ep = &udc->ep[2];
+	struct tmpa9xx_request *req;
+	unsigned long flags;
+
+	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_MW_SET_ADD);
+
+	spin_lock_irqsave(&ep->s, flags);
+
+	if (ep->cur) {
+		dev_dbg(udc->dev, "%s(): continue buf %p\n", __func__, ep->cur);
+		__handle_ep2_rcv(udc, ep->cur);
+		goto out;
+	}
+
+	if (list_empty(&ep->queue)) {
+		dev_dbg(udc->dev, "%s(): no buf available (yet)\n", __func__);
+		goto out;
+	}
+
+	req = list_entry(ep->queue.next, struct tmpa9xx_request, queue);
+	list_del_init(&req->queue);
+	ep->cur = req;
+	dev_dbg(udc->dev, "%s(): receiving to buf %p\n", __func__, ep->cur);
+
+	__handle_ep2_rcv(udc, ep->cur);
+
+out:
+	spin_unlock_irqrestore(&ep->s, flags);
 }
 
 static void int_mw_end_add(struct tmpa9xx_udc *udc)
@@ -1331,6 +1381,8 @@ again:
 		int_reset_end(udc);
 	else if ((status & INT_MR_END_ADD))
 		int_mr_end_add(udc);
+	else if ((status & INT_MW_SET_ADD))
+		int_mw_set_add(udc);
 	else if ((status & INT_MW_END_ADD))
 		int_mw_end_add(udc);
 	else if ((status & INT_EP))
@@ -1538,11 +1590,13 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, 0x33fe07ff);
 
 	/* enable our interrupts */
-	tmpa9xx_ud2ab_write(udc, UD2AB_INTENB, INT_SUSPEND | INT_RESET | INT_RESET_END | INT_MR_END_ADD | INT_MW_END_ADD);
+	tmpa9xx_ud2ab_write(udc, UD2AB_INTENB,
+		INT_SUSPEND | INT_RESET | INT_RESET_END |
+		INT_MR_END_ADD | INT_MW_END_ADD | INT_MW_SET_ADD);
 
 	/* reset dma engine */
 	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_RESET | UDC2AB_MW_RESET);
-	udc->w_pending = 0;
+
 	udc->w_len = 0;
 	udc->r_len = 0;
 

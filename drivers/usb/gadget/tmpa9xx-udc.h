@@ -182,7 +182,6 @@ struct tmpa9xx_udc {
 	unsigned char *w_buf;
 	dma_addr_t phy_w_buf;
 	int w_len;
-	int w_pending;
 
 	int ignore_status_nak;
 	int ignore_status_ack;
