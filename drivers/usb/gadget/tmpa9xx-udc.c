@@ -140,12 +140,13 @@ static void tmpa9xx_ep_free_request(struct usb_ep *_ep, struct usb_request *_req
 
 static int __ep_set_halt(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep)
 {
-	u16 cmd = EP_STALL;
-
 	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
 
 	if (ep->ep.name == ep_name[0])
 		return 0;
+#if 0
+	u16 cmd = EP_STALL;
+
 	else if (ep->ep.name == ep_name[1])
 		cmd |= EP1;
 	else if (ep->ep.name == ep_name[2])
@@ -155,9 +156,9 @@ static int __ep_set_halt(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep)
 		cmd |= EP3;
 	}
 
-	ep->is_halted = 1;
-
 	udc2_reg_write(udc, UD2CMD, cmd);
+#endif
+	ep->is_halted = 1;
 
 	return 0;
 }
@@ -1029,7 +1030,9 @@ static int udc_clear_feature(struct tmpa9xx_udc *udc, int type, int feature, int
 
 	if (ep->ep.name == ep_name[0]) {
 		/* no reset command necessary */
-	} else if (ep->ep.name == ep_name[1])
+	}
+#if 0
+	else if (ep->ep.name == ep_name[1])
 		udc2_reg_write(udc, UD2CMD, EP1 | EP_RESET);
 	else if (ep->ep.name == ep_name[2])
 		udc2_reg_write(udc, UD2CMD, EP2 | EP_RESET);
@@ -1037,7 +1040,7 @@ static int udc_clear_feature(struct tmpa9xx_udc *udc, int type, int feature, int
 		BUG_ON(ep->ep.name == ep_name[3]);
 		udc2_reg_write(udc, UD2CMD, EP3 | EP_RESET);
 	}
-
+#endif
 	ep->is_halted = 0;
 
 	finish_ep0_no_data_stage(udc);
