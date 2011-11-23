@@ -1,5 +1,3 @@
-//#define DEBUG
-
 /*
  * TMPA9xx USB peripheral controller driver
  *
@@ -140,14 +138,14 @@ static void tmpa9xx_ep_free_request(struct usb_ep *_ep, struct usb_request *_req
 	dev_dbg(udc->dev, "%s(): %p\n", __func__, _req);
 }
 
-static int ep_set_halt(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep)
+static int __ep_set_halt(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep)
 {
 	u16 cmd = EP_STALL;
 
 	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
 
 	if (ep->ep.name == ep_name[0])
-		cmd |= EP0;
+		return 0;
 	else if (ep->ep.name == ep_name[1])
 		cmd |= EP1;
 	else if (ep->ep.name == ep_name[2])
@@ -159,14 +157,7 @@ static int ep_set_halt(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep)
 
 	ep->is_halted = 1;
 
-	/* we cannot really halt any ep here, because we would have to make
-	sure that any dma has finished. this is not possible, because we are
-	handling this request in the workqueue and any dma end handling is done
-	in the workqueue as well. we cannot leave here, wait for the dma to finish
-	and than come back. */
-#if 0
 	udc2_reg_write(udc, UD2CMD, cmd);
-#endif
 
 	return 0;
 }
@@ -175,8 +166,16 @@ static int tmpa9xx_ep_set_halt(struct usb_ep *_ep, int value)
 {
 	struct tmpa9xx_ep *ep = container_of(_ep, struct tmpa9xx_ep, ep);
 	struct tmpa9xx_udc *udc = ep->udc;
+	unsigned long flags;
+	int ret;
 
-	return ep_set_halt(udc, ep);
+	spin_lock_irqsave(&ep->s, flags);
+
+	ret = __ep_set_halt(udc, ep);
+
+	spin_unlock_irqrestore(&ep->s, flags);
+
+	return ret;
 }
 
 static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descriptor *desc)
@@ -1007,7 +1006,7 @@ static int udc_set_feature(struct tmpa9xx_udc *udc, int type, int feature, int i
 	/* fixme: we only handle stalling ep != 0 atm */
 	BUG_ON(index == 0);
 
-	ep_set_halt(udc, &udc->ep[index]);
+	__ep_set_halt(udc, &udc->ep[index]);
 
 	finish_ep0_no_data_stage(udc);
 
@@ -1027,7 +1026,6 @@ static int udc_clear_feature(struct tmpa9xx_udc *udc, int type, int feature, int
 	BUG_ON(feature != USB_ENDPOINT_HALT);
 
 	ep = &udc->ep[index];
-#if 0
 
 	if (ep->ep.name == ep_name[0]) {
 		/* no reset command necessary */
@@ -1039,7 +1037,7 @@ static int udc_clear_feature(struct tmpa9xx_udc *udc, int type, int feature, int
 		BUG_ON(ep->ep.name == ep_name[3]);
 		udc2_reg_write(udc, UD2CMD, EP3 | EP_RESET);
 	}
-#endif
+
 	ep->is_halted = 0;
 
 	finish_ep0_no_data_stage(udc);
