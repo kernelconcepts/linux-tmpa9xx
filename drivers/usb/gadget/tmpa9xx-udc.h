@@ -155,6 +155,7 @@ struct tmpa9xx_ep {
 	int is_in;
 	int is_iso;
 	int is_halted;
+	int has_dma;
 };
 
 struct tmpa9xx_udc {
@@ -175,12 +176,7 @@ struct tmpa9xx_udc {
 	int state;
 	unsigned char addr;
 
-	unsigned char *r_buf;
-	dma_addr_t phy_r_buf;
 	int r_len;
-
-	unsigned char *w_buf;
-	dma_addr_t phy_w_buf;
 	int w_len;
 
 	int ignore_status_nak;

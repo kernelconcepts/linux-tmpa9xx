@@ -24,6 +24,8 @@
 
 #include "tmpa9xx-udc.h"
 
+#define	DMA_ADDR_INVALID (~(dma_addr_t)0)
+
 static const char driver_name[] = "tmpa9xx-udc";
 
 static const char *const ep_name[] = {
@@ -89,6 +91,15 @@ static void done(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req, int status)
 
 	BUG_ON(req->req.status != -EINPROGRESS);
 
+	if (ep->has_dma && req->req.dma != DMA_ADDR_INVALID) {
+		dev_dbg(udc->dev, "%s(): unmap dma 0x%08x @ buf %p\n", __func__, req->req.dma, req);
+		dma_unmap_single(udc->gadget.dev.parent,
+			req->req.dma, req->req.length,
+			ep->is_in ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
+		req->req.dma = DMA_ADDR_INVALID;
+	}
+
+
 	ep->stopped = 1;
 	req->req.status = status;
 	req->req.complete(&ep->ep, &req->req);
@@ -107,6 +118,7 @@ static struct usb_request *tmpa9xx_ep_alloc_request(struct usb_ep *_ep, unsigned
 		return NULL;
 
 	INIT_LIST_HEAD(&req->queue);
+	req->req.dma = DMA_ADDR_INVALID;
 
 	dev_dbg(udc->dev, "%s(): %p @ '%s'\n", __func__, &req->req, ep->ep.name);
 
@@ -120,6 +132,7 @@ static void tmpa9xx_ep_free_request(struct usb_ep *_ep, struct usb_request *_req
 	struct tmpa9xx_request *req;
 
 	req = container_of(_req, struct tmpa9xx_request, req);
+
 	kfree(req);
 
 	dev_dbg(udc->dev, "%s(): %p\n", __func__, _req);
@@ -496,13 +509,30 @@ static int ep1_dma_helper(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 
 	dev_dbg(udc->dev, "%s(): req %p, todo %d, len %d\n", __func__, req, req->req.length - req->req.actual, len);
 
-	memcpy(udc->r_buf, req->req.buf + req->req.actual, len);
 	udc->r_len = len;
-	tmpa9xx_ud2ab_write(udc, UD2AB_MRSADR, udc->phy_r_buf);
-	tmpa9xx_ud2ab_write(udc, UD2AB_MREADR, (udc->phy_r_buf + len - 1));
+	tmpa9xx_ud2ab_write(udc, UD2AB_MRSADR, req->req.dma + req->req.actual);
+	tmpa9xx_ud2ab_write(udc, UD2AB_MREADR, req->req.dma + req->req.actual + len - 1);
 	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_ENABLE);
 
 	return 0;
+}
+
+static void prepare_req_for_dma(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep, struct tmpa9xx_request *req)
+{
+	int ret;
+
+	BUG_ON(req->req.dma != DMA_ADDR_INVALID);
+
+	req->req.dma = dma_map_single(
+		udc->gadget.dev.parent,
+		req->req.buf,
+		req->req.length,
+		ep->is_in ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
+
+	ret = dma_mapping_error(udc->gadget.dev.parent, req->req.dma);
+	BUG_ON(ret);
+
+	dev_dbg(udc->dev, "%s(): map dma 0x%08x @ buf %p\n", __func__, req->req.dma, req);
 }
 
 static int handle_ep1_dma_done(struct tmpa9xx_udc *udc)
@@ -542,6 +572,7 @@ again:
 	req = list_entry(ep->queue.next, struct tmpa9xx_request, queue);
 	list_del_init(&req->queue);
 	ep->cur = req;
+	prepare_req_for_dma(udc, ep, req);
 	dev_dbg(udc->dev, "%s(): new cur is %p\n", __func__, req);
 
 	ret = ep1_dma_helper(udc, ep->cur);
@@ -577,8 +608,9 @@ static int ep1_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 		goto out;
 	}
 
-	dev_dbg(udc->dev, "%s(): new cur is %p\n", __func__, req);
 	ep->cur = req;
+	dev_dbg(udc->dev, "%s(): new cur is %p\n", __func__, req);
+	prepare_req_for_dma(udc, ep, req);
 
 	ret = ep1_dma_helper(udc, ep->cur);
 	if (ret) {
@@ -591,6 +623,8 @@ out:
 	return 0;
 }
 
+
+
 static int __handle_ep2_rcv(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 {
 	uint16_t len;
@@ -601,13 +635,12 @@ static int __handle_ep2_rcv(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req
 	}
 
 	udc2_reg_read(udc, UD2EP2_DataSize, &len);
-
 	dev_dbg(udc->dev, "%s(): len %d\n", __func__, len);
 
 	BUG_ON(udc->w_len);
 	udc->w_len = len;
-	tmpa9xx_ud2ab_write(udc, UD2AB_MWSADR, (uint32_t)udc->phy_w_buf);
-	tmpa9xx_ud2ab_write(udc, UD2AB_MWEADR, (uint32_t)(udc->phy_w_buf + len - 1));
+	tmpa9xx_ud2ab_write(udc, UD2AB_MWSADR, req->req.dma + req->req.actual);
+	tmpa9xx_ud2ab_write(udc, UD2AB_MWEADR, req->req.dma + req->req.actual + len - 1);
 	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MW_ENABLE);
 
 	return 0;
@@ -624,13 +657,12 @@ static int __ep2_dma_copy(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 
 	BUG_ON(udc->w_len > len);
 
-	memcpy(req->req.buf + req->req.actual, udc->w_buf, udc->w_len);
-
 	req->req.actual += udc->w_len;
 	len = req->req.length - req->req.actual;
 
-	if (udc->w_len < ep->ep.maxpacket || !len)
+	if (udc->w_len < ep->ep.maxpacket || !len) {
 		ret = 1;
+	}
 
 	udc->w_len = 0;
 	return ret;
@@ -686,6 +718,7 @@ static int handle_ep2_dma_done(struct tmpa9xx_udc *udc)
 	req = list_entry(ep->queue.next, struct tmpa9xx_request, queue);
 	list_del_init(&req->queue);
 	ep->cur = req;
+	prepare_req_for_dma(udc, ep, req);
 
 	dev_dbg(udc->dev, "%s(): new cur %p\n", __func__, ep->cur);
 	__handle_ep2_rcv(udc, ep->cur);
@@ -709,6 +742,8 @@ static int ep2_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 	}
 
 	ep->cur = req;
+	prepare_req_for_dma(udc, ep, req);
+
 	__handle_ep2_rcv(udc, ep->cur);
 
 out:
@@ -873,6 +908,7 @@ static struct tmpa9xx_udc controller = {
 		},
 		.udc = &controller,
 		.maxpacket = 64,
+		.has_dma = 0,
 	},
 	.ep[1] = {
 		.ep = {
@@ -881,6 +917,7 @@ static struct tmpa9xx_udc controller = {
 		},
 		.udc = &controller,
 		.maxpacket = 512,
+		.has_dma = 1,
 	},
 	.ep[2] = {
 		.ep = {
@@ -889,6 +926,7 @@ static struct tmpa9xx_udc controller = {
 		},
 		.udc = &controller,
 		.maxpacket = 512,
+		.has_dma = 1,
 	},
 	.ep[3] = {
 		.ep = {
@@ -897,6 +935,7 @@ static struct tmpa9xx_udc controller = {
 		},
 		.udc = &controller,
 		.maxpacket = 64,
+		.has_dma = 0,
 	},
 };
 
@@ -1041,7 +1080,7 @@ static int udc_get_status(struct tmpa9xx_udc *udc, int type, int index)
 		dev_dbg(udc->dev, "%s(): endpoint %d status 0x%04x", __func__,index, status);
 	} else {
 		/* fixme: we only handle device + endpoints atm */
-		dev_dbg(udc->dev, "%s(): type %d, index %d", __func__, type, index);
+		dev_err(udc->dev, "%s(): type %d, index %d", __func__, type, index);
 		BUG();
 	}
 
@@ -1339,6 +1378,7 @@ static void int_mw_set_add(struct tmpa9xx_udc *udc)
 	req = list_entry(ep->queue.next, struct tmpa9xx_request, queue);
 	list_del_init(&req->queue);
 	ep->cur = req;
+	prepare_req_for_dma(udc, ep, req);
 	dev_dbg(udc->dev, "%s(): receiving to buf %p\n", __func__, ep->cur);
 
 	__handle_ep2_rcv(udc, ep->cur);
@@ -1531,25 +1571,11 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	pwctl_power_reset(udc);
 
-	udc->r_buf = dma_alloc_coherent(NULL, 512, &udc->phy_r_buf, GFP_KERNEL);
-	if (!udc->r_buf) {
-		dev_err(udc->dev, "%s(): dma_alloc_coherent() failed\n", __func__);
-		ret = -ENOMEM;
-		goto err4;
-	}
-
-	udc->w_buf = dma_alloc_coherent(NULL, 512, &udc->phy_w_buf, GFP_KERNEL);
-	if (!udc->w_buf) {
-		dev_err(udc->dev, "%s(): dma_alloc_coherent() failed\n", __func__);
-		ret = -ENOMEM;
-		goto err5;
-	}
-
 	udc->irq = platform_get_irq(pdev, 0);
 	if (request_irq(udc->irq, tmpa9xx_udc_irq, IRQF_DISABLED, driver_name, udc)) {
 		dev_err(udc->dev, "%s(): request_irq() failed\n", __func__);
 		ret = -EBUSY;
-		goto err6;
+		goto err4;
 	}
 	disable_irq(udc->irq);
 
@@ -1557,7 +1583,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	if (!udc->wq) {
 		dev_err(udc->dev, "%s(): create_workqueue() failed\n", __func__);
 		ret = -EBUSY;
-		goto err7;
+		goto err5;
 	}
 
 	/* init software state */
@@ -1606,7 +1632,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	if (ret < 0) {
 		dev_err(udc->dev, "%s(): device_register() failed\n", __func__);
 		ret = -EBUSY;
-		goto err8;
+		goto err6;
 	}
 
 	dev_set_drvdata(&pdev->dev, udc);
@@ -1615,14 +1641,10 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	return 0;
 
-err8:
-	destroy_workqueue(udc->wq);
-err7:
-	free_irq(udc->irq, udc);
 err6:
-	dma_free_coherent(udc->dev, 512, udc->w_buf, udc->phy_w_buf);
+	destroy_workqueue(udc->wq);
 err5:
-	dma_free_coherent(udc->dev, 512, udc->r_buf, udc->phy_r_buf);
+	free_irq(udc->irq, udc);
 err4:
 	clk_disable(udc->clk);
 err3:
@@ -1654,10 +1676,6 @@ static int __devexit tmpa9xx_udc_remove(struct platform_device *pdev)
 	destroy_workqueue(udc->wq);
 
 	free_irq(udc->irq, udc);
-
-	dma_free_coherent(udc->dev, 512, udc->w_buf, udc->phy_w_buf);
-
-	dma_free_coherent(udc->dev, 512, udc->r_buf, udc->phy_r_buf);
 
 	clk_disable(udc->clk);
 
