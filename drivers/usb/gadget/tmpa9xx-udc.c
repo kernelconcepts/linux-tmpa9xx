@@ -999,10 +999,10 @@ static int udc_set_feature(struct tmpa9xx_udc *udc, int type, int feature, int i
 	dev_err(udc->dev, "%s(): type %d, feature %d, index %d\n", __func__, type, feature, index);
 
 	/* fixme: we only handle endpoints atm */
-	BUG_ON(type != 0x2);
+	BUG_ON(type != USB_RECIP_ENDPOINT);
 
 	/* fixme: we only handle feature endpoint halt atm */
-	BUG_ON(feature != 0x0);
+	BUG_ON(feature != USB_ENDPOINT_HALT);
 
 	/* fixme: we only handle stalling ep != 0 atm */
 	BUG_ON(index == 0);
@@ -1018,19 +1018,16 @@ static int udc_clear_feature(struct tmpa9xx_udc *udc, int type, int feature, int
 {
 	struct tmpa9xx_ep *ep;
 
-	dev_err(udc->dev, "%s(): type %d, feature %d, index %d\n", __func__, type, feature, index);
+	dev_dbg(udc->dev, "%s(): type %d, feature %d, index %d\n", __func__, type, feature, index);
 
 	/* fixme: we only handle endpoints atm */
-	BUG_ON(type != 0x2);
+	BUG_ON(type != USB_RECIP_ENDPOINT);
 
 	/* fixme: we only handle feature endpoint halt atm */
-	BUG_ON(feature != 0x0);
+	BUG_ON(feature != USB_ENDPOINT_HALT);
 
-	/* fixme: we only handle clearing halt @ ep != 0 atm */
-	BUG_ON(index == 0);
-
-#if 0
 	ep = &udc->ep[index];
+#if 0
 
 	if (ep->ep.name == ep_name[0]) {
 		/* no reset command necessary */
