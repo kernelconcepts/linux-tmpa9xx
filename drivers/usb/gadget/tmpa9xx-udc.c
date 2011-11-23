@@ -1,3 +1,5 @@
+//#define DEBUG
+
 /*
  * TMPA9xx USB peripheral controller driver
  *
@@ -1070,16 +1072,17 @@ static int udc_get_status(struct tmpa9xx_udc *udc, int type, int index)
 
 	BUG_ON(index < 0 || index > 2);
 
-	if (!type) {
-		/* device status */
+	if (type == USB_RECIP_DEVICE) {
 		status = 0;
 		dev_dbg(udc->dev, "%s(): device status 0x%04x", __func__, status);
-	} else if (type == 2) {
+	} else if (type == USB_RECIP_INTERFACE) {
+		status = 0;
+		dev_dbg(udc->dev, "%s(): interface %d status 0x%04x", __func__,index, status);
+	} else if (type == USB_RECIP_ENDPOINT) {
 		struct tmpa9xx_ep *ep = &udc->ep[index];
 		status = !!ep->is_halted;
 		dev_dbg(udc->dev, "%s(): endpoint %d status 0x%04x", __func__,index, status);
 	} else {
-		/* fixme: we only handle device + endpoints atm */
 		dev_err(udc->dev, "%s(): type %d, index %d", __func__, type, index);
 		BUG();
 	}
