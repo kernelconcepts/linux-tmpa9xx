@@ -744,8 +744,10 @@ ecm_unbind(struct usb_configuration *c, struct usb_function *f)
 		usb_free_descriptors(f->hs_descriptors);
 	usb_free_descriptors(f->descriptors);
 
-	kfree(ecm->notify_req->buf);
-	usb_ep_free_request(ecm->notify, ecm->notify_req);
+	if (ecm->notify_req) {
+		kfree(ecm->notify_req->buf);
+		usb_ep_free_request(ecm->notify, ecm->notify_req);
+	}
 
 	ecm_string_defs[1].s = NULL;
 	kfree(ecm);
