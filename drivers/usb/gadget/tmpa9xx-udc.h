@@ -156,7 +156,7 @@ struct tmpa9xx_udc {
 
 	struct work_struct ws;
 	struct workqueue_struct *wq;
-	struct semaphore sem;
+	spinlock_t reg_slock;
 	uint16_t ud2int;
 
 	int state;

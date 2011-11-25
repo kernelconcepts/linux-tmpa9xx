@@ -43,9 +43,10 @@ static const char *const ep_name[] = {
 
 static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 addr, u16 *data)
 {
+	unsigned long flags;
 	u32 reg;
 
-	down(&udc->sem);
+	spin_lock_irqsave(&udc->reg_slock, flags);
 
 	/* policy is that UDC access is alwas done, if not, it's a bug */
 	BUG_ON(tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ) & UDC2AB_READ_RQ);
@@ -58,16 +59,17 @@ static void udc2_reg_read(struct tmpa9xx_udc *udc, const u32 addr, u16 *data)
 	} while ((reg & UDC2AB_READ_RQ));
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_UDC2REG_RD);
 
-	up(&udc->sem);
+	spin_unlock_irqrestore(&udc->reg_slock, flags);
 
 	*data = tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDVL);
 }
 
 static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 addr, const u16 data)
 {
+	unsigned long flags;
 	u32 reg;
 
-	down(&udc->sem);
+	spin_lock_irqsave(&udc->reg_slock, flags);
 
 	/* policy is that UDC access is alwas done, if not, it's a bug */
 	BUG_ON(tmpa9xx_ud2ab_read(udc, UD2AB_UDC2RDREQ) & UDC2AB_READ_RQ);
@@ -80,7 +82,7 @@ static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 addr, const u16 da
 	} while ((reg & UDC2AB_READ_RQ));
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_UDC2REG_RD);
 
-	up(&udc->sem);
+	spin_unlock_irqrestore(&udc->reg_slock, flags);
 }
 
 static void done(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req, int status)
@@ -1603,8 +1605,8 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 
 	INIT_WORK(&udc->ws, backend_irq_work);
 
-	/* this semaphore protects the access to the UDC registers */
-	sema_init(&udc->sem, 1);
+	/* this spinlock protects the access to the UDC registers */
+	spin_lock_init(&udc->reg_slock);
 
 	/* ep0 init handling */
 	spin_lock_init(&udc->ep[0].s);
