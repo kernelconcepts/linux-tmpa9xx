@@ -104,7 +104,6 @@ static void done(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req, int status)
 	req->req.status = status;
 	req->req.complete(&ep->ep, &req->req);
 	ep->stopped = 0;
-
 }
 
 static struct usb_request *tmpa9xx_ep_alloc_request(struct usb_ep *_ep, unsigned int gfp_flags)
@@ -149,7 +148,7 @@ static int __ep_set_halt(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep)
 {
 	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
 
-	if (ep->ep.name == ep_name[0])
+	if (!ep->num)
 		return 0;
 #if 0
 	udc2_cmd_ep(ep, EP_STALL);
@@ -194,7 +193,7 @@ static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descr
 		return -EINVAL;
 	}
 
-	if (_ep->name == ep_name[0]) {
+	if (!ep->num) {
 		dev_err(udc->dev, "%s(): ep[0]\n", __func__);
 		return -EINVAL;
 	}
@@ -255,21 +254,17 @@ static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descr
 
 	dev_dbg(udc->dev, "%s(): '%s', is_in %d, is_iso %d, maxpacket %d\n", __func__, ep->ep.name, ep->is_in, ep->is_iso, maxpacket);
 
-	if (ep->ep.name == ep_name[1]) {
-		udc2_reg_write(udc, UD2EPx_MAXPACKETSIZE(ep->num), maxpacket);
+	udc2_reg_write(udc, UD2EPx_MAXPACKETSIZE(ep->num), maxpacket);
+
+	if (ep->num == 1) {
 		udc2_reg_write(udc, UD2EPx_STATUS(ep->num), EP_DUAL_BULK_IN);
-		udc2_cmd_ep(ep, EP_RESET);
-		return 0;
-	} else if (ep->ep.name == ep_name[2]) {
-		udc2_reg_write(udc, UD2EPx_MAXPACKETSIZE(ep->num), maxpacket);
+	} else if (ep->num == 2) {
 		udc2_reg_write(udc, UD2EPx_STATUS(ep->num), EP_DUAL_BULK_OUT);
-		udc2_cmd_ep(ep, EP_RESET);
-		return 0;
+	} else {
+		BUG_ON(ep->num != 3);
+		udc2_reg_write(udc, UD2EPx_STATUS(ep->num), (1 << 7) | (1 << 3) | (1 << 2));
 	}
 
-	BUG_ON(ep->ep.name != ep_name[3]);
-	udc2_reg_write(udc, UD2EPx_MAXPACKETSIZE(ep->num), maxpacket);
-	udc2_reg_write(udc, UD2EPx_STATUS(ep->num), (1 << 7) | (1 << 3) | (1 << 2));
 	udc2_cmd_ep(ep, EP_RESET);
 
 	return 0;
@@ -304,7 +299,7 @@ static int tmpa9xx_ep_disable(struct usb_ep *_ep)
 
 	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
 
-	BUG_ON(ep->ep.name == ep_name[0]);
+	BUG_ON(!ep->num);
 
 	spin_lock_irqsave(&ep->s, flags);
 
@@ -830,7 +825,7 @@ static int tmpa9xx_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t 
 		return -EINVAL;
 	}
 
-	if (!ep->desc && ep->ep.name != ep_name[0]) {
+	if (!ep->desc && ep->num) {
 		dev_err(udc->dev, "%s(): invalid ep\n", __func__);
 		return -EINVAL;
 	}
@@ -840,14 +835,14 @@ static int tmpa9xx_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t 
 
 	dev_dbg(udc->dev, "%s(): '%s', req %p, is_in %d, empty %d\n", __func__, ep->ep.name, _req, ep->is_in, list_empty(&ep->queue));
 
-	if (ep->ep.name == ep_name[0]) {
+	if (!ep->num) {
 		ret = ep0_queue(udc, req);
-	} else if (ep->ep.name == ep_name[1]) {
+	} else if (ep->num == 1) {
 		ret = ep1_queue(udc, req);
-	} else if (ep->ep.name == ep_name[2]) {
+	} else if (ep->num == 2) {
 		ret = ep2_queue(udc, req);
 	} else {
-		BUG_ON(ep->ep.name != ep_name[3]);
+		BUG_ON(ep->num != 3);
 		ret = ep3_queue(udc, req);
 	}
 
@@ -1022,7 +1017,7 @@ static int udc_clear_feature(struct tmpa9xx_udc *udc, int type, int feature, int
 
 	ep = &udc->ep[index];
 
-	if (ep->ep.name == ep_name[0]) {
+	if (!ep->num) {
 		/* no reset command necessary */
 	}
 #if 0
