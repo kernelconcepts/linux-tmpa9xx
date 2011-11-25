@@ -134,6 +134,7 @@ struct tmpa9xx_ep {
 	struct tmpa9xx_udc *udc;
 	const struct usb_endpoint_descriptor *desc;
 	struct usb_ep ep;
+	int num;
 
 	struct list_head queue;
 	struct tmpa9xx_request *cur;
