@@ -260,20 +260,20 @@ static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descr
 	dev_dbg(udc->dev, "%s(): '%s', is_in %d, is_iso %d, maxpacket %d\n", __func__, ep->ep.name, ep->is_in, ep->is_iso, maxpacket);
 
 	if (ep->ep.name == ep_name[1]) {
-		udc2_reg_write(udc, UD2EP1_MaxPacketSize, maxpacket);
-		udc2_reg_write(udc, UD2EP1_Status, EP_DUAL_BULK_IN);
+		udc2_reg_write(udc, UD2EPx_MAXPACKETSIZE(1), maxpacket);
+		udc2_reg_write(udc, UD2EPx_STATUS(1), EP_DUAL_BULK_IN);
 		udc2_reg_write(udc, UD2CMD, EP1 | EP_RESET);
 		return 0;
 	} else if (ep->ep.name == ep_name[2]) {
-		udc2_reg_write(udc, UD2EP2_MaxPacketSize, maxpacket);
-		udc2_reg_write(udc, UD2EP2_Status, EP_DUAL_BULK_OUT);
+		udc2_reg_write(udc, UD2EPx_MAXPACKETSIZE(2), maxpacket);
+		udc2_reg_write(udc, UD2EPx_STATUS(2), EP_DUAL_BULK_OUT);
 		udc2_reg_write(udc, UD2CMD, EP2 | EP_RESET);
 		return 0;
 	}
 
 	BUG_ON(ep->ep.name != ep_name[3]);
-	udc2_reg_write(udc, UD2EP3_MaxPacketSize, maxpacket);
-	udc2_reg_write(udc, UD2EP3_Status, (1 << 7) | (1 << 3) | (1 << 2));
+	udc2_reg_write(udc, UD2EPx_MAXPACKETSIZE(3), maxpacket);
+	udc2_reg_write(udc, UD2EPx_STATUS(3), (1 << 7) | (1 << 3) | (1 << 2));
 	udc2_reg_write(udc, UD2CMD, EP3 | EP_RESET);
 
 	return 0;
@@ -342,7 +342,7 @@ static int __write_ep0_fifo(struct tmpa9xx_udc *udc, uint16_t *buf, int length)
 		length = ep->ep.maxpacket;
 
 		for (i = length; i > 0 ; i -= 2)
-			udc2_reg_write(udc, UD2EP0_FIFO, *buf++);
+			udc2_reg_write(udc, UD2EPx_FIFO(0), *buf++);
 
 		dev_dbg(udc->dev, "%s(): partial write\n", __func__);
 		return length;
@@ -351,11 +351,11 @@ static int __write_ep0_fifo(struct tmpa9xx_udc *udc, uint16_t *buf, int length)
 	for (i = length; i > 0 ; i -= 2) {
 		if (i == 1) {
 			u8 chardata = (u8) (*buf & 0xff);
-			u8 *data_p = (u8 *) (UD2EP0_FIFO + udc->base);
+			u8 *data_p = (u8 *) (UD2EPx_FIFO(0) + udc->base);
 			*data_p = chardata;
 			break;
 		}
-		udc2_reg_write(udc, UD2EP0_FIFO, *buf++);
+		udc2_reg_write(udc, UD2EPx_FIFO(0), *buf++);
 	}
 
 	if (length < ep->ep.maxpacket)
@@ -396,11 +396,11 @@ static void write_ep3_fifo(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 	while (length > 0) {
 		if (length == 1) {
 			u8 chardata = (u8) (*buf & 0xff);
-			u8 *data_p = (u8 *) (UD2EP3_FIFO + udc->base);
+			u8 *data_p = (u8 *) (UD2EPx_FIFO(3) + udc->base);
 			*data_p = chardata;
 			break;
 		}
-		udc2_reg_write(udc, UD2EP3_FIFO, *buf);
+		udc2_reg_write(udc, UD2EPx_FIFO(3), *buf);
 		buf++;
 		length -= 2;
 	}
@@ -427,7 +427,7 @@ static int read_ep0_fifo(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 		req->req.actual += length;
 
 		while (length > 0) {
-			udc2_reg_read(udc, UD2EP0_FIFO, buf);
+			udc2_reg_read(udc, UD2EPx_FIFO(0), buf);
 			buf++;
 			length -= 2;
 		}
@@ -439,11 +439,11 @@ static int read_ep0_fifo(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 		if (length == 1) {
 			u16 tmp;
 			u8 *ptr = (u8 *) buf;
-			udc2_reg_read(udc, UD2EP0_FIFO, &tmp);
+			udc2_reg_read(udc, UD2EPx_FIFO(0), &tmp);
 			*ptr = tmp & 0xff;
 			break;
 		}
-		udc2_reg_read(udc, UD2EP0_FIFO, buf);
+		udc2_reg_read(udc, UD2EPx_FIFO(0), buf);
 		buf++;
 		length -= 2;
 	}
@@ -636,7 +636,7 @@ static int __handle_ep2_rcv(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req
 		return 0;
 	}
 
-	udc2_reg_read(udc, UD2EP2_DataSize, &len);
+	udc2_reg_read(udc, UD2EPx_DATASIZE(2), &len);
 	dev_dbg(udc->dev, "%s(): len %d\n", __func__, len);
 
 	BUG_ON(udc->w_len);
@@ -1329,7 +1329,7 @@ static void int_ep0(struct tmpa9xx_udc *udc)
 		goto out;
 	}
 
-	udc2_reg_read(udc, UD2EP0_DataSize, &avail);
+	udc2_reg_read(udc, UD2EPx_DATASIZE(0), &avail);
 	dev_dbg(udc->dev, "%s(): avail %d, length %d\n", __func__, avail, length);
 
 	BUG_ON(avail < length);

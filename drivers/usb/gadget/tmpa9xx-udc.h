@@ -37,22 +37,12 @@
 #define UD2INT_EP		0x224
 #define UD2INT_EP_MASK		0x228
 #define UD2_RX_DATA_0		0x22C
-#define UD2EP0_MaxPacketSize	0x230
-#define UD2EP0_Status		0x234
-#define UD2EP0_DataSize		0x238
-#define UD2EP0_FIFO		0x23c
-#define UD2EP1_MaxPacketSize	0x240
-#define UD2EP1_Status		0x244
-#define UD2EP1_DataSize		0x248
-#define UD2EP1_FIFO		0x24c
-#define UD2EP2_MaxPacketSize	0x250
-#define UD2EP2_Status		0x254
-#define UD2EP2_DataSize		0x258
-#define UD2EP2_FIFO		0x25c
-#define UD2EP3_MaxPacketSize	0x260
-#define UD2EP3_Status		0x264
-#define UD2EP3_DataSize		0x268
-#define UD2EP3_FIFO		0x26c
+
+#define UD2EPx_MAXPACKETSIZE(x)	(0x230+(x*0x10))
+#define UD2EPx_STATUS(x)	(0x234+(x*0x10))
+#define UD2EPx_DATASIZE(x)	(0x238+(x*0x10))
+#define UD2EPx_FIFO(x)		(0x23c+(x*0x10))
+
 #define UD2INTNAK		0x330
 #define UD2INTNAKMSK		0x334
 

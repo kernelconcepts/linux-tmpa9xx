@@ -1,3 +1,5 @@
+#define DEBUG
+#define VERBOSE_DEBUG
 /*
  * ether.c -- Ethernet gadget driver, with CDC and non-CDC options
  *
