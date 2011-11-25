@@ -275,8 +275,6 @@ static void __nuke(struct tmpa9xx_ep *ep, int status)
 	struct tmpa9xx_udc *udc = ep->udc;
 	struct tmpa9xx_request *req;
 
-	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
-
 	if (ep->cur) {
 		done(ep, ep->cur, status);
 		dev_dbg(udc->dev, "%s(): nuked %p\n", __func__, ep->cur);
@@ -289,12 +287,15 @@ static void __nuke(struct tmpa9xx_ep *ep, int status)
 		done(ep, req, status);
 		dev_dbg(udc->dev, "%s(): nuked %p\n", __func__, req);
 	}
+
+	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
 }
 
 static int tmpa9xx_ep_disable(struct usb_ep *_ep)
 {
 	struct tmpa9xx_ep *ep = container_of(_ep, struct tmpa9xx_ep, ep);
 	struct tmpa9xx_udc *udc = ep->udc;
+	uint16_t reg;
 	unsigned long flags;
 
 	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
@@ -309,7 +310,36 @@ static int tmpa9xx_ep_disable(struct usb_ep *_ep)
 	ep->ep.maxpacket = ep->maxpacket;
 	INIT_LIST_HEAD(&ep->queue);
 
-	udc2_cmd_ep(ep, EP_INVALID);
+	udc2_cmd_ep(ep, EP_DISABLE);
+	/* wait until disable command is successful */
+	while (1) {
+		udc2_reg_read(udc, UD2EPx_STATUS(ep->num), &reg);
+		if (reg & (1 << 8))
+			break;
+	}
+
+	/* abort dma if necessary */
+	if (ep->num == 1) {
+		/* master read */
+		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_ABORT);
+		while(1) {
+			uint32_t stset = tmpa9xx_ud2ab_read(udc, UD2AB_UDMSTSET);
+			if (!(stset & UDC2AB_MR_ENABLE))
+			 	break;
+		}
+		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_RESET);
+	} else if (ep->num == 2) {
+		/* master write */
+		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MW_ABORT);
+		while(1) {
+			uint32_t stset = tmpa9xx_ud2ab_read(udc, UD2AB_UDMSTSET);
+			if (!(stset & UDC2AB_MW_ENABLE))
+			 	break;
+		}
+		tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MW_RESET);
+	}
+
+	udc2_cmd_ep(ep, EP_FIFO_CLEAR);
 
 	spin_unlock_irqrestore(&ep->s, flags);
 	return 0;
@@ -939,6 +969,8 @@ static void ud2_int(struct tmpa9xx_udc *udc, uint16_t val)
 
 static void reinit(struct tmpa9xx_udc *udc)
 {
+	struct tmpa9xx_ep *ep = &udc->ep[0];
+	uint32_t intenb;
 	int i;
 
 	dev_dbg(udc->dev, "%s():\n", __func__);
@@ -948,10 +980,17 @@ static void reinit(struct tmpa9xx_udc *udc)
 	udc2_reg_write(udc, UD2CMD, EP_ALL_INVALID);
 	udc2_reg_write(udc, UD2INT_EP_MASK, (1 << 2) | (1 << 1));
 
-	__nuke(&udc->ep[0], -ESHUTDOWN);
+	__nuke(ep, -ESHUTDOWN);
+	udc2_cmd_ep(ep, EP_FIFO_CLEAR);
+	udc2_cmd_ep(ep, EP_RESET);
+	ep->ackwait = 0;
 
 	for (i = 1; i < NUM_ENDPOINTS; i++)
 		tmpa9xx_ep_disable(&udc->ep[i].ep);
+
+	/* clear all interrupts */
+	intenb = tmpa9xx_ud2ab_read(udc, UD2AB_INTENB);
+	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, intenb);
 }
 
 static int udc_set_address(struct tmpa9xx_udc *udc, int addr)
@@ -1120,8 +1159,6 @@ static void int_reset_end(struct tmpa9xx_udc *udc)
 		udc->ep[1].maxpacket = EP_MAX_PACKET_SIZE_FS;
 		udc->ep[2].maxpacket = EP_MAX_PACKET_SIZE_FS;
 	}
-
-	tmpa9xx_ud2ab_write(udc, UD2AB_UDMSTSET, UDC2AB_MR_RESET | UDC2AB_MW_RESET);
 }
 
 union setup {
@@ -1150,6 +1187,8 @@ static void int_setup(struct tmpa9xx_udc *udc)
 #define w_length	le16_to_cpu(pkt.r.wLength)
 
 	dev_dbg(udc->dev, "SETUP %02x.%02x v%04x i%04x l%04x, in %d\n", pkt.r.bRequestType, pkt.r.bRequest, w_value, w_index, w_length, pkt.r.bRequestType & USB_DIR_IN);
+
+	BUG_ON(ep->cur);
 
 	udc2_reg_write(udc, UD2CMD, EP_SETUP_RECEIVED);
 
@@ -1400,9 +1439,11 @@ again:
 		int_suspend(udc);
 	else if ((status & INT_RESET))
 		int_reset(udc);
-	else if ((status & INT_RESET_END))
+	else if ((status & INT_RESET_END)) {
 		int_reset_end(udc);
-	else if ((status & INT_MR_END_ADD))
+		/* make sure that no pending interrupts are handled */
+		goto again;
+	} else if ((status & INT_MR_END_ADD))
 		int_mr_end_add(udc);
 	else if ((status & INT_MW_SET_ADD))
 		int_mw_set_add(udc);
