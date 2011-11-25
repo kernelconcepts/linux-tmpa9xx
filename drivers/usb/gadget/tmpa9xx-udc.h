@@ -137,7 +137,6 @@ struct tmpa9xx_ep {
 	spinlock_t s;
 
 	int stopped;
-	int ackwait;
 	int maxpacket;
 	int is_in;
 	int is_iso;
@@ -162,6 +161,7 @@ struct tmpa9xx_udc {
 
 	int state;
 	unsigned char addr;
+	int ackwait;
 
 	int r_len;
 	int w_len;

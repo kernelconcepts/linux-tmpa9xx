@@ -465,6 +465,13 @@ static int read_ep0_fifo(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 	return 1;
 }
 
+static void finish_ep0_no_data_stage(struct tmpa9xx_udc *udc)
+{
+	udc->ackwait = 1;
+	udc2_reg_write(udc, UD2CMD, EP_SETUP_FIN);
+	udc->ignore_status_ack = 0;
+}
+
 static int ep0_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 {
 	struct tmpa9xx_ep *ep = &udc->ep[0];
@@ -481,15 +488,13 @@ static int ep0_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 	if (!req->req.length) {
 		dev_dbg(udc->dev, "%s(): req %p, is_in %d, length == 0. done.\n", __func__, req, ep->is_in);
 
-		ep->ackwait = 1;
-		udc2_reg_write(udc, UD2CMD, EP_SETUP_FIN);
-		udc->ignore_status_ack = 0;
+		finish_ep0_no_data_stage(udc);
 
 		goto out;
 	}
 
-	if (ep->stopped || ep->ackwait) {
-		dev_dbg(udc->dev, "%s(): stopped %d, ackwait %d\n", __func__, ep->stopped, ep->ackwait);
+	if (ep->stopped || udc->ackwait) {
+		dev_dbg(udc->dev, "%s(): stopped %d, ackwait %d\n", __func__, ep->stopped, udc->ackwait);
 		goto out;
 	}
 
@@ -612,8 +617,8 @@ static int ep1_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 
 	spin_lock_irqsave(&ep->s, flags);
 
-	if (ep->stopped || ep->ackwait) {
-		dev_dbg(udc->dev, "%s(): stopped %d, ackwait %d, adding req %p to queue\n", __func__, ep->stopped, ep->ackwait, req);
+	if (ep->stopped || udc->ackwait) {
+		dev_dbg(udc->dev, "%s(): stopped %d, ackwait %d, adding req %p to queue\n", __func__, ep->stopped, udc->ackwait, req);
 		list_add_tail(&req->queue, &ep->queue);
 		goto out;
 	}
@@ -776,8 +781,8 @@ static int ep3_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 
 	spin_lock_irqsave(&ep->s, flags);
 
-	if (ep->stopped || ep->ackwait) {
-		dev_dbg(udc->dev, "%s(): stopped %d, ackwait %d\n", __func__, ep->stopped, ep->ackwait);
+	if (ep->stopped || udc->ackwait) {
+		dev_dbg(udc->dev, "%s(): stopped %d, ackwait %d\n", __func__, ep->stopped, udc->ackwait);
 		goto out;
 	}
 
@@ -983,7 +988,7 @@ static void reinit(struct tmpa9xx_udc *udc)
 	__nuke(ep, -ESHUTDOWN);
 	udc2_cmd_ep(ep, EP_FIFO_CLEAR);
 	udc2_cmd_ep(ep, EP_RESET);
-	ep->ackwait = 0;
+	udc->ackwait = 0;
 
 	for (i = 1; i < NUM_ENDPOINTS; i++)
 		tmpa9xx_ep_disable(&udc->ep[i].ep);
@@ -995,8 +1000,6 @@ static void reinit(struct tmpa9xx_udc *udc)
 
 static int udc_set_address(struct tmpa9xx_udc *udc, int addr)
 {
-	struct tmpa9xx_ep *ep = &udc->ep[0];
-
 	dev_dbg(udc->dev, "%s(): addr 0x%04x", __func__, addr);
 
 	/* check max. address */
@@ -1005,21 +1008,9 @@ static int udc_set_address(struct tmpa9xx_udc *udc, int addr)
 	udc->addr = addr;
 	udc->state = ADDRESSED;
 
-	ep->ackwait = 1;
-	udc2_reg_write(udc, UD2CMD, EP_SETUP_FIN);
-	/* enable STATUS interrupt to make the real address setting happen */
-	udc->ignore_status_ack = 0;
+	finish_ep0_no_data_stage(udc);
 
 	return 0;
-}
-
-static void finish_ep0_no_data_stage(struct tmpa9xx_udc *udc)
-{
-	struct tmpa9xx_ep *ep = &udc->ep[0];
-
-	ep->ackwait = 1;
-	udc2_reg_write(udc, UD2CMD, EP_SETUP_FIN);
-	udc->ignore_status_ack = 0;
 }
 
 static int udc_set_feature(struct tmpa9xx_udc *udc, int type, int feature, int index)
@@ -1071,14 +1062,11 @@ static int udc_clear_feature(struct tmpa9xx_udc *udc, int type, int feature, int
 
 static int udc_set_config(struct tmpa9xx_udc *udc, int configuration_value)
 {
-	struct tmpa9xx_ep *ep = &udc->ep[0];
-
 	dev_dbg(udc->dev, "%s(): configuration_value %d", __func__, configuration_value);
 
 	udc->state = CONFIGURED;
 
-	ep->ackwait = 1;
-
+	udc->ackwait = 1;
 	/* enable STATUS interrupt to make transition to CONFIGURED state happen */
 	udc->ignore_status_ack = 0;
 
@@ -1275,8 +1263,7 @@ static void int_status(struct tmpa9xx_udc *udc)
 
 	spin_lock_irqsave(&ep->s, flags);
 
-	ep->ackwait = 0;
-
+	udc->ackwait = 0;
 	udc->ignore_status_ack = 1;
 
 	req = ep->cur;
