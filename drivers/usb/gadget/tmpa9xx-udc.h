@@ -50,11 +50,6 @@
 #define EP_MAX_PACKET_SIZE_FS	0x0040
 #define EP_MAX_PACKET_SIZE_HS	0x0200
 
-#define EP0 (0 << 4)
-#define EP1 (1 << 4)
-#define EP2 (2 << 4)
-#define EP3 (3 << 4)
-
 #define EP_SETUP_FIN		0x1
 #define EP_SET_DATA0		0x2
 #define EP_RESET		0x3

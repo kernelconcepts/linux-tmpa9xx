@@ -138,6 +138,13 @@ static void tmpa9xx_ep_free_request(struct usb_ep *_ep, struct usb_request *_req
 	dev_dbg(udc->dev, "%s(): %p\n", __func__, _req);
 }
 
+static inline void udc2_cmd_ep(struct tmpa9xx_ep *ep, int cmd)
+{
+	struct tmpa9xx_udc *udc = ep->udc;
+
+	udc2_reg_write(udc, UD2CMD, (ep->num << 4) | cmd);
+}
+
 static int __ep_set_halt(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep)
 {
 	dev_dbg(udc->dev, "%s(): '%s'\n", __func__, ep->ep.name);
@@ -145,18 +152,7 @@ static int __ep_set_halt(struct tmpa9xx_udc *udc, struct tmpa9xx_ep *ep)
 	if (ep->ep.name == ep_name[0])
 		return 0;
 #if 0
-	u16 cmd = EP_STALL;
-
-	else if (ep->ep.name == ep_name[1])
-		cmd |= EP1;
-	else if (ep->ep.name == ep_name[2])
-		cmd |= EP2;
-	else {
-		BUG_ON(ep->ep.name == ep_name[3]);
-		cmd |= EP3;
-	}
-
-	udc2_reg_write(udc, UD2CMD, cmd);
+	udc2_cmd_ep(ep, EP_STALL);
 #endif
 	ep->is_halted = 1;
 
@@ -262,19 +258,19 @@ static int tmpa9xx_ep_enable(struct usb_ep *_ep, const struct usb_endpoint_descr
 	if (ep->ep.name == ep_name[1]) {
 		udc2_reg_write(udc, UD2EPx_MAXPACKETSIZE(ep->num), maxpacket);
 		udc2_reg_write(udc, UD2EPx_STATUS(ep->num), EP_DUAL_BULK_IN);
-		udc2_reg_write(udc, UD2CMD, EP1 | EP_RESET);
+		udc2_cmd_ep(ep, EP_RESET);
 		return 0;
 	} else if (ep->ep.name == ep_name[2]) {
 		udc2_reg_write(udc, UD2EPx_MAXPACKETSIZE(ep->num), maxpacket);
 		udc2_reg_write(udc, UD2EPx_STATUS(ep->num), EP_DUAL_BULK_OUT);
-		udc2_reg_write(udc, UD2CMD, EP2 | EP_RESET);
+		udc2_cmd_ep(ep, EP_RESET);
 		return 0;
 	}
 
 	BUG_ON(ep->ep.name != ep_name[3]);
 	udc2_reg_write(udc, UD2EPx_MAXPACKETSIZE(ep->num), maxpacket);
 	udc2_reg_write(udc, UD2EPx_STATUS(ep->num), (1 << 7) | (1 << 3) | (1 << 2));
-	udc2_reg_write(udc, UD2CMD, EP3 | EP_RESET);
+	udc2_cmd_ep(ep, EP_RESET);
 
 	return 0;
 }
@@ -318,14 +314,7 @@ static int tmpa9xx_ep_disable(struct usb_ep *_ep)
 	ep->ep.maxpacket = ep->maxpacket;
 	INIT_LIST_HEAD(&ep->queue);
 
-	if (ep->ep.name == ep_name[1]) {
-		udc2_reg_write(udc, UD2CMD, EP1 | EP_INVALID);
-	} else if (ep->ep.name == ep_name[2]) {
-		udc2_reg_write(udc, UD2CMD, EP2 | EP_INVALID);
-	} else {
-		BUG_ON(ep->ep.name != ep_name[3]);
-		udc2_reg_write(udc, UD2CMD, EP3 | EP_INVALID);
-	}
+	udc2_cmd_ep(ep, EP_INVALID);
 
 	spin_unlock_irqrestore(&ep->s, flags);
 	return 0;
@@ -359,7 +348,7 @@ static int __write_ep0_fifo(struct tmpa9xx_udc *udc, uint16_t *buf, int length)
 	}
 
 	if (length < ep->ep.maxpacket)
-		udc2_reg_write(udc, UD2CMD, EP0 | EP_EOP);
+		udc2_cmd_ep(ep, EP_EOP);
 
 	dev_dbg(udc->dev, "%s(): write done\n", __func__);
 
@@ -406,7 +395,7 @@ static void write_ep3_fifo(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 	}
 
 	if (send_eop)
-		udc2_reg_write(udc, UD2CMD, EP3 | EP_EOP);
+		udc2_cmd_ep(ep, EP_EOP);
 
 	dev_dbg(udc->dev, "%s(): write done, send_eop %d\n", __func__, send_eop);
 }
@@ -505,7 +494,7 @@ static int ep1_dma_helper(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 	/* transmit a zero-length packet, no DMA necessary */
 	if (!len) {
 		dev_dbg(udc->dev, "%s(): req %p, todo %d, len %d, (zlp)\n", __func__, req, req->req.length - req->req.actual, len);
-		udc2_reg_write(udc, UD2CMD, EP1 | EP_TX_0DATA);
+		udc2_cmd_ep(ep, EP_TX_0DATA);
 		return 1;
 	}
 
@@ -1037,14 +1026,7 @@ static int udc_clear_feature(struct tmpa9xx_udc *udc, int type, int feature, int
 		/* no reset command necessary */
 	}
 #if 0
-	else if (ep->ep.name == ep_name[1])
-		udc2_reg_write(udc, UD2CMD, EP1 | EP_RESET);
-	else if (ep->ep.name == ep_name[2])
-		udc2_reg_write(udc, UD2CMD, EP2 | EP_RESET);
-	else {
-		BUG_ON(ep->ep.name == ep_name[3]);
-		udc2_reg_write(udc, UD2CMD, EP3 | EP_RESET);
-	}
+	udc2_cmd_ep(ep, EP_RESET);
 #endif
 	ep->is_halted = 0;
 
@@ -1231,7 +1213,7 @@ static void int_setup(struct tmpa9xx_udc *udc)
 	ret = udc->driver->setup(&udc->gadget, &pkt.r);
 	if (ret < 0) {
 		dev_dbg(udc->dev, "req %02x.%02x protocol STALL; ret %d\n", pkt.r.bRequestType, pkt.r.bRequest, ret);
-		udc2_reg_write(udc, UD2CMD, EP0 | EP_STALL);
+		udc2_cmd_ep(ep, EP_STALL);
 	}
 
 	dev_dbg(udc->dev, "%s(): end\n", __func__);
