@@ -1509,7 +1509,8 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	}
 
 	disable_irq(udc->irq);
-
+	cancel_work_sync(&udc->ws);
+	flush_workqueue(udc->wq);
 	stop_activity(udc);
 
 	driver->disconnect(&udc->gadget);
@@ -1683,6 +1684,8 @@ static int __devexit tmpa9xx_udc_remove(struct platform_device *pdev)
 	BUG_ON(!res);
 
 	disable_irq(udc->irq);
+
+	cancel_work_sync(&udc->ws);
 
 	flush_workqueue(udc->wq);
 
