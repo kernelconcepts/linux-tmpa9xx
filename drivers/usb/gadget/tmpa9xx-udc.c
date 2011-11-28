@@ -1343,8 +1343,6 @@ static void int_ep0(struct tmpa9xx_udc *udc)
 	udc2_reg_read(udc, UD2EPx_DATASIZE(ep->num), &avail);
 	dev_dbg(udc->dev, "%s(): avail %d, length %d\n", __func__, avail, length);
 
-	BUG_ON(avail < length);
-
 	ret = read_ep0_fifo(udc, req);
 	if (ret) {
 		done(ep, req, 0);
