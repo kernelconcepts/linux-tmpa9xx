@@ -88,6 +88,7 @@ static void udc2_reg_write(struct tmpa9xx_udc *udc, const u32 addr, const u16 da
 static void done(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req, int status)
 {
 	struct tmpa9xx_udc *udc = ep->udc;
+	int stopped = ep->stopped;
 
 	dev_dbg(udc->dev, "%s(): '%s', req %p\n", __func__, ep->ep.name, req);
 
@@ -105,7 +106,7 @@ static void done(struct tmpa9xx_ep *ep, struct tmpa9xx_request *req, int status)
 	ep->stopped = 1;
 	req->req.status = status;
 	req->req.complete(&ep->ep, &req->req);
-	ep->stopped = 0;
+	ep->stopped = stopped;
 }
 
 static struct usb_request *tmpa9xx_ep_alloc_request(struct usb_ep *_ep, unsigned int gfp_flags)
@@ -619,8 +620,8 @@ static int ep1_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 
 	spin_lock_irqsave(&ep->s, flags);
 
-	if (ep->stopped || udc->ackwait) {
-		dev_dbg(udc->dev, "%s(): stopped %d, ackwait %d, adding req %p to queue\n", __func__, ep->stopped, udc->ackwait, req);
+	if (ep->stopped) {
+		dev_dbg(udc->dev, "%s(): stopped %d, adding req %p to queue\n", __func__, ep->stopped, req);
 		list_add_tail(&req->queue, &ep->queue);
 		goto out;
 	}
@@ -783,8 +784,9 @@ static int ep3_queue(struct tmpa9xx_udc *udc, struct tmpa9xx_request *req)
 
 	spin_lock_irqsave(&ep->s, flags);
 
-	if (ep->stopped || udc->ackwait) {
-		dev_dbg(udc->dev, "%s(): stopped %d, ackwait %d\n", __func__, ep->stopped, udc->ackwait);
+	if (ep->stopped) {
+		dev_dbg(udc->dev, "%s(): stopped %d, adding req %p to queue\n", __func__, ep->stopped, req);
+		list_add_tail(&req->queue, &ep->queue);
 		goto out;
 	}
 
@@ -831,6 +833,7 @@ static int handle_ep3_snd(struct tmpa9xx_udc *udc)
 	list_del_init(&req->queue);
 	ep->cur = req;
 
+	dev_dbg(udc->dev, "%s(): handling next request %p\n", __func__, req);
 	write_ep3_fifo(udc, req);
 
 out:
@@ -974,7 +977,7 @@ static void ud2_int(struct tmpa9xx_udc *udc, uint16_t val)
 	udc2_reg_write(udc, UD2INT, udc->ud2int | val);
 }
 
-static void reinit(struct tmpa9xx_udc *udc)
+static void stop_activity(struct tmpa9xx_udc *udc)
 {
 	struct tmpa9xx_ep *ep = &udc->ep[0];
 	uint32_t intenb;
@@ -983,13 +986,11 @@ static void reinit(struct tmpa9xx_udc *udc)
 	dev_dbg(udc->dev, "%s():\n", __func__);
 
 	udc->state = DEFAULT;
-
 	udc2_reg_write(udc, UD2CMD, EP_ALL_INVALID);
 	udc2_reg_write(udc, UD2INT_EP_MASK, (1 << 2) | (1 << 1));
 
 	__nuke(ep, -ESHUTDOWN);
 	udc2_cmd_ep(ep, EP_FIFO_CLEAR);
-	udc2_cmd_ep(ep, EP_RESET);
 	udc->ackwait = 0;
 
 	for (i = 1; i < NUM_ENDPOINTS; i++)
@@ -1128,7 +1129,7 @@ static void int_reset_end(struct tmpa9xx_udc *udc)
 
 	tmpa9xx_ud2ab_write(udc, UD2AB_INTSTS, INT_RESET_END);
 
-	reinit(udc);
+	stop_activity(udc);
 
 	udc->ignore_status_nak = 1;
 	udc->ignore_status_ack = 1;
@@ -1508,7 +1509,8 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	}
 
 	disable_irq(udc->irq);
-	udc2_reg_write(udc, UD2CMD, EP_ALL_INVALID);
+
+	stop_activity(udc);
 
 	driver->disconnect(&udc->gadget);
 	driver->unbind(&udc->gadget);
@@ -1639,7 +1641,7 @@ static int __devinit tmpa9xx_udc_probe(struct platform_device *pdev)
 	udc->w_len = 0;
 	udc->r_len = 0;
 
-	reinit(udc);
+	stop_activity(udc);
 
 	ret = device_register(&udc->gadget.dev);
 	if (ret < 0) {
