@@ -1018,7 +1018,7 @@ static int udc_set_address(struct tmpa9xx_udc *udc, int addr)
 
 static int udc_set_feature(struct tmpa9xx_udc *udc, int type, int feature, int index)
 {
-	dev_err(udc->dev, "%s(): type %d, feature %d, index %d\n", __func__, type, feature, index);
+	dev_dbg(udc->dev, "%s(): type %d, feature %d, index %d\n", __func__, type, feature, index);
 
 	/* fixme: we only handle endpoints atm */
 	BUG_ON(type != USB_RECIP_ENDPOINT);
