@@ -165,16 +165,19 @@ static int pwm_backlight_suspend(struct platform_device *pdev,
 
 	if (pb->notify)
 		pb->notify(pb->dev, 0);
-	pwm_config(pb->pwm, 0, pb->period);
 	pwm_stop(pb->pwm);
+
 	return 0;
 }
 
 static int pwm_backlight_resume(struct platform_device *pdev)
 {
 	struct backlight_device *bl = platform_get_drvdata(pdev);
+	struct pwm_bl_data *pb = dev_get_drvdata(&bl->dev);
 
 	backlight_update_status(bl);
+	pwm_start(pb->pwm);
+
 	return 0;
 }
 #else
