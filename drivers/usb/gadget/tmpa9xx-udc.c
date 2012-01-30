@@ -1177,9 +1177,14 @@ static void int_setup(struct tmpa9xx_udc *udc)
 #define w_value		le16_to_cpu(pkt.r.wValue)
 #define w_length	le16_to_cpu(pkt.r.wLength)
 
-	dev_dbg(udc->dev, "SETUP %02x.%02x v%04x i%04x l%04x, in %d\n", pkt.r.bRequestType, pkt.r.bRequest, w_value, w_index, w_length, pkt.r.bRequestType & USB_DIR_IN);
+	if (ep->cur) {
+		dev_dbg(udc->dev, "warning: setup packet handling in progress\n");
+		__nuke(ep, 0);
+		udc2_cmd_ep(ep, EP_FIFO_CLEAR);
+		udc->ackwait = 0;
+	}
 
-	BUG_ON(ep->cur);
+	dev_dbg(udc->dev, "SETUP %02x.%02x v%04x i%04x l%04x, in %d\n", pkt.r.bRequestType, pkt.r.bRequest, w_value, w_index, w_length, pkt.r.bRequestType & USB_DIR_IN);
 
 	udc2_reg_write(udc, UD2CMD, EP_SETUP_RECEIVED);
 
