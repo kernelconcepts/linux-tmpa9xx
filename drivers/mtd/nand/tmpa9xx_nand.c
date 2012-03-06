@@ -425,6 +425,30 @@ static void tmpa9xx_nand_write_buf(struct mtd_info *mtd, const u_char * buf,
 	former_column = priv->column;
 }
 
+static int tmpa9xx_nand_verify_buf(struct mtd_info *mtd, const uint8_t *buf, int len)
+{
+	struct nand_chip *chip = mtd->priv;
+	struct tmpa9xx_nand_private *priv =
+		(struct tmpa9xx_nand_private *)chip->priv;
+	int i;
+
+	tmpa9xx_nand_set_cmd(NAND_CMD_READ0);
+	tmpa9xx_nand_set_addr(priv->column,priv->page_addr);
+	tmpa9xx_nand_set_cmd(NAND_CMD_READSTART);
+
+	tmpa9xx_nand_set_rw_mode(1);
+	tmpa9xx_wait_nand_dev_ready(mtd);
+
+	for (i = 0; i < len; i++) {
+		uint8_t x = readb(chip->IO_ADDR_R);
+		if (buf[i] != x) {
+			return -EFAULT;
+		}
+	}
+
+	return 0;
+}
+
 static void tmpa9xx_nand_enable_hwecc(struct mtd_info *mtd, int mode)
 {
 	struct nand_chip *this = mtd->priv;
@@ -858,6 +882,7 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	nand->read_byte = tmpa9xx_nand_read_byte;
 	nand->read_buf = tmpa9xx_nand_read_buf;
 	nand->write_buf = tmpa9xx_nand_write_buf;
+	nand->verify_buf = tmpa9xx_nand_verify_buf;
 
 	/* ECC Mode */
 	nand->ecc.mode = NAND_ECC_HW;
