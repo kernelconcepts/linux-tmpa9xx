@@ -358,6 +358,8 @@ static inline void mtd_erase_callback(struct erase_info *instr)
 }
 #endif
 
+void *mtd_kmalloc_up_to(const struct mtd_info *mtd, size_t *size);
+
 /*
  * Debugging macro and defines
  */
