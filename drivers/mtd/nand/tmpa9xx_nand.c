@@ -438,6 +438,7 @@ static int tmpa9xx_nand_verify_buf(struct mtd_info *mtd, const uint8_t *buf, int
 
 	tmpa9xx_nand_set_rw_mode(1);
 	tmpa9xx_wait_nand_dev_ready(mtd);
+	priv->column += len;
 
 	for (i = 0; i < len; i++) {
 		uint8_t x = readb(chip->IO_ADDR_R);
