@@ -49,6 +49,8 @@
 
 #define MAX_WAIT_FOR_HW		100000
 
+#define ECC_DEBUG(...)
+
 struct tmpa9xx_nand_timing {
 	unsigned int splw;
 	unsigned int sphw;
@@ -479,6 +481,9 @@ static int tmpa9xx_nand_calculate_ecc(struct mtd_info *mtd,
 		*buf++ = (unsigned char)(ecc_val & 0xff);
 		*buf++ = (unsigned char)(ecc_val >> 8);
 		*buf++ = (unsigned char)(ecc_val >> 16);
+
+		ECC_DEBUG("%s(): ecc_code %02x %02x %02x | %02x %02x %02x\n", __func__, ecc_code[0], ecc_code[1], ecc_code[2], ecc_code[3], ecc_code[4], ecc_code[5]);
+
 	} else {
 		//MLC, Reed solomn ECC data
 		ecc_val = NDECCRD0;
@@ -585,46 +590,101 @@ static int tmpa9xx_nand_part_correctdata_rs(unsigned char *data,
 	return (3);		/* Uncorrectable error */
 }
 
+static int tmpa9xx_nand_part_correctdata_hamming_256(struct mtd_info *mtd,
+						 u_char *dat,
+						 u_char *read_ecc,
+						 u_char *calc_ecc)
+{
+	u_int32_t ecc_nand = read_ecc[0] | (read_ecc[1] << 8) | (read_ecc[2] << 16);
+	u_int32_t ecc_calc = calc_ecc[0] | (calc_ecc[1] << 8) | (calc_ecc[2] << 16);
+	u_int32_t bits_set;
+	uint8_t line;
+	uint8_t column;
+	uint8_t byte;
+	int i;
+
+	/* this algorithm follows "3.11.4.2 Error Correction Methods" from the spec */
+
+	/* step 2 */
+	u_int32_t diff = ecc_calc ^ ecc_nand;
+
+	ECC_DEBUG("%s(): read_ecc %02x %02x %02x\n", __func__, read_ecc[0], read_ecc[1], read_ecc[2]);
+	ECC_DEBUG("%s(): calc_ecc %02x %02x %02x\n", __func__, calc_ecc[0], calc_ecc[1], calc_ecc[2]);
+	ECC_DEBUG("%s(): diff 0x%08x\n", __func__, diff);
+
+	/* step 3 */
+	if (!diff)
+		return 0;
+
+	/* http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetKernighan */
+	for (bits_set = 0; diff; bits_set++)
+		diff &= diff - 1; /* clear the least significant bit set */
+
+	/* step 4 */
+	if (bits_set == 1)
+		return 1;
+
+	/* step 5 */
+	diff = ecc_calc ^ ecc_nand;
+	for (i = 0; i < 12; i++, diff >>= 2) {
+		ECC_DEBUG("%s(): diff 0x%08x, bits %02x\n", __func__, diff, diff & 0x3);
+		if (i == 8)
+			continue;
+		if ((diff & 0x3) == 0x1 || (diff & 0x3) == 0x2)
+			continue;
+		ECC_DEBUG("%s(): uncorrectable error\n", __func__);
+		return -1;
+	}
+
+	/* step 6: the ecc error is correctable */
+	diff = ecc_calc ^ ecc_nand;
+	for (i = 0, line = 0; i < 8; i++, diff >>= 2)
+		if ((diff & 0x3) == 0x2)
+			line |= (0x1 << i);
+
+	diff >>= 2;
+	for (i = 0, column = 0; i < 3; i++, diff >>= 2)
+		if ((diff & 0x3) == 0x2)
+			column |= (0x1 << i);
+
+	byte = *(dat + line);
+	ECC_DEBUG("%s(): single bit ECC error detected in line 0x%02x, column 0x%02x\n", __func__, line, column);
+	ECC_DEBUG("%s(): old byte is 0x%02x\n", __func__, byte);
+
+	if (byte & (1 << column))
+		byte &= ~(1 << column);
+	else
+		byte |= (1 << column);
+
+	*(dat + line) = byte;
+	ECC_DEBUG("%s(): new byte is 0x%02x\n", __func__, byte);
+
+	return 1;
+}
+
 static int tmpa9xx_nand_part_correctdata_hamming(struct mtd_info *mtd,
 						 u_char * dat,
 						 u_char * read_ecc,
 						 u_char * calc_ecc)
 {
-	struct nand_chip *this = mtd->priv;
-	u_int32_t ecc_nand =
-	    read_ecc[0] | (read_ecc[1] << 8) | (read_ecc[2] << 16);
-	u_int32_t ecc_calc =
-	    calc_ecc[0] | (calc_ecc[1] << 8) | (calc_ecc[2] << 16);
-	u_int32_t diff = ecc_calc ^ ecc_nand;
+	int ret1;
+	int ret2;
 
-	if (diff) {
-		if ((((diff >> 12) ^ diff) & 0xfff) == 0xfff) {
-			/* Correctable error */
-			if ((diff >> (12 + 3)) < this->ecc.size) {
-				uint8_t find_bit = 1 << ((diff >> 12) & 7);
-				uint32_t find_byte = diff >> (12 + 3);
+	ret1 = tmpa9xx_nand_part_correctdata_hamming_256(mtd, dat+256, read_ecc,   calc_ecc);
+	ret2 = tmpa9xx_nand_part_correctdata_hamming_256(mtd, dat,     read_ecc+3, calc_ecc+3);
 
-				dat[find_byte] ^= find_bit;
-				printk(KERN_DEBUG
-				       "Correcting single bit ECC error at offset: %d, bit: %d\n",
-				       find_byte, find_bit);
-				return 1;
-			} else {
-				printk(KERN_ERR "ECC UNCORRECTED_ERROR 1\n");
-				return -EIO;
-			}
-		} else if (!(diff & (diff - 1))) {
-			/* Single bit ECC error in the ECC itself,
-			   nothing to fix */
-			printk(KERN_DEBUG "Single bit ECC error in ECC.\n");
-			return 1;
-		} else {
-			/* Uncorrectable error */
-			printk(KERN_ERR "ECC UNCORRECTED_ERROR 2\n");
-			return -EIO;
-		}
-	}
-	return (0);
+	/* all went fine */
+	if (!ret1 && !ret2)
+		return 0;
+
+	/* check for uncorrectable error in one of the blocks */
+	if (ret1 < 0)
+		return ret1;
+	if (ret2 < 0)
+		return ret2;
+
+	/* report all corrected errors */
+	return ret1 + ret2;
 }
 
 static int tmpa9xx_nand_correct_data(struct mtd_info *mtd, u_char * data,
