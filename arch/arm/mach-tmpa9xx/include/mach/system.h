@@ -36,7 +36,11 @@ static inline void arch_reset(char mode,const char *cmd)
 {
   void __iomem *wdt_base = (void *)WDT_BASE_ADDRESS;
 
+  /* enable access */
+  writel(0x1ACCE551, wdt_base + 0xc00);
+  /* set minimum value */
   writel(0x1, wdt_base + 0x0);
+  /* go */
   writel(0x3, wdt_base + 0x8);
 
   /* Bye ! */
