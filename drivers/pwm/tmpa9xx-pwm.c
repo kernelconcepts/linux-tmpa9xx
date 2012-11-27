@@ -18,7 +18,6 @@
  * Foundation, Inp->, 59 Temple Place, Suite 330, Boston, MA 02111-1307
  * USA
  */
-
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -52,9 +51,6 @@ struct tmpa9xx_pwm_priv {
 
 	int period;
 	int prescaler;
-
-	unsigned long period_ticks;
-	unsigned long duty_ticks;
 };
 
 static void start(struct pwm_device *pp)
@@ -114,8 +110,9 @@ static int stop_sync(struct pwm_device *pp)
 	return 1;
 }
 
-static void calc(struct tmpa9xx_pwm_priv *p)
+static void calc(struct pwm_device *pp)
 {
+	struct tmpa9xx_pwm_priv *p = pwm_get_drvdata(pp);
 	int pwm_period[] = {255, 511, 1023, 65535};
 	int prescaler[] = {1, 16, 256};
 	int i;
@@ -130,12 +127,12 @@ static void calc(struct tmpa9xx_pwm_priv *p)
 	uint64_t div;
 	unsigned long diff;
 
-	dev_dbg(p->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, p->period_ticks, p->duty_ticks);
+	dev_dbg(p->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, pp->period_ticks, pp->duty_ticks);
 
 	for(i = 0; i < 4; i++) {
 		for(j = 0; j < 3; j++) {
 			c_period_ticks = prescaler[j] * pwm_period[i];
-			diff = abs(p->period_ticks - c_period_ticks);
+			diff = abs(pp->period_ticks - c_period_ticks);
 			if(diff < approx_diff) {
 				approx_i = i;
 				approx_j = j;
@@ -149,16 +146,17 @@ static void calc(struct tmpa9xx_pwm_priv *p)
 	BUG_ON(approx_j == -1);
 	c_period_ticks = prescaler[approx_j] * pwm_period[approx_i];
 
-	div = (p->duty_ticks * c_period_ticks);
-	do_div(div, p->period_ticks);
+	div = (pp->duty_ticks * c_period_ticks);
+	do_div(div, pp->period_ticks);
 	c_duty_ticks =  div;
 
-	p->period_ticks = c_period_ticks;
-	p->duty_ticks = c_duty_ticks;
+	pp->period_ticks = c_period_ticks;
+	pp->duty_ticks = c_duty_ticks;
+
 	p->period = approx_i;
 	p->prescaler = approx_j;
 
-	dev_dbg(p->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, p->period_ticks, p->duty_ticks);
+	dev_dbg(p->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, pp->period_ticks, pp->duty_ticks);
 }
 
 static void reconfigure(struct pwm_device *pp)
@@ -171,20 +169,14 @@ static void reconfigure(struct pwm_device *pp)
 	if(!pp->period_ticks)
 		return;
 
-	p->period_ticks = pp->period_ticks;
-	p->duty_ticks = pp->duty_ticks;
-
-	calc(p);
-
-	pp->period_ticks = p->period_ticks;
-	pp->duty_ticks = p->duty_ticks;
+	calc(pp);
 
 	if (pp->polarity) {
-		val = p->period_ticks - p->duty_ticks;
+		val = pp->period_ticks - pp->duty_ticks;
 		tmr_writel(p, TIMER_COMPARE_1, val);
 		dev_dbg(p->dev, "%s(): honouring inverted polarity, val %d\n", __func__, val);
 	} else {
-		tmr_writel(p, TIMER_COMPARE_1, p->duty_ticks);
+		tmr_writel(p, TIMER_COMPARE_1, pp->duty_ticks);
 	}
 
 	val = tmr_readl(p, TIMER_MODE);
@@ -197,7 +189,7 @@ static void reconfigure(struct pwm_device *pp)
 	val |= (p->prescaler << 4);
 	tmr_writel(p, TIMER_CONTROL, val);
 
-	dev_dbg(p->dev, "%s(): compare %lu, period %d, prescaler %d\n", __func__, p->duty_ticks, p->period, p->prescaler);
+	dev_dbg(p->dev, "%s(): period %d, prescaler %d\n", __func__, p->period, p->prescaler);
 }
 
 static int config_nosleep(struct pwm_device *pp, struct pwm_config *c)
