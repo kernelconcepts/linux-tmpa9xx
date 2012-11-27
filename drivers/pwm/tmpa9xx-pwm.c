@@ -53,59 +53,59 @@ struct tmpa9xx_pwm_priv {
 	unsigned long polarity : 1;
 };
 
-static void start(struct pwm_device *p)
+static void start(struct pwm_device *pp)
 {
-	struct tmpa9xx_pwm_priv *pp = pwm_get_drvdata(p);
-	int active = test_bit(PWM_FLAG_RUNNING, &p->flags);
+	struct tmpa9xx_pwm_priv *p = pwm_get_drvdata(pp);
+	int active = test_bit(PWM_FLAG_RUNNING, &pp->flags);
 	uint32_t val;
 
-	dev_dbg(pp->dev, "%s():\n", __func__);
+	dev_dbg(p->dev, "%s():\n", __func__);
 	BUG_ON(active);
 
-	val = tmr_readl(pp, TIMER_MODE);
+	val = tmr_readl(p, TIMER_MODE);
 	val |= (0x01 << 6);	/* select PWM mode */
-	tmr_writel(pp, TIMER_MODE, val);
+	tmr_writel(p, TIMER_MODE, val);
 
-	val = tmr_readl(pp, TIMER_CONTROL);
+	val = tmr_readl(p, TIMER_CONTROL);
 	val |=   ((0x01 << 1)	/* 16 bit counter */
 		| (0x01 << 6)	/* Timer0 periodic timer */
 		| (0x01 << 7));	/* Timer0 enable */
-	tmr_writel(pp, TIMER_CONTROL, val);
+	tmr_writel(p, TIMER_CONTROL, val);
 
-	val = tmr_readl(pp, TIMER_CMPEN);
+	val = tmr_readl(p, TIMER_CMPEN);
 	val |= (0x01 << 0); /* enable compare */
-	tmr_writel(pp, TIMER_CMPEN, val);
+	tmr_writel(p, TIMER_CMPEN, val);
 
-	set_bit(PWM_FLAG_RUNNING, &p->flags);
+	set_bit(PWM_FLAG_RUNNING, &pp->flags);
 }
 
-static int stop_sync(struct pwm_device *p)
+static int stop_sync(struct pwm_device *pp)
 {
-	struct tmpa9xx_pwm_priv *pp = pwm_get_drvdata(p);
-	int active = test_bit(PWM_FLAG_RUNNING, &p->flags);
+	struct tmpa9xx_pwm_priv *p = pwm_get_drvdata(pp);
+	int active = test_bit(PWM_FLAG_RUNNING, &pp->flags);
 	uint32_t val;
 
 	if (!active) {
-		dev_dbg(pp->dev, "%s(): already stopped\n", __func__);
+		dev_dbg(p->dev, "%s(): already stopped\n", __func__);
 		return 0;
 	}
-	dev_dbg(pp->dev, "%s():\n", __func__);
+	dev_dbg(p->dev, "%s():\n", __func__);
 	
-	val = tmr_readl(pp, TIMER_CONTROL);
+	val = tmr_readl(p, TIMER_CONTROL);
 	val &=   ~((0x01 << 1)	/* deselect 16 bit counter */
 		| (0x01 << 6)	/* disable Timer0 periodic timer */
 		| (0x01 << 7));	/* disable Timer0 enable */
-	tmr_writel(pp, TIMER_CONTROL, val);
+	tmr_writel(p, TIMER_CONTROL, val);
 
-	val = tmr_readl(pp, TIMER_MODE);
+	val = tmr_readl(p, TIMER_MODE);
 	val &= ~(0x01 << 6);	/* deselect PWM mode */
-	tmr_writel(pp, TIMER_MODE, val);
+	tmr_writel(p, TIMER_MODE, val);
 
-	val = tmr_readl(pp, TIMER_CMPEN);
+	val = tmr_readl(p, TIMER_CMPEN);
 	val &= ~(0x01 << 0); /* disable compare */
-	tmr_writel(pp, TIMER_CMPEN, val);
+	tmr_writel(p, TIMER_CMPEN, val);
 
-	clear_bit(PWM_FLAG_RUNNING, &p->flags);
+	clear_bit(PWM_FLAG_RUNNING, &pp->flags);
 
 	return 1;
 }
@@ -120,7 +120,7 @@ struct pwm_calc
 	int prescaler;
 };
 
-static void calc(struct tmpa9xx_pwm_priv *pp, struct pwm_calc *c)
+static void calc(struct tmpa9xx_pwm_priv *p, struct pwm_calc *c)
 {
 	int pwm_period[] = {255, 511, 1023, 65535};
 	int prescaler[] = {1, 16, 256};
@@ -136,7 +136,7 @@ static void calc(struct tmpa9xx_pwm_priv *pp, struct pwm_calc *c)
 	uint64_t div;
 	unsigned long diff;
 
-	dev_dbg(pp->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, c->period_ticks, c->duty_ticks);
+	dev_dbg(p->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, c->period_ticks, c->duty_ticks);
 
 	for(i = 0; i < 4; i++) {
 		for(j = 0; j < 3; j++) {
@@ -147,7 +147,7 @@ static void calc(struct tmpa9xx_pwm_priv *pp, struct pwm_calc *c)
 				approx_j = j;
 				approx_diff = diff;
 			}
-			dev_dbg(pp->dev, "%s(): %5d:%3d => %12llu, diff %12lu\n", __func__, pwm_period[i], prescaler[j], c_period_ticks, diff);
+			dev_dbg(p->dev, "%s(): %5d:%3d => %12llu, diff %12lu\n", __func__, pwm_period[i], prescaler[j], c_period_ticks, diff);
 		}
 	}
 
@@ -163,13 +163,13 @@ static void calc(struct tmpa9xx_pwm_priv *pp, struct pwm_calc *c)
 		long percent;
 		diff = c->period_ticks - c_period_ticks;
 		percent = (100 * abs(diff)) / c->period_ticks;
-		dev_dbg(pp->dev, "%s(): warning: wanted period_ticks %lu, got %llu, diff %ld, %ld%% off\n", __func__, c->period_ticks, c_period_ticks, diff, percent);
+		dev_dbg(p->dev, "%s(): warning: wanted period_ticks %lu, got %llu, diff %ld, %ld%% off\n", __func__, c->period_ticks, c_period_ticks, diff, percent);
 	}
 	if(c_duty_ticks != c->duty_ticks) {
 		long percent;
 		diff = c->duty_ticks - c_duty_ticks;
 		percent = (100 * abs(diff)) / c->duty_ticks;
-		dev_dbg(pp->dev, "%s(): warning: wanted duty_ticks %lu, got %llu, diff %ld, %ld%% off\n", __func__, c->duty_ticks, c_duty_ticks, diff, percent);
+		dev_dbg(p->dev, "%s(): warning: wanted duty_ticks %lu, got %llu, diff %ld, %ld%% off\n", __func__, c->duty_ticks, c_duty_ticks, diff, percent);
 	}
 
 	c->period_ticks = c_period_ticks;
@@ -177,96 +177,96 @@ static void calc(struct tmpa9xx_pwm_priv *pp, struct pwm_calc *c)
 	c->period = approx_i;
 	c->prescaler = approx_j;
 
-	dev_dbg(pp->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, c->period_ticks, c->duty_ticks);
+	dev_dbg(p->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, c->period_ticks, c->duty_ticks);
 }
 
-static void reconfigure(struct pwm_device *p)
+static void reconfigure(struct pwm_device *pp)
 {
-	struct tmpa9xx_pwm_priv *pp = pwm_get_drvdata(p);
+	struct tmpa9xx_pwm_priv *p = pwm_get_drvdata(pp);
 	struct pwm_calc c;
 	uint32_t val;
 
-	dev_dbg(pp->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, p->period_ticks, p->duty_ticks);
+	dev_dbg(p->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, pp->period_ticks, pp->duty_ticks);
 
-	if(!p->period_ticks || !p->duty_ticks)
+	if(!pp->period_ticks || !pp->duty_ticks)
 		return;
 
-	c.period_ticks = p->period_ticks;
-	c.duty_ticks = p->duty_ticks;
+	c.period_ticks = pp->period_ticks;
+	c.duty_ticks = pp->duty_ticks;
 
-	calc(pp, &c);
+	calc(p, &c);
 
-	p->period_ticks = c.period_ticks;
-	p->duty_ticks = c.duty_ticks;
+	pp->period_ticks = c.period_ticks;
+	pp->duty_ticks = c.duty_ticks;
 
 	if (pp->polarity) {
 		val = c.period_ticks - c.duty_ticks;
-		tmr_writel(pp, TIMER_COMPARE_1, val);
-		dev_dbg(pp->dev, "%s(): honouring inverted polarity, val %d\n", __func__, val);
+		tmr_writel(p, TIMER_COMPARE_1, val);
+		dev_dbg(p->dev, "%s(): honouring inverted polarity, val %d\n", __func__, val);
 	} else {
-		tmr_writel(pp, TIMER_COMPARE_1, c.duty_ticks);
+		tmr_writel(p, TIMER_COMPARE_1, c.duty_ticks);
 	}
 
-	val = tmr_readl(pp, TIMER_MODE);
+	val = tmr_readl(p, TIMER_MODE);
 	val &= ~(0x3 << 4);
 	val |= (c.period << 4);
-	tmr_writel(pp, TIMER_MODE, val);
+	tmr_writel(p, TIMER_MODE, val);
 
-	val = tmr_readl(pp, TIMER_CONTROL);
+	val = tmr_readl(p, TIMER_CONTROL);
 	val &= ~(0x3 << 4);
 	val |= (c.prescaler << 4);
-	tmr_writel(pp, TIMER_CONTROL, val);
+	tmr_writel(p, TIMER_CONTROL, val);
 
-	dev_dbg(pp->dev, "%s(): compare %lu, period %d, prescaler %d\n", __func__, c.duty_ticks, c.period, c.prescaler);
+	dev_dbg(p->dev, "%s(): compare %lu, period %d, prescaler %d\n", __func__, c.duty_ticks, c.period, c.prescaler);
 }
 
-static int config_nosleep(struct pwm_device *p, struct pwm_config *c)
+static int config_nosleep(struct pwm_device *pp, struct pwm_config *c)
 {
-	struct tmpa9xx_pwm_priv *pp = pwm_get_drvdata(p);
+	struct tmpa9xx_pwm_priv *p = pwm_get_drvdata(pp);
 	int was_on = 0;
 
-	dev_dbg(pp->dev, "%s(): config_mask 0x%02lx\n", __func__, c->config_mask);
+	dev_dbg(p->dev, "%s(): config_mask 0x%02lx\n", __func__, c->config_mask);
 
-	was_on = stop_sync(p);
+	was_on = stop_sync(pp);
 	if (was_on < 0)
 		return was_on;
 
 	if (test_bit(PWM_CONFIG_PERIOD_TICKS, &c->config_mask)) {
-		dev_dbg(pp->dev, "%s(): period_ticks %ld\n", __func__, c->period_ticks);
-		p->period_ticks = c->period_ticks;
-		reconfigure(p);
+		dev_dbg(p->dev, "%s(): period_ticks %ld\n", __func__, c->period_ticks);
+		pp->period_ticks = c->period_ticks;
+		reconfigure(pp);
 	}
 
 	if (test_bit(PWM_CONFIG_DUTY_TICKS, &c->config_mask)) {
-		dev_dbg(pp->dev, "%s(): duty_ticks %ld\n", __func__, c->duty_ticks);
-		p->duty_ticks = c->duty_ticks;
-		reconfigure(p);
+		dev_dbg(p->dev, "%s(): duty_ticks %ld\n", __func__, c->duty_ticks);
+		pp->duty_ticks = c->duty_ticks;
+		reconfigure(pp);
 	}
 
 	if (test_bit(PWM_CONFIG_POLARITY, &c->config_mask)) {
-		dev_dbg(pp->dev, "%s(): polarity %d\n", __func__, c->polarity);
+		dev_dbg(p->dev, "%s(): polarity %d\n", __func__, c->polarity);
 		pp->polarity = !!c->polarity;
 	}
 
 	if (test_bit(PWM_CONFIG_START, &c->config_mask)
 	    || (was_on && !test_bit(PWM_CONFIG_STOP, &c->config_mask)))
-		start(p);
+		start(pp);
 
 	return 0;
 }
 
-static int config(struct pwm_device *p, struct pwm_config *c)
+static int config(struct pwm_device *pp, struct pwm_config *c)
 {
-	return config_nosleep(p, c);
+	return config_nosleep(pp, c);
 }
 
-static int request(struct pwm_device *p)
+static int request(struct pwm_device *pp)
 {
-	struct tmpa9xx_pwm_priv *pp = pwm_get_drvdata(p);
+	struct tmpa9xx_pwm_priv *p = pwm_get_drvdata(pp);
 
-	p->tick_hz = clk_get_rate(pp->clk);
+	pp->tick_hz = clk_get_rate(p->clk);
 
-	dev_dbg(pp->dev, "%s(): rate %lu\n", __func__, p->tick_hz);
+	dev_dbg(p->dev, "%s(): rate %lu\n", __func__, pp->tick_hz);
 
 	return 0;
 }
@@ -281,43 +281,43 @@ static const struct pwm_device_ops device_ops = {
 static int __devinit tmpa9xx_pwm_probe(struct platform_device *pdev)
 {
 	int prescaler_clock_khz;
-	struct tmpa9xx_pwm_priv *pp;
+	struct tmpa9xx_pwm_priv *p;
 	int ret;
 
-	pp = kzalloc(sizeof(*pp), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(pp)) {
+	p = kzalloc(sizeof(*p), GFP_KERNEL);
+	if (IS_ERR_OR_NULL(p)) {
 		dev_err(&pdev->dev, "kzalloc() failed\n");
 		ret = -ENOMEM;
 		goto err0;
 	}
 
-	pp->dev = &pdev->dev;
+	p->dev = &pdev->dev;
 
-	pp->r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (IS_ERR_OR_NULL(pp->r)) {
+	p->r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (IS_ERR_OR_NULL(p->r)) {
 		dev_err(&pdev->dev, "platform_get_resource() failed\n");
 		ret = -EINVAL;
 		goto err1;
 	}
 
-	pp->r = request_mem_region(pp->r->start, resource_size(pp->r), pdev->name);
-	if (IS_ERR_OR_NULL(pp->r)) {
+	p->r = request_mem_region(p->r->start, resource_size(p->r), pdev->name);
+	if (IS_ERR_OR_NULL(p->r)) {
 		dev_err(&pdev->dev, "request_mem_region() failed\n");
 		ret = -EBUSY;
 		goto err2;
 	}
 
-	pp->regs = ioremap(pp->r->start, resource_size(pp->r));
-	if (IS_ERR_OR_NULL(pp->regs)) {
+	p->regs = ioremap(p->r->start, resource_size(p->r));
+	if (IS_ERR_OR_NULL(p->regs)) {
 		dev_err(&pdev->dev, "ioremap() failed\n");
 		ret = -ENODEV;
 		goto err3;
 	}
 
-	pp->clk = clk_get(&pdev->dev, NULL);
-	if (IS_ERR_OR_NULL(pp->clk)) {
+	p->clk = clk_get(&pdev->dev, NULL);
+	if (IS_ERR_OR_NULL(p->clk)) {
 		dev_err(&pdev->dev, "clk_get() failed\n");
-		ret = PTR_ERR(pp->clk);
+		ret = PTR_ERR(p->clk);
 		if (!ret)
 			ret = -EINVAL;
 		goto err4;
@@ -331,67 +331,67 @@ static int __devinit tmpa9xx_pwm_probe(struct platform_device *pdev)
 
 	dev_dbg(&pdev->dev, "prescaler_clock_khz %d\n", prescaler_clock_khz);
 
-	ret = clk_set_rate(pp->clk, prescaler_clock_khz);
+	ret = clk_set_rate(p->clk, prescaler_clock_khz);
 	if (ret) {
 		dev_err(&pdev->dev, "clk_set_rate() failed\n");
 		ret = -ENODEV;
 		goto err5;
 	}
 
-	ret = clk_enable(pp->clk);
+	ret = clk_enable(p->clk);
 	if (ret) {
 		dev_err(&pdev->dev, "clk_enable() failed\n");
 		ret = -ENODEV;
 		goto err5;
 	}
 
-	platform_set_drvdata(pdev, pp);
+	platform_set_drvdata(pdev, p);
 
-	pp->pwm = pwm_register(&device_ops, &pdev->dev, "tmpa9xx-pwm:%d", pdev->id);
-	if (IS_ERR_OR_NULL(pp->pwm)) {
+	p->pwm = pwm_register(&device_ops, &pdev->dev, "tmpa9xx-pwm:%d", pdev->id);
+	if (IS_ERR_OR_NULL(p->pwm)) {
 		dev_err(&pdev->dev, "pwm_register() failed\n");
-		ret = PTR_ERR(pp->pwm);
+		ret = PTR_ERR(p->pwm);
 		if (!ret)
 			ret = -EINVAL;
 		goto err5;
 	}
 
-	pwm_set_drvdata(pp->pwm, pp);
+	pwm_set_drvdata(p->pwm, p);
 
-	dev_info(&pdev->dev, "channel %d, clk speed %lu kHz\n", pdev->id, clk_get_rate(pp->clk));
+	dev_info(&pdev->dev, "channel %d, clk speed %lu kHz\n", pdev->id, clk_get_rate(p->clk));
 
 	return 0;
 
 err5:
 	platform_set_drvdata(pdev, NULL);
-	clk_put(pp->clk);
+	clk_put(p->clk);
 err4:
-	iounmap(pp->regs);
+	iounmap(p->regs);
 err3:
-	release_mem_region(pp->r->start, resource_size(pp->r));
+	release_mem_region(p->r->start, resource_size(p->r));
 err2:
 err1:
-	kfree(pp);
+	kfree(p);
 err0:
 	return ret;
 }
 
 static int __devexit tmpa9xx_pwm_remove(struct platform_device *pdev)
 {
-	struct tmpa9xx_pwm_priv *pp = platform_get_drvdata(pdev);
+	struct tmpa9xx_pwm_priv *p = platform_get_drvdata(pdev);
 
-	if (pwm_is_requested(pp->pwm)) {
-		if (pwm_is_running(pp->pwm))
-			pwm_stop(pp->pwm);
-		pwm_release(pp->pwm);
+	if (pwm_is_requested(p->pwm)) {
+		if (pwm_is_running(p->pwm))
+			pwm_stop(p->pwm);
+		pwm_release(p->pwm);
 	}
-	pwm_unregister(pp->pwm);
+	pwm_unregister(p->pwm);
 	platform_set_drvdata(pdev, NULL);
-	clk_disable(pp->clk);
-	clk_put(pp->clk);
-	iounmap(pp->regs);
-	release_mem_region(pp->r->start, resource_size(pp->r));
-	kfree(pp);
+	clk_disable(p->clk);
+	clk_put(p->clk);
+	iounmap(p->regs);
+	release_mem_region(p->r->start, resource_size(p->r));
+	kfree(p);
 
 	return 0;
 }
