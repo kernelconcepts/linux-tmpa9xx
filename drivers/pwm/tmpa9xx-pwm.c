@@ -153,19 +153,6 @@ static void calc(struct tmpa9xx_pwm_priv *p)
 	do_div(div, p->period_ticks);
 	c_duty_ticks =  div;
 
-	if(c_period_ticks != p->period_ticks) {
-		long percent;
-		diff = p->period_ticks - c_period_ticks;
-		percent = (100 * abs(diff)) / p->period_ticks;
-		dev_dbg(p->dev, "%s(): warning: wanted period_ticks %lu, got %llu, diff %ld, %ld%% off\n", __func__, p->period_ticks, c_period_ticks, diff, percent);
-	}
-	if(c_duty_ticks != p->duty_ticks) {
-		long percent;
-		diff = p->duty_ticks - c_duty_ticks;
-		percent = (100 * abs(diff)) / p->duty_ticks;
-		dev_dbg(p->dev, "%s(): warning: wanted duty_ticks %lu, got %llu, diff %ld, %ld%% off\n", __func__, p->duty_ticks, c_duty_ticks, diff, percent);
-	}
-
 	p->period_ticks = c_period_ticks;
 	p->duty_ticks = c_duty_ticks;
 	p->period = approx_i;
@@ -181,7 +168,7 @@ static void reconfigure(struct pwm_device *pp)
 
 	dev_dbg(p->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, pp->period_ticks, pp->duty_ticks);
 
-	if(!pp->period_ticks || !pp->duty_ticks)
+	if(!pp->period_ticks)
 		return;
 
 	p->period_ticks = pp->period_ticks;
