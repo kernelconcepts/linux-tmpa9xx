@@ -127,8 +127,8 @@ static void calc(struct tmpa9xx_pwm_priv *pp, struct pwm_calc *c)
 	int i;
 	int j;
 
-	int approx_i;
-	int approx_j;
+	int approx_i = -1;
+	int approx_j = -1;
 	int approx_diff = INT_MAX;
 
 	uint64_t c_period_ticks;
@@ -151,6 +151,8 @@ static void calc(struct tmpa9xx_pwm_priv *pp, struct pwm_calc *c)
 		}
 	}
 
+	BUG_ON(approx_i == -1);
+	BUG_ON(approx_j == -1);
 	c_period_ticks = prescaler[approx_j] * pwm_period[approx_i];
 
 	div = (c->duty_ticks * c_period_ticks);
