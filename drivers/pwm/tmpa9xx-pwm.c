@@ -49,8 +49,6 @@ struct tmpa9xx_pwm_priv {
 	struct clk *clk;
 	struct pwm_device *pwm;
 	struct pwm_device_ops ops;
-
-	unsigned long polarity : 1;
 };
 
 static void start(struct pwm_device *pp)
