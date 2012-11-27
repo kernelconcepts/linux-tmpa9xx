@@ -278,7 +278,6 @@ static const struct pwm_device_ops device_ops = {
 
 static int __devinit tmpa9xx_pwm_probe(struct platform_device *pdev)
 {
-	const struct platform_device_id *id = platform_get_device_id(pdev);
 	int prescaler_clock_khz;
 	struct tmpa9xx_pwm_priv *pp;
 	int ret;
