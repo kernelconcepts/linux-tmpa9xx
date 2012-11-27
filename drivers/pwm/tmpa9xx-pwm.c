@@ -50,16 +50,17 @@ struct tmpa9xx_pwm_priv {
 	struct pwm_device *pwm;
 	struct pwm_device_ops ops;
 
-	unsigned long active : 1;
 	unsigned long polarity : 1;
 };
 
 static void start(struct pwm_device *p)
 {
 	struct tmpa9xx_pwm_priv *pp = pwm_get_drvdata(p);
+	int active = test_bit(PWM_FLAG_RUNNING, &p->flags);
 	uint32_t val;
 
-	dev_dbg(pp->dev, "%s(): active %d\n", __func__, pp->active);
+	dev_dbg(pp->dev, "%s():\n", __func__);
+	BUG_ON(active);
 
 	val = tmr_readl(pp, TIMER_MODE);
 	val |= (0x01 << 6);	/* select PWM mode */
@@ -75,20 +76,21 @@ static void start(struct pwm_device *p)
 	val |= (0x01 << 0); /* enable compare */
 	tmr_writel(pp, TIMER_CMPEN, val);
 
-	pp->active = 1;
 	set_bit(PWM_FLAG_RUNNING, &p->flags);
 }
 
 static int stop_sync(struct pwm_device *p)
 {
 	struct tmpa9xx_pwm_priv *pp = pwm_get_drvdata(p);
+	int active = test_bit(PWM_FLAG_RUNNING, &p->flags);
 	uint32_t val;
 
-	dev_dbg(pp->dev, "%s(): active %d\n", __func__, pp->active);
-
-	if (!pp->active)
+	if (!active) {
+		dev_dbg(pp->dev, "%s(): already stopped\n", __func__);
 		return 0;
-
+	}
+	dev_dbg(pp->dev, "%s():\n", __func__);
+	
 	val = tmr_readl(pp, TIMER_CONTROL);
 	val &=   ~((0x01 << 1)	/* deselect 16 bit counter */
 		| (0x01 << 6)	/* disable Timer0 periodic timer */
