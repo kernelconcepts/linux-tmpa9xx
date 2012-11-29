@@ -48,7 +48,7 @@ struct tmpa9xx_pwm_priv {
 	struct clk *clk;
 	struct pwm_device *pwm;
 	struct pwm_device_ops ops;
-
+	int once;
 	int period;
 	int prescaler;
 };
@@ -59,9 +59,33 @@ static void start(struct pwm_device *pp)
 	int active = test_bit(PWM_FLAG_RUNNING, &pp->flags);
 	uint32_t val;
 
-	dev_dbg(p->dev, "%s():\n", __func__);
 	BUG_ON(active);
+	set_bit(PWM_FLAG_RUNNING, &pp->flags);
 
+	val = tmr_readl(p, TIMER_MODE);
+	val &= ~(0x3 << 4);
+	val |= (p->period << 4);
+	tmr_writel(p, TIMER_MODE, val);
+
+	val = tmr_readl(p, TIMER_CONTROL);
+	val &= ~(0x3 << 4);
+	val |= (p->prescaler << 4);
+	tmr_writel(p, TIMER_CONTROL, val);
+
+	if (pp->polarity) {
+		val = pp->period_ticks - pp->duty_ticks;
+		tmr_writel(p, TIMER_COMPARE_1, val);
+		dev_dbg(p->dev, "%s(): honouring inverted polarity, duty_ticks %d\n", __func__, val);
+	} else {
+		tmr_writel(p, TIMER_COMPARE_1, pp->duty_ticks);
+		dev_dbg(p->dev, "%s(): duty_ticks %d\n", __func__, pp->duty_ticks);
+	}
+
+	if (p->once)
+		return;
+	
+	p->once = 1;
+	
 	val = tmr_readl(p, TIMER_MODE);
 	val |= (0x01 << 6);	/* select PWM mode */
 	tmr_writel(p, TIMER_MODE, val);
@@ -75,15 +99,12 @@ static void start(struct pwm_device *pp)
 	val = tmr_readl(p, TIMER_CMPEN);
 	val |= (0x01 << 0); /* enable compare */
 	tmr_writel(p, TIMER_CMPEN, val);
-
-	set_bit(PWM_FLAG_RUNNING, &pp->flags);
 }
 
 static int stop_sync(struct pwm_device *pp)
 {
 	struct tmpa9xx_pwm_priv *p = pwm_get_drvdata(pp);
 	int active = test_bit(PWM_FLAG_RUNNING, &pp->flags);
-	uint32_t val;
 
 	if (!active) {
 		dev_dbg(p->dev, "%s(): already stopped\n", __func__);
@@ -91,20 +112,13 @@ static int stop_sync(struct pwm_device *pp)
 	}
 	dev_dbg(p->dev, "%s():\n", __func__);
 	
-	val = tmr_readl(p, TIMER_CONTROL);
-	val &=   ~((0x01 << 1)	/* deselect 16 bit counter */
-		| (0x01 << 6)	/* disable Timer0 periodic timer */
-		| (0x01 << 7));	/* disable Timer0 enable */
-	tmr_writel(p, TIMER_CONTROL, val);
-
-	val = tmr_readl(p, TIMER_MODE);
-	val &= ~(0x01 << 6);	/* deselect PWM mode */
-	tmr_writel(p, TIMER_MODE, val);
-
-	val = tmr_readl(p, TIMER_CMPEN);
-	val &= ~(0x01 << 0); /* disable compare */
-	tmr_writel(p, TIMER_CMPEN, val);
-
+	if (pp->polarity) {
+		tmr_writel(p, TIMER_COMPARE_1, pp->period_ticks);
+		dev_dbg(p->dev, "%s(): honouring inverted polarity\n", __func__);
+	} else {
+		tmr_writel(p, TIMER_COMPARE_1, 0);
+	}
+	
 	clear_bit(PWM_FLAG_RUNNING, &pp->flags);
 
 	return 1;
@@ -117,7 +131,6 @@ static void reconfigure(struct pwm_device *pp)
 	int prescaler[] = {1, 16, 256};
 	int i;
 	int j;
-	uint32_t val;
 
 	dev_dbg(p->dev, "%s(): period_ticks %ld, duty_ticks %ld\n", __func__, pp->period_ticks, pp->duty_ticks);
 
@@ -141,24 +154,6 @@ out:
 	pp->period_ticks = pwm_period[j] * prescaler[i];
 
 	dev_dbg(p->dev, "%s(): period %d, prescaler %d -> %ld\n", __func__, p->period, p->prescaler, pp->period_ticks);
-
-	if (pp->polarity) {
-		val = pp->period_ticks - pp->duty_ticks;
-		tmr_writel(p, TIMER_COMPARE_1, val);
-		dev_dbg(p->dev, "%s(): honouring inverted polarity, val %d\n", __func__, val);
-	} else {
-		tmr_writel(p, TIMER_COMPARE_1, pp->duty_ticks);
-	}
-
-	val = tmr_readl(p, TIMER_MODE);
-	val &= ~(0x3 << 4);
-	val |= (p->period << 4);
-	tmr_writel(p, TIMER_MODE, val);
-
-	val = tmr_readl(p, TIMER_CONTROL);
-	val &= ~(0x3 << 4);
-	val |= (p->prescaler << 4);
-	tmr_writel(p, TIMER_CONTROL, val);
 }
 
 static int config_nosleep(struct pwm_device *pp, struct pwm_config *c)
