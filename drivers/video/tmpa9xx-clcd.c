@@ -93,7 +93,7 @@ int tmpa9xx_clcd_check(struct clcd_fb *fb, struct fb_var_screeninfo *var)
 	   (CHECK(xres) 		||
 	    CHECK(yres) 		||
 	    CHECK(bits_per_pixel)	||
-	    CHECK(pixclock)		||
+//	    CHECK(pixclock)		||
 	    CHECK(left_margin)		||
 	    CHECK(right_margin)		||
 	    CHECK(upper_margin)		||
