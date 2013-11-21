@@ -173,7 +173,7 @@ static struct spi_board_info spi_board_info[] = {
 	.platform_data	= &mmc_spi_info,
 	.mode		= SPI_MODE_0,
 	.chip_select	= 0,
-	.max_speed_hz	= 24000000,
+	.max_speed_hz	= 20000000,
 	.bus_num	= 0,
 
 },
