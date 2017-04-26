@@ -2,7 +2,7 @@
  *  drivers/mtd/nand/tmpa9xx_nand.c
  *
  * Copyright (C) 2008 ?. All rights reserved. (?)
- * Copyright (C) 2009, 2010 Florian Boor <florian.boor@kernelconcepts.de>
+ * Copyright (C) 2009, 2010, 2017 Florian Boor <florian.boor@kernelconcepts.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -75,6 +75,9 @@ struct tmpa9xx_nand_private {
 	struct completion dma_completion;	/* copletion of DMA (internal) */
 	struct nand_chip chip;	/* nand chip structure (internal) */
 	spinlock_t lock;	/* Lock for Pageread needed due to HW implementation */
+#ifdef CONFIG_MACH_TONGA
+	unsigned int needs_onchip_ecc;
+#endif
 };
 
 /* NAND OOB layout for different chip types */
@@ -221,6 +224,13 @@ static void tmpa9xx_nand_start_autoload(unsigned int read)
 
 static void tmpa9xx_nand_start_ecc(unsigned int read, unsigned int mlc)
 {
+	/* 28.11.2016 (sae): Take care of datasheet annotation page 327:
+	   Before reading ECC registers, be sure to set NDFMCR0<ECCE> to 0 ...
+	   After that, i have seen ecc handling in function. Without that, just sometimes.
+	   Debug messages showed, that ECCE was on, everytime.
+	*/
+	NDFMCR0 &= ~NDFMCR0_ECCE;
+
 	if (mlc && read == 0) {
 		NDFMCR0 |= NDFMCR0_RSEDN;
 	}
@@ -323,6 +333,31 @@ static void tmpa9xx_nand_set_addr(unsigned int column, unsigned int page_addr)
 	/* Latch in address */
 	NDFMCR0 &= ~(NDFMCR0_ALE | NDFMCR0_WE);
 }
+
+static void tmpa9xx_nand_enable_feature_ecc(struct mtd_info *mtd)
+{
+	unsigned char buf[4] = { 0x08, 0x00, 0x00, 0x00 };
+	int i;
+	tmpa9xx_nand_set_cmd(NAND_CMD_SET_FEATURES);
+	tmpa9xx_nand_set_addr(-1, 0x90);
+	tmpa9xx_nand_set_rw_mode(0);	/* Set controller to write mode */
+	tmpa9xx_wait_nand_dev_ready(mtd);
+
+	for (i = 0; i < 4; i++)
+		NDFDTR = buf[i];
+	tmpa9xx_wait_nand_dev_ready(mtd);
+
+	/* check parameters */
+	tmpa9xx_nand_set_cmd(NAND_CMD_GET_FEATURES);
+	tmpa9xx_nand_set_addr(-1, 0x90);
+	tmpa9xx_wait_nand_dev_ready(mtd);
+
+	buf[0] = 0x52;
+	for (i = 0; i < 4; i++)
+		buf[i] = tmpa9xx_nand_read_byte(mtd);
+	printk (KERN_ERR "\nMicron ECC feature: %s\n", (buf[0] == 0x08) ? "enabled" : "disabled" );
+}
+
 
 static void tmpa9xx_nand_read_buf(struct mtd_info *mtd, u_char * buf, int len)
 {
@@ -878,6 +913,14 @@ static void tmpa9xx_nand_get_internal_structure(struct tmpa9xx_nand_private
 		priv->page_size = NORMALPAGE_SIZE;
 		priv->spare_size = NORMALPAGE_SPARE;
 	}
+
+#ifdef CONFIG_MACH_TONGA
+	/* check for new Micron flash, Tonga only! */
+	if (id_code[0] == 0x2c) {
+		priv->needs_onchip_ecc = 1;
+		printk(KERN_INFO "Micron flash mode set\n");
+	}
+#endif
 }
 
 static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
@@ -933,7 +976,12 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	nand->IO_ADDR_R = (void __iomem *)(&NDFDTR);
 	nand->IO_ADDR_W = (void __iomem *)(&NDFDTR);
 
-	nand->chip_delay = 0;
+	/* 07.12.2106 (sae) :
+	   Working with new Micronchip / u-boot needs tp specify this option to
+	   take care of bad blocks defined via table descriptors. */
+	nand->options |= NAND_USE_FLASH_BBT;
+
+	nand->chip_delay = 0; // 100
 
 	/* Control Functions */
 	nand->select_chip = tmpa9xx_nand_select_chip;
@@ -980,6 +1028,14 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 		nand->ecc.mode = NAND_ECC_SOFT;
 	}
 
+#ifdef CONFIG_MACH_TONGA
+	/* ECC Mode */
+	if (priv->needs_onchip_ecc) {
+		nand->ecc.mode = NAND_ECC_NONE; /* No ECC for Micron flash with on chip ECC */
+		tmpa9xx_nand_enable_feature_ecc(mtd);
+	}
+#endif
+
 	/* Reinitialize with reset values */
 	NDFMCR0 = 0x0;
 	NDFMCR1 = 0x0;
@@ -1019,6 +1075,7 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 		goto err5;
 	}
 
+	
 /* Partitions:
  * If there is support for partitions then use commandline partitions if
  * available, the defauts otherwise.
