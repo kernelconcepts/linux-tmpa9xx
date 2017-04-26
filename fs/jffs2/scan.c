@@ -472,6 +472,12 @@ static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblo
 		default: 	return ret;
 		}
 	}
+	#ifdef CONFIG_TONGA_MICRON_JFFS2
+	else {
+		if (c->mtd->block_isbad(c->mtd, jeb->offset))
+			return BLK_STATE_BADBLOCK;
+	}
+	#endif
 #endif
 
 	if (jffs2_sum_active()) {

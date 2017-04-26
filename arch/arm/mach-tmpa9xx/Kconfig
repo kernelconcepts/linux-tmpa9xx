@@ -43,3 +43,8 @@ endif
 config TMPA9XX_ADC
 	tristate
 	default n
+
+config TONGA_MICRON_JFFS2
+	bool "Tonga2 Micron NAND ECC OOB quirks for JFFS2"
+	default n
+

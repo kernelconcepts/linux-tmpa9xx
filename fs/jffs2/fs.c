@@ -691,8 +691,11 @@ void jffs2_gc_release_page(struct jffs2_sb_info *c,
 
 static int jffs2_flash_setup(struct jffs2_sb_info *c) {
 	int ret = 0;
-
+#ifdef CONFIG_TONGA_MICRON_JFFS2
+	if (c->mtd->type == MTD_NANDFLASH) {
+#else
 	if (jffs2_cleanmarker_oob(c)) {
+#endif
 		/* NAND flash... do setup accordingly */
 		ret = jffs2_nand_flash_setup(c);
 		if (ret)
@@ -725,7 +728,11 @@ static int jffs2_flash_setup(struct jffs2_sb_info *c) {
 
 void jffs2_flash_cleanup(struct jffs2_sb_info *c) {
 
+#ifdef CONFIG_TONGA_MICRON_JFFS2
+	if (c->mtd->type == MTD_NANDFLASH) {
+#else
 	if (jffs2_cleanmarker_oob(c)) {
+#endif
 		jffs2_nand_flash_cleanup(c);
 	}
 
