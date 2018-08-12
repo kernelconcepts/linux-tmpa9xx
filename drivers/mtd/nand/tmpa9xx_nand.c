@@ -2,7 +2,7 @@
  *  drivers/mtd/nand/tmpa9xx_nand.c
  *
  * Copyright (C) 2008 ?. All rights reserved. (?)
- * Copyright (C) 2009, 2010 Florian Boor <florian.boor@kernelconcepts.de>
+ * Copyright (C) 2009, 2010, 2018 Florian Boor <florian.boor@kernelconcepts.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,6 +34,8 @@
 #include <asm/io.h>
 #include <mach/dma.h>
 #include <mach/regs.h>
+
+#include "../mtdcore.h"
 
 #define ECCBUF_SIZE 		 256
 #define DMA_TIMEOUT   		 0xFFFF
@@ -67,7 +69,7 @@ struct tmpa9xx_nand_private {
 	unsigned int spare_size;	/* Spare size of flash (autodetection) */
 	unsigned int column;	/* internal column position (internal) */
 	unsigned int page_addr;	/* internal page position (internal) */
-        unsigned int rndout;	/* marker for random data out reading */
+	unsigned int rndout;	/* marker for random data out reading */
 	unsigned int dma_ch;	/* used DMA channel (internal) */
 	unsigned int chip_select;	/* Chips selected (internal) */
 	unsigned char *buf;	/* Buffer pointer (internal) */
@@ -111,7 +113,6 @@ static struct nand_ecclayout nand_oob_rs_2048 = {
 		    {48, 6}}
 };
 
-#ifdef CONFIG_MTD_PARTITIONS
 /*
  * Define static partitions for flash device
  */
@@ -141,7 +142,6 @@ static struct mtd_partition mtd_parts_builtin[] = {
 };
 
 static const char *part_probes[] = { "cmdlinepart", NULL };
-#endif
 
 void tmpa9xx_nand_dma_read(struct tmpa9xx_nand_private *priv, unsigned int buf,
 			   unsigned short size)
@@ -886,10 +886,8 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 	struct mtd_info *mtd;
 	struct nand_chip *nand;
 	int ret;
-#ifdef CONFIG_MTD_PARTITIONS
 	struct mtd_partition *partitions = NULL;
 	int num_cmdline_parts;
-#endif
 
         /* NAND Controller */
         NDFMCR0 = 0x00000010; // NDCE0n pin = 0, ECC-disable
@@ -950,8 +948,8 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 
 	/* Options */
 	nand->options = NAND_NO_SUBPAGE_WRITE |
-	    NAND_NO_AUTOINCR | NAND_NO_READRDY | NAND_USE_FLASH_BBT;
-
+	    NAND_NO_AUTOINCR | NAND_NO_READRDY;
+	nand->bbt_options = NAND_BBT_USE_FLASH;
 	tmpa9xx_nand_select_chip(NULL, 0);
 	tmpa9xx_nand_set_timing(priv);
 	tmpa9xx_nand_get_internal_structure(priv);
@@ -1019,27 +1017,18 @@ static int __devinit tmpa9xx_nand_probe(struct platform_device *pdev)
 		goto err5;
 	}
 
-/* Partitions:
- * If there is support for partitions then use commandline partitions if
- * available, the defauts otherwise.
- * If there is no support for partitions then add the whole device.
- */
+	mtd->name = "tmpa9xx-nand";
 
-#ifdef CONFIG_MTD_PARTITIONS
 #ifdef CONFIG_MTD_CMDLINE_PARTS
-	mtd->name = "tmpa9xx-nand",
-	    num_cmdline_parts = parse_mtd_partitions(mtd, part_probes,
+	num_cmdline_parts = parse_mtd_partitions(mtd, part_probes,
 						     &partitions, 0);
 	if (num_cmdline_parts)
-		add_mtd_partitions(mtd, partitions, num_cmdline_parts);
+		add_mtd_partitions(mtd, partitions, num_partitions);
 	else
 		add_mtd_partitions(mtd, mtd_parts_builtin, num_partitions);
 #else
 	add_mtd_partitions(mtd, mtd_parts_builtin, num_partitions);
 #endif //CONFIG_MTD_CMDLINE_PARTS
-#else
-	add_mtd_device(mtd);
-#endif // CONFIG_MTD_PARTITIONS
 
 	return 0;
 
