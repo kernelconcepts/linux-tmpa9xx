@@ -138,7 +138,6 @@ static void __init tonga_init(void)
 
 MACHINE_START(TONGA, "Tonga 2")
         /* Maintainer:  Florian Boor <florian.boor@kernelconcepts.de> */
-        .boot_params    = 0,
         .map_io         = tmpa9xx_map_io,
         .init_irq       = tmpa9xx_init_irq,
         .timer          = &tmpa9xx_timer,

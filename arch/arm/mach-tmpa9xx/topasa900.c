@@ -41,7 +41,6 @@ static void __init topasa900_init(void)
 
 MACHINE_START(TOPASA900, "Toshiba TopasA900")
         /* Maintainer:  Florian Boor <florian.boor@kernelconcepts.de> */
-        .boot_params    = 0,
         .map_io         = tmpa9xx_map_io,
         .init_irq       = tmpa9xx_init_irq,
         .timer          = &tmpa9xx_timer,
