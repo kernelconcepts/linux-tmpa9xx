@@ -490,7 +490,8 @@ static void purge_requests(struct ibmvscsi_host_data *hostdata, int error_code)
 				       evt->hostdata->dev);
 			if (evt->cmnd_done)
 				evt->cmnd_done(evt->cmnd);
-		} else if (evt->done)
+		} else if (evt->done && evt->crq.format != VIOSRP_MAD_FORMAT &&
+			   evt->iu.srp.login_req.opcode != SRP_LOGIN_REQ)
 			evt->done(evt);
 		free_event_struct(&evt->hostdata->pool, evt);
 		spin_lock_irqsave(hostdata->host->host_lock, flags);
@@ -1547,6 +1548,9 @@ static int ibmvscsi_do_host_config(struct ibmvscsi_host_data *hostdata,
 
 	host_config = &evt_struct->iu.mad.host_config;
 
+	/* The transport length field is only 16-bit */
+	length = min(0xffff, length);
+
 	/* Set up a lun reset SRP command */
 	memset(host_config, 0x00, sizeof(*host_config));
 	host_config->common.type = VIOSRP_HOST_CONFIG_TYPE;
@@ -1849,8 +1853,7 @@ static void ibmvscsi_do_work(struct ibmvscsi_host_data *hostdata)
 		rc = ibmvscsi_ops->reset_crq_queue(&hostdata->queue, hostdata);
 		if (!rc)
 			rc = ibmvscsi_ops->send_crq(hostdata, 0xC001000000000000LL, 0);
-		if (!rc)
-			rc = vio_enable_interrupts(to_vio_dev(hostdata->dev));
+		vio_enable_interrupts(to_vio_dev(hostdata->dev));
 	} else if (hostdata->reenable_crq) {
 		smp_rmb();
 		action = "enable";

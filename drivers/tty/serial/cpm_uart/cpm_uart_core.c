@@ -1,6 +1,4 @@
 /*
- *  linux/drivers/serial/cpm_uart.c
- *
  *  Driver for CPM (SCC/SMC) serial ports; core driver
  *
  *  Based on arch/ppc/cpm2_io/uart.c by Dan Malek
@@ -33,6 +31,7 @@
 
 #include <linux/module.h>
 #include <linux/tty.h>
+#include <linux/tty_flip.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
 #include <linux/serial.h>
@@ -1359,8 +1358,7 @@ static struct uart_driver cpm_reg = {
 
 static int probe_index;
 
-static int __devinit cpm_uart_probe(struct platform_device *ofdev,
-                                    const struct of_device_id *match)
+static int __devinit cpm_uart_probe(struct platform_device *ofdev)
 {
 	int index = probe_index++;
 	struct uart_cpm_port *pinfo = &cpm_uart_ports[index];
@@ -1405,7 +1403,7 @@ static struct of_device_id cpm_uart_match[] = {
 	{}
 };
 
-static struct of_platform_driver cpm_uart_driver = {
+static struct platform_driver cpm_uart_driver = {
 	.driver = {
 		.name = "cpm_uart",
 		.owner = THIS_MODULE,
@@ -1421,7 +1419,7 @@ static int __init cpm_uart_init(void)
 	if (ret)
 		return ret;
 
-	ret = of_register_platform_driver(&cpm_uart_driver);
+	ret = platform_driver_register(&cpm_uart_driver);
 	if (ret)
 		uart_unregister_driver(&cpm_reg);
 
@@ -1430,7 +1428,7 @@ static int __init cpm_uart_init(void)
 
 static void __exit cpm_uart_exit(void)
 {
-	of_unregister_platform_driver(&cpm_uart_driver);
+	platform_driver_unregister(&cpm_uart_driver);
 	uart_unregister_driver(&cpm_reg);
 }
 

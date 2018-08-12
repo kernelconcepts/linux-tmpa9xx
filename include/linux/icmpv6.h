@@ -123,6 +123,8 @@ static inline struct icmp6hdr *icmp6_hdr(const struct sk_buff *skb)
 #define ICMPV6_NOT_NEIGHBOUR		2
 #define ICMPV6_ADDR_UNREACH		3
 #define ICMPV6_PORT_UNREACH		4
+#define ICMPV6_POLICY_FAIL		5
+#define ICMPV6_REJECT_ROUTE		6
 
 /*
  *	Codes for Time Exceeded
@@ -183,10 +185,10 @@ extern void				icmpv6_cleanup(void);
 extern void				icmpv6_param_prob(struct sk_buff *skb,
 							  u8 code, int pos);
 
-struct flowi;
+struct flowi6;
 struct in6_addr;
 extern void				icmpv6_flow_init(struct sock *sk,
-							 struct flowi *fl,
+							 struct flowi6 *fl6,
 							 u8 type,
 							 const struct in6_addr *saddr,
 							 const struct in6_addr *daddr,

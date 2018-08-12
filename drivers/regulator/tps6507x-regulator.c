@@ -90,12 +90,6 @@ static const u16 LDO2_VSEL_table[] = {
 	3000, 3100, 3200, 3300,
 };
 
-static unsigned int num_voltages[] = {ARRAY_SIZE(VDCDCx_VSEL_table),
-				ARRAY_SIZE(VDCDCx_VSEL_table),
-				ARRAY_SIZE(VDCDCx_VSEL_table),
-				ARRAY_SIZE(LDO1_VSEL_table),
-				ARRAY_SIZE(LDO2_VSEL_table)};
-
 struct tps_info {
 	const char *name;
 	unsigned min_uV;
@@ -553,7 +547,6 @@ static __devinit
 int tps6507x_pmic_probe(struct platform_device *pdev)
 {
 	struct tps6507x_dev *tps6507x_dev = dev_get_drvdata(pdev->dev.parent);
-	static int desc_id;
 	struct tps_info *info = &tps6507x_pmic_regs[0];
 	struct regulator_init_data *init_data;
 	struct regulator_dev *rdev;
@@ -598,8 +591,8 @@ int tps6507x_pmic_probe(struct platform_device *pdev)
 		}
 
 		tps->desc[i].name = info->name;
-		tps->desc[i].id = desc_id++;
-		tps->desc[i].n_voltages = num_voltages[i];
+		tps->desc[i].id = i;
+		tps->desc[i].n_voltages = info->table_len;
 		tps->desc[i].ops = (i > TPS6507X_DCDC_3 ?
 		&tps6507x_pmic_ldo_ops : &tps6507x_pmic_dcdc_ops);
 		tps->desc[i].type = REGULATOR_VOLTAGE;

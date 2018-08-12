@@ -10,6 +10,7 @@
 #include <linux/device-mapper.h>
 
 #include <linux/bio.h>
+#include <linux/completion.h>
 #include <linux/mempool.h>
 #include <linux/module.h>
 #include <linux/sched.h>
@@ -19,6 +20,8 @@
 #define DM_MSG_PREFIX "io"
 
 #define DM_IO_MAX_REGIONS	BITS_PER_LONG
+#define MIN_IOS		16
+#define MIN_BIOS	16
 
 struct dm_io_client {
 	mempool_t *pool;
@@ -32,42 +35,32 @@ struct dm_io_client {
 struct io {
 	unsigned long error_bits;
 	atomic_t count;
-	struct task_struct *sleeper;
+	struct completion *wait;
 	struct dm_io_client *client;
 	io_notify_fn callback;
 	void *context;
+	void *vma_invalidate_address;
+	unsigned long vma_invalidate_size;
 } __attribute__((aligned(DM_IO_MAX_REGIONS)));
 
 static struct kmem_cache *_dm_io_cache;
 
 /*
- * io contexts are only dynamically allocated for asynchronous
- * io.  Since async io is likely to be the majority of io we'll
- * have the same number of io contexts as bios! (FIXME: must reduce this).
- */
-
-static unsigned int pages_to_ios(unsigned int pages)
-{
-	return 4 * pages;	/* too many ? */
-}
-
-/*
  * Create a client with mempool and bioset.
  */
-struct dm_io_client *dm_io_client_create(unsigned num_pages)
+struct dm_io_client *dm_io_client_create(void)
 {
-	unsigned ios = pages_to_ios(num_pages);
 	struct dm_io_client *client;
 
 	client = kmalloc(sizeof(*client), GFP_KERNEL);
 	if (!client)
 		return ERR_PTR(-ENOMEM);
 
-	client->pool = mempool_create_slab_pool(ios, _dm_io_cache);
+	client->pool = mempool_create_slab_pool(MIN_IOS, _dm_io_cache);
 	if (!client->pool)
 		goto bad;
 
-	client->bios = bioset_create(16, 0);
+	client->bios = bioset_create(MIN_BIOS, 0);
 	if (!client->bios)
 		goto bad;
 
@@ -80,13 +73,6 @@ struct dm_io_client *dm_io_client_create(unsigned num_pages)
 	return ERR_PTR(-ENOMEM);
 }
 EXPORT_SYMBOL(dm_io_client_create);
-
-int dm_io_client_resize(unsigned num_pages, struct dm_io_client *client)
-{
-	return mempool_resize(client->pool, pages_to_ios(num_pages),
-			      GFP_KERNEL);
-}
-EXPORT_SYMBOL(dm_io_client_resize);
 
 void dm_io_client_destroy(struct dm_io_client *client)
 {
@@ -133,8 +119,12 @@ static void dec_count(struct io *io, unsigned int region, int error)
 		set_bit(region, &io->error_bits);
 
 	if (atomic_dec_and_test(&io->count)) {
-		if (io->sleeper)
-			wake_up_process(io->sleeper);
+		if (io->vma_invalidate_size)
+			invalidate_kernel_vmap_range(io->vma_invalidate_address,
+						     io->vma_invalidate_size);
+
+		if (io->wait)
+			complete(io->wait);
 
 		else {
 			unsigned long r = io->error_bits;
@@ -176,6 +166,9 @@ struct dpages {
 
 	unsigned context_u;
 	void *context_ptr;
+
+	void *vma_invalidate_address;
+	unsigned long vma_invalidate_size;
 };
 
 /*
@@ -304,6 +297,18 @@ static void do_region(int rw, unsigned region, struct dm_io_region *where,
 	unsigned offset;
 	unsigned num_bvecs;
 	sector_t remaining = where->count;
+	struct request_queue *q = bdev_get_queue(where->bdev);
+	sector_t discard_sectors;
+	unsigned int uninitialized_var(special_cmd_max_sectors);
+
+	/* Reject unsupported discard requests */
+	if (rw & REQ_DISCARD) {
+		special_cmd_max_sectors = q->limits.max_discard_sectors;
+		if (special_cmd_max_sectors == 0) {
+			dec_count(io, region, -EOPNOTSUPP);
+			return;
+		}
+	}
 
 	/*
 	 * where->count may be zero if rw holds a flush and we need to
@@ -313,9 +318,12 @@ static void do_region(int rw, unsigned region, struct dm_io_region *where,
 		/*
 		 * Allocate a suitably sized-bio.
 		 */
-		num_bvecs = dm_sector_div_up(remaining,
-					     (PAGE_SIZE >> SECTOR_SHIFT));
-		num_bvecs = min_t(int, bio_get_nr_vecs(where->bdev), num_bvecs);
+		if (rw & REQ_DISCARD)
+			num_bvecs = 1;
+		else
+			num_bvecs = min_t(int, bio_get_nr_vecs(where->bdev),
+					  dm_sector_div_up(remaining, (PAGE_SIZE >> SECTOR_SHIFT)));
+
 		bio = bio_alloc_bioset(GFP_NOIO, num_bvecs, io->client->bios);
 		bio->bi_sector = where->sector + (where->count - remaining);
 		bio->bi_bdev = where->bdev;
@@ -323,10 +331,14 @@ static void do_region(int rw, unsigned region, struct dm_io_region *where,
 		bio->bi_destructor = dm_bio_destructor;
 		store_io_and_region_in_bio(bio, io, region);
 
-		/*
-		 * Try and add as many pages as possible.
-		 */
-		while (remaining) {
+		if (rw & REQ_DISCARD) {
+			discard_sectors = min_t(sector_t, special_cmd_max_sectors, remaining);
+			bio->bi_size = discard_sectors << SECTOR_SHIFT;
+			remaining -= discard_sectors;
+		} else while (remaining) {
+			/*
+			 * Try and add as many pages as possible.
+			 */
 			dp->get_page(dp, &page, &len, &offset);
 			len = min(len, to_bytes(remaining));
 			if (!bio_add_page(bio, page, len, offset))
@@ -352,7 +364,7 @@ static void dispatch_io(int rw, unsigned int num_regions,
 	BUG_ON(num_regions > DM_IO_MAX_REGIONS);
 
 	if (sync)
-		rw |= REQ_SYNC | REQ_UNPLUG;
+		rw |= REQ_SYNC;
 
 	/*
 	 * For multiple regions we need to be careful to rewind
@@ -383,6 +395,7 @@ static int sync_io(struct dm_io_client *client, unsigned int num_regions,
 	 */
 	volatile char io_[sizeof(struct io) + __alignof__(struct io) - 1];
 	struct io *io = (struct io *)PTR_ALIGN(&io_, __alignof__(struct io));
+	DECLARE_COMPLETION_ONSTACK(wait);
 
 	if (num_regions > 1 && (rw & RW_MASK) != WRITE) {
 		WARN_ON(1);
@@ -391,20 +404,15 @@ static int sync_io(struct dm_io_client *client, unsigned int num_regions,
 
 	io->error_bits = 0;
 	atomic_set(&io->count, 1); /* see dispatch_io() */
-	io->sleeper = current;
+	io->wait = &wait;
 	io->client = client;
+
+	io->vma_invalidate_address = dp->vma_invalidate_address;
+	io->vma_invalidate_size = dp->vma_invalidate_size;
 
 	dispatch_io(rw, num_regions, where, dp, io, 1);
 
-	while (1) {
-		set_current_state(TASK_UNINTERRUPTIBLE);
-
-		if (!atomic_read(&io->count))
-			break;
-
-		io_schedule();
-	}
-	set_current_state(TASK_RUNNING);
+	wait_for_completion(&wait);
 
 	if (error_bits)
 		*error_bits = io->error_bits;
@@ -427,18 +435,26 @@ static int async_io(struct dm_io_client *client, unsigned int num_regions,
 	io = mempool_alloc(client->pool, GFP_NOIO);
 	io->error_bits = 0;
 	atomic_set(&io->count, 1); /* see dispatch_io() */
-	io->sleeper = NULL;
+	io->wait = NULL;
 	io->client = client;
 	io->callback = fn;
 	io->context = context;
+
+	io->vma_invalidate_address = dp->vma_invalidate_address;
+	io->vma_invalidate_size = dp->vma_invalidate_size;
 
 	dispatch_io(rw, num_regions, where, dp, io, 0);
 	return 0;
 }
 
-static int dp_init(struct dm_io_request *io_req, struct dpages *dp)
+static int dp_init(struct dm_io_request *io_req, struct dpages *dp,
+		   unsigned long size)
 {
 	/* Set up dpages based on memory type */
+
+	dp->vma_invalidate_address = NULL;
+	dp->vma_invalidate_size = 0;
+
 	switch (io_req->mem.type) {
 	case DM_IO_PAGE_LIST:
 		list_dp_init(dp, io_req->mem.ptr.pl, io_req->mem.offset);
@@ -449,6 +465,11 @@ static int dp_init(struct dm_io_request *io_req, struct dpages *dp)
 		break;
 
 	case DM_IO_VMA:
+		flush_kernel_vmap_range(io_req->mem.ptr.vma, size);
+		if ((io_req->bi_rw & RW_MASK) == READ) {
+			dp->vma_invalidate_address = io_req->mem.ptr.vma;
+			dp->vma_invalidate_size = size;
+		}
 		vm_dp_init(dp, io_req->mem.ptr.vma);
 		break;
 
@@ -477,7 +498,7 @@ int dm_io(struct dm_io_request *io_req, unsigned num_regions,
 	int r;
 	struct dpages dp;
 
-	r = dp_init(io_req, &dp);
+	r = dp_init(io_req, &dp, (unsigned long)where->count << SECTOR_SHIFT);
 	if (r)
 		return r;
 

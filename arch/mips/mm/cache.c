@@ -35,6 +35,11 @@ void (*local_flush_icache_range)(unsigned long start, unsigned long end);
 void (*__flush_cache_vmap)(void);
 void (*__flush_cache_vunmap)(void);
 
+void (*__flush_kernel_vmap_range)(unsigned long vaddr, int size);
+void (*__invalidate_kernel_vmap_range)(unsigned long vaddr, int size);
+
+EXPORT_SYMBOL_GPL(__flush_kernel_vmap_range);
+
 /* MIPS specific cache operations */
 void (*flush_cache_sigtramp)(unsigned long addr);
 void (*local_flush_data_cache_page)(void * addr);
@@ -112,6 +117,18 @@ void __flush_anon_page(struct page *page, unsigned long vmaddr)
 }
 
 EXPORT_SYMBOL(__flush_anon_page);
+
+void __flush_icache_page(struct vm_area_struct *vma, struct page *page)
+{
+	unsigned long addr;
+
+	if (PageHighMem(page))
+		return;
+
+	addr = (unsigned long) page_address(page);
+	flush_data_cache_page(addr);
+}
+EXPORT_SYMBOL_GPL(__flush_icache_page);
 
 void __update_cache(struct vm_area_struct *vma, unsigned long address,
 	pte_t pte)

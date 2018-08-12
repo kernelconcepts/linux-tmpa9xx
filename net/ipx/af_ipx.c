@@ -42,7 +42,6 @@
 #include <linux/uio.h>
 #include <linux/slab.h>
 #include <linux/skbuff.h>
-#include <linux/smp_lock.h>
 #include <linux/socket.h>
 #include <linux/sockios.h>
 #include <linux/string.h>
@@ -149,7 +148,6 @@ static void ipx_destroy_socket(struct sock *sk)
 	ipx_remove_socket(sk);
 	skb_queue_purge(&sk->sk_receive_queue);
 	sk_refcnt_debug_dec(sk);
-	sock_put(sk);
 }
 
 /*
@@ -1196,11 +1194,10 @@ static int ipxitf_ioctl(unsigned int cmd, void __user *arg)
 		sipx->sipx_network	= ipxif->if_netnum;
 		memcpy(sipx->sipx_node, ipxif->if_node,
 			sizeof(sipx->sipx_node));
-		rc = -EFAULT;
-		if (copy_to_user(arg, &ifr, sizeof(ifr)))
-			break;
-		ipxitf_put(ipxif);
 		rc = 0;
+		if (copy_to_user(arg, &ifr, sizeof(ifr)))
+			rc = -EFAULT;
+		ipxitf_put(ipxif);
 		break;
 	}
 	case SIOCAIPXITFCRT:
@@ -1299,7 +1296,7 @@ static int ipx_setsockopt(struct socket *sock, int level, int optname,
 	int opt;
 	int rc = -EINVAL;
 
-	lock_kernel();
+	lock_sock(sk);
 	if (optlen != sizeof(int))
 		goto out;
 
@@ -1314,7 +1311,7 @@ static int ipx_setsockopt(struct socket *sock, int level, int optname,
 	ipx_sk(sk)->type = opt;
 	rc = 0;
 out:
-	unlock_kernel();
+	release_sock(sk);
 	return rc;
 }
 
@@ -1326,7 +1323,7 @@ static int ipx_getsockopt(struct socket *sock, int level, int optname,
 	int len;
 	int rc = -ENOPROTOOPT;
 
-	lock_kernel();
+	lock_sock(sk);
 	if (!(level == SOL_IPX && optname == IPX_TYPE))
 		goto out;
 
@@ -1347,7 +1344,7 @@ static int ipx_getsockopt(struct socket *sock, int level, int optname,
 
 	rc = 0;
 out:
-	unlock_kernel();
+	release_sock(sk);
 	return rc;
 }
 
@@ -1396,7 +1393,7 @@ static int ipx_release(struct socket *sock)
 	if (!sk)
 		goto out;
 
-	lock_kernel();
+	lock_sock(sk);
 	if (!sock_flag(sk, SOCK_DEAD))
 		sk->sk_state_change(sk);
 
@@ -1404,7 +1401,8 @@ static int ipx_release(struct socket *sock)
 	sock->sk = NULL;
 	sk_refcnt_debug_release(sk);
 	ipx_destroy_socket(sk);
-	unlock_kernel();
+	release_sock(sk);
+	sock_put(sk);
 out:
 	return 0;
 }
@@ -1530,11 +1528,12 @@ out:
 
 static int ipx_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
+	struct sock *sk = sock->sk;
 	int rc;
 
-	lock_kernel();
+	lock_sock(sk);
 	rc = __ipx_bind(sock, uaddr, addr_len);
-	unlock_kernel();
+	release_sock(sk);
 
 	return rc;
 }
@@ -1551,7 +1550,7 @@ static int ipx_connect(struct socket *sock, struct sockaddr *uaddr,
 	sk->sk_state	= TCP_CLOSE;
 	sock->state 	= SS_UNCONNECTED;
 
-	lock_kernel();
+	lock_sock(sk);
 	if (addr_len != sizeof(*addr))
 		goto out;
 	addr = (struct sockaddr_ipx *)uaddr;
@@ -1598,7 +1597,7 @@ static int ipx_connect(struct socket *sock, struct sockaddr *uaddr,
 		ipxrtr_put(rt);
 	rc = 0;
 out:
-	unlock_kernel();
+	release_sock(sk);
 	return rc;
 }
 
@@ -1614,7 +1613,7 @@ static int ipx_getname(struct socket *sock, struct sockaddr *uaddr,
 
 	*uaddr_len = sizeof(struct sockaddr_ipx);
 
-	lock_kernel();
+	lock_sock(sk);
 	if (peer) {
 		rc = -ENOTCONN;
 		if (sk->sk_state != TCP_ESTABLISHED)
@@ -1649,19 +1648,7 @@ static int ipx_getname(struct socket *sock, struct sockaddr *uaddr,
 
 	rc = 0;
 out:
-	unlock_kernel();
-	return rc;
-}
-
-static unsigned int ipx_datagram_poll(struct file *file, struct socket *sock,
-			   poll_table *wait)
-{
-	int rc;
-
-	lock_kernel();
-	rc = datagram_poll(file, sock, wait);
-	unlock_kernel();
-
+	release_sock(sk);
 	return rc;
 }
 
@@ -1736,7 +1723,7 @@ static int ipx_sendmsg(struct kiocb *iocb, struct socket *sock,
 	int rc = -EINVAL;
 	int flags = msg->msg_flags;
 
-	lock_kernel();
+	lock_sock(sk);
 	/* Socket gets bound below anyway */
 /*	if (sk->sk_zapped)
 		return -EIO; */	/* Socket not bound */
@@ -1788,7 +1775,7 @@ static int ipx_sendmsg(struct kiocb *iocb, struct socket *sock,
 	if (rc >= 0)
 		rc = len;
 out:
-	unlock_kernel();
+	release_sock(sk);
 	return rc;
 }
 
@@ -1803,7 +1790,7 @@ static int ipx_recvmsg(struct kiocb *iocb, struct socket *sock,
 	struct sk_buff *skb;
 	int copied, rc;
 
-	lock_kernel();
+	lock_sock(sk);
 	/* put the autobinding in */
 	if (!ipxs->port) {
 		struct sockaddr_ipx uaddr;
@@ -1847,8 +1834,6 @@ static int ipx_recvmsg(struct kiocb *iocb, struct socket *sock,
 	if (skb->tstamp.tv64)
 		sk->sk_stamp = skb->tstamp;
 
-	msg->msg_namelen = sizeof(*sipx);
-
 	if (sipx) {
 		sipx->sipx_family	= AF_IPX;
 		sipx->sipx_port		= ipx->ipx_source.sock;
@@ -1856,13 +1841,14 @@ static int ipx_recvmsg(struct kiocb *iocb, struct socket *sock,
 		sipx->sipx_network	= IPX_SKB_CB(skb)->ipx_source_net;
 		sipx->sipx_type 	= ipx->ipx_type;
 		sipx->sipx_zero		= 0;
+		msg->msg_namelen	= sizeof(*sipx);
 	}
 	rc = copied;
 
 out_free:
 	skb_free_datagram(sk, skb);
 out:
-	unlock_kernel();
+	release_sock(sk);
 	return rc;
 }
 
@@ -1874,7 +1860,7 @@ static int ipx_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 	struct sock *sk = sock->sk;
 	void __user *argp = (void __user *)arg;
 
-	lock_kernel();
+	lock_sock(sk);
 	switch (cmd) {
 	case TIOCOUTQ:
 		amount = sk->sk_sndbuf - sk_wmem_alloc_get(sk);
@@ -1937,7 +1923,7 @@ static int ipx_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 		rc = -ENOIOCTLCMD;
 		break;
 	}
-	unlock_kernel();
+	release_sock(sk);
 
 	return rc;
 }
@@ -1984,7 +1970,7 @@ static const struct proto_ops ipx_dgram_ops = {
 	.socketpair	= sock_no_socketpair,
 	.accept		= sock_no_accept,
 	.getname	= ipx_getname,
-	.poll		= ipx_datagram_poll,
+	.poll		= datagram_poll,
 	.ioctl		= ipx_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl	= ipx_compat_ioctl,

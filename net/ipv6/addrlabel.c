@@ -558,7 +558,7 @@ static int ip6addrlbl_get(struct sk_buff *in_skb, struct nlmsghdr* nlh,
 
 	rcu_read_lock();
 	p = __ipv6_addr_label(net, addr, ipv6_addr_type(addr), ifal->ifal_index);
-	if (p && ip6addrlbl_hold(p))
+	if (p && !ip6addrlbl_hold(p))
 		p = NULL;
 	lseq = ip6addrlbl_table.seq;
 	rcu_read_unlock();
@@ -592,8 +592,11 @@ out:
 
 void __init ipv6_addr_label_rtnl_register(void)
 {
-	__rtnl_register(PF_INET6, RTM_NEWADDRLABEL, ip6addrlbl_newdel, NULL);
-	__rtnl_register(PF_INET6, RTM_DELADDRLABEL, ip6addrlbl_newdel, NULL);
-	__rtnl_register(PF_INET6, RTM_GETADDRLABEL, ip6addrlbl_get, ip6addrlbl_dump);
+	__rtnl_register(PF_INET6, RTM_NEWADDRLABEL, ip6addrlbl_newdel,
+			NULL, NULL);
+	__rtnl_register(PF_INET6, RTM_DELADDRLABEL, ip6addrlbl_newdel,
+			NULL, NULL);
+	__rtnl_register(PF_INET6, RTM_GETADDRLABEL, ip6addrlbl_get,
+			ip6addrlbl_dump, NULL);
 }
 

@@ -28,8 +28,9 @@
 #include <asm/uaccess.h>
 #include <asm/pgalloc.h>
 #include <asm/hardirq.h>
-#include <asm/gdb-stub.h>
 #include <asm/cpu-regs.h>
+#include <asm/debugger.h>
+#include <asm/gdb-stub.h>
 
 /*
  * Unlock any spinlocks which will prevent us from getting the
@@ -255,6 +256,8 @@ good_area:
 	if (unlikely(fault & VM_FAULT_ERROR)) {
 		if (fault & VM_FAULT_OOM)
 			goto out_of_memory;
+		else if (fault & VM_FAULT_SIGSEGV)
+			goto bad_area;
 		else if (fault & VM_FAULT_SIGBUS)
 			goto do_sigbus;
 		BUG();
@@ -306,10 +309,8 @@ no_context:
 	printk(" printing pc:\n");
 	printk(KERN_ALERT "%08lx\n", regs->pc);
 
-#ifdef CONFIG_GDBSTUB
-	gdbstub_intercept(
-		regs, fault_code & 0x00010000 ? EXCEP_IAERROR : EXCEP_DAERROR);
-#endif
+	debugger_intercept(fault_code & 0x00010000 ? EXCEP_IAERROR : EXCEP_DAERROR,
+			   SIGSEGV, SEGV_ACCERR, regs);
 
 	page = PTBR;
 	page = ((unsigned long *) __va(page))[address >> 22];

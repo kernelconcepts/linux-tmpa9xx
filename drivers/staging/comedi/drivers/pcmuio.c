@@ -464,13 +464,13 @@ static int pcmuio_detach(struct comedi_device *dev)
 	if (dev->iobase)
 		release_region(dev->iobase, ASIC_IOSIZE * thisboard->num_asics);
 
-	for (i = 0; i < MAX_ASICS; ++i) {
-		if (devpriv->asics[i].irq)
-			free_irq(devpriv->asics[i].irq, dev);
-	}
-
-	if (devpriv && devpriv->sprivs)
+	if (devpriv) {
+		for (i = 0; i < MAX_ASICS; ++i) {
+			if (devpriv->asics[i].irq)
+				free_irq(devpriv->asics[i].irq, dev);
+		}
 		kfree(devpriv->sprivs);
+	}
 
 	return 0;
 }
@@ -605,7 +605,7 @@ static int pcmuio_dio_insn_config(struct comedi_device *dev,
 		break;
 
 	case INSN_CONFIG_DIO_QUERY:
-		/* retreive from shadow register */
+		/* retrieve from shadow register */
 		data[1] =
 		    (s->io_bits & (1 << chan)) ? COMEDI_OUTPUT : COMEDI_INPUT;
 		return insn->n;

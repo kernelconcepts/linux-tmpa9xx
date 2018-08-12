@@ -34,11 +34,10 @@
 #include <linux/proc_fs.h>
 #include <linux/sched.h>
 #include <linux/initrd.h>
+#include <linux/export.h>
 
 #include <asm/sections.h>
 #include <asm/tlb.h>
-
-DEFINE_PER_CPU(struct mmu_gather, mmu_gathers);
 
 unsigned long empty_zero_page;
 EXPORT_SYMBOL_GPL(empty_zero_page);

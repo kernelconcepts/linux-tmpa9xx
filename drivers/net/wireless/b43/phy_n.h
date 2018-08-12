@@ -703,7 +703,7 @@
 #define B43_NPHY_CHAN_ESTHANG			B43_PHY_N(0x21D) /* Channel estimate hang */
 #define B43_NPHY_FINERX2_CGC			B43_PHY_N(0x221) /* Fine RX 2 clock gate control */
 #define  B43_NPHY_FINERX2_CGC_DECGC		0x0008 /* Decode gated clocks */
-#define B43_NPHY_TXPCTL_INIT			B43_PHY_N(0x222) /* TX power controll init */
+#define B43_NPHY_TXPCTL_INIT			B43_PHY_N(0x222) /* TX power control init */
 #define  B43_NPHY_TXPCTL_INIT_PIDXI1		0x00FF /* Power index init 1 */
 #define  B43_NPHY_TXPCTL_INIT_PIDXI1_SHIFT	0
 #define B43_NPHY_PAPD_EN0			B43_PHY_N(0x297) /* PAPD Enable0 TBD */
@@ -764,6 +764,8 @@ struct b43_phy_n {
 	u8 cal_orig_pwr_idx[2];
 	u8 measure_hold;
 	u8 phyrxchain;
+	u8 hw_phyrxchain;
+	u8 hw_phytxchain;
 	u8 perical;
 	u32 deaf_count;
 	u32 rxcalparams;
@@ -783,6 +785,8 @@ struct b43_phy_n {
 	u16 mphase_txcal_bestcoeffs[11];
 
 	bool txpwrctrl;
+	u8 tx_pwr_idx[2];
+	u16 adj_pwr_tbl[84];
 	u16 txcal_bbmult;
 	u16 txiqlocal_bestc[11];
 	bool txiqlocal_coeffsvalid;

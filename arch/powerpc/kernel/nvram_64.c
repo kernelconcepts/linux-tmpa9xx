@@ -237,27 +237,50 @@ static unsigned char __init nvram_checksum(struct nvram_header *p)
 	return c_sum;
 }
 
+/*
+ * Per the criteria passed via nvram_remove_partition(), should this
+ * partition be removed?  1=remove, 0=keep
+ */
+static int nvram_can_remove_partition(struct nvram_partition *part,
+		const char *name, int sig, const char *exceptions[])
+{
+	if (part->header.signature != sig)
+		return 0;
+	if (name) {
+		if (strncmp(name, part->header.name, 12))
+			return 0;
+	} else if (exceptions) {
+		const char **except;
+		for (except = exceptions; *except; except++) {
+			if (!strncmp(*except, part->header.name, 12))
+				return 0;
+		}
+	}
+	return 1;
+}
+
 /**
  * nvram_remove_partition - Remove one or more partitions in nvram
  * @name: name of the partition to remove, or NULL for a
  *        signature only match
  * @sig: signature of the partition(s) to remove
+ * @exceptions: When removing all partitions with a matching signature,
+ *        leave these alone.
  */
 
-int __init nvram_remove_partition(const char *name, int sig)
+int __init nvram_remove_partition(const char *name, int sig,
+						const char *exceptions[])
 {
 	struct nvram_partition *part, *prev, *tmp;
 	int rc;
 
 	list_for_each_entry(part, &nvram_partitions, partition) {
-		if (part->header.signature != sig)
-			continue;
-		if (name && strncmp(name, part->header.name, 12))
+		if (!nvram_can_remove_partition(part, name, sig, exceptions))
 			continue;
 
 		/* Make partition a free partition */
 		part->header.signature = NVRAM_SIG_FREE;
-		strncpy(part->header.name, "wwwwwwwwwwww", 12);
+		memset(part->header.name, 'w', 12);
 		part->header.checksum = nvram_checksum(&part->header);
 		rc = nvram_write_header(part);
 		if (rc <= 0) {
@@ -275,8 +298,8 @@ int __init nvram_remove_partition(const char *name, int sig)
 		}
 		if (prev) {
 			prev->header.length += part->header.length;
-			prev->header.checksum = nvram_checksum(&part->header);
-			rc = nvram_write_header(part);
+			prev->header.checksum = nvram_checksum(&prev->header);
+			rc = nvram_write_header(prev);
 			if (rc <= 0) {
 				printk(KERN_ERR "nvram_remove_partition: nvram_write failed (%d)\n", rc);
 				return rc;

@@ -228,7 +228,7 @@ struct mfc6_cache {
 #ifdef __KERNEL__
 struct rtmsg;
 extern int ip6mr_get_route(struct net *net, struct sk_buff *skb,
-			   struct rtmsg *rtm, int nowait);
+			   struct rtmsg *rtm, int nowait, u32 portid);
 
 #ifdef CONFIG_IPV6_MROUTE
 extern struct sock *mroute6_socket(struct net *net, struct sk_buff *skb);
@@ -249,7 +249,7 @@ static inline int ip6mr_sk_done(struct sock *sk)
  * Structure used to communicate from kernel to multicast router.
  * We'll overlay the structure onto an MLD header (not an IPv6 heder like igmpmsg{}
  * used for IPv4 implementation). This is because this structure will be passed via an
- * IPv6 raw socket, on wich an application will only receiver the payload i.e the data after
+ * IPv6 raw socket, on which an application will only receiver the payload i.e the data after
  * the IPv6 header and all the extension headers. (See section 3 of RFC 3542)
  */
 

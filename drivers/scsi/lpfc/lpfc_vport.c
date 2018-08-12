@@ -83,7 +83,7 @@ inline void lpfc_vport_set_state(struct lpfc_vport *vport,
 static int
 lpfc_alloc_vpi(struct lpfc_hba *phba)
 {
-	int  vpi;
+	unsigned long vpi;
 
 	spin_lock_irq(&phba->hbalock);
 	/* Start at bit 1 because vpi zero is reserved for the physical port */
@@ -464,6 +464,7 @@ disable_vport(struct fc_vport *fc_vport)
 	struct lpfc_hba   *phba = vport->phba;
 	struct lpfc_nodelist *ndlp = NULL, *next_ndlp = NULL;
 	long timeout;
+	struct Scsi_Host *shost = lpfc_shost_from_vport(vport);
 
 	ndlp = lpfc_findnode_did(vport, Fabric_DID);
 	if (ndlp && NLP_CHK_NODE_ACT(ndlp)
@@ -498,6 +499,9 @@ disable_vport(struct fc_vport *fc_vport)
 	 * scsi_host_put() to release the vport.
 	 */
 	lpfc_mbx_unreg_vpi(vport);
+	spin_lock_irq(shost->host_lock);
+	vport->fc_flag |= FC_VPORT_NEEDS_INIT_VPI;
+	spin_unlock_irq(shost->host_lock);
 
 	lpfc_vport_set_state(vport, FC_VPORT_DISABLED);
 	lpfc_printf_vlog(vport, KERN_ERR, LOG_VPORT,
@@ -688,13 +692,14 @@ lpfc_vport_delete(struct fc_vport *fc_vport)
 			/* Indicate free memory when release */
 			NLP_SET_FREE_REQ(ndlp);
 		} else {
-			if (!NLP_CHK_NODE_ACT(ndlp))
+			if (!NLP_CHK_NODE_ACT(ndlp)) {
 				ndlp = lpfc_enable_node(vport, ndlp,
 						NLP_STE_UNUSED_NODE);
 				if (!ndlp)
 					goto skip_logo;
+			}
 
-			/* Remove ndlp from vport npld list */
+			/* Remove ndlp from vport list */
 			lpfc_dequeue_node(vport, ndlp);
 			spin_lock_irq(&phba->ndlp_lock);
 			if (!NLP_CHK_FREE_REQ(ndlp))
@@ -707,8 +712,17 @@ lpfc_vport_delete(struct fc_vport *fc_vport)
 			}
 			spin_unlock_irq(&phba->ndlp_lock);
 		}
-		if (!(vport->vpi_state & LPFC_VPI_REGISTERED))
+
+		/*
+		 * If the vpi is not registered, then a valid FDISC doesn't
+		 * exist and there is no need for a ELS LOGO.  Just cleanup
+		 * the ndlp.
+		 */
+		if (!(vport->vpi_state & LPFC_VPI_REGISTERED)) {
+			lpfc_nlp_put(ndlp);
 			goto skip_logo;
+		}
+
 		vport->unreg_vpi_cmpl = VPORT_INVAL;
 		timeout = msecs_to_jiffies(phba->fc_ratov * 2000);
 		if (!lpfc_issue_els_npiv_logo(vport, ndlp))

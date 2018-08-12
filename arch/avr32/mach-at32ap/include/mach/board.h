@@ -33,6 +33,7 @@ extern struct platform_device *atmel_default_console_device;
 #define	ATMEL_USART_CLK		0x04
 
 struct atmel_uart_data {
+	int		num;		/* port num */
 	short		use_dma_tx;	/* use transmit DMA? */
 	short		use_dma_rx;	/* use receive DMA? */
 	void __iomem	*regs;		/* virtual base address, if any */
@@ -127,7 +128,8 @@ struct atmel_nand_data {
 	u8	ale;		/* address line number connected to ALE */
 	u8	cle;		/* address line number connected to CLE */
 	u8	bus_width_16;	/* buswidth is 16 bit */
-	struct mtd_partition *(*partition_info)(int size, int *num_partitions);
+	struct mtd_partition *parts;
+	unsigned int	num_parts;
 };
 struct platform_device *
 at32_add_device_nand(unsigned int id, struct atmel_nand_data *data);

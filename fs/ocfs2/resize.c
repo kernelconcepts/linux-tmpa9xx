@@ -27,7 +27,6 @@
 #include <linux/fs.h>
 #include <linux/types.h>
 
-#define MLOG_MASK_PREFIX ML_DISK_ALLOC
 #include <cluster/masklog.h>
 
 #include "ocfs2.h"
@@ -39,6 +38,7 @@
 #include "super.h"
 #include "sysfile.h"
 #include "uptodate.h"
+#include "ocfs2_trace.h"
 
 #include "buffer_head_io.h"
 #include "suballoc.h"
@@ -56,11 +56,12 @@ static u16 ocfs2_calc_new_backup_super(struct inode *inode,
 				       int new_clusters,
 				       u32 first_new_cluster,
 				       u16 cl_cpg,
+				       u16 old_bg_clusters,
 				       int set)
 {
 	int i;
 	u16 backups = 0;
-	u32 cluster;
+	u32 cluster, lgd_cluster;
 	u64 blkno, gd_blkno, lgd_blkno = le64_to_cpu(gd->bg_blkno);
 
 	for (i = 0; i < OCFS2_MAX_BACKUP_SUPERBLOCKS; i++) {
@@ -73,6 +74,12 @@ static u16 ocfs2_calc_new_backup_super(struct inode *inode,
 		else if (gd_blkno > lgd_blkno)
 			break;
 
+		/* check if already done backup super */
+		lgd_cluster = ocfs2_blocks_to_clusters(inode->i_sb, lgd_blkno);
+		lgd_cluster += old_bg_clusters;
+		if (lgd_cluster >= cluster)
+			continue;
+
 		if (set)
 			ocfs2_set_bit(cluster % cl_cpg,
 				      (unsigned long *)gd->bg_bitmap);
@@ -82,7 +89,6 @@ static u16 ocfs2_calc_new_backup_super(struct inode *inode,
 		backups++;
 	}
 
-	mlog_exit_void();
 	return backups;
 }
 
@@ -102,9 +108,10 @@ static int ocfs2_update_last_group_and_inode(handle_t *handle,
 	u16 chain, num_bits, backups = 0;
 	u16 cl_bpc = le16_to_cpu(cl->cl_bpc);
 	u16 cl_cpg = le16_to_cpu(cl->cl_cpg);
+	u16 old_bg_clusters;
 
-	mlog_entry("(new_clusters=%d, first_new_cluster = %u)\n",
-		   new_clusters, first_new_cluster);
+	trace_ocfs2_update_last_group_and_inode(new_clusters,
+						first_new_cluster);
 
 	ret = ocfs2_journal_access_gd(handle, INODE_CACHE(bm_inode),
 				      group_bh, OCFS2_JOURNAL_ACCESS_WRITE);
@@ -115,6 +122,7 @@ static int ocfs2_update_last_group_and_inode(handle_t *handle,
 
 	group = (struct ocfs2_group_desc *)group_bh->b_data;
 
+	old_bg_clusters = le16_to_cpu(group->bg_bits) / cl_bpc;
 	/* update the group first. */
 	num_bits = new_clusters * cl_bpc;
 	le16_add_cpu(&group->bg_bits, num_bits);
@@ -130,7 +138,7 @@ static int ocfs2_update_last_group_and_inode(handle_t *handle,
 						     group,
 						     new_clusters,
 						     first_new_cluster,
-						     cl_cpg, 1);
+						     cl_cpg, old_bg_clusters, 1);
 		le16_add_cpu(&group->bg_free_bits_count, -1 * backups);
 	}
 
@@ -170,13 +178,14 @@ out_rollback:
 					    group,
 					    new_clusters,
 					    first_new_cluster,
-					    cl_cpg, 0);
+					    cl_cpg, old_bg_clusters, 0);
 		le16_add_cpu(&group->bg_free_bits_count, backups);
 		le16_add_cpu(&group->bg_bits, -1 * num_bits);
 		le16_add_cpu(&group->bg_free_bits_count, -1 * num_bits);
 	}
 out:
-	mlog_exit(ret);
+	if (ret)
+		mlog_errno(ret);
 	return ret;
 }
 
@@ -281,8 +290,6 @@ int ocfs2_group_extend(struct inode * inode, int new_clusters)
 	u32 first_new_cluster;
 	u64 lgd_blkno;
 
-	mlog_entry_void();
-
 	if (ocfs2_is_hard_readonly(osb) || ocfs2_is_soft_readonly(osb))
 		return -EROFS;
 
@@ -342,7 +349,8 @@ int ocfs2_group_extend(struct inode * inode, int new_clusters)
 		goto out_unlock;
 	}
 
-	mlog(0, "extend the last group at %llu, new clusters = %d\n",
+
+	trace_ocfs2_group_extend(
 	     (unsigned long long)le64_to_cpu(group->bg_blkno), new_clusters);
 
 	handle = ocfs2_start_trans(osb, OCFS2_GROUP_EXTEND_CREDITS);
@@ -377,7 +385,6 @@ out_mutex:
 	iput(main_bm_inode);
 
 out:
-	mlog_exit_void();
 	return ret;
 }
 
@@ -472,8 +479,6 @@ int ocfs2_group_add(struct inode *inode, struct ocfs2_new_group_input *input)
 	struct ocfs2_chain_rec *cr;
 	u16 cl_bpc;
 
-	mlog_entry_void();
-
 	if (ocfs2_is_hard_readonly(osb) || ocfs2_is_soft_readonly(osb))
 		return -EROFS;
 
@@ -520,8 +525,8 @@ int ocfs2_group_add(struct inode *inode, struct ocfs2_new_group_input *input)
 		goto out_unlock;
 	}
 
-	mlog(0, "Add a new group  %llu in chain = %u, length = %u\n",
-	     (unsigned long long)input->group, input->chain, input->clusters);
+	trace_ocfs2_group_add((unsigned long long)input->group,
+			       input->chain, input->clusters, input->frees);
 
 	handle = ocfs2_start_trans(osb, OCFS2_GROUP_ADD_CREDITS);
 	if (IS_ERR(handle)) {
@@ -589,6 +594,5 @@ out_mutex:
 	iput(main_bm_inode);
 
 out:
-	mlog_exit_void();
 	return ret;
 }

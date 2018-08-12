@@ -836,7 +836,7 @@ ntstatus_to_dos(__u32 ntstatus, __u8 *eclass, __u16 *ecode)
 }
 
 int
-map_smb_to_linux_error(struct smb_hdr *smb, int logErr)
+map_smb_to_linux_error(struct smb_hdr *smb, bool logErr)
 {
 	unsigned int i;
 	int rc = -EIO;	/* if transport error smb error may not be set */
@@ -919,13 +919,6 @@ smbCalcSize(struct smb_hdr *ptr)
 		2 /* size of the bcc field */ + get_bcc(ptr));
 }
 
-unsigned int
-smbCalcSize_LE(struct smb_hdr *ptr)
-{
-	return (sizeof(struct smb_hdr) + (2 * ptr->WordCount) +
-		2 /* size of the bcc field */ + get_bcc_le(ptr));
-}
-
 /* The following are taken from fs/ntfs/util.c */
 
 #define NTFS_TIME_OFFSET ((u64)(369*365 + 89) * 24 * 3600 * 10000000)
@@ -981,10 +974,10 @@ struct timespec cnvrtDosUnixTm(__le16 le_date, __le16 le_time, int offset)
 		cERROR(1, "illegal hours %d", st->Hours);
 	days = sd->Day;
 	month = sd->Month;
-	if ((days > 31) || (month > 12)) {
+	if (days < 1 || days > 31 || month < 1 || month > 12) {
 		cERROR(1, "illegal date, month %d day: %d", month, days);
-		if (month > 12)
-			month = 12;
+		days = clamp(days, 1, 31);
+		month = clamp(month, 1, 12);
 	}
 	month -= 1;
 	days += total_days_of_prev_months[month];

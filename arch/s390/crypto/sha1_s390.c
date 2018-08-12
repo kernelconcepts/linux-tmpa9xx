@@ -90,7 +90,7 @@ static struct shash_alg alg = {
 
 static int __init sha1_s390_init(void)
 {
-	if (!crypt_s390_func_available(KIMD_SHA_1))
+	if (!crypt_s390_func_available(KIMD_SHA_1, CRYPT_S390_MSA))
 		return -EOPNOTSUPP;
 	return crypto_register_shash(&alg);
 }
@@ -103,6 +103,6 @@ static void __exit sha1_s390_fini(void)
 module_init(sha1_s390_init);
 module_exit(sha1_s390_fini);
 
-MODULE_ALIAS("sha1");
+MODULE_ALIAS_CRYPTO("sha1");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("SHA1 Secure Hash Algorithm");

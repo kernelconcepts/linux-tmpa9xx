@@ -83,7 +83,7 @@ static void xor_vectors(unsigned char *in1, unsigned char *in2,
 }
 /*
  * Returns DEFAULT_BLK_SZ bytes of random data per call
- * returns 0 if generation succeded, <0 if something went wrong
+ * returns 0 if generation succeeded, <0 if something went wrong
  */
 static int _get_more_prng_bytes(struct prng_context *ctx, int cont_test)
 {
@@ -230,11 +230,11 @@ remainder:
 	 */
 	if (byte_count < DEFAULT_BLK_SZ) {
 empty_rbuf:
-		for (; ctx->rand_data_valid < DEFAULT_BLK_SZ;
-			ctx->rand_data_valid++) {
+		while (ctx->rand_data_valid < DEFAULT_BLK_SZ) {
 			*ptr = ctx->rand_data[ctx->rand_data_valid];
 			ptr++;
 			byte_count--;
+			ctx->rand_data_valid++;
 			if (byte_count == 0)
 				goto done;
 		}
@@ -485,4 +485,5 @@ module_param(dbg, int, 0);
 MODULE_PARM_DESC(dbg, "Boolean to enable debugging (0/1 == off/on)");
 module_init(prng_mod_init);
 module_exit(prng_mod_fini);
-MODULE_ALIAS("stdrng");
+MODULE_ALIAS_CRYPTO("stdrng");
+MODULE_ALIAS_CRYPTO("ansi_cprng");

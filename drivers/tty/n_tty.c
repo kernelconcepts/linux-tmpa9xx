@@ -95,6 +95,7 @@ static void n_tty_set_room(struct tty_struct *tty)
 {
 	/* tty->read_cnt is not read locked ? */
 	int	left = N_TTY_BUF_SIZE - tty->read_cnt - 1;
+	int old_left;
 
 	/*
 	 * If we are doing input canonicalization, and there are no
@@ -104,7 +105,12 @@ static void n_tty_set_room(struct tty_struct *tty)
 	 */
 	if (left <= 0)
 		left = tty->icanon && !tty->canon_data;
+	old_left = tty->receive_room;
 	tty->receive_room = left;
+
+	/* Did this open up the receive buffer? We may need to flip */
+	if (left && !old_left)
+		schedule_work(&tty->buf.work);
 }
 
 static void put_tty_queue_nolock(unsigned char c, struct tty_struct *tty)
@@ -179,7 +185,6 @@ static void reset_buffer_flags(struct tty_struct *tty)
 	tty->canon_head = tty->canon_data = tty->erasing = 0;
 	memset(&tty->read_flags, 0, sizeof tty->read_flags);
 	n_tty_set_room(tty);
-	check_unthrottle(tty);
 }
 
 /**
@@ -1293,8 +1298,7 @@ handle_newline:
 			tty->canon_data++;
 			spin_unlock_irqrestore(&tty->read_lock, flags);
 			kill_fasync(&tty->fasync, SIGIO, POLL_IN);
-			if (waitqueue_active(&tty->read_wait))
-				wake_up_interruptible(&tty->read_wait);
+			wake_up_interruptible(&tty->read_wait);
 			return;
 		}
 	}
@@ -1417,8 +1421,7 @@ static void n_tty_receive_buf(struct tty_struct *tty, const unsigned char *cp,
 	if ((!tty->icanon && (tty->read_cnt >= tty->minimum_to_wake)) ||
 		L_EXTPROC(tty)) {
 		kill_fasync(&tty->fasync, SIGIO, POLL_IN);
-		if (waitqueue_active(&tty->read_wait))
-			wake_up_interruptible(&tty->read_wait);
+		wake_up_interruptible(&tty->read_wait);
 	}
 
 	/*
@@ -1456,7 +1459,7 @@ static void n_tty_set_termios(struct tty_struct *tty, struct ktermios *old)
 	BUG_ON(!tty);
 
 	if (old)
-		canon_change = (old->c_lflag ^ tty->termios->c_lflag) & ICANON;
+		canon_change = (old->c_lflag ^ tty->termios->c_lflag) & (ICANON | EXTPROC);
 	if (canon_change) {
 		memset(&tty->read_flags, 0, sizeof tty->read_flags);
 		tty->canon_head = tty->read_tail;
@@ -1525,6 +1528,14 @@ static void n_tty_set_termios(struct tty_struct *tty, struct ktermios *old)
 			tty->real_raw = 0;
 	}
 	n_tty_set_room(tty);
+	/*
+	 * Fix tty hang when I_IXON(tty) is cleared, but the tty
+	 * been stopped by STOP_CHAR(tty) before it.
+	 */
+	if (!I_IXON(tty) && old && (old->c_iflag & IXON) && !tty->flow_stopped) {
+		start_tty(tty);
+	}
+
 	/* The termios change make the tty ready for I/O */
 	wake_up_interruptible(&tty->write_wait);
 	wake_up_interruptible(&tty->read_wait);
@@ -1581,6 +1592,7 @@ static int n_tty_open(struct tty_struct *tty)
 			return -ENOMEM;
 	}
 	reset_buffer_flags(tty);
+	tty_unthrottle(tty);
 	tty->column = 0;
 	n_tty_set_termios(tty, NULL);
 	tty->minimum_to_wake = 1;
@@ -1722,7 +1734,8 @@ static ssize_t n_tty_read(struct tty_struct *tty, struct file *file,
 
 do_it_again:
 
-	BUG_ON(!tty->read_buf);
+	if (WARN_ON(!tty->read_buf))
+		return -EAGAIN;
 
 	c = job_control(tty, file);
 	if (c < 0)
@@ -1796,6 +1809,12 @@ do_it_again:
 			}
 			if (tty_hung_up_p(file))
 				break;
+			/*
+			 * Abort readers for ttys which never actually
+			 * get hung up.  See __tty_hangup().
+			 */
+			if (test_bit(TTY_HUPPING, &tty->flags))
+				break;
 			if (!timeout)
 				break;
 			if (file->f_flags & O_NONBLOCK) {
@@ -1809,6 +1828,7 @@ do_it_again:
 			/* FIXME: does n_tty_set_room need locking ? */
 			n_tty_set_room(tty);
 			timeout = schedule_timeout(timeout);
+			BUG_ON(!tty->read_buf);
 			continue;
 		}
 		__set_current_state(TASK_RUNNING);
@@ -1981,7 +2001,9 @@ static ssize_t n_tty_write(struct tty_struct *tty, struct file *file,
 				tty->ops->flush_chars(tty);
 		} else {
 			while (nr > 0) {
+				mutex_lock(&tty->output_lock);
 				c = tty->ops->write(tty, b, nr);
+				mutex_unlock(&tty->output_lock);
 				if (c < 0) {
 					retval = c;
 					goto break_out;
@@ -2080,7 +2102,7 @@ static int n_tty_ioctl(struct tty_struct *tty, struct file *file,
 	case TIOCINQ:
 		/* FIXME: Locking */
 		retval = tty->read_cnt;
-		if (L_ICANON(tty))
+		if (L_ICANON(tty) && !L_EXTPROC(tty))
 			retval = inq_canon(tty);
 		return put_user(retval, (unsigned int __user *) arg);
 	default:

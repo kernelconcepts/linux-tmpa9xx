@@ -24,7 +24,7 @@
 #include <linux/amba/serial.h>
 #include <mach/hardware.h>
 
-static u32 ux500_uart_base;
+u32 ux500_uart_base;
 
 static void putc(const char c)
 {
@@ -50,11 +50,10 @@ static void flush(void)
 
 static inline void arch_decomp_setup(void)
 {
-	if (machine_is_u8500())
-		ux500_uart_base = U8500_UART2_BASE;
-	else if (machine_is_u5500())
+	/* Check in run time if we run on an U8500 or U5500 */
+	if (machine_is_u5500())
 		ux500_uart_base = U5500_UART0_BASE;
-	else /* not much can be done to help here */
+	else
 		ux500_uart_base = U8500_UART2_BASE;
 }
 

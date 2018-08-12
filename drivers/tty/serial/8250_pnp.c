@@ -1,6 +1,4 @@
 /*
- *  linux/drivers/char/8250_pnp.c
- *
  *  Probe module for 8250/16550-type ISAPNP serial ports.
  *
  *  Based on drivers/char/serial.c, by Linus Torvalds, Theodore Ts'o.
@@ -44,6 +42,12 @@ static const struct pnp_device_id pnp_dev_table[] = {
 	{	"AEI1240",		0	},
 	/* Rockwell 56K ACF II Fax+Data+Voice Modem */
 	{	"AKY1021",		0 /*SPCI_FL_NO_SHIRQ*/	},
+	/*
+	 * ALi Fast Infrared Controller
+	 * Native driver (ali-ircc) is broken so at least
+	 * it can be used with irtty-sir.
+	 */
+	{	"ALI5123",		0	},
 	/* AZT3005 PnP SOUND DEVICE */
 	{	"AZT4001",		0	},
 	/* Best Data Products Inc. Smart One 336F PnP Modem */
@@ -111,6 +115,9 @@ static const struct pnp_device_id pnp_dev_table[] = {
 	/* IBM */
 	/* IBM Thinkpad 701 Internal Modem Voice */
 	{	"IBM0033",		0	},
+	/* Intermec */
+	/* Intermec CV60 touchscreen port */
+	{	"PNP4972",		0	},
 	/* Intertex */
 	/* Intertex 28k8 33k6 Voice EXT PnP */
 	{	"IXDC801",		0	},

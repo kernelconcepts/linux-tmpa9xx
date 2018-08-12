@@ -128,7 +128,7 @@ static int slave_configure(struct scsi_device *sdev)
 	blk_queue_max_hw_sectors(sdev->request_queue, 8);
 #endif
 
-	/* Many devices have trouble transfering more than 32KB at a time,
+	/* Many devices have trouble transferring more than 32KB at a time,
 	 * while others have trouble with more than 64K. At this time we
 	 * are limiting both to 32K (64 sectores).
 	 */

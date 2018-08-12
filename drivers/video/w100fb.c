@@ -33,6 +33,7 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/vmalloc.h>
+#include <linux/module.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
 #include <video/w100fb.h>
@@ -1306,7 +1307,7 @@ static void w100_init_lcd(struct w100fb_par *par)
 	union graphic_v_disp_u graphic_v_disp;
 	union crtc_total_u crtc_total;
 
-	/* w3200 doesnt like undefined bits being set so zero register values first */
+	/* w3200 doesn't like undefined bits being set so zero register values first */
 
 	active_h_disp.val = 0;
 	active_h_disp.f.active_h_start=mode->left_margin;

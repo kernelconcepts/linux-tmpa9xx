@@ -135,10 +135,8 @@ static struct sk_buff *ulog_alloc_skb(unsigned int size)
 	 * due to slab allocator restrictions */
 
 	n = max(size, nlbufsiz);
-	skb = alloc_skb(n, GFP_ATOMIC);
+	skb = alloc_skb(n, GFP_ATOMIC | __GFP_NOWARN);
 	if (!skb) {
-		pr_debug("cannot alloc whole buffer %ub!\n", n);
-
 		if (n > size) {
 			/* try to allocate only as much as we need for
 			 * current packet */
@@ -204,6 +202,7 @@ static void ipt_ulog_packet(unsigned int hooknum,
 	ub->qlen++;
 
 	pm = NLMSG_DATA(nlh);
+	memset(pm, 0, sizeof(*pm));
 
 	/* We might not have a timestamp, get one */
 	if (skb->tstamp.tv64 == 0)
@@ -220,8 +219,6 @@ static void ipt_ulog_packet(unsigned int hooknum,
 		strncpy(pm->prefix, prefix, sizeof(pm->prefix));
 	else if (loginfo->prefix[0] != '\0')
 		strncpy(pm->prefix, loginfo->prefix, sizeof(pm->prefix));
-	else
-		*(pm->prefix) = '\0';
 
 	if (in && in->hard_header_len > 0 &&
 	    skb->mac_header != skb->network_header &&
@@ -233,13 +230,9 @@ static void ipt_ulog_packet(unsigned int hooknum,
 
 	if (in)
 		strncpy(pm->indev_name, in->name, sizeof(pm->indev_name));
-	else
-		pm->indev_name[0] = '\0';
 
 	if (out)
 		strncpy(pm->outdev_name, out->name, sizeof(pm->outdev_name));
-	else
-		pm->outdev_name[0] = '\0';
 
 	/* copy_len <= skb->len, so can't fail. */
 	if (skb_copy_bits(skb, 0, pm->payload, copy_len) < 0)

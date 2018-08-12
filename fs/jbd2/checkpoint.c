@@ -97,10 +97,14 @@ static int __try_to_free_cp_buf(struct journal_head *jh)
 
 	if (jh->b_jlist == BJ_None && !buffer_locked(bh) &&
 	    !buffer_dirty(bh) && !buffer_write_io_error(bh)) {
+		/*
+		 * Get our reference so that bh cannot be freed before
+		 * we unlock it
+		 */
+		get_bh(bh);
 		JBUFFER_TRACE(jh, "remove from checkpoint list");
 		ret = __jbd2_journal_remove_checkpoint(jh) + 1;
 		jbd_unlock_bh_state(bh);
-		jbd2_journal_remove_journal_head(bh);
 		BUFFER_TRACE(bh, "release");
 		__brelse(bh);
 	} else {
@@ -223,8 +227,8 @@ restart:
 			spin_lock(&journal->j_list_lock);
 			goto restart;
 		}
+		get_bh(bh);
 		if (buffer_locked(bh)) {
-			atomic_inc(&bh->b_count);
 			spin_unlock(&journal->j_list_lock);
 			jbd_unlock_bh_state(bh);
 			wait_on_buffer(bh);
@@ -243,7 +247,6 @@ restart:
 		 */
 		released = __jbd2_journal_remove_checkpoint(jh);
 		jbd_unlock_bh_state(bh);
-		jbd2_journal_remove_journal_head(bh);
 		__brelse(bh);
 	}
 
@@ -254,9 +257,12 @@ static void
 __flush_batch(journal_t *journal, int *batch_count)
 {
 	int i;
+	struct blk_plug plug;
 
+	blk_start_plug(&plug);
 	for (i = 0; i < *batch_count; i++)
-		write_dirty_buffer(journal->j_chkpt_bhs[i], WRITE);
+		write_dirty_buffer(journal->j_chkpt_bhs[i], WRITE_SYNC);
+	blk_finish_plug(&plug);
 
 	for (i = 0; i < *batch_count; i++) {
 		struct buffer_head *bh = journal->j_chkpt_bhs[i];
@@ -284,7 +290,7 @@ static int __process_buffer(journal_t *journal, struct journal_head *jh,
 	int ret = 0;
 
 	if (buffer_locked(bh)) {
-		atomic_inc(&bh->b_count);
+		get_bh(bh);
 		spin_unlock(&journal->j_list_lock);
 		jbd_unlock_bh_state(bh);
 		wait_on_buffer(bh);
@@ -316,12 +322,12 @@ static int __process_buffer(journal_t *journal, struct journal_head *jh,
 		ret = 1;
 		if (unlikely(buffer_write_io_error(bh)))
 			ret = -EIO;
+		get_bh(bh);
 		J_ASSERT_JH(jh, !buffer_jbddirty(bh));
 		BUFFER_TRACE(bh, "remove from checkpoint");
 		__jbd2_journal_remove_checkpoint(jh);
 		spin_unlock(&journal->j_list_lock);
 		jbd_unlock_bh_state(bh);
-		jbd2_journal_remove_journal_head(bh);
 		__brelse(bh);
 	} else {
 		/*
@@ -472,80 +478,28 @@ out:
 
 int jbd2_cleanup_journal_tail(journal_t *journal)
 {
-	transaction_t * transaction;
 	tid_t		first_tid;
-	unsigned long	blocknr, freed;
+	unsigned long	blocknr;
 
 	if (is_journal_aborted(journal))
+		return -EIO;
+
+	if (!jbd2_journal_get_log_tail(journal, &first_tid, &blocknr))
 		return 1;
-
-	/* OK, work out the oldest transaction remaining in the log, and
-	 * the log block it starts at.
-	 *
-	 * If the log is now empty, we need to work out which is the
-	 * next transaction ID we will write, and where it will
-	 * start. */
-
-	write_lock(&journal->j_state_lock);
-	spin_lock(&journal->j_list_lock);
-	transaction = journal->j_checkpoint_transactions;
-	if (transaction) {
-		first_tid = transaction->t_tid;
-		blocknr = transaction->t_log_start;
-	} else if ((transaction = journal->j_committing_transaction) != NULL) {
-		first_tid = transaction->t_tid;
-		blocknr = transaction->t_log_start;
-	} else if ((transaction = journal->j_running_transaction) != NULL) {
-		first_tid = transaction->t_tid;
-		blocknr = journal->j_head;
-	} else {
-		first_tid = journal->j_transaction_sequence;
-		blocknr = journal->j_head;
-	}
-	spin_unlock(&journal->j_list_lock);
 	J_ASSERT(blocknr != 0);
 
-	/* If the oldest pinned transaction is at the tail of the log
-           already then there's not much we can do right now. */
-	if (journal->j_tail_sequence == first_tid) {
-		write_unlock(&journal->j_state_lock);
-		return 1;
-	}
-
-	/* OK, update the superblock to recover the freed space.
-	 * Physical blocks come first: have we wrapped beyond the end of
-	 * the log?  */
-	freed = blocknr - journal->j_tail;
-	if (blocknr < journal->j_tail)
-		freed = freed + journal->j_last - journal->j_first;
-
-	trace_jbd2_cleanup_journal_tail(journal, first_tid, blocknr, freed);
-	jbd_debug(1,
-		  "Cleaning journal tail from %d to %d (offset %lu), "
-		  "freeing %lu\n",
-		  journal->j_tail_sequence, first_tid, blocknr, freed);
-
-	journal->j_free += freed;
-	journal->j_tail_sequence = first_tid;
-	journal->j_tail = blocknr;
-	write_unlock(&journal->j_state_lock);
-
 	/*
-	 * If there is an external journal, we need to make sure that
-	 * any data blocks that were recently written out --- perhaps
-	 * by jbd2_log_do_checkpoint() --- are flushed out before we
-	 * drop the transactions from the external journal.  It's
-	 * unlikely this will be necessary, especially with a
-	 * appropriately sized journal, but we need this to guarantee
-	 * correctness.  Fortunately jbd2_cleanup_journal_tail()
-	 * doesn't get called all that often.
+	 * We need to make sure that any blocks that were recently written out
+	 * --- perhaps by jbd2_log_do_checkpoint() --- are flushed out before
+	 * we drop the transactions from the journal. It's unlikely this will
+	 * be necessary, especially with an appropriately sized journal, but we
+	 * need this to guarantee correctness.  Fortunately
+	 * jbd2_cleanup_journal_tail() doesn't get called all that often.
 	 */
-	if ((journal->j_fs_dev != journal->j_dev) &&
-	    (journal->j_flags & JBD2_BARRIER))
-		blkdev_issue_flush(journal->j_fs_dev, GFP_KERNEL, NULL);
-	if (!(journal->j_flags & JBD2_ABORT))
-		jbd2_journal_update_superblock(journal, 1);
-	return 0;
+	if (journal->j_flags & JBD2_BARRIER)
+		blkdev_issue_flush(journal->j_fs_dev, GFP_NOFS, NULL);
+
+	return __jbd2_update_log_tail(journal, first_tid, blocknr);
 }
 
 
@@ -554,14 +508,16 @@ int jbd2_cleanup_journal_tail(journal_t *journal)
 /*
  * journal_clean_one_cp_list
  *
- * Find all the written-back checkpoint buffers in the given list and release them.
+ * Find all the written-back checkpoint buffers in the given list and
+ * release them. If 'destroy' is set, clean all buffers unconditionally.
  *
  * Called with the journal locked.
  * Called with j_list_lock held.
  * Returns number of bufers reaped (for debug)
  */
 
-static int journal_clean_one_cp_list(struct journal_head *jh, int *released)
+static int journal_clean_one_cp_list(struct journal_head *jh, bool destroy,
+				     int *released)
 {
 	struct journal_head *last_jh;
 	struct journal_head *next_jh = jh;
@@ -577,7 +533,10 @@ static int journal_clean_one_cp_list(struct journal_head *jh, int *released)
 		next_jh = jh->b_cpnext;
 		/* Use trylock because of the ranking */
 		if (jbd_trylock_bh_state(jh2bh(jh))) {
-			ret = __try_to_free_cp_buf(jh);
+			if (!destroy)
+				ret = __try_to_free_cp_buf(jh);
+			else
+				ret = __jbd2_journal_remove_checkpoint(jh) + 1;
 			if (ret) {
 				freed++;
 				if (ret == 2) {
@@ -603,13 +562,14 @@ static int journal_clean_one_cp_list(struct journal_head *jh, int *released)
  * journal_clean_checkpoint_list
  *
  * Find all the written-back checkpoint buffers in the journal and release them.
+ * If 'destroy' is set, release all buffers unconditionally.
  *
  * Called with the journal locked.
  * Called with j_list_lock held.
  * Returns number of buffers reaped (for debug)
  */
 
-int __jbd2_journal_clean_checkpoint_list(journal_t *journal)
+int __jbd2_journal_clean_checkpoint_list(journal_t *journal, bool destroy)
 {
 	transaction_t *transaction, *last_transaction, *next_transaction;
 	int ret = 0;
@@ -625,7 +585,7 @@ int __jbd2_journal_clean_checkpoint_list(journal_t *journal)
 		transaction = next_transaction;
 		next_transaction = transaction->t_cpnext;
 		ret += journal_clean_one_cp_list(transaction->
-				t_checkpoint_list, &released);
+				t_checkpoint_list, destroy, &released);
 		/*
 		 * This function only frees up some memory if possible so we
 		 * dont have an obligation to finish processing. Bail out if
@@ -641,12 +601,34 @@ int __jbd2_journal_clean_checkpoint_list(journal_t *journal)
 		 * we can possibly see not yet submitted buffers on io_list
 		 */
 		ret += journal_clean_one_cp_list(transaction->
-				t_checkpoint_io_list, &released);
+				t_checkpoint_io_list, destroy, &released);
 		if (need_resched())
 			goto out;
 	} while (transaction != last_transaction);
 out:
 	return ret;
+}
+
+/*
+ * Remove buffers from all checkpoint lists as journal is aborted and we just
+ * need to free memory
+ */
+void jbd2_journal_destroy_checkpoint(journal_t *journal)
+{
+	/*
+	 * We loop because __jbd2_journal_clean_checkpoint_list() may abort
+	 * early due to a need of rescheduling.
+	 */
+	while (1) {
+		spin_lock(&journal->j_list_lock);
+		if (!journal->j_checkpoint_transactions) {
+			spin_unlock(&journal->j_list_lock);
+			break;
+		}
+		__jbd2_journal_clean_checkpoint_list(journal, true);
+		spin_unlock(&journal->j_list_lock);
+		cond_resched();
+	}
 }
 
 /*
@@ -663,8 +645,8 @@ out:
  * checkpoint lists.
  *
  * The function returns 1 if it frees the transaction, 0 otherwise.
+ * The function can free jh and bh.
  *
- * This function is called with the journal locked.
  * This function is called with j_list_lock held.
  * This function is called with jbd_lock_bh_state(jh2bh(jh))
  */
@@ -684,13 +666,14 @@ int __jbd2_journal_remove_checkpoint(struct journal_head *jh)
 	}
 	journal = transaction->t_journal;
 
+	JBUFFER_TRACE(jh, "removing from transaction");
 	__buffer_unlink(jh);
 	jh->b_cp_transaction = NULL;
+	jbd2_journal_put_journal_head(jh);
 
 	if (transaction->t_checkpoint_list != NULL ||
 	    transaction->t_checkpoint_io_list != NULL)
 		goto out;
-	JBUFFER_TRACE(jh, "transaction has no more buffers");
 
 	/*
 	 * There is one special case to worry about: if we have just pulled the
@@ -701,10 +684,8 @@ int __jbd2_journal_remove_checkpoint(struct journal_head *jh)
 	 * The locking here around t_state is a bit sleazy.
 	 * See the comment at the end of jbd2_journal_commit_transaction().
 	 */
-	if (transaction->t_state != T_FINISHED) {
-		JBUFFER_TRACE(jh, "belongs to running/committing transaction");
+	if (transaction->t_state != T_FINISHED)
 		goto out;
-	}
 
 	/* OK, that was the last buffer for the transaction: we can now
 	   safely remove this transaction from the log */
@@ -723,7 +704,6 @@ int __jbd2_journal_remove_checkpoint(struct journal_head *jh)
 	wake_up(&journal->j_wait_logspace);
 	ret = 1;
 out:
-	JBUFFER_TRACE(jh, "exit");
 	return ret;
 }
 
@@ -742,6 +722,8 @@ void __jbd2_journal_insert_checkpoint(struct journal_head *jh,
 	J_ASSERT_JH(jh, buffer_dirty(jh2bh(jh)) || buffer_jbddirty(jh2bh(jh)));
 	J_ASSERT_JH(jh, jh->b_cp_transaction == NULL);
 
+	/* Get reference for checkpointing transaction */
+	jbd2_journal_grab_journal_head(jh2bh(jh));
 	jh->b_cp_transaction = transaction;
 
 	if (!transaction->t_checkpoint_list) {

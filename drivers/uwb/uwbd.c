@@ -256,7 +256,7 @@ static void uwbd_event_handle(struct uwb_event *evt)
  * UWB Daemon
  *
  * Listens to all UWB notifications and takes care to track the state
- * of the UWB neighboorhood for the kernel. When we do a run, we
+ * of the UWB neighbourhood for the kernel. When we do a run, we
  * spinlock, move the list to a private copy and release the
  * lock. Hold it as little as possible. Not a conflict: it is
  * guaranteed we own the events in the private list.
@@ -303,18 +303,22 @@ static int uwbd(void *param)
 /** Start the UWB daemon */
 void uwbd_start(struct uwb_rc *rc)
 {
-	rc->uwbd.task = kthread_run(uwbd, rc, "uwbd");
-	if (rc->uwbd.task == NULL)
+	struct task_struct *task = kthread_run(uwbd, rc, "uwbd");
+	if (IS_ERR(task)) {
+		rc->uwbd.task = NULL;
 		printk(KERN_ERR "UWB: Cannot start management daemon; "
 		       "UWB won't work\n");
-	else
+	} else {
+		rc->uwbd.task = task;
 		rc->uwbd.pid = rc->uwbd.task->pid;
+	}
 }
 
 /* Stop the UWB daemon and free any unprocessed events */
 void uwbd_stop(struct uwb_rc *rc)
 {
-	kthread_stop(rc->uwbd.task);
+	if (rc->uwbd.task)
+		kthread_stop(rc->uwbd.task);
 	uwbd_flush(rc);
 }
 

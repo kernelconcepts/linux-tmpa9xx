@@ -90,7 +90,7 @@ struct at91_eth_data {
 extern void __init at91_add_device_eth(struct at91_eth_data *data);
 
 #if defined(CONFIG_ARCH_AT91SAM9260) || defined(CONFIG_ARCH_AT91SAM9263) || defined(CONFIG_ARCH_AT91SAM9G20) || defined(CONFIG_ARCH_AT91CAP9) \
-	|| defined(CONFIG_ARCH_AT91SAM9G45) || defined(CONFIG_ARCH_AT572D940HF)
+	|| defined(CONFIG_ARCH_AT91SAM9G45)
 #define eth_platform_data	at91_eth_data
 #endif
 
@@ -98,6 +98,11 @@ extern void __init at91_add_device_eth(struct at91_eth_data *data);
 struct at91_usbh_data {
 	u8		ports;		/* number of ports on root hub */
 	u8		vbus_pin[2];	/* port power-control pin */
+	u8              vbus_pin_inverted;
+	u8              overcurrent_supported;
+	u8              overcurrent_pin[2];
+	u8              overcurrent_status[2];
+	u8              overcurrent_changed[2];
 };
 extern void __init at91_add_device_usbh(struct at91_usbh_data *data);
 extern void __init at91_add_device_usbh_ohci(struct at91_usbh_data *data);
@@ -112,7 +117,8 @@ struct atmel_nand_data {
 	u8		ale;		/* address line number connected to ALE */
 	u8		cle;		/* address line number connected to CLE */
 	u8		bus_width_16;	/* buswidth is 16 bit */
-	struct mtd_partition* (*partition_info)(int, int*);
+	struct mtd_partition *parts;
+	unsigned int	num_parts;
 };
 extern void __init at91_add_device_nand(struct atmel_nand_data *data);
 
@@ -140,6 +146,7 @@ extern void __init at91_set_serial_console(unsigned portnr);
 extern struct platform_device *atmel_default_console_device;
 
 struct atmel_uart_data {
+	int			num;		/* port num */
 	short			use_dma_tx;	/* use transmit DMA? */
 	short			use_dma_rx;	/* use receive DMA? */
 	void __iomem		*regs;		/* virt. base address, if any */
@@ -202,9 +209,6 @@ extern void __init at91_add_device_can(struct at91_can_data *data);
 extern void __init at91_init_leds(u8 cpu_led, u8 timer_led);
 extern void __init at91_gpio_leds(struct gpio_led *leds, int nr);
 extern void __init at91_pwm_leds(struct gpio_led *leds, int nr);
-
- /* AT572D940HF DSP */
-extern void __init at91_add_device_mAgic(void);
 
 /* FIXME: this needs a better location, but gets stuff building again */
 extern int at91_suspend_entering_slow_clock(void);

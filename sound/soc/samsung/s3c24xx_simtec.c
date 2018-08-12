@@ -7,20 +7,14 @@
  * published by the Free Software Foundation.
 */
 
-#include <linux/module.h>
-#include <linux/moduleparam.h>
-#include <linux/platform_device.h>
 #include <linux/gpio.h>
 #include <linux/clk.h>
-#include <linux/i2c.h>
+#include <linux/module.h>
 
-#include <sound/core.h>
-#include <sound/pcm.h>
 #include <sound/soc.h>
 
 #include <plat/audio-simtec.h>
 
-#include "dma.h"
 #include "s3c24xx-i2s.h"
 #include "s3c24xx_simtec.h"
 
@@ -307,7 +301,7 @@ static void detach_gpio_amp(struct s3c24xx_audio_simtec_pdata *pd)
 }
 
 #ifdef CONFIG_PM
-int simtec_audio_resume(struct device *dev)
+static int simtec_audio_resume(struct device *dev)
 {
 	simtec_call_startup(pdata);
 	return 0;

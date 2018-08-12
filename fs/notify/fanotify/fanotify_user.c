@@ -65,7 +65,7 @@ static int create_fd(struct fsnotify_group *group, struct fsnotify_event *event)
 
 	pr_debug("%s: group=%p event=%p\n", __func__, group, event);
 
-	client_fd = get_unused_fd();
+	client_fd = get_unused_fd_flags(group->fanotify_data.f_flags);
 	if (client_fd < 0)
 		return client_fd;
 
@@ -118,6 +118,7 @@ static int fill_event_metadata(struct fsnotify_group *group,
 	metadata->event_len = FAN_EVENT_METADATA_LEN;
 	metadata->metadata_len = FAN_EVENT_METADATA_LEN;
 	metadata->vers = FANOTIFY_METADATA_VERSION;
+	metadata->reserved = 0;
 	metadata->mask = event->mask & FAN_ALL_OUTGOING_EVENTS;
 	metadata->pid = pid_vnr(event->tgid);
 	if (unlikely(event->mask & FAN_Q_OVERFLOW))
@@ -164,7 +165,7 @@ static int process_access_response(struct fsnotify_group *group,
 		 fd, response);
 	/*
 	 * make sure the response is valid, if invalid we do nothing and either
-	 * userspace can send a valid responce or we will clean it up after the
+	 * userspace can send a valid response or we will clean it up after the
 	 * timeout
 	 */
 	switch (response) {
@@ -876,7 +877,7 @@ SYSCALL_ALIAS(sys_fanotify_mark, SyS_fanotify_mark);
 #endif
 
 /*
- * fanotify_user_setup - Our initialization function.  Note that we cannnot return
+ * fanotify_user_setup - Our initialization function.  Note that we cannot return
  * error because we have compiled-in VFS hooks.  So an (unlikely) failure here
  * must result in panic().
  */

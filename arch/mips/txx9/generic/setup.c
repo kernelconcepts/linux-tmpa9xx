@@ -632,14 +632,13 @@ void __init txx9_physmap_flash_init(int no, unsigned long addr,
 				    unsigned long size,
 				    const struct physmap_flash_data *pdata)
 {
-#if defined(CONFIG_MTD_PHYSMAP) || defined(CONFIG_MTD_PHYSMAP_MODULE)
+#if IS_ENABLED(CONFIG_MTD_PHYSMAP)
 	struct resource res = {
 		.start = addr,
 		.end = addr + size - 1,
 		.flags = IORESOURCE_MEM,
 	};
 	struct platform_device *pdev;
-#ifdef CONFIG_MTD_PARTITIONS
 	static struct mtd_partition parts[2];
 	struct physmap_flash_data pdata_part;
 
@@ -658,7 +657,7 @@ void __init txx9_physmap_flash_init(int no, unsigned long addr,
 		pdata_part.parts = parts;
 		pdata = &pdata_part;
 	}
-#endif
+
 	pdev = platform_device_alloc("physmap-flash", no);
 	if (!pdev ||
 	    platform_device_add_resources(pdev, &res, 1) ||
@@ -671,8 +670,7 @@ void __init txx9_physmap_flash_init(int no, unsigned long addr,
 void __init txx9_ndfmc_init(unsigned long baseaddr,
 			    const struct txx9ndfmc_platform_data *pdata)
 {
-#if defined(CONFIG_MTD_NAND_TXX9NDFMC) || \
-	defined(CONFIG_MTD_NAND_TXX9NDFMC_MODULE)
+#if IS_ENABLED(CONFIG_MTD_NAND_TXX9NDFMC)
 	struct resource res = {
 		.start = baseaddr,
 		.end = baseaddr + 0x1000 - 1,
@@ -688,7 +686,7 @@ void __init txx9_ndfmc_init(unsigned long baseaddr,
 #endif
 }
 
-#if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
+#if IS_ENABLED(CONFIG_LEDS_GPIO)
 static DEFINE_SPINLOCK(txx9_iocled_lock);
 
 #define TXX9_IOCLED_MAXLEDS 8
@@ -811,7 +809,7 @@ void __init txx9_iocled_init(unsigned long baseaddr,
 void __init txx9_dmac_init(int id, unsigned long baseaddr, int irq,
 			   const struct txx9dmac_platform_data *pdata)
 {
-#if defined(CONFIG_TXX9_DMAC) || defined(CONFIG_TXX9_DMAC_MODULE)
+#if IS_ENABLED(CONFIG_TXX9_DMAC)
 	struct resource res[] = {
 		{
 			.start = baseaddr,
@@ -867,8 +865,7 @@ void __init txx9_aclc_init(unsigned long baseaddr, int irq,
 			   unsigned int dma_chan_out,
 			   unsigned int dma_chan_in)
 {
-#if defined(CONFIG_SND_SOC_TXX9ACLC) || \
-	defined(CONFIG_SND_SOC_TXX9ACLC_MODULE)
+#if IS_ENABLED(CONFIG_SND_SOC_TXX9ACLC)
 	unsigned int dma_base = dmac_id * TXX9_DMA_MAX_NR_CHANNELS;
 	struct resource res[] = {
 		{

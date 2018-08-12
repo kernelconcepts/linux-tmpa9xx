@@ -15,6 +15,7 @@
  * User space memory access functions
  */
 #include <linux/thread_info.h>
+#include <linux/kernel.h>
 #include <asm/page.h>
 #include <asm/errno.h>
 
@@ -180,6 +181,7 @@ struct __large_struct { unsigned long buf[100]; };
 		"2:\n"						\
 		"	.section	.fixup,\"ax\"\n"	\
 		"3:\n\t"					\
+		"	mov		0,%1\n"			\
 		"	mov		%3,%0\n"		\
 		"	jmp		2b\n"			\
 		"	.previous\n"				\

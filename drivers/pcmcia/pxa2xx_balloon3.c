@@ -25,6 +25,8 @@
 
 #include <mach/balloon3.h>
 
+#include <asm/mach-types.h>
+
 #include "soc_common.h"
 
 /*
@@ -95,18 +97,10 @@ static void balloon3_pcmcia_socket_state(struct soc_pcmcia_socket *skt,
 static int balloon3_pcmcia_configure_socket(struct soc_pcmcia_socket *skt,
 				       const socket_state_t *state)
 {
-	__raw_writew(BALLOON3_CF_RESET, BALLOON3_CF_CONTROL_REG |
+	__raw_writew(BALLOON3_CF_RESET, BALLOON3_CF_CONTROL_REG +
 			((state->flags & SS_RESET) ?
 			BALLOON3_FPGA_SETnCLR : 0));
 	return 0;
-}
-
-static void balloon3_pcmcia_socket_init(struct soc_pcmcia_socket *skt)
-{
-}
-
-static void balloon3_pcmcia_socket_suspend(struct soc_pcmcia_socket *skt)
-{
 }
 
 static struct pcmcia_low_level balloon3_pcmcia_ops = {
@@ -115,8 +109,6 @@ static struct pcmcia_low_level balloon3_pcmcia_ops = {
 	.hw_shutdown		= balloon3_pcmcia_hw_shutdown,
 	.socket_state		= balloon3_pcmcia_socket_state,
 	.configure_socket	= balloon3_pcmcia_configure_socket,
-	.socket_init		= balloon3_pcmcia_socket_init,
-	.socket_suspend		= balloon3_pcmcia_socket_suspend,
 	.first			= 0,
 	.nr			= 1,
 };
@@ -126,6 +118,9 @@ static struct platform_device *balloon3_pcmcia_device;
 static int __init balloon3_pcmcia_init(void)
 {
 	int ret;
+
+	if (!machine_is_balloon3())
+		return -ENODEV;
 
 	balloon3_pcmcia_device = platform_device_alloc("pxa2xx-pcmcia", -1);
 	if (!balloon3_pcmcia_device)

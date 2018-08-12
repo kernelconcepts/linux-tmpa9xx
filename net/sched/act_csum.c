@@ -63,7 +63,7 @@ static int tcf_csum_init(struct nlattr *nla, struct nlattr *est,
 	if (nla == NULL)
 		return -EINVAL;
 
-	err = nla_parse_nested(tb, TCA_CSUM_MAX, nla,csum_policy);
+	err = nla_parse_nested(tb, TCA_CSUM_MAX, nla, csum_policy);
 	if (err < 0)
 		return err;
 
@@ -122,9 +122,7 @@ static void *tcf_csum_skb_nextlayer(struct sk_buff *skb,
 	int hl = ihl + jhl;
 
 	if (!pskb_may_pull(skb, ipl + ntkoff) || (ipl < hl) ||
-	    (skb_cloned(skb) &&
-	     !skb_clone_writable(skb, hl + ntkoff) &&
-	     pskb_expand_head(skb, 0, 0, GFP_ATOMIC)))
+	    skb_try_make_writable(skb, hl + ntkoff))
 		return NULL;
 	else
 		return (void *)(skb_network_header(skb) + ihl);
@@ -372,9 +370,7 @@ static int tcf_csum_ipv4(struct sk_buff *skb, u32 update_flags)
 	}
 
 	if (update_flags & TCA_CSUM_UPDATE_FLAG_IPV4HDR) {
-		if (skb_cloned(skb) &&
-		    !skb_clone_writable(skb, sizeof(*iph) + ntkoff) &&
-		    pskb_expand_head(skb, 0, 0, GFP_ATOMIC))
+		if (skb_try_make_writable(skb, sizeof(*iph) + ntkoff))
 			goto fail;
 
 		ip_send_check(iph);
@@ -500,7 +496,7 @@ fail:
 }
 
 static int tcf_csum(struct sk_buff *skb,
-		    struct tc_action *a, struct tcf_result *res)
+		    const struct tc_action *a, struct tcf_result *res)
 {
 	struct tcf_csum *p = a->priv;
 	int action;

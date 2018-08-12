@@ -18,6 +18,7 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/export.h>
 #include <linux/init.h>
 #include <linux/sfi.h>
 #include <linux/platform_device.h>
@@ -58,7 +59,10 @@ EXPORT_SYMBOL_GPL(vrtc_cmos_write);
 unsigned long vrtc_get_time(void)
 {
 	u8 sec, min, hour, mday, mon;
+	unsigned long flags;
 	u32 year;
+
+	spin_lock_irqsave(&rtc_lock, flags);
 
 	while ((vrtc_cmos_read(RTC_FREQ_SELECT) & RTC_UIP))
 		cpu_relax();
@@ -70,8 +74,10 @@ unsigned long vrtc_get_time(void)
 	mon = vrtc_cmos_read(RTC_MONTH);
 	year = vrtc_cmos_read(RTC_YEAR);
 
-	/* vRTC YEAR reg contains the offset to 1960 */
-	year += 1960;
+	spin_unlock_irqrestore(&rtc_lock, flags);
+
+	/* vRTC YEAR reg contains the offset to 1972 */
+	year += 1972;
 
 	printk(KERN_INFO "vRTC: sec: %d min: %d hour: %d day: %d "
 		"mon: %d year: %d\n", sec, min, hour, mday, mon, year);
@@ -83,8 +89,10 @@ unsigned long vrtc_get_time(void)
 int vrtc_set_mmss(unsigned long nowtime)
 {
 	int real_sec, real_min;
+	unsigned long flags;
 	int vrtc_min;
 
+	spin_lock_irqsave(&rtc_lock, flags);
 	vrtc_min = vrtc_cmos_read(RTC_MINUTES);
 
 	real_sec = nowtime % 60;
@@ -95,27 +103,23 @@ int vrtc_set_mmss(unsigned long nowtime)
 
 	vrtc_cmos_write(real_sec, RTC_SECONDS);
 	vrtc_cmos_write(real_min, RTC_MINUTES);
+	spin_unlock_irqrestore(&rtc_lock, flags);
+
 	return 0;
 }
 
 void __init mrst_rtc_init(void)
 {
-	unsigned long rtc_paddr;
-	void __iomem *virt_base;
+	unsigned long vrtc_paddr;
 
 	sfi_table_parse(SFI_SIG_MRTC, NULL, NULL, sfi_parse_mrtc);
-	if (!sfi_mrtc_num)
+
+	vrtc_paddr = sfi_mrtc_array[0].phys_addr;
+	if (!sfi_mrtc_num || !vrtc_paddr)
 		return;
 
-	rtc_paddr = sfi_mrtc_array[0].phys_addr;
-
-	/* vRTC's register address may not be page aligned */
-	set_fixmap_nocache(FIX_LNW_VRTC, rtc_paddr);
-
-	virt_base = (void __iomem *)__fix_to_virt(FIX_LNW_VRTC);
-	virt_base += rtc_paddr & ~PAGE_MASK;
-	vrtc_virt_base = virt_base;
-
+	vrtc_virt_base = (void __iomem *)set_fixmap_offset_nocache(FIX_LNW_VRTC,
+								vrtc_paddr);
 	x86_platform.get_wallclock = vrtc_get_time;
 	x86_platform.set_wallclock = vrtc_set_mmss;
 }

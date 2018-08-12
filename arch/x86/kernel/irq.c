@@ -8,6 +8,8 @@
 #include <linux/seq_file.h>
 #include <linux/smp.h>
 #include <linux/ftrace.h>
+#include <linux/delay.h>
+#include <linux/export.h>
 
 #include <asm/apic.h>
 #include <asm/io_apic.h>
@@ -44,9 +46,9 @@ void ack_bad_irq(unsigned int irq)
 
 #define irq_stats(x)		(&per_cpu(irq_stat, x))
 /*
- * /proc/interrupts printing:
+ * /proc/interrupts printing for arch specific interrupts
  */
-static int show_other_interrupts(struct seq_file *p, int prec)
+int arch_show_interrupts(struct seq_file *p, int prec)
 {
 	int j;
 
@@ -122,59 +124,6 @@ static int show_other_interrupts(struct seq_file *p, int prec)
 	return 0;
 }
 
-int show_interrupts(struct seq_file *p, void *v)
-{
-	unsigned long flags, any_count = 0;
-	int i = *(loff_t *) v, j, prec;
-	struct irqaction *action;
-	struct irq_desc *desc;
-
-	if (i > nr_irqs)
-		return 0;
-
-	for (prec = 3, j = 1000; prec < 10 && j <= nr_irqs; ++prec)
-		j *= 10;
-
-	if (i == nr_irqs)
-		return show_other_interrupts(p, prec);
-
-	/* print header */
-	if (i == 0) {
-		seq_printf(p, "%*s", prec + 8, "");
-		for_each_online_cpu(j)
-			seq_printf(p, "CPU%-8d", j);
-		seq_putc(p, '\n');
-	}
-
-	desc = irq_to_desc(i);
-	if (!desc)
-		return 0;
-
-	raw_spin_lock_irqsave(&desc->lock, flags);
-	for_each_online_cpu(j)
-		any_count |= kstat_irqs_cpu(i, j);
-	action = desc->action;
-	if (!action && !any_count)
-		goto out;
-
-	seq_printf(p, "%*d: ", prec, i);
-	for_each_online_cpu(j)
-		seq_printf(p, "%10u ", kstat_irqs_cpu(i, j));
-	seq_printf(p, " %8s", desc->irq_data.chip->name);
-	seq_printf(p, "-%-8s", desc->name);
-
-	if (action) {
-		seq_printf(p, "  %s", action->name);
-		while ((action = action->next) != NULL)
-			seq_printf(p, ", %s", action->name);
-	}
-
-	seq_putc(p, '\n');
-out:
-	raw_spin_unlock_irqrestore(&desc->lock, flags);
-	return 0;
-}
-
 /*
  * /proc/stat helpers
  */
@@ -211,10 +160,6 @@ u64 arch_irq_stat_cpu(unsigned int cpu)
 u64 arch_irq_stat(void)
 {
 	u64 sum = atomic_read(&irq_err_count);
-
-#ifdef CONFIG_X86_IO_APIC
-	sum += atomic_read(&irq_mis_count);
-#endif
 	return sum;
 }
 
@@ -276,16 +221,77 @@ void smp_x86_platform_ipi(struct pt_regs *regs)
 
 EXPORT_SYMBOL_GPL(vector_used_by_percpu_irq);
 
-#ifdef CONFIG_OF
-unsigned int irq_create_of_mapping(struct device_node *controller,
-		const u32 *intspec, unsigned int intsize)
-{
-	return intspec[0];
-}
-EXPORT_SYMBOL_GPL(irq_create_of_mapping);
-#endif
-
 #ifdef CONFIG_HOTPLUG_CPU
+/*
+ * This cpu is going to be removed and its vectors migrated to the remaining
+ * online cpus.  Check to see if there are enough vectors in the remaining cpus.
+ * This function is protected by stop_machine().
+ */
+int check_irq_vectors_for_cpu_disable(void)
+{
+	int irq, cpu;
+	unsigned int this_cpu, vector, this_count, count;
+	struct irq_desc *desc;
+	struct irq_data *data;
+	struct cpumask affinity_new, online_new;
+
+	this_cpu = smp_processor_id();
+	cpumask_copy(&online_new, cpu_online_mask);
+	cpu_clear(this_cpu, online_new);
+
+	this_count = 0;
+	for (vector = FIRST_EXTERNAL_VECTOR; vector < NR_VECTORS; vector++) {
+		irq = __this_cpu_read(vector_irq[vector]);
+		if (irq >= 0) {
+			desc = irq_to_desc(irq);
+			data = irq_desc_get_irq_data(desc);
+			cpumask_copy(&affinity_new, data->affinity);
+			cpu_clear(this_cpu, affinity_new);
+
+			/* Do not count inactive or per-cpu irqs. */
+			if (!irq_has_action(irq) || irqd_is_per_cpu(data))
+				continue;
+
+			/*
+			 * A single irq may be mapped to multiple
+			 * cpu's vector_irq[] (for example IOAPIC cluster
+			 * mode).  In this case we have two
+			 * possibilities:
+			 *
+			 * 1) the resulting affinity mask is empty; that is
+			 * this the down'd cpu is the last cpu in the irq's
+			 * affinity mask, or
+			 *
+			 * 2) the resulting affinity mask is no longer
+			 * a subset of the online cpus but the affinity
+			 * mask is not zero; that is the down'd cpu is the
+			 * last online cpu in a user set affinity mask.
+			 */
+			if (cpumask_empty(&affinity_new) ||
+			    !cpumask_subset(&affinity_new, &online_new))
+				this_count++;
+		}
+	}
+
+	count = 0;
+	for_each_online_cpu(cpu) {
+		if (cpu == this_cpu)
+			continue;
+		for (vector = FIRST_EXTERNAL_VECTOR; vector < NR_VECTORS;
+		     vector++) {
+			if (per_cpu(vector_irq, cpu)[vector] < 0)
+				count++;
+		}
+	}
+
+	if (count < this_count) {
+		pr_warn("CPU %d disable failed: CPU has %u vectors assigned and there are only %u available.\n",
+			this_cpu, this_count, count);
+		return -ERANGE;
+	}
+	return 0;
+}
+
 /* A cpu has been removed from cpu_online_mask.  Reset irq affinities. */
 void fixup_irqs(void)
 {
@@ -293,6 +299,7 @@ void fixup_irqs(void)
 	static int warned;
 	struct irq_desc *desc;
 	struct irq_data *data;
+	struct irq_chip *chip;
 
 	for_each_irq_desc(irq, desc) {
 		int break_affinity = 0;
@@ -307,10 +314,10 @@ void fixup_irqs(void)
 		/* interrupt's are disabled at this point */
 		raw_spin_lock(&desc->lock);
 
-		data = &desc->irq_data;
+		data = irq_desc_get_irq_data(desc);
 		affinity = data->affinity;
-		if (!irq_has_action(irq) ||
-		    cpumask_equal(affinity, cpu_online_mask)) {
+		if (!irq_has_action(irq) || irqd_is_per_cpu(data) ||
+		    cpumask_subset(affinity, cpu_online_mask)) {
 			raw_spin_unlock(&desc->lock);
 			continue;
 		}
@@ -327,16 +334,18 @@ void fixup_irqs(void)
 			affinity = cpu_all_mask;
 		}
 
-		if (!(desc->status & IRQ_MOVE_PCNTXT) && data->chip->irq_mask)
-			data->chip->irq_mask(data);
+		chip = irq_data_get_irq_chip(data);
+		if (!irqd_can_move_in_process_context(data) && chip->irq_mask)
+			chip->irq_mask(data);
 
-		if (data->chip->irq_set_affinity)
-			data->chip->irq_set_affinity(data, affinity, true);
+		if (chip->irq_set_affinity)
+			chip->irq_set_affinity(data, affinity, true);
 		else if (!(warned++))
 			set_affinity = 0;
 
-		if (!(desc->status & IRQ_MOVE_PCNTXT) && data->chip->irq_unmask)
-			data->chip->irq_unmask(data);
+		if (!irqd_can_move_in_process_context(data) &&
+		    !irqd_irq_disabled(data) && chip->irq_unmask)
+			chip->irq_unmask(data);
 
 		raw_spin_unlock(&desc->lock);
 
@@ -368,10 +377,11 @@ void fixup_irqs(void)
 			irq = __this_cpu_read(vector_irq[vector]);
 
 			desc = irq_to_desc(irq);
-			data = &desc->irq_data;
+			data = irq_desc_get_irq_data(desc);
+			chip = irq_data_get_irq_chip(data);
 			raw_spin_lock(&desc->lock);
-			if (data->chip->irq_retrigger)
-				data->chip->irq_retrigger(data);
+			if (chip->irq_retrigger)
+				chip->irq_retrigger(data);
 			raw_spin_unlock(&desc->lock);
 		}
 	}

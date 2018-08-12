@@ -38,7 +38,7 @@ extern int eth_header(struct sk_buff *skb, struct net_device *dev,
 		      const void *daddr, const void *saddr, unsigned len);
 extern int eth_rebuild_header(struct sk_buff *skb);
 extern int eth_header_parse(const struct sk_buff *skb, unsigned char *haddr);
-extern int eth_header_cache(const struct neighbour *neigh, struct hh_cache *hh);
+extern int eth_header_cache(const struct neighbour *neigh, struct hh_cache *hh, __be16 type);
 extern void eth_header_cache_update(struct hh_cache *hh,
 				    const struct net_device *dev,
 				    const unsigned char *haddr);
@@ -137,6 +137,17 @@ static inline void random_ether_addr(u8 *addr)
 	get_random_bytes (addr, ETH_ALEN);
 	addr [0] &= 0xfe;	/* clear multicast bit */
 	addr [0] |= 0x02;	/* set local assignment bit (IEEE802) */
+}
+
+/**
+ * eth_zero_addr - Assign zero address
+ * @addr: Pointer to a six-byte array containing the Ethernet address
+ *
+ * Assign the zero address to the given address array.
+ */
+static inline void eth_zero_addr(u8 *addr)
+{
+	memset(addr, 0x00, ETH_ALEN);
 }
 
 /**

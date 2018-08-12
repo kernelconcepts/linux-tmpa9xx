@@ -59,6 +59,8 @@ unsigned long __initdata node_memmap_pfn[MAX_NUMNODES];
 unsigned long __initdata node_percpu_pfn[MAX_NUMNODES];
 unsigned long __initdata node_free_pfn[MAX_NUMNODES];
 
+static unsigned long __initdata node_percpu[MAX_NUMNODES];
+
 #ifdef CONFIG_HIGHMEM
 /* Page frame index of end of lowmem on each controller. */
 unsigned long __cpuinitdata node_lowmem_end_pfn[MAX_NUMNODES];
@@ -117,7 +119,8 @@ early_param("maxmem", setup_maxmem);
 static int __init setup_maxnodemem(char *str)
 {
 	char *endp;
-	long maxnodemem_mb, node;
+	long maxnodemem_mb;
+	unsigned long node;
 
 	node = str ? simple_strtoul(str, &endp, 0) : INT_MAX;
 	if (node >= MAX_NUMNODES || *endp != ':' ||
@@ -551,10 +554,8 @@ static void __init setup_bootmem_allocator(void)
 
 #ifdef CONFIG_KEXEC
 	if (crashk_res.start != crashk_res.end)
-		reserve_bootmem(crashk_res.start,
-			crashk_res.end - crashk_res.start + 1, 0);
+		reserve_bootmem(crashk_res.start, resource_size(&crashk_res), 0);
 #endif
-
 }
 
 void *__init alloc_remap(int nid, unsigned long size)
@@ -568,11 +569,13 @@ void *__init alloc_remap(int nid, unsigned long size)
 
 static int __init percpu_size(void)
 {
-	int size = ALIGN(__per_cpu_end - __per_cpu_start, PAGE_SIZE);
-#ifdef CONFIG_MODULES
-	if (size < PERCPU_ENOUGH_ROOM)
-		size = PERCPU_ENOUGH_ROOM;
-#endif
+	int size = __per_cpu_end - __per_cpu_start;
+	size += PERCPU_MODULE_RESERVE;
+	size += PERCPU_DYNAMIC_EARLY_SIZE;
+	if (size < PCPU_MIN_UNIT_SIZE)
+		size = PCPU_MIN_UNIT_SIZE;
+	size = roundup(size, PAGE_SIZE);
+
 	/* In several places we assume the per-cpu data fits on a huge page. */
 	BUG_ON(kdata_huge && size > HPAGE_SIZE);
 	return size;
@@ -589,7 +592,6 @@ static inline unsigned long alloc_bootmem_pfn(int size, unsigned long goal)
 static void __init zone_sizes_init(void)
 {
 	unsigned long zones_size[MAX_NR_ZONES] = { 0 };
-	unsigned long node_percpu[MAX_NUMNODES] = { 0 };
 	int size = percpu_size();
 	int num_cpus = smp_height * smp_width;
 	int i;
@@ -674,7 +676,7 @@ static void __init zone_sizes_init(void)
 		NODE_DATA(i)->bdata = NODE_DATA(0)->bdata;
 
 		free_area_init_node(i, zones_size, start, NULL);
-		printk(KERN_DEBUG "  DMA zone: %ld per-cpu pages\n",
+		printk(KERN_DEBUG "  Normal zone: %ld per-cpu pages\n",
 		       PFN_UP(node_percpu[i]));
 
 		/* Track the type of memory on each node */
@@ -910,8 +912,10 @@ void __cpuinit setup_cpu(int boot)
 #endif
 }
 
+#ifdef CONFIG_BLK_DEV_INITRD
+
 static int __initdata set_initramfs_file;
-static char __initdata initramfs_file[128] = "initramfs.cpio.gz";
+static char __initdata initramfs_file[128] = "initramfs";
 
 static int __init setup_initramfs_file(char *str)
 {
@@ -925,9 +929,9 @@ static int __init setup_initramfs_file(char *str)
 early_param("initramfs_file", setup_initramfs_file);
 
 /*
- * We look for an additional "initramfs.cpio.gz" file in the hvfs.
- * If there is one, we allocate some memory for it and it will be
- * unpacked to the initramfs after any built-in initramfs_data.
+ * We look for a file called "initramfs" in the hvfs.  If there is one, we
+ * allocate some memory for it and it will be unpacked to the initramfs.
+ * If it's compressed, the initd code will uncompress it first.
  */
 static void __init load_hv_initrd(void)
 {
@@ -937,10 +941,16 @@ static void __init load_hv_initrd(void)
 
 	fd = hv_fs_findfile((HV_VirtAddr) initramfs_file);
 	if (fd == HV_ENOENT) {
-		if (set_initramfs_file)
+		if (set_initramfs_file) {
 			pr_warning("No such hvfs initramfs file '%s'\n",
 				   initramfs_file);
-		return;
+			return;
+		} else {
+			/* Try old backwards-compatible name. */
+			fd = hv_fs_findfile((HV_VirtAddr)"initramfs.cpio.gz");
+			if (fd == HV_ENOENT)
+				return;
+		}
 	}
 	BUG_ON(fd < 0);
 	stat = hv_fs_fstat(fd);
@@ -964,8 +974,12 @@ static void __init load_hv_initrd(void)
 
 void __init free_initrd_mem(unsigned long begin, unsigned long end)
 {
-	free_bootmem(__pa(begin), end - begin);
+	free_bootmem_late(__pa(begin), end - begin);
 }
+
+#else
+static inline void load_hv_initrd(void) {}
+#endif /* CONFIG_BLK_DEV_INITRD */
 
 static void __init validate_hv(void)
 {
@@ -1312,6 +1326,8 @@ static void *__init pcpu_fc_alloc(unsigned int cpu, size_t size, size_t align)
 
 	BUG_ON(size % PAGE_SIZE != 0);
 	pfn_offset[nid] += size / PAGE_SIZE;
+	BUG_ON(node_percpu[nid] < size);
+	node_percpu[nid] -= size;
 	if (percpu_pfn[cpu] == 0)
 		percpu_pfn[cpu] = pfn;
 	return pfn_to_kaddr(pfn);

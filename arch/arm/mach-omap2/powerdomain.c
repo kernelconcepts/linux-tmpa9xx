@@ -1,8 +1,8 @@
 /*
  * OMAP powerdomain control
  *
- * Copyright (C) 2007-2008 Texas Instruments, Inc.
- * Copyright (C) 2007-2009 Nokia Corporation
+ * Copyright (C) 2007-2008, 2011 Texas Instruments, Inc.
+ * Copyright (C) 2007-2011 Nokia Corporation
  *
  * Written by Paul Walmsley
  * Added OMAP4 specific support by Abhijit Pagare <abhijitpagare@ti.com>
@@ -19,18 +19,23 @@
 #include <linux/list.h>
 #include <linux/errno.h>
 #include <linux/string.h>
+#include <trace/events/power.h>
+
 #include "cm2xxx_3xxx.h"
 #include "prcm44xx.h"
 #include "cm44xx.h"
 #include "prm2xxx_3xxx.h"
 #include "prm44xx.h"
 
+#include <asm/cpu.h>
 #include <plat/cpu.h>
 #include "powerdomain.h"
 #include "clockdomain.h"
 #include <plat/prcm.h>
 
 #include "pm.h"
+
+#define PWRDM_TRACE_STATES_FLAG	(1<<31)
 
 enum {
 	PWRDM_STATE_NOW = 0,
@@ -72,11 +77,9 @@ static struct powerdomain *_pwrdm_lookup(const char *name)
 static int _pwrdm_register(struct powerdomain *pwrdm)
 {
 	int i;
+	struct voltagedomain *voltdm;
 
 	if (!pwrdm || !pwrdm->name)
-		return -EINVAL;
-
-	if (!omap_chip_is(pwrdm->omap_chip))
 		return -EINVAL;
 
 	if (cpu_is_omap44xx() &&
@@ -88,6 +91,16 @@ static int _pwrdm_register(struct powerdomain *pwrdm)
 
 	if (_pwrdm_lookup(pwrdm->name))
 		return -EEXIST;
+
+	voltdm = voltdm_lookup(pwrdm->voltdm.name);
+	if (!voltdm) {
+		pr_err("powerdomain: %s: voltagedomain %s does not exist\n",
+		       pwrdm->name, pwrdm->voltdm.name);
+		return -EINVAL;
+	}
+	pwrdm->voltdm.ptr = voltdm;
+	INIT_LIST_HEAD(&pwrdm->voltdm_node);
+	voltdm_add_pwrdm(voltdm, pwrdm);
 
 	list_add(&pwrdm->node, &pwrdm_list);
 
@@ -130,8 +143,7 @@ static void _update_logic_membank_counters(struct powerdomain *pwrdm)
 static int _pwrdm_state_switch(struct powerdomain *pwrdm, int flag)
 {
 
-	int prev;
-	int state;
+	int prev, state, trace_state = 0;
 
 	if (pwrdm == NULL)
 		return -EINVAL;
@@ -148,6 +160,17 @@ static int _pwrdm_state_switch(struct powerdomain *pwrdm, int flag)
 			pwrdm->state_counter[prev]++;
 		if (prev == PWRDM_POWER_RET)
 			_update_logic_membank_counters(pwrdm);
+		/*
+		 * If the power domain did not hit the desired state,
+		 * generate a trace event with both the desired and hit states
+		 */
+		if (state != prev) {
+			trace_state = (PWRDM_TRACE_STATES_FLAG |
+				       ((state & OMAP_POWERSTATE_MASK) << 8) |
+				       ((prev & OMAP_POWERSTATE_MASK) << 0));
+			trace_power_domain_target(pwrdm->name, trace_state,
+						  smp_processor_id());
+		}
 		break;
 	default:
 		return -EINVAL;
@@ -179,29 +202,76 @@ static int _pwrdm_post_transition_cb(struct powerdomain *pwrdm, void *unused)
 /* Public functions */
 
 /**
- * pwrdm_init - set up the powerdomain layer
- * @pwrdm_list: array of struct powerdomain pointers to register
- * @custom_funcs: func pointers for arch specfic implementations
+ * pwrdm_register_platform_funcs - register powerdomain implementation fns
+ * @po: func pointers for arch specific implementations
  *
- * Loop through the array of powerdomains @pwrdm_list, registering all
- * that are available on the current CPU. If pwrdm_list is supplied
- * and not null, all of the referenced powerdomains will be
- * registered.  No return value.  XXX pwrdm_list is not really a
- * "list"; it is an array.  Rename appropriately.
+ * Register the list of function pointers used to implement the
+ * powerdomain functions on different OMAP SoCs.  Should be called
+ * before any other pwrdm_register*() function.  Returns -EINVAL if
+ * @po is null, -EEXIST if platform functions have already been
+ * registered, or 0 upon success.
  */
-void pwrdm_init(struct powerdomain **pwrdm_list, struct pwrdm_ops *custom_funcs)
+int pwrdm_register_platform_funcs(struct pwrdm_ops *po)
+{
+	if (!po)
+		return -EINVAL;
+
+	if (arch_pwrdm)
+		return -EEXIST;
+
+	arch_pwrdm = po;
+
+	return 0;
+}
+
+/**
+ * pwrdm_register_pwrdms - register SoC powerdomains
+ * @ps: pointer to an array of struct powerdomain to register
+ *
+ * Register the powerdomains available on a particular OMAP SoC.  Must
+ * be called after pwrdm_register_platform_funcs().  May be called
+ * multiple times.  Returns -EACCES if called before
+ * pwrdm_register_platform_funcs(); -EINVAL if the argument @ps is
+ * null; or 0 upon success.
+ */
+int pwrdm_register_pwrdms(struct powerdomain **ps)
 {
 	struct powerdomain **p = NULL;
 
-	if (!custom_funcs)
-		WARN(1, "powerdomain: No custom pwrdm functions registered\n");
-	else
-		arch_pwrdm = custom_funcs;
+	if (!arch_pwrdm)
+		return -EEXIST;
 
-	if (pwrdm_list) {
-		for (p = pwrdm_list; *p; p++)
-			_pwrdm_register(*p);
-	}
+	if (!ps)
+		return -EINVAL;
+
+	for (p = ps; *p; p++)
+		_pwrdm_register(*p);
+
+	return 0;
+}
+
+/**
+ * pwrdm_complete_init - set up the powerdomain layer
+ *
+ * Do whatever is necessary to initialize registered powerdomains and
+ * powerdomain code.  Currently, this programs the next power state
+ * for each powerdomain to ON.  This prevents powerdomains from
+ * unexpectedly losing context or entering high wakeup latency modes
+ * with non-power-management-enabled kernels.  Must be called after
+ * pwrdm_register_pwrdms().  Returns -EACCES if called before
+ * pwrdm_register_pwrdms(), or 0 upon success.
+ */
+int pwrdm_complete_init(void)
+{
+	struct powerdomain *temp_p;
+
+	if (list_empty(&pwrdm_list))
+		return -EACCES;
+
+	list_for_each_entry(temp_p, &pwrdm_list, node)
+		pwrdm_set_next_pwrst(temp_p, PWRDM_POWER_ON);
+
+	return 0;
 }
 
 /**
@@ -368,6 +438,18 @@ int pwrdm_for_each_clkdm(struct powerdomain *pwrdm,
 }
 
 /**
+ * pwrdm_get_voltdm - return a ptr to the voltdm that this pwrdm resides in
+ * @pwrdm: struct powerdomain *
+ *
+ * Return a pointer to the struct voltageomain that the specified powerdomain
+ * @pwrdm exists in.
+ */
+struct voltagedomain *pwrdm_get_voltdm(struct powerdomain *pwrdm)
+{
+	return pwrdm->voltdm.ptr;
+}
+
+/**
  * pwrdm_get_mem_bank_count - get number of memory banks in this powerdomain
  * @pwrdm: struct powerdomain *
  *
@@ -406,8 +488,13 @@ int pwrdm_set_next_pwrst(struct powerdomain *pwrdm, u8 pwrst)
 	pr_debug("powerdomain: setting next powerstate for %s to %0x\n",
 		 pwrdm->name, pwrst);
 
-	if (arch_pwrdm && arch_pwrdm->pwrdm_set_next_pwrst)
+	if (arch_pwrdm && arch_pwrdm->pwrdm_set_next_pwrst) {
+		/* Trace the pwrdm desired target state */
+		trace_power_domain_target(pwrdm->name, pwrst,
+					  smp_processor_id());
+		/* Program the pwrdm desired target state */
 		ret = arch_pwrdm->pwrdm_set_next_pwrst(pwrdm, pwrst);
+	}
 
 	return ret;
 }
@@ -915,16 +1002,16 @@ int pwrdm_post_transition(void)
  * @pwrdm: struct powerdomain * to wait for
  *
  * Context loss count is the sum of powerdomain off-mode counter, the
- * logic off counter and the per-bank memory off counter.  Returns 0
+ * logic off counter and the per-bank memory off counter.  Returns negative
  * (and WARNs) upon error, otherwise, returns the context loss count.
  */
-u32 pwrdm_get_context_loss_count(struct powerdomain *pwrdm)
+int pwrdm_get_context_loss_count(struct powerdomain *pwrdm)
 {
 	int i, count;
 
 	if (!pwrdm) {
 		WARN(1, "powerdomain: %s: pwrdm is null\n", __func__);
-		return 0;
+		return -ENODEV;
 	}
 
 	count = pwrdm->state_counter[PWRDM_POWER_OFF];
@@ -933,8 +1020,55 @@ u32 pwrdm_get_context_loss_count(struct powerdomain *pwrdm)
 	for (i = 0; i < pwrdm->banks; i++)
 		count += pwrdm->ret_mem_off_counter[i];
 
-	pr_debug("powerdomain: %s: context loss count = %u\n",
+	/*
+	 * Context loss count has to be a non-negative value. Clear the sign
+	 * bit to get a value range from 0 to INT_MAX.
+	 */
+	count &= INT_MAX;
+
+	pr_debug("powerdomain: %s: context loss count = %d\n",
 		 pwrdm->name, count);
 
 	return count;
+}
+
+/**
+ * pwrdm_can_ever_lose_context - can this powerdomain ever lose context?
+ * @pwrdm: struct powerdomain *
+ *
+ * Given a struct powerdomain * @pwrdm, returns 1 if the powerdomain
+ * can lose either memory or logic context or if @pwrdm is invalid, or
+ * returns 0 otherwise.  This function is not concerned with how the
+ * powerdomain registers are programmed (i.e., to go off or not); it's
+ * concerned with whether it's ever possible for this powerdomain to
+ * go off while some other part of the chip is active.  This function
+ * assumes that every powerdomain can go to either ON or INACTIVE.
+ */
+bool pwrdm_can_ever_lose_context(struct powerdomain *pwrdm)
+{
+	int i;
+
+	if (IS_ERR_OR_NULL(pwrdm)) {
+		pr_debug("powerdomain: %s: invalid powerdomain pointer\n",
+			 __func__);
+		return 1;
+	}
+
+	if (pwrdm->pwrsts & PWRSTS_OFF)
+		return 1;
+
+	if (pwrdm->pwrsts & PWRSTS_RET) {
+		if (pwrdm->pwrsts_logic_ret & PWRSTS_OFF)
+			return 1;
+
+		for (i = 0; i < pwrdm->banks; i++)
+			if (pwrdm->pwrsts_mem_ret[i] & PWRSTS_OFF)
+				return 1;
+	}
+
+	for (i = 0; i < pwrdm->banks; i++)
+		if (pwrdm->pwrsts_mem_on[i] & PWRSTS_OFF)
+			return 1;
+
+	return 0;
 }

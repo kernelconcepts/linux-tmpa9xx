@@ -92,10 +92,6 @@ static int radio_si4713_s_audout(struct file *file, void *priv,
 static int radio_si4713_querycap(struct file *file, void *priv,
 					struct v4l2_capability *capability)
 {
-	struct radio_si4713_device *rsdev;
-
-	rsdev = video_get_drvdata(video_devdata(file));
-
 	strlcpy(capability->driver, "radio-si4713", sizeof(capability->driver));
 	strlcpy(capability->card, "Silicon Labs Si4713 Modulator",
 				sizeof(capability->card));
@@ -224,7 +220,8 @@ static int radio_si4713_s_frequency(struct file *file, void *p,
 							s_frequency, vf);
 }
 
-static long radio_si4713_default(struct file *file, void *p, int cmd, void *arg)
+static long radio_si4713_default(struct file *file, void *p,
+				bool valid_prio, int cmd, void *arg)
 {
 	return v4l2_device_call_until_err(get_v4l2_dev(file), 0, core,
 							ioctl, cmd, arg);

@@ -17,6 +17,7 @@
 #include <linux/mfd/wm8350/pmic.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
+#include <linux/module.h>
 
 /* Microamps */
 static const int isink_cur[] = {
@@ -215,13 +216,13 @@ static int wm8350_led_probe(struct platform_device *pdev)
 
 	isink = regulator_get(&pdev->dev, "led_isink");
 	if (IS_ERR(isink)) {
-		printk(KERN_ERR "%s: cant get ISINK\n", __func__);
+		printk(KERN_ERR "%s: can't get ISINK\n", __func__);
 		return PTR_ERR(isink);
 	}
 
 	dcdc = regulator_get(&pdev->dev, "led_vcc");
 	if (IS_ERR(dcdc)) {
-		printk(KERN_ERR "%s: cant get DCDC\n", __func__);
+		printk(KERN_ERR "%s: can't get DCDC\n", __func__);
 		ret = PTR_ERR(dcdc);
 		goto err_isink;
 	}

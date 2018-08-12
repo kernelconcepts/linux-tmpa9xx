@@ -1,5 +1,6 @@
 #include "../libslang.h"
 #include <elf.h>
+#include <newt.h>
 #include <inttypes.h>
 #include <sys/ttydefaults.h>
 #include <ctype.h>
@@ -41,7 +42,7 @@ static int ui_entry__read(const char *title, char *bf, size_t size, int width)
 out_free_form:
 	newtPopWindow();
 	newtFormDestroy(form);
-	return 0;
+	return err;
 }
 
 struct map_browser {
@@ -108,11 +109,8 @@ static int map_browser__run(struct map_browser *self)
 			     verbose ? "" : "restart with -v to use") < 0)
 		return -1;
 
-	if (verbose)
-		ui_browser__add_exit_key(&self->b, '/');
-
 	while (1) {
-		key = ui_browser__run(&self->b);
+		key = ui_browser__run(&self->b, 0);
 
 		if (verbose && key == '/')
 			map_browser__search(self);

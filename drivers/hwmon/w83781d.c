@@ -826,6 +826,7 @@ w83781d_detect_subclients(struct i2c_client *new_client)
 	struct i2c_adapter *adapter = new_client->adapter;
 	struct w83781d_data *data = i2c_get_clientdata(new_client);
 	enum chips kind = data->type;
+	int num_sc = 1;
 
 	id = i2c_adapter_id(adapter);
 
@@ -850,6 +851,7 @@ w83781d_detect_subclients(struct i2c_client *new_client)
 	}
 
 	if (kind != w83783s) {
+		num_sc = 2;
 		if (force_subclients[0] == id &&
 		    force_subclients[1] == address) {
 			sc_addr[1] = force_subclients[3];
@@ -865,7 +867,7 @@ w83781d_detect_subclients(struct i2c_client *new_client)
 		}
 	}
 
-	for (i = 0; i <= 1; i++) {
+	for (i = 0; i < num_sc; i++) {
 		data->lm75[i] = i2c_new_dummy(adapter, sc_addr[i]);
 		if (!data->lm75[i]) {
 			dev_err(&new_client->dev, "Subclient %d "
@@ -876,8 +878,6 @@ w83781d_detect_subclients(struct i2c_client *new_client)
 				goto ERROR_SC_3;
 			goto ERROR_SC_2;
 		}
-		if (kind == w83783s)
-			break;
 	}
 
 	return 0;
@@ -1245,17 +1245,17 @@ w83781d_read_value_i2c(struct w83781d_data *data, u16 reg)
 		/* convert from ISA to LM75 I2C addresses */
 		switch (reg & 0xff) {
 		case 0x50:	/* TEMP */
-			res = swab16(i2c_smbus_read_word_data(cl, 0));
+			res = i2c_smbus_read_word_swapped(cl, 0);
 			break;
 		case 0x52:	/* CONFIG */
 			res = i2c_smbus_read_byte_data(cl, 1);
 			break;
 		case 0x53:	/* HYST */
-			res = swab16(i2c_smbus_read_word_data(cl, 2));
+			res = i2c_smbus_read_word_swapped(cl, 2);
 			break;
 		case 0x55:	/* OVER */
 		default:
-			res = swab16(i2c_smbus_read_word_data(cl, 3));
+			res = i2c_smbus_read_word_swapped(cl, 3);
 			break;
 		}
 	}
@@ -1289,10 +1289,10 @@ w83781d_write_value_i2c(struct w83781d_data *data, u16 reg, u16 value)
 			i2c_smbus_write_byte_data(cl, 1, value & 0xff);
 			break;
 		case 0x53:	/* HYST */
-			i2c_smbus_write_word_data(cl, 2, swab16(value));
+			i2c_smbus_write_word_swapped(cl, 2, value);
 			break;
 		case 0x55:	/* OVER */
-			i2c_smbus_write_word_data(cl, 3, swab16(value));
+			i2c_smbus_write_word_swapped(cl, 3, value);
 			break;
 		}
 	}

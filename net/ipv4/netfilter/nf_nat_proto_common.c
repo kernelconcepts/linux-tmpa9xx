@@ -12,6 +12,8 @@
 #include <linux/ip.h>
 
 #include <linux/netfilter.h>
+#include <linux/export.h>
+#include <net/secure_seq.h>
 #include <net/netfilter/nf_nat.h>
 #include <net/netfilter/nf_nat_core.h>
 #include <net/netfilter/nf_nat_rule.h>
@@ -40,7 +42,7 @@ void nf_nat_proto_unique_tuple(struct nf_conntrack_tuple *tuple,
 			       const struct nf_conn *ct,
 			       u_int16_t *rover)
 {
-	unsigned int range_size, min, i;
+	unsigned int range_size, min, max, i;
 	__be16 *portptr;
 	u_int16_t off;
 
@@ -70,7 +72,10 @@ void nf_nat_proto_unique_tuple(struct nf_conntrack_tuple *tuple,
 		}
 	} else {
 		min = ntohs(range->min.all);
-		range_size = ntohs(range->max.all) - min + 1;
+		max = ntohs(range->max.all);
+		if (unlikely(max < min))
+			swap(max, min);
+		range_size = max - min + 1;
 	}
 
 	if (range->flags & IP_NAT_RANGE_PROTO_RANDOM)

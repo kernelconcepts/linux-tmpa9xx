@@ -45,6 +45,8 @@
 #include <linux/workqueue.h>
 #include <linux/completion.h>
 #include <linux/slab.h>
+#include <linux/module.h>
+#include <linux/sysctl.h>
 
 #include <rdma/iw_cm.h>
 #include <rdma/ib_addr.h>
@@ -62,6 +64,20 @@ struct iwcm_work {
 	struct list_head list;
 	struct iw_cm_event event;
 	struct list_head free_list;
+};
+
+static unsigned int default_backlog = 256;
+
+static struct ctl_table_header *iwcm_ctl_table_hdr;
+static struct ctl_table iwcm_ctl_table[] = {
+	{
+		.procname	= "default_backlog",
+		.data		= &default_backlog,
+		.maxlen		= sizeof(default_backlog),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
+	{ }
 };
 
 /*
@@ -418,6 +434,9 @@ int iw_cm_listen(struct iw_cm_id *cm_id, int backlog)
 
 	cm_id_priv = container_of(cm_id, struct iwcm_id_private, id);
 
+	if (!backlog)
+		backlog = default_backlog;
+
 	ret = alloc_work_entries(cm_id_priv, backlog);
 	if (ret)
 		return ret;
@@ -725,7 +744,7 @@ static int cm_conn_rep_handler(struct iwcm_id_private *cm_id_priv,
 	 */
 	clear_bit(IWCM_F_CONNECT_WAIT, &cm_id_priv->flags);
 	BUG_ON(cm_id_priv->state != IW_CM_STATE_CONN_SENT);
-	if (iw_event->status == IW_CM_EVENT_STATUS_ACCEPTED) {
+	if (iw_event->status == 0) {
 		cm_id_priv->id.local_addr = iw_event->local_addr;
 		cm_id_priv->id.remote_addr = iw_event->remote_addr;
 		cm_id_priv->state = IW_CM_STATE_ESTABLISHED;
@@ -1013,17 +1032,33 @@ int iw_cm_init_qp_attr(struct iw_cm_id *cm_id,
 }
 EXPORT_SYMBOL(iw_cm_init_qp_attr);
 
+static struct ctl_path iwcm_ctl_path[] = {
+	{ .procname = "net" },
+	{ .procname = "iw_cm" },
+	{ }
+};
+
 static int __init iw_cm_init(void)
 {
 	iwcm_wq = create_singlethread_workqueue("iw_cm_wq");
 	if (!iwcm_wq)
 		return -ENOMEM;
 
+	iwcm_ctl_table_hdr = register_net_sysctl_table(&init_net,
+						       iwcm_ctl_path,
+						       iwcm_ctl_table);
+	if (!iwcm_ctl_table_hdr) {
+		pr_err("iw_cm: couldn't register sysctl paths\n");
+		destroy_workqueue(iwcm_wq);
+		return -ENOMEM;
+	}
+
 	return 0;
 }
 
 static void __exit iw_cm_cleanup(void)
 {
+	unregister_net_sysctl_table(iwcm_ctl_table_hdr);
 	destroy_workqueue(iwcm_wq);
 }
 

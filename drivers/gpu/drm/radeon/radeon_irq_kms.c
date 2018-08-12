@@ -51,10 +51,17 @@ static void radeon_hotplug_work_func(struct work_struct *work)
 	struct drm_mode_config *mode_config = &dev->mode_config;
 	struct drm_connector *connector;
 
+	/* we can race here at startup, some boards seem to trigger
+	 * hotplug irqs when they shouldn't. */
+	if (!rdev->mode_info.mode_config_initialized)
+		return;
+
+	mutex_lock(&mode_config->mutex);
 	if (mode_config->num_connector) {
 		list_for_each_entry(connector, &mode_config->connector_list, head)
 			radeon_connector_hotplug(connector);
 	}
+	mutex_unlock(&mode_config->mutex);
 	/* Just fire off a uevent and let userspace tell us what to do */
 	drm_helper_hpd_irq_event(dev);
 }
@@ -67,10 +74,10 @@ void radeon_driver_irq_preinstall_kms(struct drm_device *dev)
 	/* Disable *all* interrupts */
 	rdev->irq.sw_int = false;
 	rdev->irq.gui_idle = false;
-	for (i = 0; i < rdev->num_crtc; i++)
-		rdev->irq.crtc_vblank_int[i] = false;
-	for (i = 0; i < 6; i++) {
+	for (i = 0; i < RADEON_MAX_HPD_PINS; i++)
 		rdev->irq.hpd[i] = false;
+	for (i = 0; i < RADEON_MAX_CRTCS; i++) {
+		rdev->irq.crtc_vblank_int[i] = false;
 		rdev->irq.pflip[i] = false;
 	}
 	radeon_irq_set(rdev);
@@ -99,13 +106,75 @@ void radeon_driver_irq_uninstall_kms(struct drm_device *dev)
 	/* Disable *all* interrupts */
 	rdev->irq.sw_int = false;
 	rdev->irq.gui_idle = false;
-	for (i = 0; i < rdev->num_crtc; i++)
-		rdev->irq.crtc_vblank_int[i] = false;
-	for (i = 0; i < 6; i++) {
+	for (i = 0; i < RADEON_MAX_HPD_PINS; i++)
 		rdev->irq.hpd[i] = false;
+	for (i = 0; i < RADEON_MAX_CRTCS; i++) {
+		rdev->irq.crtc_vblank_int[i] = false;
 		rdev->irq.pflip[i] = false;
 	}
 	radeon_irq_set(rdev);
+}
+
+static bool radeon_msi_ok(struct radeon_device *rdev)
+{
+	/* RV370/RV380 was first asic with MSI support */
+	if (rdev->family < CHIP_RV380)
+		return false;
+
+	/* MSIs don't work on AGP */
+	if (rdev->flags & RADEON_IS_AGP)
+		return false;
+
+	/* force MSI on */
+	if (radeon_msi == 1)
+		return true;
+	else if (radeon_msi == 0)
+		return false;
+
+	/* Quirks */
+	/* HP RS690 only seems to work with MSIs. */
+	if ((rdev->pdev->device == 0x791f) &&
+	    (rdev->pdev->subsystem_vendor == 0x103c) &&
+	    (rdev->pdev->subsystem_device == 0x30c2))
+		return true;
+
+	/* Dell RS690 only seems to work with MSIs. */
+	if ((rdev->pdev->device == 0x791f) &&
+	    (rdev->pdev->subsystem_vendor == 0x1028) &&
+	    (rdev->pdev->subsystem_device == 0x01fc))
+		return true;
+
+	/* Dell RS690 only seems to work with MSIs. */
+	if ((rdev->pdev->device == 0x791f) &&
+	    (rdev->pdev->subsystem_vendor == 0x1028) &&
+	    (rdev->pdev->subsystem_device == 0x01fd))
+		return true;
+
+	/* Gateway RS690 only seems to work with MSIs. */
+	if ((rdev->pdev->device == 0x791f) &&
+	    (rdev->pdev->subsystem_vendor == 0x107b) &&
+	    (rdev->pdev->subsystem_device == 0x0185))
+		return true;
+
+	/* try and enable MSIs by default on all RS690s */
+	if (rdev->family == CHIP_RS690)
+		return true;
+
+	/* RV515 seems to have MSI issues where it loses
+	 * MSI rearms occasionally. This leads to lockups and freezes.
+	 * disable it by default.
+	 */
+	if (rdev->family == CHIP_RV515)
+		return false;
+	if (rdev->flags & RADEON_IS_IGP) {
+		/* APUs work fine with MSIs */
+		if (rdev->family >= CHIP_PALM)
+			return true;
+		/* lots of IGPs have problems with MSIs */
+		return false;
+	}
+
+	return true;
 }
 
 int radeon_irq_kms_init(struct radeon_device *rdev)
@@ -124,12 +193,8 @@ int radeon_irq_kms_init(struct radeon_device *rdev)
 	}
 	/* enable msi */
 	rdev->msi_enabled = 0;
-	/* MSIs don't seem to work reliably on all IGP
-	 * chips.  Disable MSI on them for now.
-	 */
-	if ((rdev->family >= CHIP_RV380) &&
-	    ((!(rdev->flags & RADEON_IS_IGP)) || (rdev->family >= CHIP_PALM)) &&
-	    (!(rdev->flags & RADEON_IS_AGP))) {
+
+	if (radeon_msi_ok(rdev)) {
 		int ret = pci_enable_msi(rdev->pdev);
 		if (!ret) {
 			rdev->msi_enabled = 1;

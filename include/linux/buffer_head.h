@@ -12,7 +12,7 @@
 #include <linux/linkage.h>
 #include <linux/pagemap.h>
 #include <linux/wait.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 
 #ifdef CONFIG_BLOCK
 
@@ -166,12 +166,13 @@ void __wait_on_buffer(struct buffer_head *);
 wait_queue_head_t *bh_waitq_head(struct buffer_head *bh);
 struct buffer_head *__find_get_block(struct block_device *bdev, sector_t block,
 			unsigned size);
-struct buffer_head *__getblk(struct block_device *bdev, sector_t block,
-			unsigned size);
+struct buffer_head *__getblk_gfp(struct block_device *bdev, sector_t block,
+				  unsigned size, gfp_t gfp);
 void __brelse(struct buffer_head *);
 void __bforget(struct buffer_head *);
 void __breadahead(struct block_device *, sector_t block, unsigned int size);
-struct buffer_head *__bread(struct block_device *, sector_t block, unsigned size);
+struct buffer_head *__bread_gfp(struct block_device *,
+				sector_t block, unsigned size, gfp_t gfp);
 void invalidate_bh_lrus(void);
 struct buffer_head *alloc_buffer_head(gfp_t gfp_flags);
 void free_buffer_head(struct buffer_head * bh);
@@ -217,9 +218,24 @@ int cont_write_begin(struct file *, struct address_space *, loff_t,
 			get_block_t *, loff_t *);
 int generic_cont_expand_simple(struct inode *inode, loff_t size);
 int block_commit_write(struct page *page, unsigned from, unsigned to);
+int __block_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
+				get_block_t get_block);
 int block_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 				get_block_t get_block);
-void block_sync_page(struct page *);
+/* Convert errno to return value from ->page_mkwrite() call */
+static inline int block_page_mkwrite_return(int err)
+{
+	if (err == 0)
+		return VM_FAULT_LOCKED;
+	if (err == -EFAULT)
+		return VM_FAULT_NOPAGE;
+	if (err == -ENOMEM)
+		return VM_FAULT_OOM;
+	if (err == -EAGAIN)
+		return VM_FAULT_RETRY;
+	/* -ENOSPC, -EDQUOT, -EIO ... */
+	return VM_FAULT_SIGBUS;
+}
 sector_t generic_block_bmap(struct address_space *, sector_t, get_block_t *);
 int block_truncate_page(struct address_space *, loff_t, get_block_t *);
 int nobh_write_begin(struct address_space *, loff_t, unsigned, unsigned,
@@ -271,7 +287,13 @@ static inline void bforget(struct buffer_head *bh)
 static inline struct buffer_head *
 sb_bread(struct super_block *sb, sector_t block)
 {
-	return __bread(sb->s_bdev, block, sb->s_blocksize);
+	return __bread_gfp(sb->s_bdev, block, sb->s_blocksize, __GFP_MOVABLE);
+}
+
+static inline struct buffer_head *
+sb_bread_unmovable(struct super_block *sb, sector_t block)
+{
+	return __bread_gfp(sb->s_bdev, block, sb->s_blocksize, 0);
 }
 
 static inline void
@@ -283,7 +305,14 @@ sb_breadahead(struct super_block *sb, sector_t block)
 static inline struct buffer_head *
 sb_getblk(struct super_block *sb, sector_t block)
 {
-	return __getblk(sb->s_bdev, block, sb->s_blocksize);
+	return __getblk_gfp(sb->s_bdev, block, sb->s_blocksize, __GFP_MOVABLE);
+}
+
+
+static inline struct buffer_head *
+sb_getblk_gfp(struct super_block *sb, sector_t block, gfp_t gfp)
+{
+	return __getblk_gfp(sb->s_bdev, block, sb->s_blocksize, gfp);
 }
 
 static inline struct buffer_head *
@@ -318,6 +347,36 @@ static inline void lock_buffer(struct buffer_head *bh)
 	might_sleep();
 	if (!trylock_buffer(bh))
 		__lock_buffer(bh);
+}
+
+static inline struct buffer_head *getblk_unmovable(struct block_device *bdev,
+						   sector_t block,
+						   unsigned size)
+{
+	return __getblk_gfp(bdev, block, size, 0);
+}
+
+static inline struct buffer_head *__getblk(struct block_device *bdev,
+					   sector_t block,
+					   unsigned size)
+{
+	return __getblk_gfp(bdev, block, size, __GFP_MOVABLE);
+}
+
+/**
+ *  __bread() - reads a specified block and returns the bh
+ *  @bdev: the block_device to read from
+ *  @block: number of block
+ *  @size: size (in bytes) to read
+ *
+ *  Reads a specified block, and returns buffer head that contains it.
+ *  The page cache is allocated from movable area so that it can be migrated.
+ *  It returns NULL if the block was unreadable.
+ */
+static inline struct buffer_head *
+__bread(struct block_device *bdev, sector_t block, unsigned size)
+{
+	return __bread_gfp(bdev, block, size, __GFP_MOVABLE);
 }
 
 extern int __set_page_dirty_buffers(struct page *page);

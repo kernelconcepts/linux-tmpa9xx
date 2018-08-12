@@ -35,6 +35,7 @@
 #define OP_TRAP_64 2
 
 #define OP_31_XOP_LWZX      23
+#define OP_31_XOP_DCBF      86
 #define OP_31_XOP_LBZX      87
 #define OP_31_XOP_STWX      151
 #define OP_31_XOP_STBX      215
@@ -112,6 +113,12 @@ void kvmppc_emulate_dec(struct kvm_vcpu *vcpu)
 	} else {
 		hrtimer_try_to_cancel(&vcpu->arch.dec_timer);
 	}
+}
+
+u32 kvmppc_get_dec(struct kvm_vcpu *vcpu, u64 tb)
+{
+	u64 jd = tb - vcpu->arch.dec_jiffies;
+	return vcpu->arch.dec - jd;
 }
 
 /* XXX to do:
@@ -279,11 +286,8 @@ int kvmppc_emulate_instruction(struct kvm_run *run, struct kvm_vcpu *vcpu)
 
 			case SPRN_DEC:
 			{
-				u64 jd = get_tb() - vcpu->arch.dec_jiffies;
-				kvmppc_set_gpr(vcpu, rt, vcpu->arch.dec - jd);
-				pr_debug("mfDEC: %x - %llx = %lx\n",
-					 vcpu->arch.dec, jd,
-					 kvmppc_get_gpr(vcpu, rt));
+				kvmppc_set_gpr(vcpu, rt,
+					       kvmppc_get_dec(vcpu, get_tb()));
 				break;
 			}
 			default:
@@ -294,6 +298,7 @@ int kvmppc_emulate_instruction(struct kvm_run *run, struct kvm_vcpu *vcpu)
 				}
 				break;
 			}
+			kvmppc_set_exit_type(vcpu, EMULATED_MFSPR_EXITS);
 			break;
 
 		case OP_31_XOP_STHX:
@@ -363,8 +368,10 @@ int kvmppc_emulate_instruction(struct kvm_run *run, struct kvm_vcpu *vcpu)
 					printk("mtspr: unknown spr %x\n", sprn);
 				break;
 			}
+			kvmppc_set_exit_type(vcpu, EMULATED_MTSPR_EXITS);
 			break;
 
+		case OP_31_XOP_DCBF:
 		case OP_31_XOP_DCBI:
 			/* Do nothing. The guest is performing dcbi because
 			 * hardware DMA is not snooped by the dcache, but

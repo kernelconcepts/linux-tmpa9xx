@@ -75,10 +75,10 @@ static void kobil_close(struct usb_serial_port *port);
 static int  kobil_write(struct tty_struct *tty, struct usb_serial_port *port,
 			 const unsigned char *buf, int count);
 static int  kobil_write_room(struct tty_struct *tty);
-static int  kobil_ioctl(struct tty_struct *tty, struct file *file,
+static int  kobil_ioctl(struct tty_struct *tty,
 			unsigned int cmd, unsigned long arg);
-static int  kobil_tiocmget(struct tty_struct *tty, struct file *file);
-static int  kobil_tiocmset(struct tty_struct *tty, struct file *file,
+static int  kobil_tiocmget(struct tty_struct *tty);
+static int  kobil_tiocmset(struct tty_struct *tty,
 			   unsigned int set, unsigned int clear);
 static void kobil_read_int_callback(struct urb *urb);
 static void kobil_write_callback(struct urb *purb);
@@ -149,6 +149,11 @@ static int kobil_startup(struct usb_serial *serial)
 	struct usb_interface *interface;
 	struct usb_host_interface *altsetting;
 	struct usb_host_endpoint *endpoint;
+
+	if (serial->num_interrupt_out < serial->num_ports) {
+		dev_err(&serial->interface->dev, "missing interrupt-out endpoint\n");
+		return -ENODEV;
+	}
 
 	priv = kmalloc(sizeof(struct kobil_private), GFP_KERNEL);
 	if (!priv)
@@ -372,7 +377,7 @@ static void kobil_read_int_callback(struct urb *urb)
 	}
 
 	tty = tty_port_tty_get(&port->port);
-	if (urb->actual_length) {
+	if (tty && urb->actual_length) {
 
 		/* BEGIN DEBUG */
 		/*
@@ -463,7 +468,8 @@ static int kobil_write(struct tty_struct *tty, struct usb_serial_port *port,
 			);
 
 			priv->cur_pos = priv->cur_pos + length;
-			result = usb_submit_urb(port->write_urb, GFP_NOIO);
+			result = usb_submit_urb(port->write_urb,
+					GFP_ATOMIC);
 			dbg("%s - port %d Send write URB returns: %i",
 					__func__, port->number, result);
 			todo = priv->filled - priv->cur_pos;
@@ -487,7 +493,7 @@ static int kobil_write(struct tty_struct *tty, struct usb_serial_port *port,
 			port->interrupt_in_urb->dev = port->serial->dev;
 
 			result = usb_submit_urb(port->interrupt_in_urb,
-								GFP_NOIO);
+					GFP_ATOMIC);
 			dbg("%s - port %d Send read URB returns: %i",
 					__func__, port->number, result);
 		}
@@ -504,7 +510,7 @@ static int kobil_write_room(struct tty_struct *tty)
 }
 
 
-static int kobil_tiocmget(struct tty_struct *tty, struct file *file)
+static int kobil_tiocmget(struct tty_struct *tty)
 {
 	struct usb_serial_port *port = tty->driver_data;
 	struct kobil_private *priv;
@@ -544,7 +550,7 @@ static int kobil_tiocmget(struct tty_struct *tty, struct file *file)
 	return result;
 }
 
-static int kobil_tiocmset(struct tty_struct *tty, struct file *file,
+static int kobil_tiocmset(struct tty_struct *tty,
 			   unsigned int set, unsigned int clear)
 {
 	struct usb_serial_port *port = tty->driver_data;
@@ -668,7 +674,7 @@ static void kobil_set_termios(struct tty_struct *tty,
 		);
 }
 
-static int kobil_ioctl(struct tty_struct *tty, struct file *file,
+static int kobil_ioctl(struct tty_struct *tty,
 					unsigned int cmd, unsigned long arg)
 {
 	struct usb_serial_port *port = tty->driver_data;

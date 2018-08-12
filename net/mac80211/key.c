@@ -3,6 +3,7 @@
  * Copyright 2005-2006, Devicescape Software, Inc.
  * Copyright 2006-2007	Jiri Benc <jbenc@suse.cz>
  * Copyright 2007-2008	Johannes Berg <johannes@sipsolutions.net>
+ * Copyright 2017	Intel Deutschland GmbH
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -15,6 +16,7 @@
 #include <linux/rcupdate.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
+#include <linux/export.h>
 #include <net/mac80211.h>
 #include "ieee80211_i.h"
 #include "driver-ops.h"
@@ -61,6 +63,36 @@ static struct ieee80211_sta *get_sta_for_key(struct ieee80211_key *key)
 	return NULL;
 }
 
+static void increment_tailroom_need_count(struct ieee80211_sub_if_data *sdata)
+{
+	/*
+	 * When this count is zero, SKB resizing for allocating tailroom
+	 * for IV or MMIC is skipped. But, this check has created two race
+	 * cases in xmit path while transiting from zero count to one:
+	 *
+	 * 1. SKB resize was skipped because no key was added but just before
+	 * the xmit key is added and SW encryption kicks off.
+	 *
+	 * 2. SKB resize was skipped because all the keys were hw planted but
+	 * just before xmit one of the key is deleted and SW encryption kicks
+	 * off.
+	 *
+	 * In both the above case SW encryption will find not enough space for
+	 * tailroom and exits with WARN_ON. (See WARN_ONs at wpa.c)
+	 *
+	 * Solution has been explained at
+	 * http://mid.gmane.org/1308590980.4322.19.camel@jlt3.sipsolutions.net
+	 */
+
+	if (!sdata->crypto_tx_tailroom_needed_cnt++) {
+		/*
+		 * Flush all XMIT packets currently using HW encryption or no
+		 * encryption at all if the count transition is from 0 -> 1.
+		 */
+		synchronize_net();
+	}
+}
+
 static int ieee80211_key_enable_hw_accel(struct ieee80211_key *key)
 {
 	struct ieee80211_sub_if_data *sdata;
@@ -101,6 +133,11 @@ static int ieee80211_key_enable_hw_accel(struct ieee80211_key *key)
 
 	if (!ret) {
 		key->flags |= KEY_FLAG_UPLOADED_TO_HARDWARE;
+
+		if (!((key->conf.flags & IEEE80211_KEY_FLAG_GENERATE_MMIC) ||
+		      (key->conf.flags & IEEE80211_KEY_FLAG_GENERATE_IV)))
+			sdata->crypto_tx_tailroom_needed_cnt--;
+
 		return 0;
 	}
 
@@ -141,6 +178,10 @@ static void ieee80211_key_disable_hw_accel(struct ieee80211_key *key)
 
 	sta = get_sta_for_key(key);
 	sdata = key->sdata;
+
+	if (!((key->conf.flags & IEEE80211_KEY_FLAG_GENERATE_MMIC) ||
+	      (key->conf.flags & IEEE80211_KEY_FLAG_GENERATE_IV)))
+		increment_tailroom_need_count(sdata);
 
 	if (sdata->vif.type == NL80211_IFTYPE_AP_VLAN)
 		sdata = container_of(sdata->bss,
@@ -186,7 +227,7 @@ static void __ieee80211_set_default_key(struct ieee80211_sub_if_data *sdata,
 	assert_key_lock(sdata->local);
 
 	if (idx >= 0 && idx < NUM_DEFAULT_KEYS)
-		key = sdata->keys[idx];
+		key = key_mtx_dereference(sdata->local, sdata->keys[idx]);
 
 	if (uni)
 		rcu_assign_pointer(sdata->default_unicast_key, key);
@@ -213,7 +254,7 @@ __ieee80211_set_default_mgmt_key(struct ieee80211_sub_if_data *sdata, int idx)
 
 	if (idx >= NUM_DEFAULT_KEYS &&
 	    idx < NUM_DEFAULT_KEYS + NUM_DEFAULT_MGMT_KEYS)
-		key = sdata->keys[idx];
+		key = key_mtx_dereference(sdata->local, sdata->keys[idx]);
 
 	rcu_assign_pointer(sdata->default_mgmt_key, key);
 
@@ -239,7 +280,7 @@ static void __ieee80211_key_replace(struct ieee80211_sub_if_data *sdata,
 	bool defunikey, defmultikey, defmgmtkey;
 
 	if (new)
-		list_add(&new->list, &sdata->key_list);
+		list_add_tail(&new->list, &sdata->key_list);
 
 	if (sta && pairwise) {
 		rcu_assign_pointer(sta->ptk, new);
@@ -257,9 +298,15 @@ static void __ieee80211_key_replace(struct ieee80211_sub_if_data *sdata,
 		else
 			idx = new->conf.keyidx;
 
-		defunikey = old && sdata->default_unicast_key == old;
-		defmultikey = old && sdata->default_multicast_key == old;
-		defmgmtkey = old && sdata->default_mgmt_key == old;
+		defunikey = old &&
+			old == key_mtx_dereference(sdata->local,
+						sdata->default_unicast_key);
+		defmultikey = old &&
+			old == key_mtx_dereference(sdata->local,
+						sdata->default_multicast_key);
+		defmgmtkey = old &&
+			old == key_mtx_dereference(sdata->local,
+						sdata->default_mgmt_key);
 
 		if (defunikey && !new)
 			__ieee80211_set_default_key(sdata, -1, true, false);
@@ -324,6 +371,7 @@ struct ieee80211_key *ieee80211_key_alloc(u32 cipher, int idx, size_t key_len,
 					get_unaligned_le16(seq);
 			}
 		}
+		spin_lock_init(&key->u.tkip.txlock);
 		break;
 	case WLAN_CIPHER_SUITE_CCMP:
 		key->conf.iv_len = CCMP_HDR_LEN;
@@ -342,7 +390,7 @@ struct ieee80211_key *ieee80211_key_alloc(u32 cipher, int idx, size_t key_len,
 		if (IS_ERR(key->u.ccmp.tfm)) {
 			err = PTR_ERR(key->u.ccmp.tfm);
 			kfree(key);
-			key = ERR_PTR(err);
+			return ERR_PTR(err);
 		}
 		break;
 	case WLAN_CIPHER_SUITE_AES_CMAC:
@@ -360,7 +408,7 @@ struct ieee80211_key *ieee80211_key_alloc(u32 cipher, int idx, size_t key_len,
 		if (IS_ERR(key->u.aes_cmac.tfm)) {
 			err = PTR_ERR(key->u.aes_cmac.tfm);
 			kfree(key);
-			key = ERR_PTR(err);
+			return ERR_PTR(err);
 		}
 		break;
 	}
@@ -388,10 +436,45 @@ static void __ieee80211_key_destroy(struct ieee80211_key *key)
 		ieee80211_aes_key_free(key->u.ccmp.tfm);
 	if (key->conf.cipher == WLAN_CIPHER_SUITE_AES_CMAC)
 		ieee80211_aes_cmac_key_free(key->u.aes_cmac.tfm);
-	if (key->local)
+	if (key->local) {
 		ieee80211_debugfs_key_remove(key);
+		key->sdata->crypto_tx_tailroom_needed_cnt--;
+	}
 
 	kfree(key);
+}
+
+static bool ieee80211_key_identical(struct ieee80211_sub_if_data *sdata,
+				    struct ieee80211_key *old,
+				    struct ieee80211_key *new)
+{
+	u8 tkip_old[WLAN_KEY_LEN_TKIP], tkip_new[WLAN_KEY_LEN_TKIP];
+	u8 *tk_old, *tk_new;
+
+	if (!old || new->conf.keylen != old->conf.keylen)
+		return false;
+
+	tk_old = old->conf.key;
+	tk_new = new->conf.key;
+
+	/*
+	 * In station mode, don't compare the TX MIC key, as it's never used
+	 * and offloaded rekeying may not care to send it to the host. This
+	 * is the case in iwlwifi, for example.
+	 */
+	if (sdata->vif.type == NL80211_IFTYPE_STATION &&
+	    new->conf.cipher == WLAN_CIPHER_SUITE_TKIP &&
+	    new->conf.keylen == WLAN_KEY_LEN_TKIP &&
+	    !(new->conf.flags & IEEE80211_KEY_FLAG_PAIRWISE)) {
+		memcpy(tkip_old, tk_old, WLAN_KEY_LEN_TKIP);
+		memcpy(tkip_new, tk_new, WLAN_KEY_LEN_TKIP);
+		memset(tkip_old + NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY, 0, 8);
+		memset(tkip_new + NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY, 0, 8);
+		tk_old = tkip_old;
+		tk_new = tkip_new;
+	}
+
+	return !memcmp(tk_old, tk_new, new->conf.keylen);
 }
 
 int ieee80211_key_link(struct ieee80211_key *key,
@@ -400,22 +483,20 @@ int ieee80211_key_link(struct ieee80211_key *key,
 {
 	struct ieee80211_key *old_key;
 	int idx, ret;
-	bool pairwise = key->conf.flags & IEEE80211_KEY_FLAG_PAIRWISE;
+	bool pairwise;
 
 	BUG_ON(!sdata);
 	BUG_ON(!key);
 
+	pairwise = key->conf.flags & IEEE80211_KEY_FLAG_PAIRWISE;
 	idx = key->conf.keyidx;
-	key->local = sdata->local;
-	key->sdata = sdata;
-	key->sta = sta;
 
 	if (sta) {
 		/*
 		 * some hardware cannot handle TKIP with QoS, so
 		 * we indicate whether QoS could be in use.
 		 */
-		if (test_sta_flags(sta, WLAN_STA_WME))
+		if (test_sta_flag(sta, WLAN_STA_WME))
 			key->conf.flags |= IEEE80211_KEY_FLAG_WMM_STA;
 	} else {
 		if (sdata->vif.type == NL80211_IFTYPE_STATION) {
@@ -427,9 +508,9 @@ int ieee80211_key_link(struct ieee80211_key *key,
 			 */
 
 			/* same here, the AP could be using QoS */
-			ap = sta_info_get(key->sdata, key->sdata->u.mgd.bssid);
+			ap = sta_info_get(sdata, sdata->u.mgd.bssid);
 			if (ap) {
-				if (test_sta_flags(ap, WLAN_STA_WME))
+				if (test_sta_flag(ap, WLAN_STA_WME))
 					key->conf.flags |=
 						IEEE80211_KEY_FLAG_WMM_STA;
 			}
@@ -439,11 +520,27 @@ int ieee80211_key_link(struct ieee80211_key *key,
 	mutex_lock(&sdata->local->key_mtx);
 
 	if (sta && pairwise)
-		old_key = sta->ptk;
+		old_key = key_mtx_dereference(sdata->local, sta->ptk);
 	else if (sta)
-		old_key = sta->gtk[idx];
+		old_key = key_mtx_dereference(sdata->local, sta->gtk[idx]);
 	else
-		old_key = sdata->keys[idx];
+		old_key = key_mtx_dereference(sdata->local, sdata->keys[idx]);
+
+	/*
+	 * Silently accept key re-installation without really installing the
+	 * new version of the key to avoid nonce reuse or replay issues.
+	 */
+	if (ieee80211_key_identical(sdata, old_key, key)) {
+		__ieee80211_key_free(key);
+		ret = 0;
+		goto out;
+	}
+
+	key->local = sdata->local;
+	key->sdata = sdata;
+	key->sta = sta;
+
+	increment_tailroom_need_count(sdata);
 
 	__ieee80211_key_replace(sdata, sta, pairwise, old_key, key);
 	__ieee80211_key_destroy(old_key);
@@ -452,13 +549,17 @@ int ieee80211_key_link(struct ieee80211_key *key,
 
 	ret = ieee80211_key_enable_hw_accel(key);
 
+ out:
 	mutex_unlock(&sdata->local->key_mtx);
 
 	return ret;
 }
 
-static void __ieee80211_key_free(struct ieee80211_key *key)
+void __ieee80211_key_free(struct ieee80211_key *key)
 {
+	if (!key)
+		return;
+
 	/*
 	 * Replace key with nothingness if it was ever used.
 	 */
@@ -472,9 +573,6 @@ static void __ieee80211_key_free(struct ieee80211_key *key)
 void ieee80211_key_free(struct ieee80211_local *local,
 			struct ieee80211_key *key)
 {
-	if (!key)
-		return;
-
 	mutex_lock(&local->key_mtx);
 	__ieee80211_key_free(key);
 	mutex_unlock(&local->key_mtx);
@@ -491,11 +589,48 @@ void ieee80211_enable_keys(struct ieee80211_sub_if_data *sdata)
 
 	mutex_lock(&sdata->local->key_mtx);
 
-	list_for_each_entry(key, &sdata->key_list, list)
+	sdata->crypto_tx_tailroom_needed_cnt = 0;
+
+	list_for_each_entry(key, &sdata->key_list, list) {
+		increment_tailroom_need_count(sdata);
 		ieee80211_key_enable_hw_accel(key);
+	}
 
 	mutex_unlock(&sdata->local->key_mtx);
 }
+
+void ieee80211_iter_keys(struct ieee80211_hw *hw,
+			 struct ieee80211_vif *vif,
+			 void (*iter)(struct ieee80211_hw *hw,
+				      struct ieee80211_vif *vif,
+				      struct ieee80211_sta *sta,
+				      struct ieee80211_key_conf *key,
+				      void *data),
+			 void *iter_data)
+{
+	struct ieee80211_local *local = hw_to_local(hw);
+	struct ieee80211_key *key;
+	struct ieee80211_sub_if_data *sdata;
+
+	ASSERT_RTNL();
+
+	mutex_lock(&local->key_mtx);
+	if (vif) {
+		sdata = vif_to_sdata(vif);
+		list_for_each_entry(key, &sdata->key_list, list)
+			iter(hw, &sdata->vif,
+			     key->sta ? &key->sta->sta : NULL,
+			     &key->conf, iter_data);
+	} else {
+		list_for_each_entry(sdata, &local->interfaces, list)
+			list_for_each_entry(key, &sdata->key_list, list)
+				iter(hw, &sdata->vif,
+				     key->sta ? &key->sta->sta : NULL,
+				     &key->conf, iter_data);
+	}
+	mutex_unlock(&local->key_mtx);
+}
+EXPORT_SYMBOL(ieee80211_iter_keys);
 
 void ieee80211_disable_keys(struct ieee80211_sub_if_data *sdata)
 {
@@ -526,3 +661,89 @@ void ieee80211_free_keys(struct ieee80211_sub_if_data *sdata)
 
 	mutex_unlock(&sdata->local->key_mtx);
 }
+
+
+void ieee80211_gtk_rekey_notify(struct ieee80211_vif *vif, const u8 *bssid,
+				const u8 *replay_ctr, gfp_t gfp)
+{
+	struct ieee80211_sub_if_data *sdata = vif_to_sdata(vif);
+
+	trace_api_gtk_rekey_notify(sdata, bssid, replay_ctr);
+
+	cfg80211_gtk_rekey_notify(sdata->dev, bssid, replay_ctr, gfp);
+}
+EXPORT_SYMBOL_GPL(ieee80211_gtk_rekey_notify);
+
+void ieee80211_get_key_tx_seq(struct ieee80211_key_conf *keyconf,
+			      struct ieee80211_key_seq *seq)
+{
+	struct ieee80211_key *key;
+	u64 pn64;
+
+	if (WARN_ON(!(keyconf->flags & IEEE80211_KEY_FLAG_GENERATE_IV)))
+		return;
+
+	key = container_of(keyconf, struct ieee80211_key, conf);
+
+	switch (key->conf.cipher) {
+	case WLAN_CIPHER_SUITE_TKIP:
+		seq->tkip.iv32 = key->u.tkip.tx.iv32;
+		seq->tkip.iv16 = key->u.tkip.tx.iv16;
+		break;
+	case WLAN_CIPHER_SUITE_CCMP:
+		pn64 = atomic64_read(&key->u.ccmp.tx_pn);
+		seq->ccmp.pn[5] = pn64;
+		seq->ccmp.pn[4] = pn64 >> 8;
+		seq->ccmp.pn[3] = pn64 >> 16;
+		seq->ccmp.pn[2] = pn64 >> 24;
+		seq->ccmp.pn[1] = pn64 >> 32;
+		seq->ccmp.pn[0] = pn64 >> 40;
+		break;
+	case WLAN_CIPHER_SUITE_AES_CMAC:
+		pn64 = atomic64_read(&key->u.aes_cmac.tx_pn);
+		seq->ccmp.pn[5] = pn64;
+		seq->ccmp.pn[4] = pn64 >> 8;
+		seq->ccmp.pn[3] = pn64 >> 16;
+		seq->ccmp.pn[2] = pn64 >> 24;
+		seq->ccmp.pn[1] = pn64 >> 32;
+		seq->ccmp.pn[0] = pn64 >> 40;
+		break;
+	default:
+		WARN_ON(1);
+	}
+}
+EXPORT_SYMBOL(ieee80211_get_key_tx_seq);
+
+void ieee80211_get_key_rx_seq(struct ieee80211_key_conf *keyconf,
+			      int tid, struct ieee80211_key_seq *seq)
+{
+	struct ieee80211_key *key;
+	const u8 *pn;
+
+	key = container_of(keyconf, struct ieee80211_key, conf);
+
+	switch (key->conf.cipher) {
+	case WLAN_CIPHER_SUITE_TKIP:
+		if (WARN_ON(tid < 0 || tid >= NUM_RX_DATA_QUEUES))
+			return;
+		seq->tkip.iv32 = key->u.tkip.rx[tid].iv32;
+		seq->tkip.iv16 = key->u.tkip.rx[tid].iv16;
+		break;
+	case WLAN_CIPHER_SUITE_CCMP:
+		if (WARN_ON(tid < -1 || tid >= NUM_RX_DATA_QUEUES))
+			return;
+		if (tid < 0)
+			pn = key->u.ccmp.rx_pn[NUM_RX_DATA_QUEUES];
+		else
+			pn = key->u.ccmp.rx_pn[tid];
+		memcpy(seq->ccmp.pn, pn, CCMP_PN_LEN);
+		break;
+	case WLAN_CIPHER_SUITE_AES_CMAC:
+		if (WARN_ON(tid != 0))
+			return;
+		pn = key->u.aes_cmac.rx_pn;
+		memcpy(seq->aes_cmac.pn, pn, CMAC_PN_LEN);
+		break;
+	}
+}
+EXPORT_SYMBOL(ieee80211_get_key_rx_seq);

@@ -189,12 +189,16 @@ static loff_t vol_cdev_llseek(struct file *file, loff_t offset, int origin)
 	return new_offset;
 }
 
-static int vol_cdev_fsync(struct file *file, int datasync)
+static int vol_cdev_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	struct ubi_volume_desc *desc = file->private_data;
 	struct ubi_device *ubi = desc->vol->ubi;
-
-	return ubi_sync(ubi->ubi_num);
+	struct inode *inode = file->f_path.dentry->d_inode;
+	int err;
+	mutex_lock(&inode->i_mutex);
+	err = ubi_sync(ubi->ubi_num);
+	mutex_unlock(&inode->i_mutex);
+	return err;
 }
 
 
@@ -471,7 +475,7 @@ static long vol_cdev_ioctl(struct file *file, unsigned int cmd,
 		/* Validate the request */
 		err = -EINVAL;
 		if (req.lnum < 0 || req.lnum >= vol->reserved_pebs ||
-		    req.bytes < 0 || req.lnum >= vol->usable_leb_size)
+		    req.bytes < 0 || req.bytes > vol->usable_leb_size)
 			break;
 		if (req.dtype != UBI_LONGTERM && req.dtype != UBI_SHORTTERM &&
 		    req.dtype != UBI_UNKNOWN)

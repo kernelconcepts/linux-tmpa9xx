@@ -42,6 +42,7 @@
 #include <linux/slab.h>
 #include <linux/rtc.h>
 #include <linux/spi/spi.h>
+#include <linux/module.h>
 
 #define DRV_VERSION "0.6"
 
@@ -263,6 +264,7 @@ static int __devinit pcf2123_probe(struct spi_device *spi)
 
 	if (!(rxbuf[0] & 0x20)) {
 		dev_err(&spi->dev, "chip not found\n");
+		ret = -ENODEV;
 		goto kfree_exit;
 	}
 

@@ -23,7 +23,10 @@
 
 #include <linux/device.h>
 #include <linux/uio.h>
-#include <linux/dma-mapping.h>
+#include <linux/dma-direction.h>
+#include <linux/scatterlist.h>
+#include <linux/bitmap.h>
+#include <asm/page.h>
 
 /**
  * typedef dma_cookie_t - an opaque DMA cookie
@@ -434,7 +437,7 @@ struct dma_tx_state {
  *	zero or error code
  * @device_tx_status: poll for transaction completion, the optional
  *	txstate parameter can be supplied with a pointer to get a
- *	struct with auxilary transfer status information, otherwise the call
+ *	struct with auxiliary transfer status information, otherwise the call
  *	will just return a simple status code
  * @device_issue_pending: push pending transactions to hardware
  */
@@ -515,6 +518,16 @@ static inline int dmaengine_slave_config(struct dma_chan *chan,
 {
 	return dmaengine_device_control(chan, DMA_SLAVE_CONFIG,
 			(unsigned long)config);
+}
+
+static inline struct dma_async_tx_descriptor *dmaengine_prep_slave_single(
+	struct dma_chan *chan, void *buf, size_t len,
+	enum dma_data_direction dir, unsigned long flags)
+{
+	struct scatterlist sg;
+	sg_init_one(&sg, buf, len);
+
+	return chan->device->device_prep_slave_sg(chan, &sg, 1, dir, flags);
 }
 
 static inline int dmaengine_terminate_all(struct dma_chan *chan)

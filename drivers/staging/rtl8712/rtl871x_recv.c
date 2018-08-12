@@ -28,6 +28,9 @@
 
 #define _RTL871X_RECV_C_
 
+#include <linux/slab.h>
+#include <linux/kmemleak.h>
+
 #include "osdep_service.h"
 #include "drv_types.h"
 #include "recv_osdep.h"
@@ -73,6 +76,7 @@ sint _r8712_init_recv_priv(struct recv_priv *precvpriv,
 					   RXFRAME_ALIGN_SZ);
 	if (precvpriv->pallocated_frame_buf == NULL)
 		return _FAIL;
+	kmemleak_not_leak(precvpriv->pallocated_frame_buf);
 	memset(precvpriv->pallocated_frame_buf, 0, NR_RECVFRAME *
 		sizeof(union recv_frame) + RXFRAME_ALIGN_SZ);
 	precvpriv->precv_frame_buf = precvpriv->pallocated_frame_buf +
@@ -250,7 +254,7 @@ union recv_frame *r8712_portctrl(struct _adapter *adapter,
 	struct sta_info *psta;
 	struct	sta_priv *pstapriv;
 	union recv_frame *prtnframe;
-	u16 ether_type = 0;
+	u16 ether_type;
 
 	pstapriv = &adapter->stapriv;
 	ptr = get_recvframe_data(precv_frame);
@@ -259,15 +263,14 @@ union recv_frame *r8712_portctrl(struct _adapter *adapter,
 	psta = r8712_get_stainfo(pstapriv, psta_addr);
 	auth_alg = adapter->securitypriv.AuthAlgrthm;
 	if (auth_alg == 2) {
+		/* get ether_type */
+		ptr = ptr + pfhdr->attrib.hdrlen + LLC_HEADER_SIZE;
+		memcpy(&ether_type, ptr, 2);
+		ether_type = ntohs((unsigned short)ether_type);
+
 		if ((psta != NULL) && (psta->ieee8021x_blocked)) {
 			/* blocked
 			 * only accept EAPOL frame */
-			prtnframe = precv_frame;
-			/*get ether_type */
-			ptr = ptr + pfhdr->attrib.hdrlen +
-			      pfhdr->attrib.iv_len + LLC_HEADER_SIZE;
-			memcpy(&ether_type, ptr, 2);
-			ether_type = ntohs((unsigned short)ether_type);
 			if (ether_type == 0x888e)
 				prtnframe = precv_frame;
 			else {
@@ -307,9 +310,9 @@ static sint recv_decache(union recv_frame *precv_frame, u8 bretry,
 	return _SUCCESS;
 }
 
-static sint sta2sta_data_frame(struct _adapter *adapter, union recv_frame *precv_frame,
-			struct sta_info **psta
-)
+static sint sta2sta_data_frame(struct _adapter *adapter,
+			       union recv_frame *precv_frame,
+			       struct sta_info **psta)
 {
 	u8 *ptr = precv_frame->u.hdr.rx_data;
 	sint ret = _SUCCESS;
@@ -373,8 +376,9 @@ static sint sta2sta_data_frame(struct _adapter *adapter, union recv_frame *precv
 	return ret;
 }
 
-static sint ap2sta_data_frame(struct _adapter *adapter, union recv_frame *precv_frame,
-		       struct sta_info **psta)
+static sint ap2sta_data_frame(struct _adapter *adapter,
+			      union recv_frame *precv_frame,
+			      struct sta_info **psta)
 {
 	u8 *ptr = precv_frame->u.hdr.rx_data;
 	struct rx_pkt_attrib *pattrib = &precv_frame->u.hdr.attrib;
@@ -431,8 +435,9 @@ static sint ap2sta_data_frame(struct _adapter *adapter, union recv_frame *precv_
 	return _SUCCESS;
 }
 
-static sint sta2ap_data_frame(struct _adapter *adapter, union recv_frame *precv_frame,
-		       struct sta_info **psta)
+static sint sta2ap_data_frame(struct _adapter *adapter,
+			      union recv_frame *precv_frame,
+			      struct sta_info **psta)
 {
 	struct rx_pkt_attrib *pattrib = &precv_frame->u.hdr.attrib;
 	struct	sta_priv *pstapriv = &adapter->stapriv;
@@ -636,11 +641,16 @@ sint r8712_wlanhdr_to_ethhdr(union recv_frame *precvframe)
 		/* append rx status for mp test packets */
 		ptr = recvframe_pull(precvframe, (rmv_len -
 		      sizeof(struct ethhdr) + 2) - 24);
+		if (!ptr)
+			return _FAIL;
 		memcpy(ptr, get_rxmem(precvframe), 24);
 		ptr += 24;
-	} else
+	} else {
 		ptr = recvframe_pull(precvframe, (rmv_len -
 		      sizeof(struct ethhdr) + (bsnaphdr ? 2 : 0)));
+		if (!ptr)
+			return _FAIL;
+	}
 
 	memcpy(ptr, pattrib->dst, ETH_ALEN);
 	memcpy(ptr+ETH_ALEN, pattrib->src, ETH_ALEN);

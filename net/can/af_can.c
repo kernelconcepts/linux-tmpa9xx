@@ -38,8 +38,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
  * DAMAGE.
  *
- * Send feedback to <socketcan-users@lists.berlios.de>
- *
  */
 
 #include <linux/module.h>
@@ -58,6 +56,7 @@
 #include <linux/skbuff.h>
 #include <linux/can.h>
 #include <linux/can/core.h>
+#include <linux/ratelimit.h>
 #include <net/net_namespace.h>
 #include <net/sock.h>
 
@@ -84,8 +83,8 @@ static DEFINE_SPINLOCK(can_rcvlists_lock);
 static struct kmem_cache *rcv_cache __read_mostly;
 
 /* table of registered CAN protocols */
-static struct can_proto *proto_tab[CAN_NPROTO] __read_mostly;
-static DEFINE_SPINLOCK(proto_tab_lock);
+static const struct can_proto *proto_tab[CAN_NPROTO] __read_mostly;
+static DEFINE_MUTEX(proto_tab_lock);
 
 struct timer_list can_stattimer;   /* timer for statistics update */
 struct s_stats    can_stats;       /* packet statistics */
@@ -95,7 +94,7 @@ struct s_pstats   can_pstats;      /* receive list statistics */
  * af_can socket functions
  */
 
-static int can_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
+int can_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 {
 	struct sock *sk = sock->sk;
 
@@ -108,17 +107,36 @@ static int can_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 		return -ENOIOCTLCMD;
 	}
 }
+EXPORT_SYMBOL(can_ioctl);
 
 static void can_sock_destruct(struct sock *sk)
 {
 	skb_queue_purge(&sk->sk_receive_queue);
 }
 
+static const struct can_proto *can_get_proto(int protocol)
+{
+	const struct can_proto *cp;
+
+	rcu_read_lock();
+	cp = rcu_dereference(proto_tab[protocol]);
+	if (cp && !try_module_get(cp->prot->owner))
+		cp = NULL;
+	rcu_read_unlock();
+
+	return cp;
+}
+
+static inline void can_put_proto(const struct can_proto *cp)
+{
+	module_put(cp->prot->owner);
+}
+
 static int can_create(struct net *net, struct socket *sock, int protocol,
 		      int kern)
 {
 	struct sock *sk;
-	struct can_proto *cp;
+	const struct can_proto *cp;
 	int err = 0;
 
 	sock->state = SS_UNCONNECTED;
@@ -129,9 +147,12 @@ static int can_create(struct net *net, struct socket *sock, int protocol,
 	if (!net_eq(net, &init_net))
 		return -EAFNOSUPPORT;
 
+	cp = can_get_proto(protocol);
+
 #ifdef CONFIG_MODULES
-	/* try to load protocol module kernel is modular */
-	if (!proto_tab[protocol]) {
+	if (!cp) {
+		/* try to load protocol module if kernel is modular */
+
 		err = request_module("can-proto-%d", protocol);
 
 		/*
@@ -139,17 +160,13 @@ static int can_create(struct net *net, struct socket *sock, int protocol,
 		 * return the error code immediately.  Below we will
 		 * return -EPROTONOSUPPORT
 		 */
-		if (err && printk_ratelimit())
-			printk(KERN_ERR "can: request_module "
+		if (err)
+			printk_ratelimited(KERN_ERR "can: request_module "
 			       "(can-proto-%d) failed.\n", protocol);
+
+		cp = can_get_proto(protocol);
 	}
 #endif
-
-	spin_lock(&proto_tab_lock);
-	cp = proto_tab[protocol];
-	if (cp && !try_module_get(cp->prot->owner))
-		cp = NULL;
-	spin_unlock(&proto_tab_lock);
 
 	/* check for available protocol and correct usage */
 
@@ -157,7 +174,7 @@ static int can_create(struct net *net, struct socket *sock, int protocol,
 		return -EPROTONOSUPPORT;
 
 	if (cp->type != sock->type) {
-		err = -EPROTONOSUPPORT;
+		err = -EPROTOTYPE;
 		goto errout;
 	}
 
@@ -182,7 +199,7 @@ static int can_create(struct net *net, struct socket *sock, int protocol,
 	}
 
  errout:
-	module_put(cp->prot->owner);
+	can_put_proto(cp);
 	return err;
 }
 
@@ -227,6 +244,9 @@ int can_send(struct sk_buff *skb, int loop)
 	}
 
 	skb->protocol = htons(ETH_P_CAN);
+	skb->ip_summed = CHECKSUM_UNNECESSARY;
+
+	skb_reset_mac_header(skb);
 	skb_reset_network_header(skb);
 	skb_reset_transport_header(skb);
 
@@ -383,6 +403,7 @@ static struct hlist_head *find_rcv_list(canid_t *can_id, canid_t *mask,
  * @func: callback function on filter match
  * @data: returned parameter for callback function
  * @ident: string for calling module indentification
+ * @sk: socket pointer (might be NULL)
  *
  * Description:
  *  Invokes the callback function with the received sk_buff and the given
@@ -406,7 +427,7 @@ static struct hlist_head *find_rcv_list(canid_t *can_id, canid_t *mask,
  */
 int can_rx_register(struct net_device *dev, canid_t can_id, canid_t mask,
 		    void (*func)(struct sk_buff *, void *), void *data,
-		    char *ident)
+		    char *ident, struct sock *sk)
 {
 	struct receiver *r;
 	struct hlist_head *rl;
@@ -434,6 +455,7 @@ int can_rx_register(struct net_device *dev, canid_t can_id, canid_t mask,
 		r->func    = func;
 		r->data    = data;
 		r->ident   = ident;
+		r->sk      = sk;
 
 		hlist_add_head_rcu(&r->list, rl);
 		d->entries++;
@@ -458,8 +480,11 @@ EXPORT_SYMBOL(can_rx_register);
 static void can_rx_delete_receiver(struct rcu_head *rp)
 {
 	struct receiver *r = container_of(rp, struct receiver, rcu);
+	struct sock *sk = r->sk;
 
 	kmem_cache_free(rcv_cache, r);
+	if (sk)
+		sock_put(sk);
 }
 
 /**
@@ -538,8 +563,11 @@ void can_rx_unregister(struct net_device *dev, canid_t can_id, canid_t mask,
 	spin_unlock(&can_rcvlists_lock);
 
 	/* schedule the receiver item for deletion */
-	if (r)
+	if (r) {
+		if (r->sk)
+			sock_hold(r->sk);
 		call_rcu(&r->rcu, can_rx_delete_receiver);
+	}
 }
 EXPORT_SYMBOL(can_rx_unregister);
 
@@ -625,13 +653,13 @@ static int can_rcv(struct sk_buff *skb, struct net_device *dev,
 	if (!net_eq(dev_net(dev), &init_net))
 		goto drop;
 
-	if (WARN_ONCE(dev->type != ARPHRD_CAN ||
-		      skb->len != sizeof(struct can_frame) ||
-		      cf->can_dlc > 8,
-		      "PF_CAN: dropped non conform skbuf: "
-		      "dev type %d, len %d, can_dlc %d\n",
-		      dev->type, skb->len, cf->can_dlc))
+	if (unlikely(dev->type != ARPHRD_CAN ||
+		     skb->len != sizeof(struct can_frame) ||
+		     cf->can_dlc > 8)) {
+		pr_warn_once("PF_CAN: dropped non conform CAN skbuf: dev type %d, len %d, can_dlc %d\n",
+			     dev->type, skb->len, cf->can_dlc);
 		goto drop;
+	}
 
 	/* update statistics */
 	can_stats.rx_frames++;
@@ -678,7 +706,7 @@ drop:
  *  -EBUSY  protocol already in use
  *  -ENOBUF if proto_register() fails
  */
-int can_proto_register(struct can_proto *cp)
+int can_proto_register(const struct can_proto *cp)
 {
 	int proto = cp->protocol;
 	int err = 0;
@@ -693,19 +721,16 @@ int can_proto_register(struct can_proto *cp)
 	if (err < 0)
 		return err;
 
-	spin_lock(&proto_tab_lock);
+	mutex_lock(&proto_tab_lock);
+
 	if (proto_tab[proto]) {
 		printk(KERN_ERR "can: protocol %d already registered\n",
 		       proto);
 		err = -EBUSY;
-	} else {
-		proto_tab[proto] = cp;
+	} else
+		RCU_INIT_POINTER(proto_tab[proto], cp);
 
-		/* use generic ioctl function if not defined by module */
-		if (!cp->ops->ioctl)
-			cp->ops->ioctl = can_ioctl;
-	}
-	spin_unlock(&proto_tab_lock);
+	mutex_unlock(&proto_tab_lock);
 
 	if (err < 0)
 		proto_unregister(cp->prot);
@@ -718,17 +743,16 @@ EXPORT_SYMBOL(can_proto_register);
  * can_proto_unregister - unregister CAN transport protocol
  * @cp: pointer to CAN protocol structure
  */
-void can_proto_unregister(struct can_proto *cp)
+void can_proto_unregister(const struct can_proto *cp)
 {
 	int proto = cp->protocol;
 
-	spin_lock(&proto_tab_lock);
-	if (!proto_tab[proto]) {
-		printk(KERN_ERR "BUG: can: protocol %d is not registered\n",
-		       proto);
-	}
-	proto_tab[proto] = NULL;
-	spin_unlock(&proto_tab_lock);
+	mutex_lock(&proto_tab_lock);
+	BUG_ON(proto_tab[proto] != cp);
+	RCU_INIT_POINTER(proto_tab[proto], NULL);
+	mutex_unlock(&proto_tab_lock);
+
+	synchronize_rcu();
 
 	proto_unregister(cp->prot);
 }
@@ -842,7 +866,7 @@ static __exit void can_exit(void)
 	struct net_device *dev;
 
 	if (stats_timer)
-		del_timer(&can_stattimer);
+		del_timer_sync(&can_stattimer);
 
 	can_remove_proc();
 

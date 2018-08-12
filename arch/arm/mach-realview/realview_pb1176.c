@@ -26,6 +26,8 @@
 #include <linux/amba/pl061.h>
 #include <linux/amba/mmci.h>
 #include <linux/amba/pl022.h>
+#include <linux/mtd/physmap.h>
+#include <linux/mtd/partitions.h>
 #include <linux/io.h>
 
 #include <mach/hardware.h>
@@ -134,47 +136,26 @@ static struct pl022_ssp_controller ssp0_plat_data = {
  * RealView PB1176 AMBA devices
  */
 #define GPIO2_IRQ	{ IRQ_PB1176_GPIO2, NO_IRQ }
-#define GPIO2_DMA	{ 0, 0 }
 #define GPIO3_IRQ	{ IRQ_PB1176_GPIO3, NO_IRQ }
-#define GPIO3_DMA	{ 0, 0 }
 #define AACI_IRQ	{ IRQ_PB1176_AACI, NO_IRQ }
-#define AACI_DMA	{ 0x80, 0x81 }
 #define MMCI0_IRQ	{ IRQ_PB1176_MMCI0A, IRQ_PB1176_MMCI0B }
-#define MMCI0_DMA	{ 0x84, 0 }
 #define KMI0_IRQ	{ IRQ_PB1176_KMI0, NO_IRQ }
-#define KMI0_DMA	{ 0, 0 }
 #define KMI1_IRQ	{ IRQ_PB1176_KMI1, NO_IRQ }
-#define KMI1_DMA	{ 0, 0 }
 #define PB1176_SMC_IRQ	{ NO_IRQ, NO_IRQ }
-#define PB1176_SMC_DMA	{ 0, 0 }
 #define MPMC_IRQ	{ NO_IRQ, NO_IRQ }
-#define MPMC_DMA	{ 0, 0 }
 #define PB1176_CLCD_IRQ	{ IRQ_DC1176_CLCD, NO_IRQ }
-#define PB1176_CLCD_DMA	{ 0, 0 }
 #define SCTL_IRQ	{ NO_IRQ, NO_IRQ }
-#define SCTL_DMA	{ 0, 0 }
 #define PB1176_WATCHDOG_IRQ	{ IRQ_DC1176_WATCHDOG, NO_IRQ }
-#define PB1176_WATCHDOG_DMA	{ 0, 0 }
 #define PB1176_GPIO0_IRQ	{ IRQ_PB1176_GPIO0, NO_IRQ }
-#define PB1176_GPIO0_DMA	{ 0, 0 }
 #define GPIO1_IRQ	{ IRQ_PB1176_GPIO1, NO_IRQ }
-#define GPIO1_DMA	{ 0, 0 }
 #define PB1176_RTC_IRQ	{ IRQ_DC1176_RTC, NO_IRQ }
-#define PB1176_RTC_DMA	{ 0, 0 }
 #define SCI_IRQ		{ IRQ_PB1176_SCI, NO_IRQ }
-#define SCI_DMA		{ 7, 6 }
 #define PB1176_UART0_IRQ	{ IRQ_DC1176_UART0, NO_IRQ }
-#define PB1176_UART0_DMA	{ 15, 14 }
 #define PB1176_UART1_IRQ	{ IRQ_DC1176_UART1, NO_IRQ }
-#define PB1176_UART1_DMA	{ 13, 12 }
 #define PB1176_UART2_IRQ	{ IRQ_DC1176_UART2, NO_IRQ }
-#define PB1176_UART2_DMA	{ 11, 10 }
 #define PB1176_UART3_IRQ	{ IRQ_DC1176_UART3, NO_IRQ }
-#define PB1176_UART3_DMA	{ 0x86, 0x87 }
 #define PB1176_UART4_IRQ	{ IRQ_PB1176_UART4, NO_IRQ }
-#define PB1176_UART4_DMA	{ 0, 0 }
 #define PB1176_SSP_IRQ		{ IRQ_DC1176_SSP, NO_IRQ }
-#define PB1176_SSP_DMA		{ 9, 8 }
 
 /* FPGA Primecells */
 AMBA_DEVICE(aaci,	"fpga:aaci",	AACI,		NULL);
@@ -225,22 +206,48 @@ static struct amba_device *amba_devs[] __initdata = {
  * RealView PB1176 platform devices
  */
 static struct resource realview_pb1176_flash_resources[] = {
-	[0] = {
+	{
 		.start		= REALVIEW_PB1176_FLASH_BASE,
 		.end		= REALVIEW_PB1176_FLASH_BASE + REALVIEW_PB1176_FLASH_SIZE - 1,
 		.flags		= IORESOURCE_MEM,
 	},
-	[1] = {
+#ifdef CONFIG_REALVIEW_PB1176_SECURE_FLASH
+	{
 		.start		= REALVIEW_PB1176_SEC_FLASH_BASE,
 		.end		= REALVIEW_PB1176_SEC_FLASH_BASE + REALVIEW_PB1176_SEC_FLASH_SIZE - 1,
 		.flags		= IORESOURCE_MEM,
 	},
-};
-#ifdef CONFIG_REALVIEW_PB1176_SECURE_FLASH
-#define PB1176_FLASH_BLOCKS	2
-#else
-#define PB1176_FLASH_BLOCKS	1
 #endif
+};
+
+static struct physmap_flash_data pb1176_rom_pdata = {
+	.probe_type	= "map_rom",
+	.width		= 4,
+	.nr_parts	= 0,
+};
+
+static struct resource pb1176_rom_resources[] = {
+	/*
+	 * This exposes the PB1176 DevChip ROM as an MTD ROM mapping.
+	 * The reference manual states that this is actually a pseudo-ROM
+	 * programmed in NVRAM.
+	 */
+	{
+		.start		= REALVIEW_DC1176_ROM_BASE,
+		.end		= REALVIEW_DC1176_ROM_BASE + SZ_16K - 1,
+		.flags		= IORESOURCE_MEM,
+	}
+};
+
+static struct platform_device pb1176_rom_device = {
+	.name		= "physmap-flash",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(pb1176_rom_resources),
+	.resource	= pb1176_rom_resources,
+	.dev = {
+		.platform_data = &pb1176_rom_pdata,
+	},
+};
 
 static struct resource realview_pb1176_smsc911x_resources[] = {
 	[0] = {
@@ -337,8 +344,7 @@ static void realview_pb1176_reset(char mode)
 	__raw_writel(REALVIEW_PB1176_SYS_SOFT_RESET, reset_ctrl);
 }
 
-static void realview_pb1176_fixup(struct machine_desc *mdesc,
-				  struct tag *tags, char **from,
+static void realview_pb1176_fixup(struct tag *tags, char **from,
 				  struct meminfo *meminfo)
 {
 	/*
@@ -359,7 +365,8 @@ static void __init realview_pb1176_init(void)
 #endif
 
 	realview_flash_register(realview_pb1176_flash_resources,
-				PB1176_FLASH_BLOCKS);
+				ARRAY_SIZE(realview_pb1176_flash_resources));
+	platform_device_register(&pb1176_rom_device);
 	realview_eth_register(NULL, realview_pb1176_smsc911x_resources);
 	platform_device_register(&realview_i2c_device);
 	realview_usb_register(realview_pb1176_isp1761_resources);
@@ -379,10 +386,14 @@ static void __init realview_pb1176_init(void)
 
 MACHINE_START(REALVIEW_PB1176, "ARM-RealView PB1176")
 	/* Maintainer: ARM Ltd/Deep Blue Solutions Ltd */
-	.boot_params	= PHYS_OFFSET + 0x00000100,
+	.atag_offset	= 0x100,
 	.fixup		= realview_pb1176_fixup,
 	.map_io		= realview_pb1176_map_io,
+	.init_early	= realview_init_early,
 	.init_irq	= gic_init_irq,
 	.timer		= &realview_pb1176_timer,
 	.init_machine	= realview_pb1176_init,
+#ifdef CONFIG_ZONE_DMA
+	.dma_zone_size	= SZ_256M,
+#endif
 MACHINE_END

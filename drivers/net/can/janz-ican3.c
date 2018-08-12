@@ -22,6 +22,7 @@
 #include <linux/can/error.h>
 
 #include <linux/mfd/janz.h>
+#include <asm/io.h>
 
 /* the DPM has 64k of memory, organized into 256x 256 byte pages */
 #define DPM_NUM_PAGES		256
@@ -273,7 +274,7 @@ static inline void ican3_set_page(struct ican3_dev *mod, unsigned int page)
  */
 
 /*
- * Recieve a message from the ICAN3 "old-style" firmware interface
+ * Receive a message from the ICAN3 "old-style" firmware interface
  *
  * LOCKING: must hold mod->lock
  *
@@ -1049,7 +1050,7 @@ static void ican3_handle_inquiry(struct ican3_dev *mod, struct ican3_msg *msg)
 		complete(&mod->termination_comp);
 		break;
 	default:
-		dev_err(mod->dev, "recieved an unknown inquiry response\n");
+		dev_err(mod->dev, "received an unknown inquiry response\n");
 		break;
 	}
 }
@@ -1057,7 +1058,7 @@ static void ican3_handle_inquiry(struct ican3_dev *mod, struct ican3_msg *msg)
 static void ican3_handle_unknown_message(struct ican3_dev *mod,
 					struct ican3_msg *msg)
 {
-	dev_warn(mod->dev, "recieved unknown message: spec 0x%.2x length %d\n",
+	dev_warn(mod->dev, "received unknown message: spec 0x%.2x length %d\n",
 			   msg->spec, le16_to_cpu(msg->len));
 }
 
@@ -1112,7 +1113,7 @@ static bool ican3_txok(struct ican3_dev *mod)
 }
 
 /*
- * Recieve one CAN frame from the hardware
+ * Receive one CAN frame from the hardware
  *
  * CONTEXT: must be called from user context
  */
@@ -1249,7 +1250,6 @@ static irqreturn_t ican3_irq(int irq, void *dev_id)
  */
 static int ican3_reset_module(struct ican3_dev *mod)
 {
-	u8 val = 1 << mod->num;
 	unsigned long start;
 	u8 runold, runnew;
 
@@ -1263,8 +1263,7 @@ static int ican3_reset_module(struct ican3_dev *mod)
 	runold = ioread8(mod->dpm + TARGET_RUNNING);
 
 	/* reset the module */
-	iowrite8(val, &mod->ctrl->reset_assert);
-	iowrite8(val, &mod->ctrl->reset_deassert);
+	iowrite8(0x00, &mod->dpmctrl->hwreset);
 
 	/* wait until the module has finished resetting and is running */
 	start = jiffies;

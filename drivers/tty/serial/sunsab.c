@@ -156,6 +156,15 @@ receive_chars(struct uart_sunsab_port *up,
 	    (up->port.line == up->port.cons->index))
 		saw_console_brk = 1;
 
+	if (count == 0) {
+		if (unlikely(stat->sreg.isr1 & SAB82532_ISR1_BRK)) {
+			stat->sreg.isr0 &= ~(SAB82532_ISR0_PERR |
+					     SAB82532_ISR0_FERR);
+			up->port.icount.brk++;
+			uart_handle_break(&up->port);
+		}
+	}
+
 	for (i = 0; i < count; i++) {
 		unsigned char ch = buf[i], flag;
 
@@ -1006,7 +1015,7 @@ static int __devinit sunsab_init_one(struct uart_sunsab_port *up,
 	return 0;
 }
 
-static int __devinit sab_probe(struct platform_device *op, const struct of_device_id *match)
+static int __devinit sab_probe(struct platform_device *op)
 {
 	static int inst;
 	struct uart_sunsab_port *up;
@@ -1092,7 +1101,7 @@ static const struct of_device_id sab_match[] = {
 };
 MODULE_DEVICE_TABLE(of, sab_match);
 
-static struct of_platform_driver sab_driver = {
+static struct platform_driver sab_driver = {
 	.driver = {
 		.name = "sab",
 		.owner = THIS_MODULE,
@@ -1130,12 +1139,12 @@ static int __init sunsab_init(void)
 		}
 	}
 
-	return of_register_platform_driver(&sab_driver);
+	return platform_driver_register(&sab_driver);
 }
 
 static void __exit sunsab_exit(void)
 {
-	of_unregister_platform_driver(&sab_driver);
+	platform_driver_unregister(&sab_driver);
 	if (sunsab_reg.nr) {
 		sunserial_unregister_minors(&sunsab_reg, sunsab_reg.nr);
 	}

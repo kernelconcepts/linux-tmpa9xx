@@ -32,6 +32,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <ctype.h>
+#include <cpuid.h>
 
 #define MSR_TSC	0x10
 #define MSR_NEHALEM_PLATFORM_INFO	0xCE
@@ -128,53 +129,55 @@ unsigned long long get_msr(int cpu, off_t offset)
 void print_header(void)
 {
 	if (show_pkg)
-		fprintf(stderr, "pkg ");
+		fprintf(stderr, "pk");
 	if (show_core)
-		fprintf(stderr, "core");
+		fprintf(stderr, " cr");
 	if (show_cpu)
 		fprintf(stderr, " CPU");
 	if (do_nhm_cstates)
-		fprintf(stderr, "   %%c0 ");
+		fprintf(stderr, "    %%c0 ");
 	if (has_aperf)
-		fprintf(stderr, "  GHz");
+		fprintf(stderr, " GHz");
 	fprintf(stderr, "  TSC");
 	if (do_nhm_cstates)
-		fprintf(stderr, "   %%c1 ");
+		fprintf(stderr, "    %%c1");
 	if (do_nhm_cstates)
-		fprintf(stderr, "   %%c3 ");
+		fprintf(stderr, "    %%c3");
 	if (do_nhm_cstates)
-		fprintf(stderr, "   %%c6 ");
+		fprintf(stderr, "    %%c6");
 	if (do_snb_cstates)
-		fprintf(stderr, "   %%c7 ");
+		fprintf(stderr, "    %%c7");
 	if (do_snb_cstates)
-		fprintf(stderr, "  %%pc2 ");
+		fprintf(stderr, "  %%pc2");
 	if (do_nhm_cstates)
-		fprintf(stderr, "  %%pc3 ");
+		fprintf(stderr, "  %%pc3");
 	if (do_nhm_cstates)
-		fprintf(stderr, "  %%pc6 ");
+		fprintf(stderr, "  %%pc6");
 	if (do_snb_cstates)
-		fprintf(stderr, "  %%pc7 ");
+		fprintf(stderr, "  %%pc7");
 	if (extra_msr_offset)
-		fprintf(stderr, "       MSR 0x%x ", extra_msr_offset);
+		fprintf(stderr, "        MSR 0x%x ", extra_msr_offset);
 
 	putc('\n', stderr);
 }
 
 void dump_cnt(struct counters *cnt)
 {
-	fprintf(stderr, "package: %d ", cnt->pkg);
-	fprintf(stderr, "core:: %d ", cnt->core);
-	fprintf(stderr, "CPU: %d ", cnt->cpu);
-	fprintf(stderr, "TSC: %016llX\n", cnt->tsc);
-	fprintf(stderr, "c3: %016llX\n", cnt->c3);
-	fprintf(stderr, "c6: %016llX\n", cnt->c6);
-	fprintf(stderr, "c7: %016llX\n", cnt->c7);
-	fprintf(stderr, "aperf: %016llX\n", cnt->aperf);
-	fprintf(stderr, "pc2: %016llX\n", cnt->pc2);
-	fprintf(stderr, "pc3: %016llX\n", cnt->pc3);
-	fprintf(stderr, "pc6: %016llX\n", cnt->pc6);
-	fprintf(stderr, "pc7: %016llX\n", cnt->pc7);
-	fprintf(stderr, "msr0x%x: %016llX\n", extra_msr_offset, cnt->extra_msr);
+	if (!cnt)
+		return;
+	if (cnt->pkg) fprintf(stderr, "package: %d ", cnt->pkg);
+	if (cnt->core) fprintf(stderr, "core:: %d ", cnt->core);
+	if (cnt->cpu) fprintf(stderr, "CPU: %d ", cnt->cpu);
+	if (cnt->tsc) fprintf(stderr, "TSC: %016llX\n", cnt->tsc);
+	if (cnt->c3) fprintf(stderr, "c3: %016llX\n", cnt->c3);
+	if (cnt->c6) fprintf(stderr, "c6: %016llX\n", cnt->c6);
+	if (cnt->c7) fprintf(stderr, "c7: %016llX\n", cnt->c7);
+	if (cnt->aperf) fprintf(stderr, "aperf: %016llX\n", cnt->aperf);
+	if (cnt->pc2) fprintf(stderr, "pc2: %016llX\n", cnt->pc2);
+	if (cnt->pc3) fprintf(stderr, "pc3: %016llX\n", cnt->pc3);
+	if (cnt->pc6) fprintf(stderr, "pc6: %016llX\n", cnt->pc6);
+	if (cnt->pc7) fprintf(stderr, "pc7: %016llX\n", cnt->pc7);
+	if (cnt->extra_msr) fprintf(stderr, "msr0x%x: %016llX\n", extra_msr_offset, cnt->extra_msr);
 }
 
 void dump_list(struct counters *cnt)
@@ -194,14 +197,14 @@ void print_cnt(struct counters *p)
 	/* topology columns, print blanks on 1st (average) line */
 	if (p == cnt_average) {
 		if (show_pkg)
-			fprintf(stderr, "    ");
+			fprintf(stderr, " ");
 		if (show_core)
 			fprintf(stderr, "    ");
 		if (show_cpu)
 			fprintf(stderr, "    ");
 	} else {
 		if (show_pkg)
-			fprintf(stderr, "%4d", p->pkg);
+			fprintf(stderr, "%d", p->pkg);
 		if (show_core)
 			fprintf(stderr, "%4d", p->core);
 		if (show_cpu)
@@ -241,22 +244,22 @@ void print_cnt(struct counters *p)
 		if (!skip_c1)
 			fprintf(stderr, "%7.2f", 100.0 * p->c1/p->tsc);
 		else
-			fprintf(stderr, "   ****");
+			fprintf(stderr, "  ****");
 	}
 	if (do_nhm_cstates)
-		fprintf(stderr, "%7.2f", 100.0 * p->c3/p->tsc);
+		fprintf(stderr, " %6.2f", 100.0 * p->c3/p->tsc);
 	if (do_nhm_cstates)
-		fprintf(stderr, "%7.2f", 100.0 * p->c6/p->tsc);
+		fprintf(stderr, " %6.2f", 100.0 * p->c6/p->tsc);
 	if (do_snb_cstates)
-		fprintf(stderr, "%7.2f", 100.0 * p->c7/p->tsc);
+		fprintf(stderr, " %6.2f", 100.0 * p->c7/p->tsc);
 	if (do_snb_cstates)
-		fprintf(stderr, "%7.2f", 100.0 * p->pc2/p->tsc);
+		fprintf(stderr, " %5.2f", 100.0 * p->pc2/p->tsc);
 	if (do_nhm_cstates)
-		fprintf(stderr, "%7.2f", 100.0 * p->pc3/p->tsc);
+		fprintf(stderr, " %5.2f", 100.0 * p->pc3/p->tsc);
 	if (do_nhm_cstates)
-		fprintf(stderr, "%7.2f", 100.0 * p->pc6/p->tsc);
+		fprintf(stderr, " %5.2f", 100.0 * p->pc6/p->tsc);
 	if (do_snb_cstates)
-		fprintf(stderr, "%7.2f", 100.0 * p->pc7/p->tsc);
+		fprintf(stderr, " %5.2f", 100.0 * p->pc7/p->tsc);
 	if (extra_msr_offset)
 		fprintf(stderr, "  0x%016llx", p->extra_msr);
 	putc('\n', stderr);
@@ -845,7 +848,7 @@ void check_cpuid()
 
 	eax = ebx = ecx = edx = 0;
 
-	asm("cpuid" : "=a" (max_level), "=b" (ebx), "=c" (ecx), "=d" (edx) : "a" (0));
+	__get_cpuid(0, &max_level, &ebx, &ecx, &edx);
 
 	if (ebx == 0x756e6547 && edx == 0x49656e69 && ecx == 0x6c65746e)
 		genuine_intel = 1;
@@ -854,7 +857,7 @@ void check_cpuid()
 		fprintf(stderr, "%.4s%.4s%.4s ",
 			(char *)&ebx, (char *)&edx, (char *)&ecx);
 
-	asm("cpuid" : "=a" (fms), "=c" (ecx), "=d" (edx) : "a" (1) : "ebx");
+	__get_cpuid(1, &fms, &ebx, &ecx, &edx);
 	family = (fms >> 8) & 0xf;
 	model = (fms >> 4) & 0xf;
 	stepping = fms & 0xf;
@@ -876,7 +879,7 @@ void check_cpuid()
 	 * This check is valid for both Intel and AMD.
 	 */
 	ebx = ecx = edx = 0;
-	asm("cpuid" : "=a" (max_level), "=b" (ebx), "=c" (ecx), "=d" (edx) : "a" (0x80000000));
+	__get_cpuid(0x80000000, &max_level, &ebx, &ecx, &edx);
 
 	if (max_level < 0x80000007) {
 		fprintf(stderr, "CPUID: no invariant TSC (max_level 0x%x)\n", max_level);
@@ -887,7 +890,7 @@ void check_cpuid()
 	 * Non-Stop TSC is advertised by CPUID.EAX=0x80000007: EDX.bit8
 	 * this check is valid for both Intel and AMD
 	 */
-	asm("cpuid" : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx) : "a" (0x80000007));
+	__get_cpuid(0x80000007, &eax, &ebx, &ecx, &edx);
 	has_invariant_tsc = edx & (1 << 8);
 
 	if (!has_invariant_tsc) {
@@ -900,7 +903,7 @@ void check_cpuid()
 	 * this check is valid for both Intel and AMD
 	 */
 
-	asm("cpuid" : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx) : "a" (0x6));
+	__get_cpuid(0x6, &eax, &ebx, &ecx, &edx);
 	has_aperf = ecx & (1 << 0);
 	if (!has_aperf) {
 		fprintf(stderr, "No APERF MSR\n");
@@ -990,7 +993,7 @@ int fork_it(char **argv)
 	if (!retval)
 		print_counters(cnt_delta);
 
-	fprintf(stderr, "%.6f sec\n", tv_delta.tv_sec + tv_delta.tv_usec/1000000.0);;
+	fprintf(stderr, "%.6f sec\n", tv_delta.tv_sec + tv_delta.tv_usec/1000000.0);
 
 	return 0;
 }

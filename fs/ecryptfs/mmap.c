@@ -70,8 +70,8 @@ static int ecryptfs_writepage(struct page *page, struct writeback_control *wbc)
 		goto out;
 	}
 	SetPageUptodate(page);
-	unlock_page(page);
 out:
+	unlock_page(page);
 	return rc;
 }
 
@@ -193,11 +193,7 @@ static int ecryptfs_readpage(struct file *file, struct page *page)
 		&ecryptfs_inode_to_private(page->mapping->host)->crypt_stat;
 	int rc = 0;
 
-	if (!crypt_stat
-	    || !(crypt_stat->flags & ECRYPTFS_ENCRYPTED)
-	    || (crypt_stat->flags & ECRYPTFS_NEW_FILE)) {
-		ecryptfs_printk(KERN_DEBUG,
-				"Passing through unencrypted page\n");
+	if (!crypt_stat || !(crypt_stat->flags & ECRYPTFS_ENCRYPTED)) {
 		rc = ecryptfs_read_lower_page_segment(page, page->index, 0,
 						      PAGE_CACHE_SIZE,
 						      page->mapping->host);
@@ -295,8 +291,7 @@ static int ecryptfs_write_begin(struct file *file,
 		struct ecryptfs_crypt_stat *crypt_stat =
 			&ecryptfs_inode_to_private(mapping->host)->crypt_stat;
 
-		if (!(crypt_stat->flags & ECRYPTFS_ENCRYPTED)
-		    || (crypt_stat->flags & ECRYPTFS_NEW_FILE)) {
+		if (!(crypt_stat->flags & ECRYPTFS_ENCRYPTED)) {
 			rc = ecryptfs_read_lower_page_segment(
 				page, index, 0, PAGE_CACHE_SIZE, mapping->host);
 			if (rc) {
@@ -374,6 +369,11 @@ static int ecryptfs_write_begin(struct file *file,
 	    && (pos != 0))
 		zero_user(page, 0, PAGE_CACHE_SIZE);
 out:
+	if (unlikely(rc)) {
+		unlock_page(page);
+		page_cache_release(page);
+		*pagep = NULL;
+	}
 	return rc;
 }
 
@@ -487,12 +487,6 @@ static int ecryptfs_write_end(struct file *file,
 		&ecryptfs_inode_to_private(ecryptfs_inode)->crypt_stat;
 	int rc;
 
-	if (crypt_stat->flags & ECRYPTFS_NEW_FILE) {
-		ecryptfs_printk(KERN_DEBUG, "ECRYPTFS_NEW_FILE flag set in "
-			"crypt_stat at memory location [%p]\n", crypt_stat);
-		crypt_stat->flags &= ~(ECRYPTFS_NEW_FILE);
-	} else
-		ecryptfs_printk(KERN_DEBUG, "Not a new file\n");
 	ecryptfs_printk(KERN_DEBUG, "Calling fill_zeros_to_end_of_page"
 			"(page w/ index = [0x%.16lx], to = [%d])\n", index, to);
 	if (!(crypt_stat->flags & ECRYPTFS_ENCRYPTED)) {

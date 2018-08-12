@@ -10,9 +10,6 @@
 #include <asm/apicdef.h>
 #include <asm/irq_vectors.h>
 
-/* Even though we don't support this, supply it to appease OF */
-static inline void irq_dispose_mapping(unsigned int virq) { }
-
 static inline int irq_canonicalize(int irq)
 {
 	return ((irq == 2) ? 9 : irq);
@@ -28,6 +25,7 @@ extern void irq_ctx_init(int cpu);
 
 #ifdef CONFIG_HOTPLUG_CPU
 #include <linux/cpumask.h>
+extern int check_irq_vectors_for_cpu_disable(void);
 extern void fixup_irqs(void);
 extern void irq_force_complete_move(int);
 #endif

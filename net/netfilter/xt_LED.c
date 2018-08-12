@@ -31,6 +31,8 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Adam Nielsen <a.nielsen@shikadi.net>");
 MODULE_DESCRIPTION("Xtables: trigger LED devices on packet match");
+MODULE_ALIAS("ipt_LED");
+MODULE_ALIAS("ip6t_LED");
 
 static LIST_HEAD(xt_led_triggers);
 static DEFINE_MUTEX(xt_led_mutex);
@@ -137,10 +139,11 @@ static int led_tg_check(const struct xt_tgchk_param *par)
 		goto exit_alloc;
 	}
 
-	/* See if we need to set up a timer */
-	if (ledinfo->delay > 0)
-		setup_timer(&ledinternal->timer, led_timeout_callback,
-			    (unsigned long)ledinternal);
+	/* Since the letinternal timer can be shared between multiple targets,
+	 * always set it up, even if the current target does not need it
+	 */
+	setup_timer(&ledinternal->timer, led_timeout_callback,
+		    (unsigned long)ledinternal);
 
 	list_add_tail(&ledinternal->list, &xt_led_triggers);
 
@@ -177,8 +180,7 @@ static void led_tg_destroy(const struct xt_tgdtor_param *par)
 
 	list_del(&ledinternal->list);
 
-	if (ledinfo->delay > 0)
-		del_timer_sync(&ledinternal->timer);
+	del_timer_sync(&ledinternal->timer);
 
 	led_trigger_unregister(&ledinternal->netfilter_led_trigger);
 

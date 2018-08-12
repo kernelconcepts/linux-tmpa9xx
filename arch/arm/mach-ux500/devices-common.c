@@ -13,7 +13,7 @@
 #include <linux/platform_device.h>
 #include <linux/amba/bus.h>
 
-#include <plat/gpio.h>
+#include <plat/gpio-nomadik.h>
 
 #include <mach/hardware.h>
 
@@ -139,6 +139,7 @@ void dbx500_add_gpios(resource_size_t *base, int num, int irq,
 	for (i = 0; i < num; i++, first += 32, irq++) {
 		pdata->first_gpio = first;
 		pdata->first_irq = NOMADIK_GPIO_TO_IRQ(first);
+		pdata->num_gpio = 32;
 
 		dbx500_add_gpio(i, base[i], irq, pdata);
 	}

@@ -14,6 +14,7 @@
  *  Free Software Foundation;  either version 2 of the  License, or (at your
  *  option) any later version.
  */
+#include <linux/gpio.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/mm.h>
@@ -40,8 +41,7 @@
 #include <asm/mach/flash.h>
 #include <asm/mach/arch.h>
 
-#include <mach/gpio.h>
-
+#include <mach/gpio-ixp2000.h>
 
 /*************************************************************************
  * IXDP2x00 IRQ Initialization
@@ -158,13 +158,13 @@ void __init ixdp2x00_init_irq(volatile unsigned long *stat_reg, volatile unsigne
 	*board_irq_mask = 0xffffffff;
 
 	for(irq = IXP2000_BOARD_IRQ(0); irq < IXP2000_BOARD_IRQ(board_irq_count); irq++) {
-		set_irq_chip(irq, &ixdp2x00_cpld_irq_chip);
-		set_irq_handler(irq, handle_level_irq);
+		irq_set_chip_and_handler(irq, &ixdp2x00_cpld_irq_chip,
+					 handle_level_irq);
 		set_irq_flags(irq, IRQF_VALID);
 	}
 
 	/* Hook into PCI interrupt */
-	set_irq_chained_handler(IRQ_IXP2000_PCIB, ixdp2x00_irq_handler);
+	irq_set_chained_handler(IRQ_IXP2000_PCIB, ixdp2x00_irq_handler);
 }
 
 /*************************************************************************

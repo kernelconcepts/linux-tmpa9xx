@@ -192,14 +192,14 @@ static int tc3589x_irq_init(struct tc3589x *tc3589x)
 	int irq;
 
 	for (irq = base; irq < base + TC3589x_NR_INTERNAL_IRQS; irq++) {
-		set_irq_chip_data(irq, tc3589x);
-		set_irq_chip_and_handler(irq, &dummy_irq_chip,
+		irq_set_chip_data(irq, tc3589x);
+		irq_set_chip_and_handler(irq, &dummy_irq_chip,
 					 handle_edge_irq);
-		set_irq_nested_thread(irq, 1);
+		irq_set_nested_thread(irq, 1);
 #ifdef CONFIG_ARM
 		set_irq_flags(irq, IRQF_VALID);
 #else
-		set_irq_noprobe(irq);
+		irq_set_noprobe(irq);
 #endif
 	}
 
@@ -215,8 +215,8 @@ static void tc3589x_irq_remove(struct tc3589x *tc3589x)
 #ifdef CONFIG_ARM
 		set_irq_flags(irq, 0);
 #endif
-		set_irq_chip_and_handler(irq, NULL, NULL);
-		set_irq_chip_data(irq, NULL);
+		irq_set_chip_and_handler(irq, NULL, NULL);
+		irq_set_chip_data(irq, NULL);
 	}
 }
 
@@ -357,6 +357,7 @@ static int __devexit tc3589x_remove(struct i2c_client *client)
 	return 0;
 }
 
+#ifdef CONFIG_PM
 static int tc3589x_suspend(struct device *dev)
 {
 	struct tc3589x *tc3589x = dev_get_drvdata(dev);
@@ -387,6 +388,7 @@ static int tc3589x_resume(struct device *dev)
 
 static const SIMPLE_DEV_PM_OPS(tc3589x_dev_pm_ops, tc3589x_suspend,
 						tc3589x_resume);
+#endif
 
 static const struct i2c_device_id tc3589x_id[] = {
 	{ "tc3589x", 24 },

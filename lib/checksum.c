@@ -49,7 +49,7 @@ static inline unsigned short from32to16(unsigned int x)
 
 static unsigned int do_csum(const unsigned char *buff, int len)
 {
-	int odd, count;
+	int odd;
 	unsigned int result = 0;
 
 	if (len <= 0)
@@ -64,25 +64,22 @@ static unsigned int do_csum(const unsigned char *buff, int len)
 		len--;
 		buff++;
 	}
-	count = len >> 1;		/* nr of 16-bit words.. */
-	if (count) {
+	if (len >= 2) {
 		if (2 & (unsigned long) buff) {
 			result += *(unsigned short *) buff;
-			count--;
 			len -= 2;
 			buff += 2;
 		}
-		count >>= 1;		/* nr of 32-bit words.. */
-		if (count) {
+		if (len >= 4) {
+			const unsigned char *end = buff + ((unsigned)len & ~3);
 			unsigned int carry = 0;
 			do {
 				unsigned int w = *(unsigned int *) buff;
-				count--;
 				buff += 4;
 				result += carry;
 				result += w;
 				carry = (w > result);
-			} while (count);
+			} while (buff < end);
 			result += carry;
 			result = (result & 0xffff) + (result >> 16);
 		}
@@ -182,6 +179,15 @@ csum_partial_copy(const void *src, void *dst, int len, __wsum sum)
 EXPORT_SYMBOL(csum_partial_copy);
 
 #ifndef csum_tcpudp_nofold
+static inline u32 from64to32(u64 x)
+{
+	/* add up 32-bit and 32-bit for 32+c bit */
+	x = (x & 0xffffffff) + (x >> 32);
+	/* add up carry.. */
+	x = (x & 0xffffffff) + (x >> 32);
+	return (u32)x;
+}
+
 __wsum csum_tcpudp_nofold(__be32 saddr, __be32 daddr,
 			unsigned short len,
 			unsigned short proto,
@@ -196,8 +202,7 @@ __wsum csum_tcpudp_nofold(__be32 saddr, __be32 daddr,
 #else
 	s += (proto + len) << 8;
 #endif
-	s += (s >> 32);
-	return (__force __wsum)s;
+	return (__force __wsum)from64to32(s);
 }
 EXPORT_SYMBOL(csum_tcpudp_nofold);
 #endif

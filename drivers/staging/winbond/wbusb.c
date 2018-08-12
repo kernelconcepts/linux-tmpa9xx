@@ -11,6 +11,7 @@
  */
 #include <net/mac80211.h>
 #include <linux/usb.h>
+#include <linux/module.h>
 
 #include "core.h"
 #include "mds_f.h"
@@ -24,7 +25,7 @@ MODULE_DESCRIPTION("IS89C35 802.11bg WLAN USB Driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 
-static const struct usb_device_id wb35_table[] __devinitconst = {
+static const struct usb_device_id wb35_table[] = {
 	{ USB_DEVICE(0x0416, 0x0035) },
 	{ USB_DEVICE(0x18E8, 0x6201) },
 	{ USB_DEVICE(0x18E8, 0x6206) },
@@ -118,13 +119,14 @@ static void wbsoft_configure_filter(struct ieee80211_hw *dev,
 	*total_flags = new_flags;
 }
 
-static int wbsoft_tx(struct ieee80211_hw *dev, struct sk_buff *skb)
+static void wbsoft_tx(struct ieee80211_hw *dev, struct sk_buff *skb)
 {
 	struct wbsoft_priv *priv = dev->priv;
 
 	if (priv->sMlmeFrame.IsInUsed != PACKET_FREE_TO_USE) {
 		priv->sMlmeFrame.wNumTxMMPDUDiscarded++;
-		return NETDEV_TX_BUSY;
+		kfree_skb(skb);
+		return;
 	}
 
 	priv->sMlmeFrame.IsInUsed = PACKET_COME_FROM_MLME;
@@ -140,8 +142,6 @@ static int wbsoft_tx(struct ieee80211_hw *dev, struct sk_buff *skb)
 	 */
 
 	Mds_Tx(priv);
-
-	return NETDEV_TX_OK;
 }
 
 static int wbsoft_start(struct ieee80211_hw *dev)
@@ -278,7 +278,7 @@ static int wbsoft_config(struct ieee80211_hw *dev, u32 changed)
 	return 0;
 }
 
-static u64 wbsoft_get_tsf(struct ieee80211_hw *dev)
+static u64 wbsoft_get_tsf(struct ieee80211_hw *dev, struct ieee80211_vif *vif)
 {
 	printk("wbsoft_get_tsf called\n");
 	return 0;

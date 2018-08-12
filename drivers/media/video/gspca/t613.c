@@ -26,6 +26,8 @@
  *			Costantino Leandro
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #define MODULE_NAME "t613"
 
 #include <linux/slab.h>
@@ -92,8 +94,6 @@ static int sd_setmirror(struct gspca_dev *gspca_dev, __s32 val);
 static int sd_getmirror(struct gspca_dev *gspca_dev, __s32 *val);
 static int sd_seteffect(struct gspca_dev *gspca_dev, __s32 val);
 static int sd_geteffect(struct gspca_dev *gspca_dev, __s32 *val);
-static int sd_querymenu(struct gspca_dev *gspca_dev,
-			struct v4l2_querymenu *menu);
 
 static const struct ctrl sd_ctrls[] = {
 	{
@@ -574,7 +574,7 @@ static void reg_w_buf(struct gspca_dev *gspca_dev,
 
 		tmpbuf = kmemdup(buffer, len, GFP_KERNEL);
 		if (!tmpbuf) {
-			err("Out of memory");
+			pr_err("Out of memory\n");
 			return;
 		}
 		usb_control_msg(gspca_dev->dev,
@@ -600,7 +600,7 @@ static void reg_w_ixbuf(struct gspca_dev *gspca_dev,
 	} else {
 		p = tmpbuf = kmalloc(len * 2, GFP_KERNEL);
 		if (!tmpbuf) {
-			err("Out of memory");
+			pr_err("Out of memory\n");
 			return;
 		}
 	}
@@ -654,7 +654,7 @@ static void om6802_sensor_init(struct gspca_dev *gspca_dev)
 	}
 	byte = reg_r(gspca_dev, 0x0063);
 	if (byte != 0x17) {
-		err("Bad sensor reset %02x", byte);
+		pr_err("Bad sensor reset %02x\n", byte);
 		/* continue? */
 	}
 
@@ -892,7 +892,7 @@ static int sd_init(struct gspca_dev *gspca_dev)
 		sd->sensor = SENSOR_OM6802;
 		break;
 	default:
-		err("unknown sensor %04x", sensor_id);
+		pr_err("unknown sensor %04x\n", sensor_id);
 		return -EINVAL;
 	}
 
@@ -907,7 +907,7 @@ static int sd_init(struct gspca_dev *gspca_dev)
 				break;		/* OK */
 		}
 		if (i < 0) {
-			err("Bad sensor reset %02x", test_byte);
+			pr_err("Bad sensor reset %02x\n", test_byte);
 			return -EIO;
 		}
 		reg_w_buf(gspca_dev, n2, sizeof n2);
@@ -1379,20 +1379,17 @@ static int sd_getlowlight(struct gspca_dev *gspca_dev, __s32 *val)
 static int sd_querymenu(struct gspca_dev *gspca_dev,
 			struct v4l2_querymenu *menu)
 {
+	static const char *freq_nm[3] = {"NoFliker", "50 Hz", "60 Hz"};
+
 	switch (menu->id) {
 	case V4L2_CID_POWER_LINE_FREQUENCY:
-		switch (menu->index) {
-		case 1:		/* V4L2_CID_POWER_LINE_FREQUENCY_50HZ */
-			strcpy((char *) menu->name, "50 Hz");
-			return 0;
-		case 2:		/* V4L2_CID_POWER_LINE_FREQUENCY_60HZ */
-			strcpy((char *) menu->name, "60 Hz");
-			return 0;
-		}
-		break;
+		if ((unsigned) menu->index >= ARRAY_SIZE(freq_nm))
+			break;
+		strcpy((char *) menu->name, freq_nm[menu->index]);
+		return 0;
 	case V4L2_CID_EFFECTS:
 		if ((unsigned) menu->index < ARRAY_SIZE(effects_control)) {
-			strncpy((char *) menu->name,
+			strlcpy((char *) menu->name,
 				effects_control[menu->index],
 				sizeof menu->name);
 			return 0;

@@ -27,6 +27,10 @@ void __init arm_mm_memblock_reserve(void)
 	memblock_reserve(CONFIG_VECTORS_BASE, PAGE_SIZE);
 }
 
+void __init sanity_check_meminfo(void)
+{
+}
+
 /*
  * paging_init() sets up the page tables, initialises the zone memory
  * maps, and sets up the zero page, bad page and bad page tables.
@@ -48,6 +52,12 @@ void flush_dcache_page(struct page *page)
 	__cpuc_flush_dcache_area(page_address(page), PAGE_SIZE);
 }
 EXPORT_SYMBOL(flush_dcache_page);
+
+void flush_kernel_dcache_page(struct page *page)
+{
+	__cpuc_flush_dcache_area(page_address(page), PAGE_SIZE);
+}
+EXPORT_SYMBOL(flush_kernel_dcache_page);
 
 void copy_to_user_page(struct vm_area_struct *vma, struct page *page,
 		       unsigned long uaddr, void *dst, const void *src,

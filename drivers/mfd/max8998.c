@@ -39,6 +39,8 @@ static struct mfd_cell max8998_devs[] = {
 		.name = "max8998-pmic",
 	}, {
 		.name = "max8998-rtc",
+	}, {
+		.name = "max8998-battery",
 	},
 };
 
@@ -150,6 +152,10 @@ static int max8998_i2c_probe(struct i2c_client *i2c,
 	mutex_init(&max8998->iolock);
 
 	max8998->rtc = i2c_new_dummy(i2c->adapter, RTC_I2C_ADDR);
+	if (!max8998->rtc) {
+		dev_err(&i2c->dev, "Failed to allocate I2C device for RTC\n");
+		return -ENODEV;
+	}
 	i2c_set_clientdata(max8998->rtc, max8998);
 
 	max8998_irq_init(max8998);
@@ -209,7 +215,7 @@ static int max8998_suspend(struct device *dev)
 	struct max8998_dev *max8998 = i2c_get_clientdata(i2c);
 
 	if (max8998->wakeup)
-		set_irq_wake(max8998->irq, 1);
+		irq_set_irq_wake(max8998->irq, 1);
 	return 0;
 }
 
@@ -219,7 +225,7 @@ static int max8998_resume(struct device *dev)
 	struct max8998_dev *max8998 = i2c_get_clientdata(i2c);
 
 	if (max8998->wakeup)
-		set_irq_wake(max8998->irq, 0);
+		irq_set_irq_wake(max8998->irq, 0);
 	/*
 	 * In LP3974, if IRQ registers are not "read & clear"
 	 * when it's set during sleep, the interrupt becomes
@@ -233,7 +239,7 @@ struct max8998_reg_dump {
 	u8	val;
 };
 #define SAVE_ITEM(x)	{ .addr = (x), .val = 0x0, }
-struct max8998_reg_dump max8998_dump[] = {
+static struct max8998_reg_dump max8998_dump[] = {
 	SAVE_ITEM(MAX8998_REG_IRQM1),
 	SAVE_ITEM(MAX8998_REG_IRQM2),
 	SAVE_ITEM(MAX8998_REG_IRQM3),
@@ -298,7 +304,7 @@ static int max8998_restore(struct device *dev)
 	return 0;
 }
 
-const struct dev_pm_ops max8998_pm = {
+static const struct dev_pm_ops max8998_pm = {
 	.suspend = max8998_suspend,
 	.resume = max8998_resume,
 	.freeze = max8998_freeze,

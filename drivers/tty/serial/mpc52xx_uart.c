@@ -34,6 +34,7 @@
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/tty.h>
+#include <linux/tty_flip.h>
 #include <linux/serial.h>
 #include <linux/sysrq.h>
 #include <linux/console.h>
@@ -273,7 +274,7 @@ static unsigned int mpc5200b_psc_set_baudrate(struct uart_port *port,
 
 static void mpc52xx_psc_get_irq(struct uart_port *port, struct device_node *np)
 {
-	port->irqflags = IRQF_DISABLED;
+	port->irqflags = 0;
 	port->irq = irq_of_parse_and_map(np, 0);
 }
 
@@ -1302,16 +1303,13 @@ static struct of_device_id mpc52xx_uart_of_match[] = {
 	{},
 };
 
-static int __devinit
-mpc52xx_uart_of_probe(struct platform_device *op, const struct of_device_id *match)
+static int __devinit mpc52xx_uart_of_probe(struct platform_device *op)
 {
 	int idx = -1;
 	unsigned int uartclk;
 	struct uart_port *port = NULL;
 	struct resource res;
 	int ret;
-
-	dev_dbg(&op->dev, "mpc52xx_uart_probe(op=%p, match=%p)\n", op, match);
 
 	/* Check validity & presence */
 	for (idx = 0; idx < MPC52xx_PSC_MAXNUM; idx++)
@@ -1453,7 +1451,7 @@ mpc52xx_uart_of_enumerate(void)
 
 MODULE_DEVICE_TABLE(of, mpc52xx_uart_of_match);
 
-static struct of_platform_driver mpc52xx_uart_of_driver = {
+static struct platform_driver mpc52xx_uart_of_driver = {
 	.probe		= mpc52xx_uart_of_probe,
 	.remove		= mpc52xx_uart_of_remove,
 #ifdef CONFIG_PM
@@ -1497,9 +1495,9 @@ mpc52xx_uart_init(void)
 			return ret;
 	}
 
-	ret = of_register_platform_driver(&mpc52xx_uart_of_driver);
+	ret = platform_driver_register(&mpc52xx_uart_of_driver);
 	if (ret) {
-		printk(KERN_ERR "%s: of_register_platform_driver failed (%i)\n",
+		printk(KERN_ERR "%s: platform_driver_register failed (%i)\n",
 		       __FILE__, ret);
 		uart_unregister_driver(&mpc52xx_uart_driver);
 		return ret;
@@ -1514,7 +1512,7 @@ mpc52xx_uart_exit(void)
 	if (psc_ops->fifoc_uninit)
 		psc_ops->fifoc_uninit();
 
-	of_unregister_platform_driver(&mpc52xx_uart_of_driver);
+	platform_driver_unregister(&mpc52xx_uart_of_driver);
 	uart_unregister_driver(&mpc52xx_uart_driver);
 }
 

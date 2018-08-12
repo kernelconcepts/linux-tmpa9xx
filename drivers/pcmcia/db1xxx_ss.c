@@ -24,6 +24,7 @@
 #include <linux/gpio.h>
 #include <linux/interrupt.h>
 #include <linux/pm.h>
+#include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/resource.h>
 #include <linux/slab.h>
@@ -181,7 +182,7 @@ static int db1x_pcmcia_setup_irqs(struct db1x_pcmcia_sock *sock)
 		/* all other (older) Db1x00 boards use a GPIO to show
 		 * card detection status:  use both-edge triggers.
 		 */
-		set_irq_type(sock->insert_irq, IRQ_TYPE_EDGE_BOTH);
+		irq_set_irq_type(sock->insert_irq, IRQ_TYPE_EDGE_BOTH);
 		ret = request_irq(sock->insert_irq, db1000_pcmcia_cdirq,
 				  0, "pcmcia_carddetect", sock);
 

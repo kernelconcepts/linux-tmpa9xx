@@ -346,6 +346,9 @@ static int idmouse_probe(struct usb_interface *interface,
 	if (iface_desc->desc.bInterfaceClass != 0x0A)
 		return -ENODEV;
 
+	if (iface_desc->desc.bNumEndpoints < 1)
+		return -ENODEV;
+
 	/* allocate memory for our device state and initialize it */
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (dev == NULL)
@@ -359,7 +362,7 @@ static int idmouse_probe(struct usb_interface *interface,
 	endpoint = &iface_desc->endpoint[0].desc;
 	if (!dev->bulk_in_endpointAddr && usb_endpoint_is_bulk_in(endpoint)) {
 		/* we found a bulk in endpoint */
-		dev->orig_bi_size = le16_to_cpu(endpoint->wMaxPacketSize);
+		dev->orig_bi_size = usb_endpoint_maxp(endpoint);
 		dev->bulk_in_size = 0x200; /* works _much_ faster */
 		dev->bulk_in_endpointAddr = endpoint->bEndpointAddress;
 		dev->bulk_in_buffer =

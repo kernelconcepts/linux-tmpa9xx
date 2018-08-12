@@ -27,12 +27,12 @@
 #include <asm/system.h>
 #include <asm/uaccess.h>
 #include <asm/io.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 #include <asm/mathemu.h>
 #include <asm/cpcmd.h>
-#include <asm/s390_ext.h>
 #include <asm/lowcore.h>
 #include <asm/debug.h>
+#include <asm/irq.h>
 
 #ifndef CONFIG_64BIT
 #define ONELONG "%08lx: "
@@ -672,6 +672,7 @@ static struct insn opcode_b2[] = {
 	{ "rp", 0x77, INSTR_S_RD },
 	{ "stcke", 0x78, INSTR_S_RD },
 	{ "sacf", 0x79, INSTR_S_RD },
+	{ "spp", 0x80, INSTR_S_RD },
 	{ "stsi", 0x7d, INSTR_S_RD },
 	{ "srnm", 0x99, INSTR_S_RD },
 	{ "stfpc", 0x9c, INSTR_S_RD },
@@ -1502,14 +1503,21 @@ static int print_insn(char *buffer, unsigned char *code, unsigned long addr)
 			}
 			if (separator)
 				ptr += sprintf(ptr, "%c", separator);
+			/*
+			 * Use four '%' characters below because of the
+			 * following two conversions:
+			 *
+			 *  1) sprintf: %%%%r -> %%r
+			 *  2) printk : %%r   -> %r
+			 */
 			if (operand->flags & OPERAND_GPR)
-				ptr += sprintf(ptr, "%%r%i", value);
+				ptr += sprintf(ptr, "%%%%r%i", value);
 			else if (operand->flags & OPERAND_FPR)
-				ptr += sprintf(ptr, "%%f%i", value);
+				ptr += sprintf(ptr, "%%%%f%i", value);
 			else if (operand->flags & OPERAND_AR)
-				ptr += sprintf(ptr, "%%a%i", value);
+				ptr += sprintf(ptr, "%%%%a%i", value);
 			else if (operand->flags & OPERAND_CR)
-				ptr += sprintf(ptr, "%%c%i", value);
+				ptr += sprintf(ptr, "%%%%c%i", value);
 			else if (operand->flags & OPERAND_PCREL)
 				ptr += sprintf(ptr, "%lx", (signed int) value
 								      + addr);
@@ -1534,7 +1542,7 @@ void show_code(struct pt_regs *regs)
 {
 	char *mode = (regs->psw.mask & PSW_MASK_PSTATE) ? "User" : "Krnl";
 	unsigned char code[64];
-	char buffer[64], *ptr;
+	char buffer[128], *ptr;
 	mm_segment_t old_fs;
 	unsigned long addr;
 	int start, end, opsize, hops, i;
@@ -1592,7 +1600,7 @@ void show_code(struct pt_regs *regs)
 		start += opsize;
 		printk(buffer);
 		ptr = buffer;
-		ptr += sprintf(ptr, "\n          ");
+		ptr += sprintf(ptr, "\n\t  ");
 		hops++;
 	}
 	printk("\n");

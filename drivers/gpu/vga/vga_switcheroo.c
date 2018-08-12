@@ -26,6 +26,7 @@
 #include <linux/fb.h>
 
 #include <linux/pci.h>
+#include <linux/console.h>
 #include <linux/vga_switcheroo.h>
 
 struct vga_switcheroo_client {
@@ -215,12 +216,8 @@ static int vga_switchoff(struct vga_switcheroo_client *client)
 /* stage one happens before delay */
 static int vga_switchto_stage1(struct vga_switcheroo_client *new_client)
 {
-	int ret;
 	int i;
 	struct vga_switcheroo_client *active = NULL;
-
-	if (new_client->active == true)
-		return 0;
 
 	for (i = 0; i < VGA_SWITCHEROO_MAX_CLIENTS; i++) {
 		if (vgasr_priv.clients[i].active == true) {
@@ -230,11 +227,6 @@ static int vga_switchto_stage1(struct vga_switcheroo_client *new_client)
 	}
 	if (!active)
 		return 0;
-
-	/* power up the first device */
-	ret = pci_enable_device(new_client->pdev);
-	if (ret)
-		return ret;
 
 	if (new_client->pwr_state == VGA_SWITCHEROO_OFF)
 		vga_switchon(new_client);
@@ -265,8 +257,10 @@ static int vga_switchto_stage2(struct vga_switcheroo_client *new_client)
 
 	if (new_client->fb_info) {
 		struct fb_event event;
+		console_lock();
 		event.info = new_client->fb_info;
 		fb_notifier_call_chain(FB_EVENT_REMAP_ALL_CONSOLE, &event);
+		console_unlock();
 	}
 
 	ret = vgasr_priv.handler->switchto(new_client->id);
@@ -371,6 +365,9 @@ vga_switcheroo_debugfs_write(struct file *filp, const char __user *ubuf,
 		ret = vgasr_priv.handler->switchto(client_id);
 		goto out;
 	}
+
+	if (client->active == true)
+		goto out;
 
 	/* okay we want a switch - test if devices are willing to switch */
 	can_switch = true;

@@ -30,10 +30,6 @@
 #define WL1271_RX_MAX_RSSI -30
 #define WL1271_RX_MIN_RSSI -95
 
-#define WL1271_RX_ALIGN_TO 4
-#define WL1271_RX_ALIGN(len) (((len) + WL1271_RX_ALIGN_TO - 1) & \
-			     ~(WL1271_RX_ALIGN_TO - 1))
-
 #define SHORT_PREAMBLE_BIT   BIT(0)
 #define OFDM_RATE_BIT        BIT(6)
 #define PBCC_RATE_BIT        BIT(7)
@@ -86,19 +82,34 @@
 /*
  * RX Descriptor status
  *
- * Bits 0-2 - status
- * Bits 3-7 - reserved
+ * Bits 0-2 - error code
+ * Bits 3-5 - process_id tag (AP mode FW)
+ * Bits 6-7 - reserved
  */
-#define WL1271_RX_DESC_STATUS_MASK      0x07
+#define WL1271_RX_DESC_STATUS_MASK      0x03
 
 #define WL1271_RX_DESC_SUCCESS          0x00
 #define WL1271_RX_DESC_DECRYPT_FAIL     0x01
 #define WL1271_RX_DESC_MIC_FAIL         0x02
 #define WL1271_RX_DESC_DRIVER_RX_Q_FAIL 0x03
 
-#define RX_MEM_BLOCK_MASK     0xFF
-#define RX_BUF_SIZE_MASK      0xFFF00
-#define RX_BUF_SIZE_SHIFT_DIV 6
+#define RX_MEM_BLOCK_MASK            0xFF
+#define RX_BUF_SIZE_MASK             0xFFF00
+#define RX_BUF_SIZE_SHIFT_DIV        6
+/* If set, the start of IP payload is not 4 bytes aligned */
+#define RX_BUF_UNALIGNED_PAYLOAD     BIT(20)
+
+enum {
+	WL12XX_RX_CLASS_UNKNOWN,
+	WL12XX_RX_CLASS_MANAGEMENT,
+	WL12XX_RX_CLASS_DATA,
+	WL12XX_RX_CLASS_QOS_DATA,
+	WL12XX_RX_CLASS_BCN_PRBRSP,
+	WL12XX_RX_CLASS_EAPOL,
+	WL12XX_RX_CLASS_BA_EVENT,
+	WL12XX_RX_CLASS_AMSDU,
+	WL12XX_RX_CLASS_LOGGER,
+};
 
 struct wl1271_rx_descriptor {
 	__le16 length;
@@ -110,12 +121,12 @@ struct wl1271_rx_descriptor {
 	u8  snr;
 	__le32 timestamp;
 	u8  packet_class;
-	u8  process_id;
+	u8  hlid;
 	u8  pad_len;
 	u8  reserved;
 } __packed;
 
-void wl1271_rx(struct wl1271 *wl, struct wl1271_fw_status *status);
+void wl12xx_rx(struct wl1271 *wl, struct wl12xx_fw_status *status);
 u8 wl1271_rate_to_idx(int rate, enum ieee80211_band band);
 
 #endif

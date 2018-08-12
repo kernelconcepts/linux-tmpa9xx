@@ -295,7 +295,7 @@ static void iommu_free(struct iommu_table *tbl, dma_addr_t dma_addr,
 
 	/* were we called with bad_dma_address? */
 	badend = DMA_ERROR_CODE + (EMERGENCY_PAGES * PAGE_SIZE);
-	if (unlikely((dma_addr >= DMA_ERROR_CODE) && (dma_addr < badend))) {
+	if (unlikely(dma_addr < badend)) {
 		WARN(1, KERN_ERR "Calgary: driver tried unmapping bad DMA "
 		       "address 0x%Lx\n", dma_addr);
 		return;
@@ -1279,7 +1279,7 @@ static int __init calgary_bus_has_devices(int bus, unsigned short pci_dev)
 
 	if (pci_dev == PCI_DEVICE_ID_IBM_CALIOC2) {
 		/*
-		 * FIXME: properly scan for devices accross the
+		 * FIXME: properly scan for devices across the
 		 * PCI-to-PCI bridge on every CalIOC2 port.
 		 */
 		return 1;
@@ -1295,7 +1295,7 @@ static int __init calgary_bus_has_devices(int bus, unsigned short pci_dev)
 
 /*
  * calgary_init_bitmap_from_tce_table():
- * Funtion for kdump case. In the second/kdump kernel initialize
+ * Function for kdump case. In the second/kdump kernel initialize
  * the bitmap based on the tce table entries obtained from first kernel
  */
 static void calgary_init_bitmap_from_tce_table(struct iommu_table *tbl)
@@ -1553,7 +1553,7 @@ static void __init calgary_fixup_one_tce_space(struct pci_dev *dev)
 			continue;
 
 		/* cover the whole region */
-		npages = (r->end - r->start) >> PAGE_SHIFT;
+		npages = resource_size(r) >> PAGE_SHIFT;
 		npages++;
 
 		iommu_range_reserve(tbl, r->start, npages);

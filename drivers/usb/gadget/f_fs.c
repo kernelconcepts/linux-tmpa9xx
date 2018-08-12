@@ -12,15 +12,6 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 
@@ -29,6 +20,7 @@
 
 #include <linux/blkdev.h>
 #include <linux/pagemap.h>
+#include <linux/export.h>
 #include <asm/unaligned.h>
 
 #include <linux/usb/composite.h>
@@ -367,6 +359,14 @@ static int __ffs_ep0_queue_wait(struct ffs_data *ffs, char *data, size_t len)
 
 	req->buf      = data;
 	req->length   = len;
+
+	/*
+	 * UDC layer requires to provide a buffer even for ZLP, but should
+	 * not use it at all. Let's provide some poisoned pointer to catch
+	 * possible bug in the driver.
+	 */
+	if (req->buf == NULL)
+		req->buf = (void *)0xDEADBABE;
 
 	INIT_COMPLETION(ffs->ep0req_completion);
 
@@ -712,7 +712,7 @@ static long ffs_ep0_ioctl(struct file *file, unsigned code, unsigned long value)
 	if (code == FUNCTIONFS_INTERFACE_REVMAP) {
 		struct ffs_function *func = ffs->func;
 		ret = func ? ffs_func_revmap_intf(func, value) : -ENODEV;
-	} else if (gadget->ops->ioctl) {
+	} else if (gadget && gadget->ops->ioctl) {
 		ret = gadget->ops->ioctl(gadget, code, value);
 	} else {
 		ret = -ENOTTY;
@@ -1376,11 +1376,13 @@ static int functionfs_bind(struct ffs_data *ffs, struct usb_composite_dev *cdev)
 	ffs->ep0req->context = ffs;
 
 	lang = ffs->stringtabs;
-	for (lang = ffs->stringtabs; *lang; ++lang) {
-		struct usb_string *str = (*lang)->strings;
-		int id = first_id;
-		for (; str->s; ++id, ++str)
-			str->id = id;
+	if (lang) {
+		for (; *lang; ++lang) {
+			struct usb_string *str = (*lang)->strings;
+			int id = first_id;
+			for (; str->s; ++id, ++str)
+				str->id = id;
+		}
 	}
 
 	ffs->gadget = cdev->gadget;
@@ -1536,7 +1538,8 @@ static int ffs_func_eps_enable(struct ffs_function *func)
 		ds = ep->descs[ep->descs[1] ? 1 : 0];
 
 		ep->ep->driver_data = ep;
-		ret = usb_ep_enable(ep->ep, ds);
+		ep->ep->desc = ds;
+		ret = usb_ep_enable(ep->ep);
 		if (likely(!ret)) {
 			epfile->ep = ep;
 			epfile->in = usb_endpoint_dir_in(ds);
@@ -2162,7 +2165,7 @@ static int ffs_func_bind(struct usb_configuration *c,
 	const int high = gadget_is_dualspeed(func->gadget) &&
 		func->ffs->hs_descs_count;
 
-	int ret;
+	int ret, i;
 
 	/* Make it a single chunk, less management later on */
 	struct {
@@ -2191,8 +2194,8 @@ static int ffs_func_bind(struct usb_configuration *c,
 	memset(data->eps, 0, sizeof data->eps);
 	memcpy(data->raw_descs, ffs->raw_descs + 16, sizeof data->raw_descs);
 	memset(data->inums, 0xff, sizeof data->inums);
-	for (ret = ffs->eps_count; ret; --ret)
-		data->eps[ret].num = -1;
+	for (i = 0; i < ffs->eps_count; i++)
+		data->eps[i].num = -1;
 
 	/* Save pointers */
 	func->eps             = data->eps;

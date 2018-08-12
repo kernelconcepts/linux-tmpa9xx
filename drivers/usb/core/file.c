@@ -26,6 +26,7 @@
 #define MAX_USB_MINORS	256
 static const struct file_operations *usb_minors[MAX_USB_MINORS];
 static DECLARE_RWSEM(minor_rwsem);
+static DEFINE_MUTEX(init_usb_class_mutex);
 
 static int usb_open(struct inode * inode, struct file * file)
 {
@@ -116,8 +117,9 @@ static void release_usb_class(struct kref *kref)
 
 static void destroy_usb_class(void)
 {
-	if (usb_class)
-		kref_put(&usb_class->kref, release_usb_class);
+	mutex_lock(&init_usb_class_mutex);
+	kref_put(&usb_class->kref, release_usb_class);
+	mutex_unlock(&init_usb_class_mutex);
 }
 
 int usb_major_init(void)
@@ -179,7 +181,10 @@ int usb_register_dev(struct usb_interface *intf,
 	if (intf->minor >= 0)
 		return -EADDRINUSE;
 
+	mutex_lock(&init_usb_class_mutex);
 	retval = init_usb_class();
+	mutex_unlock(&init_usb_class_mutex);
+
 	if (retval)
 		return retval;
 
@@ -236,13 +241,6 @@ EXPORT_SYMBOL_GPL(usb_register_dev);
 void usb_deregister_dev(struct usb_interface *intf,
 			struct usb_class_driver *class_driver)
 {
-	int minor_base = class_driver->minor_base;
-	char name[20];
-
-#ifdef CONFIG_USB_DYNAMIC_MINORS
-	minor_base = 0;
-#endif
-
 	if (intf->minor == -1)
 		return;
 
@@ -252,7 +250,6 @@ void usb_deregister_dev(struct usb_interface *intf,
 	usb_minors[intf->minor] = NULL;
 	up_write(&minor_rwsem);
 
-	snprintf(name, sizeof(name), class_driver->name, intf->minor - minor_base);
 	device_destroy(usb_class->class, MKDEV(USB_MAJOR, intf->minor));
 	intf->usb_dev = NULL;
 	intf->minor = -1;

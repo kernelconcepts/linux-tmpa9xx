@@ -25,14 +25,12 @@
 
 /*
  * WARNING: This controller is attached to System Bus 2 of the PXA which
- * needs its arbiter to be enabled explictly (CKENB & 1<<9).
+ * needs its arbiter to be enabled explicitly (CKENB & 1<<9).
  * There is currently no way to do this from Linux, so you need to teach
  * your bootloader for now.
  */
 
 #include <linux/module.h>
-#include <linux/version.h>
-
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
 #include <linux/miscdevice.h>
@@ -678,7 +676,7 @@ pxa3xx_gcu_probe(struct platform_device *dev)
 	}
 
 	ret = request_irq(irq, pxa3xx_gcu_handle_irq,
-			  IRQF_DISABLED, DRV_NAME, priv);
+			  0, DRV_NAME, priv);
 	if (ret) {
 		dev_err(&dev->dev, "request_irq failed\n");
 		ret = -EBUSY;

@@ -12,7 +12,7 @@
 
 #undef DEBUG
 
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/string.h>
 #include <linux/sched.h>
 #include <linux/init.h>
@@ -62,6 +62,8 @@
 #include <asm/udbg.h>
 #include <asm/kexec.h>
 #include <asm/mmu_context.h>
+#include <asm/code-patching.h>
+#include <asm/kvm_ppc.h>
 
 #include "setup.h"
 
@@ -72,6 +74,7 @@
 #endif
 
 int boot_cpuid = 0;
+int spinning_secondaries;
 u64 ppc64_pft_size;
 
 /* Pick defaults since we might want to patch instructions
@@ -233,6 +236,7 @@ void early_setup_secondary(void)
 void smp_release_cpus(void)
 {
 	unsigned long *ptr;
+	int i;
 
 	DBG(" -> smp_release_cpus()\n");
 
@@ -245,7 +249,16 @@ void smp_release_cpus(void)
 	ptr  = (unsigned long *)((unsigned long)&__secondary_hold_spinloop
 			- PHYSICAL_START);
 	*ptr = __pa(generic_secondary_smp_init);
-	mb();
+
+	/* And wait a bit for them to catch up */
+	for (i = 0; i < 100000; i++) {
+		mb();
+		HMT_low();
+		if (spinning_secondaries == 0)
+			break;
+		udelay(1);
+	}
+	DBG("spinning_secondaries = %d\n", spinning_secondaries);
 
 	DBG(" <- smp_release_cpus()\n");
 }
@@ -265,14 +278,14 @@ static void __init initialize_cache_info(void)
 
 	DBG(" -> initialize_cache_info()\n");
 
-	for (np = NULL; (np = of_find_node_by_type(np, "cpu"));) {
+	for_each_node_by_type(np, "cpu") {
 		num_cpus += 1;
 
-		/* We're assuming *all* of the CPUs have the same
+		/*
+		 * We're assuming *all* of the CPUs have the same
 		 * d-cache and i-cache sizes... -Peter
 		 */
-
-		if ( num_cpus == 1 ) {
+		if (num_cpus == 1) {
 			const u32 *sizep, *lsizep;
 			u32 size, lsize;
 
@@ -281,10 +294,13 @@ static void __init initialize_cache_info(void)
 			sizep = of_get_property(np, "d-cache-size", NULL);
 			if (sizep != NULL)
 				size = *sizep;
-			lsizep = of_get_property(np, "d-cache-block-size", NULL);
+			lsizep = of_get_property(np, "d-cache-block-size",
+						 NULL);
 			/* fallback if block size missing */
 			if (lsizep == NULL)
-				lsizep = of_get_property(np, "d-cache-line-size", NULL);
+				lsizep = of_get_property(np,
+							 "d-cache-line-size",
+							 NULL);
 			if (lsizep != NULL)
 				lsize = *lsizep;
 			if (sizep == 0 || lsizep == 0)
@@ -301,9 +317,12 @@ static void __init initialize_cache_info(void)
 			sizep = of_get_property(np, "i-cache-size", NULL);
 			if (sizep != NULL)
 				size = *sizep;
-			lsizep = of_get_property(np, "i-cache-block-size", NULL);
+			lsizep = of_get_property(np, "i-cache-block-size",
+						 NULL);
 			if (lsizep == NULL)
-				lsizep = of_get_property(np, "i-cache-line-size", NULL);
+				lsizep = of_get_property(np,
+							 "i-cache-line-size",
+							 NULL);
 			if (lsizep != NULL)
 				lsize = *lsizep;
 			if (sizep == 0 || lsizep == 0)
@@ -340,6 +359,7 @@ void __init setup_system(void)
 			  &__start___fw_ftr_fixup, &__stop___fw_ftr_fixup);
 	do_lwsync_fixups(cur_cpu_spec->cpu_features,
 			 &__start___lwsync_fixup, &__stop___lwsync_fixup);
+	do_final_fixups();
 
 	/*
 	 * Unflatten the device-tree passed by prom_init or kexec
@@ -423,17 +443,30 @@ void __init setup_system(void)
 	DBG(" <- setup_system()\n");
 }
 
-static u64 slb0_limit(void)
+/* This returns the limit below which memory accesses to the linear
+ * mapping are guarnateed not to cause a TLB or SLB miss. This is
+ * used to allocate interrupt or emergency stacks for which our
+ * exception entry path doesn't deal with being interrupted.
+ */
+static u64 safe_stack_limit(void)
 {
-	if (cpu_has_feature(CPU_FTR_1T_SEGMENT)) {
+#ifdef CONFIG_PPC_BOOK3E
+	/* Freescale BookE bolts the entire linear mapping */
+	if (mmu_has_feature(MMU_FTR_TYPE_FSL_E))
+		return linear_map_top;
+	/* Other BookE, we assume the first GB is bolted */
+	return 1ul << 30;
+#else
+	/* BookS, the first segment is bolted */
+	if (mmu_has_feature(MMU_FTR_1T_SEGMENT))
 		return 1UL << SID_SHIFT_1T;
-	}
 	return 1UL << SID_SHIFT;
+#endif
 }
 
 static void __init irqstack_early_init(void)
 {
-	u64 limit = slb0_limit();
+	u64 limit = safe_stack_limit();
 	unsigned int i;
 
 	/*
@@ -453,6 +486,9 @@ static void __init irqstack_early_init(void)
 #ifdef CONFIG_PPC_BOOK3E
 static void __init exc_lvl_early_init(void)
 {
+	extern unsigned int interrupt_base_book3e;
+	extern unsigned int exc_debug_debug_book3e;
+
 	unsigned int i;
 
 	for_each_possible_cpu(i) {
@@ -463,10 +499,31 @@ static void __init exc_lvl_early_init(void)
 		mcheckirq_ctx[i] = (struct thread_info *)
 			__va(memblock_alloc(THREAD_SIZE, THREAD_SIZE));
 	}
+
+	if (cpu_has_feature(CPU_FTR_DEBUG_LVL_EXC))
+		patch_branch(&interrupt_base_book3e + (0x040 / 4) + 1,
+			     (unsigned long)&exc_debug_debug_book3e, 0);
 }
 #else
 #define exc_lvl_early_init()
 #endif
+
+/*
+ * Emergency stacks are used for a range of things, from asynchronous
+ * NMIs (system reset, machine check) to synchronous, process context.
+ * We set preempt_count to zero, even though that isn't necessarily correct. To
+ * get the right value we'd need to copy it from the previous thread_info, but
+ * doing that might fault causing more problems.
+ * TODO: what to do with accounting?
+ */
+static void emerg_stack_init_thread_info(struct thread_info *ti, int cpu)
+{
+	ti->task = NULL;
+	ti->cpu = cpu;
+	ti->preempt_count = 0;
+	ti->local_flags = 0;
+	ti->flags = 0;
+}
 
 /*
  * Stack space used when we detect a bad kernel stack pointer, and
@@ -485,12 +542,20 @@ static void __init emergency_stack_init(void)
 	 * Since we use these as temporary stacks during secondary CPU
 	 * bringup, we need to get at them in real mode. This means they
 	 * must also be within the RMO region.
+	 *
+	 * The IRQ stacks allocated elsewhere in this file are zeroed and
+	 * initialized in kernel/irq.c. These are initialized here in order
+	 * to have emergency stacks available as early as possible.
 	 */
-	limit = min(slb0_limit(), ppc64_rma_size);
+	limit = min(safe_stack_limit(), ppc64_rma_size);
 
 	for_each_possible_cpu(i) {
 		unsigned long sp;
+		struct thread_info *ti;
 		sp  = memblock_alloc_base(THREAD_SIZE, THREAD_SIZE, limit);
+		ti = __va(sp);
+		memset(ti, 0, THREAD_SIZE);
+		emerg_stack_init_thread_info(ti, i);
 		sp += THREAD_SIZE;
 		paca[i].emergency_sp = __va(sp);
 	}
@@ -547,6 +612,8 @@ void __init setup_arch(char **cmdline_p)
 
 	/* Initialize the MMU context management stuff */
 	mmu_context_init();
+
+	kvm_rma_init();
 
 	ppc64_boot_msg(0x15, "Setup Done");
 }

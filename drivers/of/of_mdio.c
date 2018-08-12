@@ -83,7 +83,6 @@ int of_mdiobus_register(struct mii_bus *mdio, struct device_node *np)
 				addr);
 			continue;
 		}
-		phy_scan_fixups(phy);
 
 		/* Associate the OF node with the device structure so it
 		 * can be looked up later */
@@ -136,7 +135,7 @@ EXPORT_SYMBOL(of_phy_find_device);
  * @hndlr: Link state callback for the network device
  * @iface: PHY data interface type
  *
- * Returns a pointer to the phy_device if successfull.  NULL otherwise
+ * Returns a pointer to the phy_device if successful.  NULL otherwise
  */
 struct phy_device *of_phy_connect(struct net_device *dev,
 				  struct device_node *phy_np,

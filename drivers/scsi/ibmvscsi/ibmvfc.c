@@ -717,7 +717,6 @@ static int ibmvfc_reset_crq(struct ibmvfc_host *vhost)
 	spin_lock_irqsave(vhost->host->host_lock, flags);
 	vhost->state = IBMVFC_NO_CRQ;
 	vhost->logged_in = 0;
-	ibmvfc_set_host_action(vhost, IBMVFC_HOST_ACTION_NONE);
 
 	/* Clean out the queue */
 	memset(crq->msgs, 0, PAGE_SIZE);
@@ -4306,8 +4305,8 @@ static void ibmvfc_do_work(struct ibmvfc_host *vhost)
 		spin_lock_irqsave(vhost->host->host_lock, flags);
 		if (rc == H_CLOSED)
 			vio_enable_interrupts(to_vio_dev(vhost->dev));
-		else if (rc || (rc = ibmvfc_send_crq_init(vhost)) ||
-			 (rc = vio_enable_interrupts(to_vio_dev(vhost->dev)))) {
+		if (rc || (rc = ibmvfc_send_crq_init(vhost)) ||
+		    (rc = vio_enable_interrupts(to_vio_dev(vhost->dev)))) {
 			ibmvfc_link_down(vhost, IBMVFC_LINK_DEAD);
 			dev_err(vhost->dev, "Error after reset (rc=%d)\n", rc);
 		}

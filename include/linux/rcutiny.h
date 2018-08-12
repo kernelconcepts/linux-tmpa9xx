@@ -27,8 +27,22 @@
 
 #include <linux/cache.h>
 
+#ifdef CONFIG_RCU_BOOST
 static inline void rcu_init(void)
 {
+}
+#else /* #ifdef CONFIG_RCU_BOOST */
+void rcu_init(void);
+#endif /* #else #ifdef CONFIG_RCU_BOOST */
+
+static inline void rcu_barrier_bh(void)
+{
+	wait_rcu_gp(call_rcu_bh);
+}
+
+static inline void rcu_barrier_sched(void)
+{
+	wait_rcu_gp(call_rcu_sched);
 }
 
 #ifdef CONFIG_TINY_RCU
@@ -45,8 +59,12 @@ static inline void rcu_barrier(void)
 
 #else /* #ifdef CONFIG_TINY_RCU */
 
-void rcu_barrier(void);
 void synchronize_rcu_expedited(void);
+
+static inline void rcu_barrier(void)
+{
+	wait_rcu_gp(call_rcu);
+}
 
 #endif /* #else #ifdef CONFIG_TINY_RCU */
 
@@ -97,6 +115,14 @@ static inline void rcu_note_context_switch(int cpu)
 {
 	rcu_sched_qs(cpu);
 	rcu_preempt_note_context_switch();
+}
+
+/*
+ * Take advantage of the fact that there is only one CPU, which
+ * allows us to ignore virtualization-based context switches.
+ */
+static inline void rcu_virt_note_context_switch(int cpu)
+{
 }
 
 /*

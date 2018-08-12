@@ -176,14 +176,8 @@ void sysv_set_inode(struct inode *inode, dev_t rdev)
 		inode->i_fop = &sysv_dir_operations;
 		inode->i_mapping->a_ops = &sysv_aops;
 	} else if (S_ISLNK(inode->i_mode)) {
-		if (inode->i_blocks) {
-			inode->i_op = &sysv_symlink_inode_operations;
-			inode->i_mapping->a_ops = &sysv_aops;
-		} else {
-			inode->i_op = &sysv_fast_symlink_inode_operations;
-			nd_terminate_link(SYSV_I(inode)->i_data, inode->i_size,
-				sizeof(SYSV_I(inode)->i_data) - 1);
-		}
+		inode->i_op = &sysv_symlink_inode_operations;
+		inode->i_mapping->a_ops = &sysv_aops;
 	} else
 		init_special_inode(inode, inode->i_mode, rdev);
 }
@@ -219,7 +213,7 @@ struct inode *sysv_iget(struct super_block *sb, unsigned int ino)
 	inode->i_mode = fs16_to_cpu(sbi, raw_inode->i_mode);
 	inode->i_uid = (uid_t)fs16_to_cpu(sbi, raw_inode->i_uid);
 	inode->i_gid = (gid_t)fs16_to_cpu(sbi, raw_inode->i_gid);
-	inode->i_nlink = fs16_to_cpu(sbi, raw_inode->i_nlink);
+	set_nlink(inode, fs16_to_cpu(sbi, raw_inode->i_nlink));
 	inode->i_size = fs32_to_cpu(sbi, raw_inode->i_size);
 	inode->i_atime.tv_sec = fs32_to_cpu(sbi, raw_inode->i_atime);
 	inode->i_mtime.tv_sec = fs32_to_cpu(sbi, raw_inode->i_mtime);

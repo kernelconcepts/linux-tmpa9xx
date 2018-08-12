@@ -24,11 +24,7 @@
 #include <linux/types.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
-
-#ifdef MODULE
 #include <linux/module.h>
-#endif
-
 #include <linux/device.h>
 #include <linux/init.h>
 #include <linux/moduleparam.h>
@@ -59,7 +55,6 @@
 #include <dspbridge/chnl.h>
 #include <dspbridge/proc.h>
 #include <dspbridge/dev.h>
-#include <dspbridge/drvdefs.h>
 #include <dspbridge/drv.h>
 
 #ifdef CONFIG_TIDSPBRIDGE_DVFS

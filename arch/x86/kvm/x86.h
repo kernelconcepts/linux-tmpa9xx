@@ -75,10 +75,68 @@ static inline u32 bit(int bitno)
 	return 1 << (bitno & 31);
 }
 
+static inline void vcpu_cache_mmio_info(struct kvm_vcpu *vcpu,
+					gva_t gva, gfn_t gfn, unsigned access)
+{
+	vcpu->arch.mmio_gva = gva & PAGE_MASK;
+	vcpu->arch.access = access;
+	vcpu->arch.mmio_gfn = gfn;
+	vcpu->arch.mmio_gen = kvm_memslots(vcpu->kvm)->generation;
+}
+
+static inline bool vcpu_match_mmio_gen(struct kvm_vcpu *vcpu)
+{
+	return vcpu->arch.mmio_gen == kvm_memslots(vcpu->kvm)->generation;
+}
+
+/*
+ * Clear the mmio cache info for the given gva. If gva is MMIO_GVA_ANY, we
+ * clear all mmio cache info.
+ */
+#define MMIO_GVA_ANY (~(gva_t)0)
+
+static inline void vcpu_clear_mmio_info(struct kvm_vcpu *vcpu, gva_t gva)
+{
+	if (gva != MMIO_GVA_ANY && vcpu->arch.mmio_gva != (gva & PAGE_MASK))
+		return;
+
+	vcpu->arch.mmio_gva = 0;
+}
+
+static inline bool vcpu_match_mmio_gva(struct kvm_vcpu *vcpu, unsigned long gva)
+{
+	if (vcpu_match_mmio_gen(vcpu) && vcpu->arch.mmio_gva &&
+	      vcpu->arch.mmio_gva == (gva & PAGE_MASK))
+		return true;
+
+	return false;
+}
+
+static inline bool vcpu_match_mmio_gpa(struct kvm_vcpu *vcpu, gpa_t gpa)
+{
+	if (vcpu_match_mmio_gen(vcpu) && vcpu->arch.mmio_gfn &&
+	      vcpu->arch.mmio_gfn == gpa >> PAGE_SHIFT)
+		return true;
+
+	return false;
+}
+
 void kvm_before_handle_nmi(struct kvm_vcpu *vcpu);
 void kvm_after_handle_nmi(struct kvm_vcpu *vcpu);
-int kvm_inject_realmode_interrupt(struct kvm_vcpu *vcpu, int irq);
+int kvm_inject_realmode_interrupt(struct kvm_vcpu *vcpu, int irq, int inc_eip);
 
 void kvm_write_tsc(struct kvm_vcpu *vcpu, u64 data);
+
+int kvm_read_guest_virt(struct x86_emulate_ctxt *ctxt,
+	gva_t addr, void *val, unsigned int bytes,
+	struct x86_exception *exception);
+
+int kvm_write_guest_virt_system(struct x86_emulate_ctxt *ctxt,
+	gva_t addr, void *val, unsigned int bytes,
+	struct x86_exception *exception);
+
+bool kvm_mtrr_valid(struct kvm_vcpu *vcpu, u32 msr, u64 data);
+
+extern unsigned int min_timer_period_us;
 
 #endif

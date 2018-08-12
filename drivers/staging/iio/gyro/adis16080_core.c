@@ -5,10 +5,6 @@
  *
  * Licensed under the GPL-2 or later.
  */
-
-#include <linux/interrupt.h>
-#include <linux/irq.h>
-#include <linux/gpio.h>
 #include <linux/delay.h>
 #include <linux/mutex.h>
 #include <linux/device.h>
@@ -16,209 +12,162 @@
 #include <linux/spi/spi.h>
 #include <linux/slab.h>
 #include <linux/sysfs.h>
-#include <linux/list.h>
+#include <linux/module.h>
 
 #include "../iio.h"
 #include "../sysfs.h"
-#include "gyro.h"
-#include "../adc/adc.h"
 
-#include "adis16080.h"
+#define ADIS16080_DIN_GYRO   (0 << 10) /* Gyroscope output */
+#define ADIS16080_DIN_TEMP   (1 << 10) /* Temperature output */
+#define ADIS16080_DIN_AIN1   (2 << 10)
+#define ADIS16080_DIN_AIN2   (3 << 10)
 
-#define DRIVER_NAME		"adis16080"
+/*
+ * 1: Write contents on DIN to control register.
+ * 0: No changes to control register.
+ */
 
-struct adis16080_state *adis16080_st;
+#define ADIS16080_DIN_WRITE  (1 << 15)
 
-int adis16080_spi_write(struct device *dev,
+/**
+ * struct adis16080_state - device instance specific data
+ * @us:			actual spi_device to write data
+ * @buf:		transmit or receive buffer
+ * @buf_lock:		mutex to protect tx and rx
+ **/
+struct adis16080_state {
+	struct spi_device		*us;
+	struct mutex			buf_lock;
+
+	u8 buf[2] ____cacheline_aligned;
+};
+
+static int adis16080_spi_write(struct iio_dev *indio_dev,
 		u16 val)
 {
 	int ret;
-	struct iio_dev *indio_dev = dev_get_drvdata(dev);
-	struct adis16080_state *st = iio_dev_get_devdata(indio_dev);
+	struct adis16080_state *st = iio_priv(indio_dev);
 
 	mutex_lock(&st->buf_lock);
-	st->tx[0] = val >> 8;
-	st->tx[1] = val;
+	st->buf[0] = val >> 8;
+	st->buf[1] = val;
 
-	ret = spi_write(st->us, st->tx, 2);
+	ret = spi_write(st->us, st->buf, 2);
 	mutex_unlock(&st->buf_lock);
 
 	return ret;
 }
 
-int adis16080_spi_read(struct device *dev,
-		u16 *val)
+static int adis16080_spi_read(struct iio_dev *indio_dev,
+			      u16 *val)
 {
 	int ret;
-	struct iio_dev *indio_dev = dev_get_drvdata(dev);
-	struct adis16080_state *st = iio_dev_get_devdata(indio_dev);
+	struct adis16080_state *st = iio_priv(indio_dev);
 
 	mutex_lock(&st->buf_lock);
 
-	ret = spi_read(st->us, st->rx, 2);
+	ret = spi_read(st->us, st->buf, 2);
 
 	if (ret == 0)
-		*val = ((st->rx[0] & 0xF) << 8) | st->rx[1];
+		*val = ((st->buf[0] & 0xF) << 8) | st->buf[1];
 	mutex_unlock(&st->buf_lock);
 
 	return ret;
 }
 
-static ssize_t adis16080_read(struct device *dev,
-		struct device_attribute *attr,
-		char *buf)
+static int adis16080_read_raw(struct iio_dev *indio_dev,
+			     struct iio_chan_spec const *chan,
+			     int *val,
+			     int *val2,
+			     long mask)
 {
-	struct iio_dev *indio_dev = dev_get_drvdata(dev);
-	u16 val;
-	ssize_t ret;
-
+	int ret = -EINVAL;
+	u16 ut = 0;
 	/* Take the iio_dev status lock */
+
 	mutex_lock(&indio_dev->mlock);
-	ret =  adis16080_spi_read(dev, &val);
+	switch (mask) {
+	case 0:
+		ret = adis16080_spi_write(indio_dev,
+					  chan->address |
+					  ADIS16080_DIN_WRITE);
+		if (ret < 0)
+			break;
+		ret = adis16080_spi_read(indio_dev, &ut);
+		if (ret < 0)
+			break;
+		*val = ut;
+		ret = IIO_VAL_INT;
+		break;
+	}
 	mutex_unlock(&indio_dev->mlock);
 
-	if (ret == 0)
-		return sprintf(buf, "%d\n", val);
-	else
-		return ret;
+	return ret;
 }
 
-static ssize_t adis16080_write(struct device *dev,
-		struct device_attribute *attr,
-		const char *buf,
-		size_t len)
-{
-	int ret;
-	long val;
-
-	ret = strict_strtol(buf, 16, &val);
-	if (ret)
-		goto error_ret;
-	ret = adis16080_spi_write(dev, val);
-
-error_ret:
-	return ret ? ret : len;
-}
-
-#define IIO_DEV_ATTR_IN(_show)				\
-	IIO_DEVICE_ATTR(in, S_IRUGO, _show, NULL, 0)
-
-#define IIO_DEV_ATTR_OUT(_store)				\
-	IIO_DEVICE_ATTR(out, S_IRUGO, NULL, _store, 0)
-
-static IIO_DEV_ATTR_IN(adis16080_read);
-static IIO_DEV_ATTR_OUT(adis16080_write);
-
-static IIO_CONST_ATTR(name, "adis16080");
-
-static struct attribute *adis16080_event_attributes[] = {
-	NULL
+static const struct iio_chan_spec adis16080_channels[] = {
+	{
+		.type = IIO_ANGL_VEL,
+		.modified = 1,
+		.channel2 = IIO_MOD_Z,
+		.address = ADIS16080_DIN_GYRO,
+	}, {
+		.type = IIO_VOLTAGE,
+		.indexed = 1,
+		.channel = 0,
+		.address = ADIS16080_DIN_AIN1,
+	}, {
+		.type = IIO_VOLTAGE,
+		.indexed = 1,
+		.channel = 1,
+		.address = ADIS16080_DIN_AIN2,
+	}, {
+		.type = IIO_TEMP,
+		.indexed = 1,
+		.channel = 0,
+		.address = ADIS16080_DIN_TEMP,
+	}
 };
 
-static struct attribute_group adis16080_event_attribute_group = {
-	.attrs = adis16080_event_attributes,
-};
-
-static struct attribute *adis16080_attributes[] = {
-	&iio_dev_attr_in.dev_attr.attr,
-	&iio_dev_attr_out.dev_attr.attr,
-	&iio_const_attr_name.dev_attr.attr,
-	NULL
-};
-
-static const struct attribute_group adis16080_attribute_group = {
-	.attrs = adis16080_attributes,
+static const struct iio_info adis16080_info = {
+	.read_raw = &adis16080_read_raw,
+	.driver_module = THIS_MODULE,
 };
 
 static int __devinit adis16080_probe(struct spi_device *spi)
 {
-	int ret, regdone = 0;
-	struct adis16080_state *st = kzalloc(sizeof *st, GFP_KERNEL);
-	if (!st) {
-		ret =  -ENOMEM;
+	int ret;
+	struct adis16080_state *st;
+	struct iio_dev *indio_dev;
+
+	/* setup the industrialio driver allocated elements */
+	indio_dev = iio_allocate_device(sizeof(*st));
+	if (indio_dev == NULL) {
+		ret = -ENOMEM;
 		goto error_ret;
 	}
+	st = iio_priv(indio_dev);
 	/* this is only used for removal purposes */
-	spi_set_drvdata(spi, st);
+	spi_set_drvdata(spi, indio_dev);
 
 	/* Allocate the comms buffers */
-	st->rx = kzalloc(sizeof(*st->rx)*ADIS16080_MAX_RX, GFP_KERNEL);
-	if (st->rx == NULL) {
-		ret = -ENOMEM;
-		goto error_free_st;
-	}
-	st->tx = kzalloc(sizeof(*st->tx)*ADIS16080_MAX_TX, GFP_KERNEL);
-	if (st->tx == NULL) {
-		ret = -ENOMEM;
-		goto error_free_rx;
-	}
 	st->us = spi;
 	mutex_init(&st->buf_lock);
-	/* setup the industrialio driver allocated elements */
-	st->indio_dev = iio_allocate_device();
-	if (st->indio_dev == NULL) {
-		ret = -ENOMEM;
-		goto error_free_tx;
-	}
 
-	st->indio_dev->dev.parent = &spi->dev;
-	st->indio_dev->num_interrupt_lines = 1;
-	st->indio_dev->event_attrs = &adis16080_event_attribute_group;
-	st->indio_dev->attrs = &adis16080_attribute_group;
-	st->indio_dev->dev_data = (void *)(st);
-	st->indio_dev->driver_module = THIS_MODULE;
-	st->indio_dev->modes = INDIO_DIRECT_MODE;
+	indio_dev->name = spi->dev.driver->name;
+	indio_dev->channels = adis16080_channels;
+	indio_dev->num_channels = ARRAY_SIZE(adis16080_channels);
+	indio_dev->dev.parent = &spi->dev;
+	indio_dev->info = &adis16080_info;
+	indio_dev->modes = INDIO_DIRECT_MODE;
 
-	ret = adis16080_configure_ring(st->indio_dev);
+	ret = iio_device_register(indio_dev);
 	if (ret)
 		goto error_free_dev;
-
-	ret = iio_device_register(st->indio_dev);
-	if (ret)
-		goto error_unreg_ring_funcs;
-	regdone = 1;
-
-	ret = adis16080_initialize_ring(st->indio_dev->ring);
-	if (ret) {
-		printk(KERN_ERR "failed to initialize the ring\n");
-		goto error_unreg_ring_funcs;
-	}
-
-	if (spi->irq && gpio_is_valid(irq_to_gpio(spi->irq)) > 0) {
-		ret = iio_register_interrupt_line(spi->irq,
-				st->indio_dev,
-				0,
-				IRQF_TRIGGER_RISING,
-				"adis16080");
-		if (ret)
-			goto error_uninitialize_ring;
-
-		ret = adis16080_probe_trigger(st->indio_dev);
-		if (ret)
-			goto error_unregister_line;
-	}
-
-	adis16080_st = st;
 	return 0;
 
-error_unregister_line:
-	if (st->indio_dev->modes & INDIO_RING_TRIGGERED)
-		iio_unregister_interrupt_line(st->indio_dev, 0);
-error_uninitialize_ring:
-	adis16080_uninitialize_ring(st->indio_dev->ring);
-error_unreg_ring_funcs:
-	adis16080_unconfigure_ring(st->indio_dev);
 error_free_dev:
-	if (regdone)
-		iio_device_unregister(st->indio_dev);
-	else
-		iio_free_device(st->indio_dev);
-error_free_tx:
-	kfree(st->tx);
-error_free_rx:
-	kfree(st->rx);
-error_free_st:
-	kfree(st);
+	iio_free_device(indio_dev);
 error_ret:
 	return ret;
 }
@@ -226,21 +175,8 @@ error_ret:
 /* fixme, confirm ordering in this function */
 static int adis16080_remove(struct spi_device *spi)
 {
-	struct adis16080_state *st = spi_get_drvdata(spi);
-	struct iio_dev *indio_dev = st->indio_dev;
-
-	flush_scheduled_work();
-
-	adis16080_remove_trigger(indio_dev);
-	if (spi->irq && gpio_is_valid(irq_to_gpio(spi->irq)) > 0)
-		iio_unregister_interrupt_line(indio_dev, 0);
-
-	adis16080_uninitialize_ring(indio_dev->ring);
-	adis16080_unconfigure_ring(indio_dev);
-	iio_device_unregister(indio_dev);
-	kfree(st->tx);
-	kfree(st->rx);
-	kfree(st);
+	iio_device_unregister(spi_get_drvdata(spi));
+	iio_free_device(spi_get_drvdata(spi));
 
 	return 0;
 }
@@ -267,5 +203,5 @@ static __exit void adis16080_exit(void)
 module_exit(adis16080_exit);
 
 MODULE_AUTHOR("Barry Song <21cnbao@gmail.com>");
-MODULE_DESCRIPTION("Analog Devices ADIS16080/100 Yaw Rate Gyroscope with SPI driver");
+MODULE_DESCRIPTION("Analog Devices ADIS16080/100 Yaw Rate Gyroscope Driver");
 MODULE_LICENSE("GPL v2");

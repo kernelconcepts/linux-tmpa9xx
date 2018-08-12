@@ -8,7 +8,7 @@
  * with minor modifications, see there for credits.
  */
 
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/sched.h>
@@ -230,7 +230,8 @@ static void pci_parse_of_addrs(struct platform_device *op,
 			res = &dev->resource[(i - PCI_BASE_ADDRESS_0) >> 2];
 		} else if (i == dev->rom_base_reg) {
 			res = &dev->resource[PCI_ROM_RESOURCE];
-			flags |= IORESOURCE_READONLY | IORESOURCE_CACHEABLE;
+			flags |= IORESOURCE_READONLY | IORESOURCE_CACHEABLE
+			      | IORESOURCE_SIZEALIGN;
 		} else {
 			printk(KERN_ERR "PCI: bad cfg reg num 0x%x\n", i);
 			continue;
@@ -284,7 +285,7 @@ static struct pci_dev *of_create_pci_dev(struct pci_pbm_info *pbm,
 	dev->sysdata = node;
 	dev->dev.parent = bus->bridge;
 	dev->dev.bus = &pci_bus_type;
-	dev->dev.of_node = node;
+	dev->dev.of_node = of_node_get(node);
 	dev->devfn = devfn;
 	dev->multifunction = 0;		/* maybe a lie? */
 	set_pcie_port_type(dev);
@@ -486,8 +487,8 @@ static void __devinit apb_fake_ranges(struct pci_dev *dev,
 	pci_read_config_byte(dev, APB_MEM_ADDRESS_MAP, &map);
 	apb_calc_first_last(map, &first, &last);
 	res = bus->resource[1];
-	res->start = (first << 21);
-	res->end = (last << 21) + ((1 << 21) - 1);
+	res->start = (first << 29);
+	res->end = (last << 29) + ((1 << 29) - 1);
 	res->flags = IORESOURCE_MEM;
 	pci_resource_adjust(res, &pbm->mem_space);
 }
@@ -675,6 +676,7 @@ static void __devinit pci_bus_register_of_sysfs(struct pci_bus *bus)
 		 * humanoid.
 		 */
 		err = sysfs_create_file(&dev->dev.kobj, &dev_attr_obppath.attr);
+		(void) err;
 	}
 	list_for_each_entry(child_bus, &bus->children, node)
 		pci_bus_register_of_sysfs(child_bus);
@@ -819,11 +821,9 @@ static int __pci_mmap_make_offset_bus(struct pci_dev *pdev, struct vm_area_struc
 	unsigned long space_size, user_offset, user_size;
 
 	if (mmap_state == pci_mmap_io) {
-		space_size = (pbm->io_space.end -
-			      pbm->io_space.start) + 1;
+		space_size = resource_size(&pbm->io_space);
 	} else {
-		space_size = (pbm->mem_space.end -
-			      pbm->mem_space.start) + 1;
+		space_size = resource_size(&pbm->mem_space);
 	}
 
 	/* Make sure the request is in range. */
@@ -1001,30 +1001,24 @@ EXPORT_SYMBOL(pci_domain_nr);
 int arch_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc)
 {
 	struct pci_pbm_info *pbm = pdev->dev.archdata.host_controller;
-	unsigned int virt_irq;
+	unsigned int irq;
 
 	if (!pbm->setup_msi_irq)
 		return -EINVAL;
 
-	return pbm->setup_msi_irq(&virt_irq, pdev, desc);
+	return pbm->setup_msi_irq(&irq, pdev, desc);
 }
 
-void arch_teardown_msi_irq(unsigned int virt_irq)
+void arch_teardown_msi_irq(unsigned int irq)
 {
-	struct msi_desc *entry = get_irq_msi(virt_irq);
+	struct msi_desc *entry = irq_get_msi_desc(irq);
 	struct pci_dev *pdev = entry->dev;
 	struct pci_pbm_info *pbm = pdev->dev.archdata.host_controller;
 
 	if (pbm->teardown_msi_irq)
-		pbm->teardown_msi_irq(virt_irq, pdev);
+		pbm->teardown_msi_irq(irq, pdev);
 }
 #endif /* !(CONFIG_PCI_MSI) */
-
-struct device_node *pci_device_to_OF_node(struct pci_dev *pdev)
-{
-	return pdev->dev.of_node;
-}
-EXPORT_SYMBOL(pci_device_to_OF_node);
 
 static void ali_sound_dma_hack(struct pci_dev *pdev, int set_bit)
 {

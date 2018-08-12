@@ -284,7 +284,7 @@ static void esd_usb2_rx_event(struct esd_usb2_net_priv *priv,
 				break;
 			}
 
-			/* Error occured during transmission? */
+			/* Error occurred during transmission? */
 			if (!(ecc & SJA1000_ECC_DIR))
 				cf->data[2] |= CAN_ERR_PROT_TX;
 
@@ -332,7 +332,7 @@ static void esd_usb2_rx_can_msg(struct esd_usb2_net_priv *priv,
 		}
 
 		cf->can_id = id & ESD_IDMASK;
-		cf->can_dlc = get_can_dlc(msg->msg.rx.dlc);
+		cf->can_dlc = get_can_dlc(msg->msg.rx.dlc & ~ESD_RTR);
 
 		if (id & ESD_EXTID)
 			cf->can_id |= CAN_EFF_FLAG;
@@ -393,6 +393,8 @@ static void esd_usb2_read_bulk_callback(struct urb *urb)
 		break;
 
 	case -ENOENT:
+	case -EPIPE:
+	case -EPROTO:
 	case -ESHUTDOWN:
 		return;
 
@@ -659,7 +661,7 @@ failed:
 static void unlink_all_urbs(struct esd_usb2 *dev)
 {
 	struct esd_usb2_net_priv *priv;
-	int i;
+	int i, j;
 
 	usb_kill_anchored_urbs(&dev->rx_submitted);
 	for (i = 0; i < dev->net_count; i++) {
@@ -668,8 +670,8 @@ static void unlink_all_urbs(struct esd_usb2 *dev)
 			usb_kill_anchored_urbs(&priv->tx_submitted);
 			atomic_set(&priv->active_tx_jobs, 0);
 
-			for (i = 0; i < MAX_TX_URBS; i++)
-				priv->tx_contexts[i].echo_index = MAX_TX_URBS;
+			for (j = 0; j < MAX_TX_URBS; j++)
+				priv->tx_contexts[j].echo_index = MAX_TX_URBS;
 		}
 	}
 }
@@ -1097,6 +1099,7 @@ static void esd_usb2_disconnect(struct usb_interface *intf)
 			}
 		}
 		unlink_all_urbs(dev);
+		kfree(dev);
 	}
 }
 

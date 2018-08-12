@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2004 Ulf Eklund
  *
- * Based on the saa7115 driver and on the first verison of Chris Kennedy's
+ * Based on the saa7115 driver and on the first version of Chris Kennedy's
  * cx25840 driver.
  *
  * Changes by Tyler Trafford <tatrafford@comcast.net>
@@ -445,7 +445,7 @@ static void cx25840_initialize(struct i2c_client *client)
 	cx25840_write(client, 0x918, 0xa0);
 	cx25840_write(client, 0x919, 0x01);
 
-	/* stereo prefered */
+	/* stereo preferred */
 	cx25840_write(client, 0x809, 0x04);
 	/* AC97 shift */
 	cx25840_write(client, 0x8cf, 0x0f);
@@ -546,7 +546,7 @@ static void cx23885_initialize(struct i2c_client *client)
 	 * Aux PLL
 	 * Initial setup for audio sample clock:
 	 * 48 ksps, 16 bits/sample, x160 multiplier = 122.88 MHz
-	 * Intial I2S output/master clock(?):
+	 * Initial I2S output/master clock(?):
 	 * 48 ksps, 16 bits/sample, x16 multiplier = 12.288 MHz
 	 */
 	switch (state->id) {
@@ -702,6 +702,13 @@ static void cx231xx_initialize(struct i2c_client *client)
 
 	/* start microcontroller */
 	cx25840_and_or(client, 0x803, ~0x10, 0x10);
+
+	/* CC raw enable */
+	cx25840_write(client, 0x404, 0x0b);
+
+	/* CC on */
+	cx25840_write(client, 0x42f, 0x66);
+	cx25840_write4(client, 0x474, 0x1e1e601a);
 }
 
 /* ----------------------------------------------------------------------- */
@@ -903,7 +910,7 @@ static void input_change(struct i2c_client *client)
 	} else if (std & V4L2_STD_PAL) {
 		/* Autodetect audio standard and audio system */
 		cx25840_write(client, 0x808, 0xff);
-		/* Since system PAL-L is pretty much non-existant and
+		/* Since system PAL-L is pretty much non-existent and
 		   not used by any public broadcast network, force
 		   6.5 MHz carrier to be interpreted as System DK,
 		   this avoids DK audio detection instability */
@@ -1065,6 +1072,18 @@ static int set_input(struct i2c_client *client, enum cx25840_video_input vid_inp
 		 */
 		cx25840_write(client, 0x918, 0xa0);
 		cx25840_write(client, 0x919, 0x01);
+	}
+
+	if (is_cx2388x(state) && ((aud_input == CX25840_AUDIO7) ||
+		(aud_input == CX25840_AUDIO6))) {
+		/* Configure audio from LR1 or LR2 input */
+		cx25840_write4(client, 0x910, 0);
+		cx25840_write4(client, 0x8d0, 0x63073);
+	} else
+	if (is_cx2388x(state) && (aud_input == CX25840_AUDIO8)) {
+		/* Configure audio from tuner/sif input */
+		cx25840_write4(client, 0x910, 0x12b000c9);
+		cx25840_write4(client, 0x8d0, 0x1f063870);
 	}
 
 	return 0;
@@ -1851,7 +1870,7 @@ static u32 get_cx2388x_ident(struct i2c_client *client)
 			ret = V4L2_IDENT_CX23885_AV;
 		} else {
 			/* CX23887 has a broken DIF, but the registers
-			 * appear valid (but unsed), good enough to detect. */
+			 * appear valid (but unused), good enough to detect. */
 			ret = V4L2_IDENT_CX23887_AV;
 		}
 	} else if (cx25840_read4(client, 0x300) & 0x0fffffff) {

@@ -578,8 +578,7 @@ static int __jffs2_flush_wbuf(struct jffs2_sb_info *c, int pad)
 	if (!jffs2_is_writebuffered(c))
 		return 0;
 
-	if (mutex_trylock(&c->alloc_sem)) {
-		mutex_unlock(&c->alloc_sem);
+	if (!mutex_is_locked(&c->alloc_sem)) {
 		printk(KERN_CRIT "jffs2_flush_wbuf() called with alloc_sem not locked!\n");
 		BUG();
 	}
@@ -1026,18 +1025,18 @@ int jffs2_check_oob_empty(struct jffs2_sb_info *c,
 	int cmlen = min_t(int, c->oobavail, OOB_CM_SIZE);
 	struct mtd_oob_ops ops;
 
-	ops.mode = MTD_OOB_AUTO;
+	ops.mode = MTD_OPS_AUTO_OOB;
 	ops.ooblen = NR_OOB_SCAN_PAGES * c->oobavail;
 	ops.oobbuf = c->oobbuf;
 	ops.len = ops.ooboffs = ops.retlen = ops.oobretlen = 0;
 	ops.datbuf = NULL;
 
 	ret = c->mtd->read_oob(c->mtd, jeb->offset, &ops);
-	if (ret || ops.oobretlen != ops.ooblen) {
+	if ((ret && !mtd_is_bitflip(ret)) || ops.oobretlen != ops.ooblen) {
 		printk(KERN_ERR "cannot read OOB for EB at %08x, requested %zd"
 				" bytes, read %zd bytes, error %d\n",
 				jeb->offset, ops.ooblen, ops.oobretlen, ret);
-		if (!ret)
+		if (!ret || mtd_is_bitflip(ret))
 			ret = -EIO;
 		return ret;
 	}
@@ -1069,18 +1068,18 @@ int jffs2_check_nand_cleanmarker(struct jffs2_sb_info *c,
 	struct mtd_oob_ops ops;
 	int ret, cmlen = min_t(int, c->oobavail, OOB_CM_SIZE);
 
-	ops.mode = MTD_OOB_AUTO;
+	ops.mode = MTD_OPS_AUTO_OOB;
 	ops.ooblen = cmlen;
 	ops.oobbuf = c->oobbuf;
 	ops.len = ops.ooboffs = ops.retlen = ops.oobretlen = 0;
 	ops.datbuf = NULL;
 
 	ret = c->mtd->read_oob(c->mtd, jeb->offset, &ops);
-	if (ret || ops.oobretlen != ops.ooblen) {
+	if ((ret && !mtd_is_bitflip(ret)) || ops.oobretlen != ops.ooblen) {
 		printk(KERN_ERR "cannot read OOB for EB at %08x, requested %zd"
 				" bytes, read %zd bytes, error %d\n",
 				jeb->offset, ops.ooblen, ops.oobretlen, ret);
-		if (!ret)
+		if (!ret || mtd_is_bitflip(ret))
 			ret = -EIO;
 		return ret;
 	}
@@ -1095,7 +1094,7 @@ int jffs2_write_nand_cleanmarker(struct jffs2_sb_info *c,
 	struct mtd_oob_ops ops;
 	int cmlen = min_t(int, c->oobavail, OOB_CM_SIZE);
 
-	ops.mode = MTD_OOB_AUTO;
+	ops.mode = MTD_OPS_AUTO_OOB;
 	ops.ooblen = cmlen;
 	ops.oobbuf = (uint8_t *)&oob_cleanmarker;
 	ops.len = ops.ooboffs = ops.retlen = ops.oobretlen = 0;
@@ -1116,7 +1115,7 @@ int jffs2_write_nand_cleanmarker(struct jffs2_sb_info *c,
 
 /*
  * On NAND we try to mark this block bad. If the block was erased more
- * than MAX_ERASE_FAILURES we mark it finaly bad.
+ * than MAX_ERASE_FAILURES we mark it finally bad.
  * Don't care about failures. This block remains on the erase-pending
  * or badblock list as long as nobody manipulates the flash with
  * a bootloader or something like that.

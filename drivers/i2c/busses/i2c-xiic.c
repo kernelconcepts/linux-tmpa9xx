@@ -21,7 +21,7 @@
  * to the automotive development board Russellville. The copyright holder
  * as seen in the header is Intel corporation.
  * Mocean Laboratories forked off the GNU/Linux platform work into a
- * separate company called Pelagicore AB, which commited the code to the
+ * separate company called Pelagicore AB, which committed the code to the
  * kernel.
  */
 
@@ -311,10 +311,8 @@ static void xiic_fill_tx_fifo(struct xiic_i2c *i2c)
 			/* last message in transfer -> STOP */
 			data |= XIIC_TX_DYN_STOP_MASK;
 			dev_dbg(i2c->adap.dev.parent, "%s TX STOP\n", __func__);
-
-			xiic_setreg16(i2c, XIIC_DTR_REG_OFFSET, data);
-		} else
-			xiic_setreg8(i2c, XIIC_DTR_REG_OFFSET, data);
+		}
+		xiic_setreg16(i2c, XIIC_DTR_REG_OFFSET, data);
 	}
 }
 

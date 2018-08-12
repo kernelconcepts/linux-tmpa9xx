@@ -13,7 +13,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/mmzone.h>
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/nodemask.h>
 #include <linux/cpu.h>
 #include <linux/notifier.h>
@@ -221,7 +221,7 @@ int __node_distance(int a, int b)
 	int distance = LOCAL_DISTANCE;
 
 	if (!form1_affinity)
-		return distance;
+		return ((a == b) ? LOCAL_DISTANCE : REMOTE_DISTANCE);
 
 	for (i = 0; i < distance_ref_points_depth; i++) {
 		if (distance_lookup_table[a][i] == distance_lookup_table[b][i])
@@ -311,14 +311,16 @@ EXPORT_SYMBOL_GPL(of_node_to_nid);
 static int __init find_min_common_depth(void)
 {
 	int depth;
-	struct device_node *rtas_root;
 	struct device_node *chosen;
+	struct device_node *root;
 	const char *vec5;
 
-	rtas_root = of_find_node_by_path("/rtas");
-
-	if (!rtas_root)
-		return -1;
+	if (firmware_has_feature(FW_FEATURE_OPAL))
+		root = of_find_node_by_path("/ibm,opal");
+	else
+		root = of_find_node_by_path("/rtas");
+	if (!root)
+		root = of_find_node_by_path("/");
 
 	/*
 	 * This property is a set of 32-bit integers, each representing
@@ -332,7 +334,7 @@ static int __init find_min_common_depth(void)
 	 * NUMA boundary and the following are progressively less significant
 	 * boundaries. There can be more than one level of NUMA.
 	 */
-	distance_ref_points = of_get_property(rtas_root,
+	distance_ref_points = of_get_property(root,
 					"ibm,associativity-reference-points",
 					&distance_ref_points_depth);
 
@@ -345,12 +347,19 @@ static int __init find_min_common_depth(void)
 
 #define VEC5_AFFINITY_BYTE	5
 #define VEC5_AFFINITY		0x80
-	chosen = of_find_node_by_path("/chosen");
-	if (chosen) {
-		vec5 = of_get_property(chosen, "ibm,architecture-vec-5", NULL);
-		if (vec5 && (vec5[VEC5_AFFINITY_BYTE] & VEC5_AFFINITY)) {
-			dbg("Using form 1 affinity\n");
-			form1_affinity = 1;
+
+	if (firmware_has_feature(FW_FEATURE_OPAL))
+		form1_affinity = 1;
+	else {
+		chosen = of_find_node_by_path("/chosen");
+		if (chosen) {
+			vec5 = of_get_property(chosen,
+					       "ibm,architecture-vec-5", NULL);
+			if (vec5 && (vec5[VEC5_AFFINITY_BYTE] &
+							VEC5_AFFINITY)) {
+				dbg("Using form 1 affinity\n");
+				form1_affinity = 1;
+			}
 		}
 	}
 
@@ -376,11 +385,11 @@ static int __init find_min_common_depth(void)
 		distance_ref_points_depth = MAX_DISTANCE_REF_POINTS;
 	}
 
-	of_node_put(rtas_root);
+	of_node_put(root);
 	return depth;
 
 err:
-	of_node_put(rtas_root);
+	of_node_put(root);
 	return -1;
 }
 
@@ -440,11 +449,11 @@ static void read_drconf_cell(struct of_drconf_cell *drmem, const u32 **cellp)
 }
 
 /*
- * Retreive and validate the ibm,dynamic-memory property of the device tree.
+ * Retrieve and validate the ibm,dynamic-memory property of the device tree.
  *
  * The layout of the ibm,dynamic-memory property is a number N of memblock
  * list entries followed by N memblock list entries.  Each memblock list entry
- * contains information as layed out in the of_drconf_cell struct above.
+ * contains information as laid out in the of_drconf_cell struct above.
  */
 static int of_get_drconf_memory(struct device_node *memory, const u32 **dm)
 {
@@ -468,7 +477,7 @@ static int of_get_drconf_memory(struct device_node *memory, const u32 **dm)
 }
 
 /*
- * Retreive and validate the ibm,lmb-size property for drconf memory
+ * Retrieve and validate the ibm,lmb-size property for drconf memory
  * from the device tree.
  */
 static u64 of_get_lmb_size(struct device_node *memory)
@@ -490,7 +499,7 @@ struct assoc_arrays {
 };
 
 /*
- * Retreive and validate the list of associativity arrays for drconf
+ * Retrieve and validate the list of associativity arrays for drconf
  * memory from the ibm,associativity-lookup-arrays property of the
  * device tree..
  *
@@ -591,8 +600,8 @@ static int __cpuinit cpu_numa_callback(struct notifier_block *nfb,
 	case CPU_UP_CANCELED:
 	case CPU_UP_CANCELED_FROZEN:
 		unmap_cpu_from_node(lcpu);
-		break;
 		ret = NOTIFY_OK;
+		break;
 #endif
 	}
 	return ret;
@@ -604,7 +613,7 @@ static int __cpuinit cpu_numa_callback(struct notifier_block *nfb,
  * Returns the size the region should have to enforce the memory limit.
  * This will either be the original value of size, a truncated value,
  * or zero. If the returned value of size is 0 the region should be
- * discarded as it lies wholy above the memory limit.
+ * discarded as it lies wholly above the memory limit.
  */
 static unsigned long __init numa_enforce_memory_limit(unsigned long start,
 						      unsigned long size)
@@ -710,8 +719,7 @@ static void __init parse_drconf_memory(struct device_node *memory)
 
 static int __init parse_numa_properties(void)
 {
-	struct device_node *cpu = NULL;
-	struct device_node *memory = NULL;
+	struct device_node *memory;
 	int default_nid = 0;
 	unsigned long i;
 
@@ -733,6 +741,7 @@ static int __init parse_numa_properties(void)
 	 * each node to be onlined must have NODE_DATA etc backing it.
 	 */
 	for_each_present_cpu(i) {
+		struct device_node *cpu;
 		int nid;
 
 		cpu = of_get_cpu_node(i, NULL);
@@ -751,8 +760,8 @@ static int __init parse_numa_properties(void)
 	}
 
 	get_n_mem_cells(&n_mem_addr_cells, &n_mem_size_cells);
-	memory = NULL;
-	while ((memory = of_find_node_by_type(memory, "memory")) != NULL) {
+
+	for_each_node_by_type(memory, "memory") {
 		unsigned long start;
 		unsigned long size;
 		int nid;
@@ -801,8 +810,9 @@ new_range:
 	}
 
 	/*
-	 * Now do the same thing for each MEMBLOCK listed in the ibm,dynamic-memory
-	 * property in the ibm,dynamic-reconfiguration-memory node.
+	 * Now do the same thing for each MEMBLOCK listed in the
+	 * ibm,dynamic-memory property in the
+	 * ibm,dynamic-reconfiguration-memory node.
 	 */
 	memory = of_find_node_by_path("/ibm,dynamic-reconfiguration-memory");
 	if (memory)
@@ -1188,10 +1198,10 @@ static int hot_add_drconf_scn_to_nid(struct device_node *memory,
  */
 int hot_add_node_scn_to_nid(unsigned long scn_addr)
 {
-	struct device_node *memory = NULL;
+	struct device_node *memory;
 	int nid = -1;
 
-	while ((memory = of_find_node_by_type(memory, "memory")) != NULL) {
+	for_each_node_by_type(memory, "memory") {
 		unsigned long start, size;
 		int ranges;
 		const unsigned int *memcell_buf;
@@ -1215,10 +1225,11 @@ int hot_add_node_scn_to_nid(unsigned long scn_addr)
 			break;
 		}
 
-		of_node_put(memory);
 		if (nid >= 0)
 			break;
 	}
+
+	of_node_put(memory);
 
 	return nid;
 }
@@ -1264,17 +1275,33 @@ int hot_add_scn_to_nid(unsigned long scn_addr)
 static u64 hot_add_drconf_memory_max(void)
 {
         struct device_node *memory = NULL;
+	struct device_node *dn = NULL;
         unsigned int drconf_cell_cnt = 0;
         u64 lmb_size = 0;
         const u32 *dm = 0;
+	const __be64 *lrdr = NULL;
+	struct of_drconf_cell drmem;
+
+	dn = of_find_node_by_path("/rtas");
+	if (dn) {
+		lrdr = of_get_property(dn, "ibm,lrdr-capacity", NULL);
+		of_node_put(dn);
+		if (lrdr)
+			return be64_to_cpup(lrdr);
+	}
 
         memory = of_find_node_by_path("/ibm,dynamic-reconfiguration-memory");
         if (memory) {
                 drconf_cell_cnt = of_get_drconf_memory(memory, &dm);
                 lmb_size = of_get_lmb_size(memory);
+
+		/* Advance to the last cell, each cell has 6 32 bit integers */
+		dm += (drconf_cell_cnt - 1) * 6;
+		read_drconf_cell(&drmem, &dm);
                 of_node_put(memory);
+		return drmem.base_addr + lmb_size;
         }
-        return lmb_size * drconf_cell_cnt;
+	return 0;
 }
 
 /*
@@ -1453,7 +1480,7 @@ int arch_update_cpu_topology(void)
 	unsigned int associativity[VPHN_ASSOC_BUFSIZE] = {0};
 	struct sys_device *sysdev;
 
-	for_each_cpu_mask(cpu, cpu_associativity_changes_mask) {
+	for_each_cpu(cpu,&cpu_associativity_changes_mask) {
 		vphn_get_associativity(cpu, associativity);
 		nid = associativity_to_nid(associativity);
 

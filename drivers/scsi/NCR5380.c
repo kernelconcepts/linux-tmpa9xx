@@ -936,8 +936,7 @@ static void NCR5380_exit(struct Scsi_Host *instance)
 {
 	struct NCR5380_hostdata *hostdata = (struct NCR5380_hostdata *) instance->hostdata;
 
-	cancel_delayed_work(&hostdata->coroutine);
-	flush_scheduled_work();
+	cancel_delayed_work_sync(&hostdata->coroutine);
 }
 
 /**
@@ -1199,12 +1198,12 @@ static irqreturn_t NCR5380_intr(int dummy, void *dev_id)
 				 */
 
 				if ((NCR5380_read(MODE_REG) & MR_DMA) && ((basr & BASR_END_DMA_TRANSFER) || !(basr & BASR_PHASE_MATCH))) {
-					int transfered;
+					int transferred;
 
 					if (!hostdata->connected)
 						panic("scsi%d : received end of DMA interrupt with no connected cmd\n", instance->hostno);
 
-					transfered = (hostdata->dmalen - NCR5380_dma_residual(instance));
+					transferred = (hostdata->dmalen - NCR5380_dma_residual(instance));
 					hostdata->connected->SCp.this_residual -= transferred;
 					hostdata->connected->SCp.ptr += transferred;
 					hostdata->dmalen = 0;
@@ -1564,7 +1563,7 @@ failed:
  *      bytes to transfer, **data - pointer to data pointer.
  * 
  * Returns : -1 when different phase is entered without transferring
- *      maximum number of bytes, 0 if all bytes or transfered or exit
+ *      maximum number of bytes, 0 if all bytes or transferred or exit
  *      is in same phase.
  *
  *      Also, *phase, *count, *data are modified in place.
@@ -1801,7 +1800,7 @@ static int do_abort(struct Scsi_Host *host) {
  *      bytes to transfer, **data - pointer to data pointer.
  * 
  * Returns : -1 when different phase is entered without transferring
- *      maximum number of bytes, 0 if all bytes or transfered or exit
+ *      maximum number of bytes, 0 if all bytes or transferred or exit
  *      is in same phase.
  *
  *      Also, *phase, *count, *data are modified in place.
@@ -2663,14 +2662,14 @@ static void NCR5380_dma_complete(NCR5380_instance * instance) {
  *
  * Purpose : abort a command
  *
- * Inputs : cmd - the Scsi_Cmnd to abort, code - code to set the 
- *      host byte of the result field to, if zero DID_ABORTED is 
+ * Inputs : cmd - the Scsi_Cmnd to abort, code - code to set the
+ *      host byte of the result field to, if zero DID_ABORTED is
  *      used.
  *
- * Returns : 0 - success, -1 on failure.
+ * Returns : SUCCESS - success, FAILED on failure.
  *
- *	XXX - there is no way to abort the command that is currently 
- *	connected, you have to wait for it to complete.  If this is 
+ *	XXX - there is no way to abort the command that is currently
+ *	connected, you have to wait for it to complete.  If this is
  *	a problem, we could implement longjmp() / setjmp(), setjmp()
  *	called where the loop started in NCR5380_main().
  *
@@ -2720,7 +2719,7 @@ static int NCR5380_abort(Scsi_Cmnd * cmd) {
  * aborted flag and get back into our main loop.
  */
 
-		return 0;
+		return SUCCESS;
 	}
 #endif
 

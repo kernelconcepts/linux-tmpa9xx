@@ -12,7 +12,7 @@
  *     within cong_avoid.
  *   o Error correcting in remote HZ, therefore remote HZ will be keeped
  *     on checking and updating.
- *   o Handling calculation of One-Way-Delay (OWD) within rtt_sample, sicne
+ *   o Handling calculation of One-Way-Delay (OWD) within rtt_sample, since
  *     OWD have a similar meaning as RTT. Also correct the buggy formular.
  *   o Handle reaction for Early Congestion Indication (ECI) within
  *     pkts_acked, as mentioned within pseudo code.
@@ -264,13 +264,15 @@ static void tcp_lp_pkts_acked(struct sock *sk, u32 num_acked, s32 rtt_us)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct lp *lp = inet_csk_ca(sk);
+	u32 delta;
 
 	if (rtt_us > 0)
 		tcp_lp_rtt_sample(sk, rtt_us);
 
 	/* calc inference */
-	if (tcp_time_stamp > tp->rx_opt.rcv_tsecr)
-		lp->inference = 3 * (tcp_time_stamp - tp->rx_opt.rcv_tsecr);
+	delta = tcp_time_stamp - tp->rx_opt.rcv_tsecr;
+	if ((s32)delta > 0)
+		lp->inference = 3 * delta;
 
 	/* test if within inference */
 	if (lp->last_drop && (tcp_time_stamp - lp->last_drop < lp->inference))
@@ -313,7 +315,7 @@ static void tcp_lp_pkts_acked(struct sock *sk, u32 num_acked, s32 rtt_us)
 	lp->last_drop = tcp_time_stamp;
 }
 
-static struct tcp_congestion_ops tcp_lp = {
+static struct tcp_congestion_ops tcp_lp __read_mostly = {
 	.flags = TCP_CONG_RTT_STAMP,
 	.init = tcp_lp_init,
 	.ssthresh = tcp_reno_ssthresh,

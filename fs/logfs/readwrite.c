@@ -126,7 +126,7 @@ static void logfs_disk_to_inode(struct logfs_disk_inode *di, struct inode*inode)
 	inode->i_atime	= be64_to_timespec(di->di_atime);
 	inode->i_ctime	= be64_to_timespec(di->di_ctime);
 	inode->i_mtime	= be64_to_timespec(di->di_mtime);
-	inode->i_nlink	= be32_to_cpu(di->di_refcount);
+	set_nlink(inode, be32_to_cpu(di->di_refcount));
 	inode->i_generation = be32_to_cpu(di->di_generation);
 
 	switch (inode->i_mode & S_IFMT) {
@@ -481,7 +481,7 @@ static int inode_write_alias(struct super_block *sb,
 			val = inode_val0(inode);
 			break;
 		case INODE_USED_OFS:
-			val = cpu_to_be64(li->li_used_bytes);;
+			val = cpu_to_be64(li->li_used_bytes);
 			break;
 		case INODE_SIZE_OFS:
 			val = cpu_to_be64(i_size_read(inode));
@@ -1616,7 +1616,7 @@ int logfs_rewrite_block(struct inode *inode, u64 bix, u64 ofs,
 		err = logfs_write_buf(inode, page, flags);
 		if (!err && shrink_level(gc_level) == 0) {
 			/* Rewrite cannot mark the inode dirty but has to
-			 * write it immediatly.
+			 * write it immediately.
 			 * Q: Can't we just create an alias for the inode
 			 * instead?  And if not, why not?
 			 */

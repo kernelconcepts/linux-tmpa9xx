@@ -16,22 +16,26 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <mach/hardware.h>
-#include <asm/io.h>
+#include <linux/io.h>
 
-static int cpu_silicon_rev = -1;
+static int mx5_cpu_rev = -1;
 
 #define IIM_SREV 0x24
+#define MX50_HW_ADADIG_DIGPROG	0xB0
 
 static int get_mx51_srev(void)
 {
 	void __iomem *iim_base = MX51_IO_ADDRESS(MX51_IIM_BASE_ADDR);
 	u32 rev = readl(iim_base + IIM_SREV) & 0xff;
 
-	if (rev == 0x0)
+	switch (rev) {
+	case 0x0:
 		return IMX_CHIP_REVISION_2_0;
-	else if (rev == 0x10)
+	case 0x10:
 		return IMX_CHIP_REVISION_3_0;
-	return 0;
+	default:
+		return IMX_CHIP_REVISION_UNKNOWN;
+	}
 }
 
 /*
@@ -44,10 +48,10 @@ int mx51_revision(void)
 	if (!cpu_is_mx51())
 		return -EINVAL;
 
-	if (cpu_silicon_rev == -1)
-		cpu_silicon_rev = get_mx51_srev();
+	if (mx5_cpu_rev == -1)
+		mx5_cpu_rev = get_mx51_srev();
 
-	return cpu_silicon_rev;
+	return mx5_cpu_rev;
 }
 EXPORT_SYMBOL(mx51_revision);
 
@@ -63,7 +67,8 @@ static int __init mx51_neon_fixup(void)
 	if (!cpu_is_mx51())
 		return 0;
 
-	if (mx51_revision() < IMX_CHIP_REVISION_3_0 && (elf_hwcap & HWCAP_NEON)) {
+	if (mx51_revision() < IMX_CHIP_REVISION_3_0 &&
+			(elf_hwcap & HWCAP_NEON)) {
 		elf_hwcap &= ~HWCAP_NEON;
 		pr_info("Turning off NEON support, detected broken NEON implementation\n");
 	}
@@ -78,11 +83,16 @@ static int get_mx53_srev(void)
 	void __iomem *iim_base = MX51_IO_ADDRESS(MX53_IIM_BASE_ADDR);
 	u32 rev = readl(iim_base + IIM_SREV) & 0xff;
 
-	if (rev == 0x0)
+	switch (rev) {
+	case 0x0:
 		return IMX_CHIP_REVISION_1_0;
-	else if (rev == 0x10)
+	case 0x2:
 		return IMX_CHIP_REVISION_2_0;
-	return 0;
+	case 0x3:
+		return IMX_CHIP_REVISION_2_1;
+	default:
+		return IMX_CHIP_REVISION_UNKNOWN;
+	}
 }
 
 /*
@@ -95,12 +105,50 @@ int mx53_revision(void)
 	if (!cpu_is_mx53())
 		return -EINVAL;
 
-	if (cpu_silicon_rev == -1)
-		cpu_silicon_rev = get_mx53_srev();
+	if (mx5_cpu_rev == -1)
+		mx5_cpu_rev = get_mx53_srev();
 
-	return cpu_silicon_rev;
+	return mx5_cpu_rev;
 }
 EXPORT_SYMBOL(mx53_revision);
+
+static int get_mx50_srev(void)
+{
+	void __iomem *anatop = ioremap(MX50_ANATOP_BASE_ADDR, SZ_8K);
+	u32 rev;
+
+	if (!anatop) {
+		mx5_cpu_rev = -EINVAL;
+		return 0;
+	}
+
+	rev = readl(anatop + MX50_HW_ADADIG_DIGPROG);
+	rev &= 0xff;
+
+	iounmap(anatop);
+	if (rev == 0x0)
+		return IMX_CHIP_REVISION_1_0;
+	else if (rev == 0x1)
+		return IMX_CHIP_REVISION_1_1;
+	return 0;
+}
+
+/*
+ * Returns:
+ *	the silicon revision of the cpu
+ *	-EINVAL - not a mx50
+ */
+int mx50_revision(void)
+{
+	if (!cpu_is_mx50())
+		return -EINVAL;
+
+	if (mx5_cpu_rev == -1)
+		mx5_cpu_rev = get_mx50_srev();
+
+	return mx5_cpu_rev;
+}
+EXPORT_SYMBOL(mx50_revision);
 
 static int __init post_cpu_init(void)
 {

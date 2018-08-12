@@ -14,11 +14,11 @@
 #include <asm/mach/map.h>
 
 #include <linux/dma-mapping.h>
+#include <linux/gpio.h>
 #include <linux/platform_device.h>
 #include <linux/i2c-gpio.h>
 
 #include <mach/board.h>
-#include <mach/gpio.h>
 #include <mach/at91rm9200.h>
 #include <mach/at91rm9200_mc.h>
 
@@ -60,8 +60,16 @@ static struct platform_device at91rm9200_usbh_device = {
 
 void __init at91_add_device_usbh(struct at91_usbh_data *data)
 {
+	int i;
+
 	if (!data)
 		return;
+
+	/* Enable overcurrent notification */
+	for (i = 0; i < data->ports; i++) {
+		if (data->overcurrent_pin[i])
+			at91_set_gpio_input(data->overcurrent_pin[i], 1);
+	}
 
 	usbh_data = *data;
 	platform_device_register(&at91rm9200_usbh_device);
@@ -75,7 +83,7 @@ void __init at91_add_device_usbh(struct at91_usbh_data *data) {}
  *  USB Device (Gadget)
  * -------------------------------------------------------------------- */
 
-#ifdef CONFIG_USB_GADGET_AT91
+#if defined(CONFIG_USB_AT91) || defined(CONFIG_USB_AT91_MODULE)
 static struct at91_udc_data udc_data;
 
 static struct resource udc_resources[] = {
@@ -454,7 +462,7 @@ static struct i2c_gpio_platform_data pdata = {
 
 static struct platform_device at91rm9200_twi_device = {
 	.name			= "i2c-gpio",
-	.id			= -1,
+	.id			= 0,
 	.dev.platform_data	= &pdata,
 };
 
@@ -644,15 +652,7 @@ static struct platform_device at91rm9200_tcb1_device = {
 
 static void __init at91_add_device_tc(void)
 {
-	/* this chip has a separate clock and irq for each TC channel */
-	at91_clock_associate("tc0_clk", &at91rm9200_tcb0_device.dev, "t0_clk");
-	at91_clock_associate("tc1_clk", &at91rm9200_tcb0_device.dev, "t1_clk");
-	at91_clock_associate("tc2_clk", &at91rm9200_tcb0_device.dev, "t2_clk");
 	platform_device_register(&at91rm9200_tcb0_device);
-
-	at91_clock_associate("tc3_clk", &at91rm9200_tcb1_device.dev, "t0_clk");
-	at91_clock_associate("tc4_clk", &at91rm9200_tcb1_device.dev, "t1_clk");
-	at91_clock_associate("tc5_clk", &at91rm9200_tcb1_device.dev, "t2_clk");
 	platform_device_register(&at91rm9200_tcb1_device);
 }
 #else
@@ -849,17 +849,14 @@ void __init at91_add_device_ssc(unsigned id, unsigned pins)
 	case AT91RM9200_ID_SSC0:
 		pdev = &at91rm9200_ssc0_device;
 		configure_ssc0_pins(pins);
-		at91_clock_associate("ssc0_clk", &pdev->dev, "ssc");
 		break;
 	case AT91RM9200_ID_SSC1:
 		pdev = &at91rm9200_ssc1_device;
 		configure_ssc1_pins(pins);
-		at91_clock_associate("ssc1_clk", &pdev->dev, "ssc");
 		break;
 	case AT91RM9200_ID_SSC2:
 		pdev = &at91rm9200_ssc2_device;
 		configure_ssc2_pins(pins);
-		at91_clock_associate("ssc2_clk", &pdev->dev, "ssc");
 		break;
 	default:
 		return;
@@ -880,8 +877,8 @@ void __init at91_add_device_ssc(unsigned id, unsigned pins) {}
 #if defined(CONFIG_SERIAL_ATMEL)
 static struct resource dbgu_resources[] = {
 	[0] = {
-		.start	= AT91_VA_BASE_SYS + AT91_DBGU,
-		.end	= AT91_VA_BASE_SYS + AT91_DBGU + SZ_512 - 1,
+		.start	= AT91_BASE_SYS + AT91_DBGU,
+		.end	= AT91_BASE_SYS + AT91_DBGU + SZ_512 - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
@@ -894,7 +891,6 @@ static struct resource dbgu_resources[] = {
 static struct atmel_uart_data dbgu_data = {
 	.use_dma_tx	= 0,
 	.use_dma_rx	= 0,		/* DBGU not capable of receive DMA */
-	.regs		= (void __iomem *)(AT91_VA_BASE_SYS + AT91_DBGU),
 };
 
 static u64 dbgu_dmamask = DMA_BIT_MASK(32);
@@ -1109,37 +1105,34 @@ struct platform_device *atmel_default_console_device;	/* the serial console devi
 void __init at91_register_uart(unsigned id, unsigned portnr, unsigned pins)
 {
 	struct platform_device *pdev;
+	struct atmel_uart_data *pdata;
 
 	switch (id) {
 		case 0:		/* DBGU */
 			pdev = &at91rm9200_dbgu_device;
 			configure_dbgu_pins();
-			at91_clock_associate("mck", &pdev->dev, "usart");
 			break;
 		case AT91RM9200_ID_US0:
 			pdev = &at91rm9200_uart0_device;
 			configure_usart0_pins(pins);
-			at91_clock_associate("usart0_clk", &pdev->dev, "usart");
 			break;
 		case AT91RM9200_ID_US1:
 			pdev = &at91rm9200_uart1_device;
 			configure_usart1_pins(pins);
-			at91_clock_associate("usart1_clk", &pdev->dev, "usart");
 			break;
 		case AT91RM9200_ID_US2:
 			pdev = &at91rm9200_uart2_device;
 			configure_usart2_pins(pins);
-			at91_clock_associate("usart2_clk", &pdev->dev, "usart");
 			break;
 		case AT91RM9200_ID_US3:
 			pdev = &at91rm9200_uart3_device;
 			configure_usart3_pins(pins);
-			at91_clock_associate("usart3_clk", &pdev->dev, "usart");
 			break;
 		default:
 			return;
 	}
-	pdev->id = portnr;		/* update to mapped ID */
+	pdata = pdev->dev.platform_data;
+	pdata->num = portnr;		/* update to mapped ID */
 
 	if (portnr < ATMEL_MAX_UART)
 		at91_uarts[portnr] = pdev;
@@ -1147,8 +1140,10 @@ void __init at91_register_uart(unsigned id, unsigned portnr, unsigned pins)
 
 void __init at91_set_serial_console(unsigned portnr)
 {
-	if (portnr < ATMEL_MAX_UART)
+	if (portnr < ATMEL_MAX_UART) {
 		atmel_default_console_device = at91_uarts[portnr];
+		at91rm9200_set_console_clock(at91_uarts[portnr]->id);
+	}
 }
 
 void __init at91_add_device_serial(void)

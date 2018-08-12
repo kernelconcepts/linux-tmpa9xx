@@ -84,7 +84,7 @@ module_param(send_first, int, 0644);
 MODULE_PARM_DESC(send_first, "Send RDMA Message First on Active Connection");
 
 
-unsigned int nes_drv_opt = 0;
+unsigned int nes_drv_opt = NES_DRV_OPT_DISABLE_INT_MOD | NES_DRV_OPT_ENABLE_PAU;
 module_param(nes_drv_opt, int, 0644);
 MODULE_PARM_DESC(nes_drv_opt, "Driver option parameters");
 
@@ -130,9 +130,6 @@ static struct notifier_block nes_net_notifier = {
 	.notifier_call = nes_net_event
 };
 
-
-
-
 /**
  * nes_inetaddr_event
  */
@@ -153,7 +150,8 @@ static int nes_inetaddr_event(struct notifier_block *notifier,
 				nesdev, nesdev->netdev[0]->name);
 		netdev = nesdev->netdev[0];
 		nesvnic = netdev_priv(netdev);
-		is_bonded = (netdev->master == event_netdev);
+		is_bonded = netif_is_bond_slave(netdev) &&
+			    (netdev->master == event_netdev);
 		if ((netdev == event_netdev) || is_bonded) {
 			if (nesvnic->rdma_enabled == 0) {
 				nes_debug(NES_DBG_NETDEV, "Returning without processing event for %s since"
@@ -320,6 +318,9 @@ void nes_rem_ref(struct ib_qp *ibqp)
 	}
 
 	if (atomic_dec_and_test(&nesqp->refcount)) {
+		if (nesqp->pau_mode)
+			nes_destroy_pau_qp(nesdev, nesqp);
+
 		/* Destroy the QP */
 		cqp_request = nes_get_cqp_request(nesdev);
 		if (cqp_request == NULL) {
@@ -693,7 +694,7 @@ static int __devinit nes_probe(struct pci_dev *pcidev, const struct pci_device_i
 	nesdev->netdev_count++;
 	nesdev->nesadapter->netdev_count++;
 
-	printk(KERN_ERR PFX "%s: NetEffect RNIC driver successfully loaded.\n",
+	printk(KERN_INFO PFX "%s: NetEffect RNIC driver successfully loaded.\n",
 			pci_name(pcidev));
 	return 0;
 
@@ -1137,7 +1138,9 @@ static ssize_t nes_store_wqm_quanta(struct device_driver *ddp,
 	u32 i = 0;
 	struct nes_device *nesdev;
 
-	strict_strtoul(buf, 0, &wqm_quanta_value);
+	if (kstrtoul(buf, 0, &wqm_quanta_value) < 0)
+		return -EINVAL;
+
 	list_for_each_entry(nesdev, &nes_dev_list, list) {
 		if (i == ee_flsh_adapter) {
 			nesdev->nesadapter->wqm_quanta = wqm_quanta_value;

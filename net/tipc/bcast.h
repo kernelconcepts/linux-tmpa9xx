@@ -2,7 +2,7 @@
  * net/tipc/bcast.h: Include file for TIPC broadcast code
  *
  * Copyright (c) 2003-2006, Ericsson AB
- * Copyright (c) 2005, Wind River Systems
+ * Copyright (c) 2005, 2010-2011, Wind River Systems
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -90,6 +90,7 @@ void tipc_port_list_free(struct port_list *pl_ptr);
 
 int  tipc_bclink_init(void);
 void tipc_bclink_stop(void);
+struct tipc_node *tipc_bclink_retransmit_to(void);
 void tipc_bclink_acknowledge(struct tipc_node *n_ptr, u32 acked);
 int  tipc_bclink_send_msg(struct sk_buff *buf);
 void tipc_bclink_recv_pkt(struct sk_buff *buf);
@@ -100,6 +101,5 @@ int  tipc_bclink_stats(char *stats_buf, const u32 buf_size);
 int  tipc_bclink_reset_stats(void);
 int  tipc_bclink_set_queue_limits(u32 limit);
 void tipc_bcbearer_sort(void);
-void tipc_bcbearer_push(void);
 
 #endif

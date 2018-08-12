@@ -42,7 +42,7 @@ static struct uac_clock_source_descriptor *
 	while ((cs = snd_usb_find_csint_desc(ctrl_iface->extra,
 					     ctrl_iface->extralen,
 					     cs, UAC2_CLOCK_SOURCE))) {
-		if (cs->bClockID == clock_id)
+		if (cs->bLength >= sizeof(*cs) && cs->bClockID == clock_id)
 			return cs;
 	}
 
@@ -58,8 +58,11 @@ static struct uac_clock_selector_descriptor *
 	while ((cs = snd_usb_find_csint_desc(ctrl_iface->extra,
 					     ctrl_iface->extralen,
 					     cs, UAC2_CLOCK_SELECTOR))) {
-		if (cs->bClockID == clock_id)
+		if (cs->bLength >= sizeof(*cs) && cs->bClockID == clock_id) {
+			if (cs->bLength < 5 + cs->bNrInPins)
+				return NULL;
 			return cs;
+		}
 	}
 
 	return NULL;
@@ -74,7 +77,7 @@ static struct uac_clock_multiplier_descriptor *
 	while ((cs = snd_usb_find_csint_desc(ctrl_iface->extra,
 					     ctrl_iface->extralen,
 					     cs, UAC2_CLOCK_MULTIPLIER))) {
-		if (cs->bClockID == clock_id)
+		if (cs->bLength >= sizeof(*cs) && cs->bClockID == clock_id)
 			return cs;
 	}
 
@@ -91,7 +94,7 @@ static int uac_clock_selector_get_val(struct snd_usb_audio *chip, int selector_i
 			      USB_RECIP_INTERFACE | USB_TYPE_CLASS | USB_DIR_IN,
 			      UAC2_CX_CLOCK_SELECTOR << 8,
 			      snd_usb_ctrl_intf(chip) | (selector_id << 8),
-			      &buf, sizeof(buf), 1000);
+			      &buf, sizeof(buf));
 
 	if (ret < 0)
 		return ret;
@@ -104,17 +107,27 @@ static bool uac_clock_source_is_valid(struct snd_usb_audio *chip, int source_id)
 	int err;
 	unsigned char data;
 	struct usb_device *dev = chip->dev;
+	struct uac_clock_source_descriptor *cs_desc =
+		snd_usb_find_clock_source(chip->ctrl_intf, source_id);
+
+	if (!cs_desc)
+		return 0;
+
+	/* If a clock source can't tell us whether it's valid, we assume it is */
+	if (!uac2_control_is_readable(cs_desc->bmControls,
+				      UAC2_CS_CONTROL_CLOCK_VALID - 1))
+		return 1;
 
 	err = snd_usb_ctl_msg(dev, usb_rcvctrlpipe(dev, 0), UAC2_CS_CUR,
 			      USB_TYPE_CLASS | USB_RECIP_INTERFACE | USB_DIR_IN,
 			      UAC2_CS_CONTROL_CLOCK_VALID << 8,
 			      snd_usb_ctrl_intf(chip) | (source_id << 8),
-			      &data, sizeof(data), 1000);
+			      &data, sizeof(data));
 
 	if (err < 0) {
 		snd_printk(KERN_WARNING "%s(): cannot get clock validity for id %d\n",
 			   __func__, source_id);
-		return err;
+		return 0;
 	}
 
 	return !!data;
@@ -201,6 +214,8 @@ static int set_sample_rate_v1(struct snd_usb_audio *chip, int iface,
 	unsigned char data[3];
 	int err, crate;
 
+	if (get_iface_desc(alts)->bNumEndpoints < 1)
+		return -EINVAL;
 	ep = get_endpoint(alts, 0)->bEndpointAddress;
 
 	/* if endpoint doesn't have sampling rate control, bail out */
@@ -213,7 +228,7 @@ static int set_sample_rate_v1(struct snd_usb_audio *chip, int iface,
 	if ((err = snd_usb_ctl_msg(dev, usb_sndctrlpipe(dev, 0), UAC_SET_CUR,
 				   USB_TYPE_CLASS | USB_RECIP_ENDPOINT | USB_DIR_OUT,
 				   UAC_EP_CS_ATTR_SAMPLE_RATE << 8, ep,
-				   data, sizeof(data), 1000)) < 0) {
+				   data, sizeof(data))) < 0) {
 		snd_printk(KERN_ERR "%d:%d:%d: cannot set freq %d to ep %#x\n",
 			   dev->devnum, iface, fmt->altsetting, rate, ep);
 		return err;
@@ -222,7 +237,7 @@ static int set_sample_rate_v1(struct snd_usb_audio *chip, int iface,
 	if ((err = snd_usb_ctl_msg(dev, usb_rcvctrlpipe(dev, 0), UAC_GET_CUR,
 				   USB_TYPE_CLASS | USB_RECIP_ENDPOINT | USB_DIR_IN,
 				   UAC_EP_CS_ATTR_SAMPLE_RATE << 8, ep,
-				   data, sizeof(data), 1000)) < 0) {
+				   data, sizeof(data))) < 0) {
 		snd_printk(KERN_WARNING "%d:%d:%d: cannot get freq at ep %#x\n",
 			   dev->devnum, iface, fmt->altsetting, ep);
 		return 0; /* some devices don't support reading */
@@ -264,7 +279,7 @@ static int set_sample_rate_v2(struct snd_usb_audio *chip, int iface,
 				   USB_TYPE_CLASS | USB_RECIP_INTERFACE | USB_DIR_OUT,
 				   UAC2_CS_CONTROL_SAM_FREQ << 8,
 				   snd_usb_ctrl_intf(chip) | (clock << 8),
-				   data, sizeof(data), 1000)) < 0) {
+				   data, sizeof(data))) < 0) {
 		snd_printk(KERN_ERR "%d:%d:%d: cannot set freq %d (v2)\n",
 			   dev->devnum, iface, fmt->altsetting, rate);
 		return err;
@@ -274,7 +289,7 @@ static int set_sample_rate_v2(struct snd_usb_audio *chip, int iface,
 				   USB_TYPE_CLASS | USB_RECIP_INTERFACE | USB_DIR_IN,
 				   UAC2_CS_CONTROL_SAM_FREQ << 8,
 				   snd_usb_ctrl_intf(chip) | (clock << 8),
-				   data, sizeof(data), 1000)) < 0) {
+				   data, sizeof(data))) < 0) {
 		snd_printk(KERN_WARNING "%d:%d:%d: cannot get freq (v2)\n",
 			   dev->devnum, iface, fmt->altsetting);
 		return err;

@@ -82,6 +82,7 @@
 #include <linux/cpu.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
+#include <linux/syscore_ops.h>
 
 #include <asm/microcode.h>
 #include <asm/processor.h>
@@ -255,7 +256,7 @@ static int __init microcode_dev_init(void)
 	return 0;
 }
 
-static void microcode_dev_exit(void)
+static void __exit microcode_dev_exit(void)
 {
 	misc_deregister(&microcode_dev);
 }
@@ -296,20 +297,31 @@ static ssize_t reload_store(struct sys_device *dev,
 			    const char *buf, size_t size)
 {
 	unsigned long val;
-	int cpu = dev->id;
-	int ret = 0;
-	char *end;
+	int cpu;
+	ssize_t ret = 0, tmp_ret;
 
-	val = simple_strtoul(buf, &end, 0);
-	if (end == buf)
+	/* allow reload only from the BSP */
+	if (boot_cpu_data.cpu_index != dev->id)
 		return -EINVAL;
 
-	if (val == 1) {
-		get_online_cpus();
-		if (cpu_online(cpu))
-			ret = reload_for_cpu(cpu);
-		put_online_cpus();
+	ret = kstrtoul(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	if (val != 1)
+		return size;
+
+	get_online_cpus();
+	for_each_online_cpu(cpu) {
+		tmp_ret = reload_for_cpu(cpu);
+		if (tmp_ret != 0)
+			pr_warn("Error reloading microcode on CPU %d\n", cpu);
+
+		/* save retval of the first encountered reload error */
+		if (!ret)
+			ret = tmp_ret;
 	}
+	put_online_cpus();
 
 	if (!ret)
 		ret = size;
@@ -418,7 +430,7 @@ static int mc_sysdev_add(struct sys_device *sys_dev)
 		return err;
 
 	if (microcode_init_cpu(cpu) == UCODE_ERROR)
-		err = -EINVAL;
+		return -EINVAL;
 
 	return err;
 }
@@ -436,33 +448,25 @@ static int mc_sysdev_remove(struct sys_device *sys_dev)
 	return 0;
 }
 
-static int mc_sysdev_resume(struct sys_device *dev)
-{
-	int cpu = dev->id;
-	struct ucode_cpu_info *uci = ucode_cpu_info + cpu;
-
-	if (!cpu_online(cpu))
-		return 0;
-
-	/*
-	 * All non-bootup cpus are still disabled,
-	 * so only CPU 0 will apply ucode here.
-	 *
-	 * Moreover, there can be no concurrent
-	 * updates from any other places at this point.
-	 */
-	WARN_ON(cpu != 0);
-
-	if (uci->valid && uci->mc)
-		microcode_ops->apply_microcode(cpu);
-
-	return 0;
-}
-
 static struct sysdev_driver mc_sysdev_driver = {
 	.add			= mc_sysdev_add,
 	.remove			= mc_sysdev_remove,
-	.resume			= mc_sysdev_resume,
+};
+
+/**
+ * mc_bp_resume - Update boot CPU microcode during resume.
+ */
+static void mc_bp_resume(void)
+{
+	int cpu = smp_processor_id();
+	struct ucode_cpu_info *uci = ucode_cpu_info + cpu;
+
+	if (uci->valid && uci->mc)
+		microcode_ops->apply_microcode(cpu);
+}
+
+static struct syscore_ops mc_syscore_ops = {
+	.resume			= mc_bp_resume,
 };
 
 static __cpuinit int
@@ -488,7 +492,13 @@ mc_cpu_callback(struct notifier_block *nb, unsigned long action, void *hcpu)
 		sysfs_remove_group(&sys_dev->kobj, &mc_attr_group);
 		pr_debug("CPU%d removed\n", cpu);
 		break;
-	case CPU_DEAD:
+
+	/*
+	 * When a CPU goes offline, don't free up or invalidate the copy of
+	 * the microcode in kernel memory, so that we can reuse it when the
+	 * CPU comes back online without unnecessarily requesting the userspace
+	 * for it again.
+	 */
 	case CPU_UP_CANCELED_FROZEN:
 		/* The CPU refused to come up during a system resume */
 		microcode_fini_cpu(cpu);
@@ -518,10 +528,8 @@ static int __init microcode_init(void)
 
 	microcode_pdev = platform_device_register_simple("microcode", -1,
 							 NULL, 0);
-	if (IS_ERR(microcode_pdev)) {
-		microcode_dev_exit();
+	if (IS_ERR(microcode_pdev))
 		return PTR_ERR(microcode_pdev);
-	}
 
 	get_online_cpus();
 	mutex_lock(&microcode_mutex);
@@ -531,21 +539,34 @@ static int __init microcode_init(void)
 	mutex_unlock(&microcode_mutex);
 	put_online_cpus();
 
-	if (error) {
-		platform_device_unregister(microcode_pdev);
-		return error;
-	}
+	if (error)
+		goto out_pdev;
 
 	error = microcode_dev_init();
 	if (error)
-		return error;
+		goto out_sysdev_driver;
 
+	register_syscore_ops(&mc_syscore_ops);
 	register_hotcpu_notifier(&mc_cpu_notifier);
 
 	pr_info("Microcode Update Driver: v" MICROCODE_VERSION
 		" <tigran@aivazian.fsnet.co.uk>, Peter Oruba\n");
 
 	return 0;
+
+out_sysdev_driver:
+	get_online_cpus();
+	mutex_lock(&microcode_mutex);
+
+	sysdev_driver_unregister(&cpu_sysdev_class, &mc_sysdev_driver);
+
+	mutex_unlock(&microcode_mutex);
+	put_online_cpus();
+
+out_pdev:
+	platform_device_unregister(microcode_pdev);
+	return error;
+
 }
 module_init(microcode_init);
 
@@ -554,6 +575,7 @@ static void __exit microcode_exit(void)
 	microcode_dev_exit();
 
 	unregister_hotcpu_notifier(&mc_cpu_notifier);
+	unregister_syscore_ops(&mc_syscore_ops);
 
 	get_online_cpus();
 	mutex_lock(&microcode_mutex);

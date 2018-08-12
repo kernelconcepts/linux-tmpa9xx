@@ -15,7 +15,6 @@
 
 #include <linux/init.h>
 #include <linux/platform_device.h>
-#include <linux/sysdev.h>
 #include <linux/interrupt.h>
 #include <linux/sched.h>
 #include <linux/bitops.h>
@@ -27,6 +26,7 @@
 #include <linux/mtd/partitions.h>
 #include <linux/types.h>
 #include <linux/i2c/pcf857x.h>
+#include <linux/i2c/pxa-i2c.h>
 #include <linux/mtd/nand.h>
 #include <linux/mtd/physmap.h>
 #include <linux/regulator/max1586.h>
@@ -50,8 +50,6 @@
 #include <mach/pxa27x-udc.h>
 #include <mach/irda.h>
 #include <mach/ohci.h>
-
-#include <plat/i2c.h>
 
 #include "generic.h"
 #include "devices.h"
@@ -264,7 +262,7 @@ static void __init balloon3_lcd_init(void)
 	}
 
 	balloon3_lcd_screen.pxafb_backlight_power = balloon3_backlight_power;
-	set_pxa_fb_info(&balloon3_lcd_screen);
+	pxa_set_fb_info(NULL, &balloon3_lcd_screen);
 	return;
 
 err2:
@@ -309,7 +307,7 @@ static inline void balloon3_mmc_init(void) {}
 /******************************************************************************
  * USB Gadget
  ******************************************************************************/
-#if defined(CONFIG_USB_GADGET_PXA27X)||defined(CONFIG_USB_GADGET_PXA27X_MODULE)
+#if defined(CONFIG_USB_PXA27X)||defined(CONFIG_USB_PXA27X_MODULE)
 static void balloon3_udc_command(int cmd)
 {
 	if (cmd == PXA2XX_UDC_CMD_CONNECT)
@@ -528,13 +526,13 @@ static void __init balloon3_init_irq(void)
 	pxa27x_init_irq();
 	/* setup extra Balloon3 irqs */
 	for (irq = BALLOON3_IRQ(0); irq <= BALLOON3_IRQ(7); irq++) {
-		set_irq_chip(irq, &balloon3_irq_chip);
-		set_irq_handler(irq, handle_level_irq);
+		irq_set_chip_and_handler(irq, &balloon3_irq_chip,
+					 handle_level_irq);
 		set_irq_flags(irq, IRQF_VALID | IRQF_PROBE);
 	}
 
-	set_irq_chained_handler(BALLOON3_AUX_NIRQ, balloon3_irq_handler);
-	set_irq_type(BALLOON3_AUX_NIRQ, IRQ_TYPE_EDGE_FALLING);
+	irq_set_chained_handler(BALLOON3_AUX_NIRQ, balloon3_irq_handler);
+	irq_set_irq_type(BALLOON3_AUX_NIRQ, IRQ_TYPE_EDGE_FALLING);
 
 	pr_debug("%s: chained handler installed - irq %d automatically "
 		"enabled\n", __func__, BALLOON3_AUX_NIRQ);
@@ -593,7 +591,7 @@ static void balloon3_nand_cmd_ctl(struct mtd_info *mtd, int cmd, unsigned int ct
 				BALLOON3_NAND_CONTROL_REG);
 		if (balloon3_ctl_set)
 			__raw_writel(balloon3_ctl_set,
-				BALLOON3_NAND_CONTROL_REG |
+				BALLOON3_NAND_CONTROL_REG +
 				BALLOON3_FPGA_SETnCLR);
 	}
 
@@ -610,7 +608,7 @@ static void balloon3_nand_select_chip(struct mtd_info *mtd, int chip)
 	__raw_writew(
 		BALLOON3_NAND_CONTROL_FLCE0 | BALLOON3_NAND_CONTROL_FLCE1 |
 		BALLOON3_NAND_CONTROL_FLCE2 | BALLOON3_NAND_CONTROL_FLCE3,
-		BALLOON3_NAND_CONTROL_REG | BALLOON3_FPGA_SETnCLR);
+		BALLOON3_NAND_CONTROL_REG + BALLOON3_FPGA_SETnCLR);
 
 	/* Deassert correct nCE line */
 	__raw_writew(BALLOON3_NAND_CONTROL_FLCE0 << chip,
@@ -628,7 +626,7 @@ static int balloon3_nand_probe(struct platform_device *pdev)
 	int ret;
 
 	__raw_writew(BALLOON3_NAND_CONTROL2_16BIT,
-		BALLOON3_NAND_CONTROL2_REG | BALLOON3_FPGA_SETnCLR);
+		BALLOON3_NAND_CONTROL2_REG + BALLOON3_FPGA_SETnCLR);
 
 	ver = __raw_readw(BALLOON3_FPGA_VER);
 	if (ver < 0x4f08)
@@ -651,7 +649,7 @@ static int balloon3_nand_probe(struct platform_device *pdev)
 		BALLOON3_NAND_CONTROL_FLCE0 | BALLOON3_NAND_CONTROL_FLCE1 |
 		BALLOON3_NAND_CONTROL_FLCE2 | BALLOON3_NAND_CONTROL_FLCE3 |
 		BALLOON3_NAND_CONTROL_FLWP,
-		BALLOON3_NAND_CONTROL_REG | BALLOON3_FPGA_SETnCLR);
+		BALLOON3_NAND_CONTROL_REG + BALLOON3_FPGA_SETnCLR);
 	return 0;
 
 err2:
@@ -809,7 +807,7 @@ static void __init balloon3_init(void)
 
 static struct map_desc balloon3_io_desc[] __initdata = {
 	{	/* CPLD/FPGA */
-		.virtual	=  BALLOON3_FPGA_VIRT,
+		.virtual	= (unsigned long)BALLOON3_FPGA_VIRT,
 		.pfn		= __phys_to_pfn(BALLOON3_FPGA_PHYS),
 		.length		= BALLOON3_FPGA_LENGTH,
 		.type		= MT_DEVICE,
@@ -827,7 +825,8 @@ MACHINE_START(BALLOON3, "Balloon3")
 	.map_io		= balloon3_map_io,
 	.nr_irqs	= BALLOON3_NR_IRQS,
 	.init_irq	= balloon3_init_irq,
+	.handle_irq	= pxa27x_handle_irq,
 	.timer		= &pxa_timer,
 	.init_machine	= balloon3_init,
-	.boot_params	= PHYS_OFFSET + 0x100,
+	.atag_offset	= 0x100,
 MACHINE_END

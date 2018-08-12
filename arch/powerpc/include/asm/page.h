@@ -36,6 +36,18 @@
 
 #define PAGE_SIZE		(ASM_CONST(1) << PAGE_SHIFT)
 
+#ifndef __ASSEMBLY__
+#ifdef CONFIG_HUGETLB_PAGE
+extern unsigned int HPAGE_SHIFT;
+#else
+#define HPAGE_SHIFT PAGE_SHIFT
+#endif
+#define HPAGE_SIZE		((1UL) << HPAGE_SHIFT)
+#define HPAGE_MASK		(~(HPAGE_SIZE - 1))
+#define HUGETLB_PAGE_ORDER	(HPAGE_SHIFT - PAGE_SHIFT)
+#define HUGE_MAX_HSTATE		(MMU_PAGE_COUNT-1)
+#endif
+
 /* We do define AT_SYSINFO_EHDR but don't use the gate mechanism */
 #define __HAVE_ARCH_GATE_AREA		1
 
@@ -100,13 +112,25 @@ extern phys_addr_t kernstart_addr;
 #endif
 
 #ifdef CONFIG_FLATMEM
-#define ARCH_PFN_OFFSET		(MEMORY_START >> PAGE_SHIFT)
+#define ARCH_PFN_OFFSET		((unsigned long)(MEMORY_START >> PAGE_SHIFT))
 #define pfn_valid(pfn)		((pfn) >= ARCH_PFN_OFFSET && (pfn) < max_mapnr)
 #endif
 
 #define virt_to_page(kaddr)	pfn_to_page(__pa(kaddr) >> PAGE_SHIFT)
 #define pfn_to_kaddr(pfn)	__va((pfn) << PAGE_SHIFT)
+
+#ifdef CONFIG_PPC_BOOK3S_64
+/*
+ * On hash the vmalloc and other regions alias to the kernel region when passed
+ * through __pa(), which virt_to_pfn() uses. That means virt_addr_valid() can
+ * return true for some vmalloc addresses, which is incorrect. So explicitly
+ * check that the address is in the kernel region.
+ */
+#define virt_addr_valid(kaddr) (REGION_ID(kaddr) == KERNEL_REGION_ID && \
+				pfn_valid(__pa(kaddr) >> PAGE_SHIFT))
+#else
 #define virt_addr_valid(kaddr)	pfn_valid(__pa(kaddr) >> PAGE_SHIFT)
+#endif
 
 /*
  * On Book-E parts we need __va to parse the device tree and we can't
@@ -120,8 +144,18 @@ extern phys_addr_t kernstart_addr;
 #define __va(x) ((void *)(unsigned long)((phys_addr_t)(x) - PHYSICAL_START + KERNELBASE))
 #define __pa(x) ((unsigned long)(x) + PHYSICAL_START - KERNELBASE)
 #else
+#ifdef CONFIG_PPC64
+/*
+ * gcc miscompiles (unsigned long)(&static_var) - PAGE_OFFSET
+ * with -mcmodel=medium, so we use & and | instead of - and + on 64-bit.
+ */
+#define __va(x) ((void *)(unsigned long)((phys_addr_t)(x) | PAGE_OFFSET))
+#define __pa(x) ((unsigned long)(x) & 0x0fffffffffffffffUL)
+
+#else /* 32-bit, non book E */
 #define __va(x) ((void *)(unsigned long)((phys_addr_t)(x) + PAGE_OFFSET - MEMORY_START))
 #define __pa(x) ((unsigned long)(x) - PAGE_OFFSET + MEMORY_START)
+#endif
 #endif
 
 /*
@@ -157,6 +191,24 @@ extern phys_addr_t kernstart_addr;
 #else
 #define is_kernel_addr(x)	((x) >= PAGE_OFFSET)
 #endif
+
+/*
+ * Use the top bit of the higher-level page table entries to indicate whether
+ * the entries we point to contain hugepages.  This works because we know that
+ * the page tables live in kernel space.  If we ever decide to support having
+ * page tables at arbitrary addresses, this breaks and will have to change.
+ */
+#ifdef CONFIG_PPC64
+#define PD_HUGE 0x8000000000000000
+#else
+#define PD_HUGE 0x80000000
+#endif
+
+/*
+ * Some number of bits at the level of the page table that points to
+ * a hugepte are used to encode the size.  This masks those bits.
+ */
+#define HUGEPD_SHIFT_MASK     0x3f
 
 #ifndef __ASSEMBLY__
 
@@ -243,7 +295,6 @@ typedef unsigned long pgprot_t;
 #endif
 
 typedef struct { signed long pd; } hugepd_t;
-#define HUGEPD_SHIFT_MASK     0x3f
 
 #ifdef CONFIG_HUGETLB_PAGE
 static inline int hugepd_ok(hugepd_t hpd)

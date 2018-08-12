@@ -13,7 +13,7 @@
  * License version 2. This program is licensed "as is" without any 
  * warranty of any kind, whether express or implied.
  */
-
+#include <linux/gpio.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/spinlock.h>
@@ -25,6 +25,7 @@
 #include <linux/bitops.h>
 #include <linux/serial_8250.h>
 #include <linux/mm.h>
+#include <linux/export.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -39,7 +40,7 @@
 #include <asm/mach/time.h>
 #include <asm/mach/irq.h>
 
-#include <mach/gpio.h>
+#include <mach/gpio-ixp2000.h>
 
 static DEFINE_SPINLOCK(ixp2000_slowport_lock);
 static unsigned long ixp2000_slowport_irq_flags;
@@ -476,8 +477,8 @@ void __init ixp2000_init_irq(void)
 	 */
 	for (irq = IRQ_IXP2000_SOFT_INT; irq <= IRQ_IXP2000_THDB3; irq++) {
 		if ((1 << irq) & IXP2000_VALID_IRQ_MASK) {
-			set_irq_chip(irq, &ixp2000_irq_chip);
-			set_irq_handler(irq, handle_level_irq);
+			irq_set_chip_and_handler(irq, &ixp2000_irq_chip,
+						 handle_level_irq);
 			set_irq_flags(irq, IRQF_VALID);
 		} else set_irq_flags(irq, 0);
 	}
@@ -485,21 +486,21 @@ void __init ixp2000_init_irq(void)
 	for (irq = IRQ_IXP2000_DRAM0_MIN_ERR; irq <= IRQ_IXP2000_SP_INT; irq++) {
 		if((1 << (irq - IRQ_IXP2000_DRAM0_MIN_ERR)) &
 				IXP2000_VALID_ERR_IRQ_MASK) {
-			set_irq_chip(irq, &ixp2000_err_irq_chip);
-			set_irq_handler(irq, handle_level_irq);
+			irq_set_chip_and_handler(irq, &ixp2000_err_irq_chip,
+						 handle_level_irq);
 			set_irq_flags(irq, IRQF_VALID);
 		}
 		else
 			set_irq_flags(irq, 0);
 	}
-	set_irq_chained_handler(IRQ_IXP2000_ERRSUM, ixp2000_err_irq_handler);
+	irq_set_chained_handler(IRQ_IXP2000_ERRSUM, ixp2000_err_irq_handler);
 
 	for (irq = IRQ_IXP2000_GPIO0; irq <= IRQ_IXP2000_GPIO7; irq++) {
-		set_irq_chip(irq, &ixp2000_GPIO_irq_chip);
-		set_irq_handler(irq, handle_level_irq);
+		irq_set_chip_and_handler(irq, &ixp2000_GPIO_irq_chip,
+					 handle_level_irq);
 		set_irq_flags(irq, IRQF_VALID);
 	}
-	set_irq_chained_handler(IRQ_IXP2000_GPIO, ixp2000_GPIO_irq_handler);
+	irq_set_chained_handler(IRQ_IXP2000_GPIO, ixp2000_GPIO_irq_handler);
 
 	/*
 	 * Enable PCI irqs.  The actual PCI[AB] decoding is done in
@@ -508,8 +509,8 @@ void __init ixp2000_init_irq(void)
 	 */
 	ixp2000_reg_write(IXP2000_IRQ_ENABLE_SET, (1 << IRQ_IXP2000_PCI));
 	for (irq = IRQ_IXP2000_PCIA; irq <= IRQ_IXP2000_PCIB; irq++) {
-		set_irq_chip(irq, &ixp2000_pci_irq_chip);
-		set_irq_handler(irq, handle_level_irq);
+		irq_set_chip_and_handler(irq, &ixp2000_pci_irq_chip,
+					 handle_level_irq);
 		set_irq_flags(irq, IRQF_VALID);
 	}
 }

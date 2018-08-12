@@ -33,7 +33,9 @@
 
 #include <linux/pci.h>
 #include <linux/netdevice.h>
+#include <linux/moduleparam.h>
 #include <linux/slab.h>
+#include <linux/stat.h>
 #include <linux/vmalloc.h>
 
 #include "ipath_kernel.h"
@@ -335,7 +337,7 @@ done:
  * @dd: the infinipath device
  *
  * sanity check at least some of the values after reset, and
- * ensure no receive or transmit (explictly, in case reset
+ * ensure no receive or transmit (explicitly, in case reset
  * failed
  */
 static int init_chip_reset(struct ipath_devdata *dd)

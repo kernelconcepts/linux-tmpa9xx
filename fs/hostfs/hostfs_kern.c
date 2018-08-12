@@ -265,7 +265,7 @@ static int hostfs_show_options(struct seq_file *seq, struct vfsmount *vfs)
 	size_t offset = strlen(root_ino) + 1;
 
 	if (strlen(root_path) > offset)
-		seq_printf(seq, ",%s", root_path + offset);
+		seq_show_option(seq, root_path + offset, NULL);
 
 	return 0;
 }
@@ -362,9 +362,20 @@ retry:
 	return 0;
 }
 
-int hostfs_fsync(struct file *file, int datasync)
+int hostfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
-	return fsync_file(HOSTFS_I(file->f_mapping->host)->fd, datasync);
+	struct inode *inode = file->f_mapping->host;
+	int ret;
+
+	ret = filemap_write_and_wait_range(inode->i_mapping, start, end);
+	if (ret)
+		return ret;
+
+	mutex_lock(&inode->i_mutex);
+	ret = fsync_file(HOSTFS_I(inode)->fd, datasync);
+	mutex_unlock(&inode->i_mutex);
+
+	return ret;
 }
 
 static const struct file_operations hostfs_file_fops = {
@@ -530,7 +541,7 @@ static int read_name(struct inode *ino, char *name)
 
 	ino->i_ino = st.ino;
 	ino->i_mode = st.mode;
-	ino->i_nlink = st.nlink;
+	set_nlink(ino, st.nlink);
 	ino->i_uid = st.uid;
 	ino->i_gid = st.gid;
 	ino->i_atime = st.atime;
@@ -709,13 +720,11 @@ int hostfs_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t dev)
 
 	init_special_inode(inode, mode, dev);
 	err = do_mknod(name, mode, MAJOR(dev), MINOR(dev));
-	if (!err)
+	if (err)
 		goto out_free;
 
 	err = read_name(inode, name);
 	__putname(name);
-	if (err)
-		goto out_put;
 	if (err)
 		goto out_put;
 
@@ -748,12 +757,12 @@ int hostfs_rename(struct inode *from_ino, struct dentry *from,
 	return err;
 }
 
-int hostfs_permission(struct inode *ino, int desired, unsigned int flags)
+int hostfs_permission(struct inode *ino, int desired)
 {
 	char *name;
 	int r = 0, w = 0, x = 0, err;
 
-	if (flags & IPERM_FLAG_RCU)
+	if (desired & MAY_NOT_BLOCK)
 		return -ECHILD;
 
 	if (desired & MAY_READ) r = 1;
@@ -770,7 +779,7 @@ int hostfs_permission(struct inode *ino, int desired, unsigned int flags)
 		err = access_file(name, r, w, x);
 	__putname(name);
 	if (!err)
-		err = generic_permission(ino, desired, flags, NULL);
+		err = generic_permission(ino, desired);
 	return err;
 }
 
@@ -783,7 +792,7 @@ int hostfs_setattr(struct dentry *dentry, struct iattr *attr)
 
 	int fd = HOSTFS_I(inode)->fd;
 
-	err = inode_change_ok(inode, attr);
+	err = setattr_prepare(dentry, attr);
 	if (err)
 		return err;
 
@@ -946,10 +955,11 @@ static int hostfs_fill_sb_common(struct super_block *sb, void *d, int silent)
 
 	if (S_ISLNK(root_inode->i_mode)) {
 		char *name = follow_link(host_root_path);
-		if (IS_ERR(name))
+		if (IS_ERR(name)) {
 			err = PTR_ERR(name);
-		else
-			err = read_name(root_inode, name);
+			goto out_put;
+		}
+		err = read_name(root_inode, name);
 		kfree(name);
 		if (err)
 			goto out_put;

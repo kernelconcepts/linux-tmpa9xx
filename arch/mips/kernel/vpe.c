@@ -19,7 +19,7 @@
  * VPE support module
  *
  * Provides support for loading a MIPS SP program on VPE1.
- * The SP enviroment is rather simple, no tlb's.  It needs to be relocatable
+ * The SP environment is rather simple, no tlb's.  It needs to be relocatable
  * (or partially linked). You should initialise your stack in the startup
  * code. This loader looks for the symbol __start and sets up
  * execution to resume from there. The MIPS SDE kit contains suitable examples.
@@ -29,7 +29,6 @@
  */
 #include <linux/kernel.h>
 #include <linux/device.h>
-#include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <asm/uaccess.h>
@@ -46,7 +45,7 @@
 #include <asm/mipsregs.h>
 #include <asm/mipsmtregs.h>
 #include <asm/cacheflush.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 #include <asm/cpu.h>
 #include <asm/mips_mt.h>
 #include <asm/processor.h>
@@ -192,7 +191,7 @@ static struct tc *get_tc(int index)
 	}
 	spin_unlock(&vpecontrol.tc_list_lock);
 
-	return NULL;
+	return res;
 }
 
 /* allocate a vpe and associate it with this minor (or index) */

@@ -150,7 +150,7 @@ void __init check_for_initrd(void)
 	}
 
 	/*
-	 * If we got this far inspite of the boot loader's best efforts
+	 * If we got this far in spite of the boot loader's best efforts
 	 * to the contrary, assume we actually have a valid initrd and
 	 * fix up the root dev.
 	 */
@@ -211,13 +211,16 @@ void __init __add_active_range(unsigned int nid, unsigned long start_pfn,
 	}
 
 	/*
-	 *  We don't know which RAM region contains kernel data,
-	 *  so we try it repeatedly and let the resource manager
-	 *  test it.
+	 * We don't know which RAM region contains kernel data or
+	 * the reserved crashkernel region, so try it repeatedly
+	 * and let the resource manager test it.
 	 */
 	request_resource(res, &code_resource);
 	request_resource(res, &data_resource);
 	request_resource(res, &bss_resource);
+#ifdef CONFIG_KEXEC
+	request_resource(res, &crashk_res);
+#endif
 
 	/*
 	 * Also make sure that there is a PMB mapping that covers this

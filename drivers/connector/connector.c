@@ -122,50 +122,29 @@ EXPORT_SYMBOL_GPL(cn_netlink_send);
  */
 static int cn_call_callback(struct sk_buff *skb)
 {
-	struct cn_callback_entry *__cbq, *__new_cbq;
+	struct cn_callback_entry *i, *cbq = NULL;
 	struct cn_dev *dev = &cdev;
 	struct cn_msg *msg = NLMSG_DATA(nlmsg_hdr(skb));
+	struct netlink_skb_parms *nsp = &NETLINK_CB(skb);
 	int err = -ENODEV;
 
 	spin_lock_bh(&dev->cbdev->queue_lock);
-	list_for_each_entry(__cbq, &dev->cbdev->queue_list, callback_entry) {
-		if (cn_cb_equal(&__cbq->id.id, &msg->id)) {
-			if (likely(!work_pending(&__cbq->work) &&
-					__cbq->data.skb == NULL)) {
-				__cbq->data.skb = skb;
-
-				if (queue_work(dev->cbdev->cn_queue,
-					       &__cbq->work))
-					err = 0;
-				else
-					err = -EINVAL;
-			} else {
-				struct cn_callback_data *d;
-
-				err = -ENOMEM;
-				__new_cbq = kzalloc(sizeof(struct cn_callback_entry), GFP_ATOMIC);
-				if (__new_cbq) {
-					d = &__new_cbq->data;
-					d->skb = skb;
-					d->callback = __cbq->data.callback;
-					d->free = __new_cbq;
-
-					INIT_WORK(&__new_cbq->work,
-							&cn_queue_wrapper);
-
-					if (queue_work(dev->cbdev->cn_queue,
-						       &__new_cbq->work))
-						err = 0;
-					else {
-						kfree(__new_cbq);
-						err = -EINVAL;
-					}
-				}
-			}
+	list_for_each_entry(i, &dev->cbdev->queue_list, callback_entry) {
+		if (cn_cb_equal(&i->id.id, &msg->id)) {
+			atomic_inc(&i->refcnt);
+			cbq = i;
 			break;
 		}
 	}
 	spin_unlock_bh(&dev->cbdev->queue_lock);
+
+	if (cbq != NULL) {
+		err = 0;
+		cbq->callback(msg, nsp);
+		kfree_skb(skb);
+		cn_queue_release_callback(cbq);
+		err = 0;
+	}
 
 	return err;
 }
@@ -175,25 +154,21 @@ static int cn_call_callback(struct sk_buff *skb)
  *
  * It checks skb, netlink header and msg sizes, and calls callback helper.
  */
-static void cn_rx_skb(struct sk_buff *__skb)
+static void cn_rx_skb(struct sk_buff *skb)
 {
 	struct nlmsghdr *nlh;
-	int err;
-	struct sk_buff *skb;
-
-	skb = skb_get(__skb);
+	int len, err;
 
 	if (skb->len >= NLMSG_SPACE(0)) {
 		nlh = nlmsg_hdr(skb);
+		len = nlmsg_len(nlh);
 
-		if (nlh->nlmsg_len < sizeof(struct cn_msg) ||
+		if (len < (int)sizeof(struct cn_msg) ||
 		    skb->len < nlh->nlmsg_len ||
-		    nlh->nlmsg_len > CONNECTOR_MAX_MSG_SIZE) {
-			kfree_skb(skb);
+		    len > CONNECTOR_MAX_MSG_SIZE)
 			return;
-		}
 
-		err = cn_call_callback(skb);
+		err = cn_call_callback(skb_get(skb));
 		if (err < 0)
 			kfree_skb(skb);
 	}
@@ -205,7 +180,7 @@ static void cn_rx_skb(struct sk_buff *__skb)
  *
  * May sleep.
  */
-int cn_add_callback(struct cb_id *id, char *name,
+int cn_add_callback(struct cb_id *id, const char *name,
 		    void (*callback)(struct cn_msg *, struct netlink_skb_parms *))
 {
 	int err;

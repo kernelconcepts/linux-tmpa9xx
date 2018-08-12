@@ -507,6 +507,17 @@ static ssize_t show_nctxts(struct device *device,
 		dd->first_user_ctxt);
 }
 
+static ssize_t show_nfreectxts(struct device *device,
+			   struct device_attribute *attr, char *buf)
+{
+	struct qib_ibdev *dev =
+		container_of(device, struct qib_ibdev, ibdev.dev);
+	struct qib_devdata *dd = dd_from_dev(dev);
+
+	/* Return the number of free user ports (contexts) available. */
+	return scnprintf(buf, PAGE_SIZE, "%u\n", dd->freectxts);
+}
+
 static ssize_t show_serial(struct device *device,
 			   struct device_attribute *attr, char *buf)
 {
@@ -537,28 +548,6 @@ static ssize_t store_chip_reset(struct device *device,
 	ret = qib_reset_device(dd->unit);
 bail:
 	return ret < 0 ? ret : count;
-}
-
-static ssize_t show_logged_errs(struct device *device,
-				struct device_attribute *attr, char *buf)
-{
-	struct qib_ibdev *dev =
-		container_of(device, struct qib_ibdev, ibdev.dev);
-	struct qib_devdata *dd = dd_from_dev(dev);
-	int idx, count;
-
-	/* force consistency with actual EEPROM */
-	if (qib_update_eeprom_log(dd) != 0)
-		return -ENXIO;
-
-	count = 0;
-	for (idx = 0; idx < QIB_EEP_LOG_CNT; ++idx) {
-		count += scnprintf(buf + count, PAGE_SIZE - count, "%d%c",
-				   dd->eep_st_errs[idx],
-				   idx == (QIB_EEP_LOG_CNT - 1) ? '\n' : ' ');
-	}
-
-	return count;
 }
 
 /*
@@ -604,9 +593,9 @@ static DEVICE_ATTR(hca_type, S_IRUGO, show_hca, NULL);
 static DEVICE_ATTR(board_id, S_IRUGO, show_hca, NULL);
 static DEVICE_ATTR(version, S_IRUGO, show_version, NULL);
 static DEVICE_ATTR(nctxts, S_IRUGO, show_nctxts, NULL);
+static DEVICE_ATTR(nfreectxts, S_IRUGO, show_nfreectxts, NULL);
 static DEVICE_ATTR(serial, S_IRUGO, show_serial, NULL);
 static DEVICE_ATTR(boardversion, S_IRUGO, show_boardversion, NULL);
-static DEVICE_ATTR(logged_errors, S_IRUGO, show_logged_errs, NULL);
 static DEVICE_ATTR(tempsense, S_IRUGO, show_tempsense, NULL);
 static DEVICE_ATTR(localbus_info, S_IRUGO, show_localbus_info, NULL);
 static DEVICE_ATTR(chip_reset, S_IWUSR, NULL, store_chip_reset);
@@ -617,9 +606,9 @@ static struct device_attribute *qib_attributes[] = {
 	&dev_attr_board_id,
 	&dev_attr_version,
 	&dev_attr_nctxts,
+	&dev_attr_nfreectxts,
 	&dev_attr_serial,
 	&dev_attr_boardversion,
-	&dev_attr_logged_errors,
 	&dev_attr_tempsense,
 	&dev_attr_localbus_info,
 	&dev_attr_chip_reset,

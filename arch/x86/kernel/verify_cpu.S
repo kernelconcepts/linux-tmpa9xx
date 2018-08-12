@@ -18,7 +18,7 @@
  *	This file is expected to run in 32bit code.  Currently:
  *
  *	arch/x86/boot/compressed/head_64.S: Boot cpu verification
- *	arch/x86/kernel/trampoline_64.S: secondary processor verfication
+ *	arch/x86/kernel/trampoline_64.S: secondary processor verification
  *	arch/x86/kernel/head_32.S: processor startup
  *
  *	verify_cpu, returns the status of longmode and SSE in register %eax.
@@ -34,10 +34,11 @@
 #include <asm/msr-index.h>
 
 verify_cpu:
-	pushfl				# Save caller passed flags
-	pushl	$0			# Kill any dangerous flags
-	popfl
+	pushf				# Save caller passed flags
+	push	$0			# Kill any dangerous flags
+	popf
 
+#ifndef __x86_64__
 	pushfl				# standard way to check for cpuid
 	popl	%eax
 	movl	%eax,%ebx
@@ -48,6 +49,7 @@ verify_cpu:
 	popl	%eax
 	cmpl	%eax,%ebx
 	jz	verify_cpu_no_longmode	# cpu has no cpuid
+#endif
 
 	movl	$0x0,%eax		# See if cpuid 1 is implemented
 	cpuid
@@ -130,10 +132,10 @@ verify_cpu_sse_test:
 	jmp	verify_cpu_sse_test	# try again
 
 verify_cpu_no_longmode:
-	popfl				# Restore caller passed flags
+	popf				# Restore caller passed flags
 	movl $1,%eax
 	ret
 verify_cpu_sse_ok:
-	popfl				# Restore caller passed flags
+	popf				# Restore caller passed flags
 	xorl %eax, %eax
 	ret

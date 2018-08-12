@@ -32,6 +32,7 @@
 #include "nouveau_hw.h"
 #include "nouveau_crtc.h"
 #include "nouveau_dma.h"
+#include "nv50_display.h"
 
 static void
 nouveau_user_framebuffer_destroy(struct drm_framebuffer *drm_fb)
@@ -61,18 +62,62 @@ static const struct drm_framebuffer_funcs nouveau_framebuffer_funcs = {
 };
 
 int
-nouveau_framebuffer_init(struct drm_device *dev, struct nouveau_framebuffer *nouveau_fb,
-			 struct drm_mode_fb_cmd *mode_cmd, struct nouveau_bo *nvbo)
+nouveau_framebuffer_init(struct drm_device *dev,
+			 struct nouveau_framebuffer *nv_fb,
+			 struct drm_mode_fb_cmd *mode_cmd,
+			 struct nouveau_bo *nvbo)
 {
+	struct drm_nouveau_private *dev_priv = dev->dev_private;
+	struct drm_framebuffer *fb = &nv_fb->base;
 	int ret;
 
-	ret = drm_framebuffer_init(dev, &nouveau_fb->base, &nouveau_framebuffer_funcs);
+	ret = drm_framebuffer_init(dev, fb, &nouveau_framebuffer_funcs);
 	if (ret) {
 		return ret;
 	}
 
-	drm_helper_mode_fill_fb_struct(&nouveau_fb->base, mode_cmd);
-	nouveau_fb->nvbo = nvbo;
+	drm_helper_mode_fill_fb_struct(fb, mode_cmd);
+	nv_fb->nvbo = nvbo;
+
+	if (dev_priv->card_type >= NV_50) {
+		u32 tile_flags = nouveau_bo_tile_layout(nvbo);
+		if (tile_flags == 0x7a00 ||
+		    tile_flags == 0xfe00)
+			nv_fb->r_dma = NvEvoFB32;
+		else
+		if (tile_flags == 0x7000)
+			nv_fb->r_dma = NvEvoFB16;
+		else
+			nv_fb->r_dma = NvEvoVRAM_LP;
+
+		switch (fb->depth) {
+		case  8: nv_fb->r_format = NV50_EVO_CRTC_FB_DEPTH_8; break;
+		case 15: nv_fb->r_format = NV50_EVO_CRTC_FB_DEPTH_15; break;
+		case 16: nv_fb->r_format = NV50_EVO_CRTC_FB_DEPTH_16; break;
+		case 24:
+		case 32: nv_fb->r_format = NV50_EVO_CRTC_FB_DEPTH_24; break;
+		case 30: nv_fb->r_format = NV50_EVO_CRTC_FB_DEPTH_30; break;
+		default:
+			 NV_ERROR(dev, "unknown depth %d\n", fb->depth);
+			 return -EINVAL;
+		}
+
+		if (dev_priv->chipset == 0x50)
+			nv_fb->r_format |= (tile_flags << 8);
+
+		if (!tile_flags) {
+			if (dev_priv->card_type < NV_D0)
+				nv_fb->r_pitch = 0x00100000 | fb->pitch;
+			else
+				nv_fb->r_pitch = 0x01000000 | fb->pitch;
+		} else {
+			u32 mode = nvbo->tile_mode;
+			if (dev_priv->card_type >= NV_C0)
+				mode >>= 4;
+			nv_fb->r_pitch = ((fb->pitch / 4) << 4) | mode;
+		}
+	}
+
 	return 0;
 }
 
@@ -182,6 +227,7 @@ nouveau_page_flip_emit(struct nouveau_channel *chan,
 		       struct nouveau_page_flip_state *s,
 		       struct nouveau_fence **pfence)
 {
+	struct drm_nouveau_private *dev_priv = chan->dev->dev_private;
 	struct drm_device *dev = chan->dev;
 	unsigned long flags;
 	int ret;
@@ -201,9 +247,12 @@ nouveau_page_flip_emit(struct nouveau_channel *chan,
 	if (ret)
 		goto fail;
 
-	BEGIN_RING(chan, NvSubSw, NV_SW_PAGE_FLIP, 1);
-	OUT_RING(chan, 0);
-	FIRE_RING(chan);
+	if (dev_priv->card_type < NV_C0)
+		BEGIN_RING(chan, NvSubSw, NV_SW_PAGE_FLIP, 1);
+	else
+		BEGIN_NVC0(chan, 2, NvSubM2MF, 0x0500, 1);
+	OUT_RING  (chan, 0);
+	FIRE_RING (chan);
 
 	ret = nouveau_fence_new(chan, pfence, true);
 	if (ret)
@@ -230,7 +279,7 @@ nouveau_crtc_page_flip(struct drm_crtc *crtc, struct drm_framebuffer *fb,
 	struct nouveau_fence *fence;
 	int ret;
 
-	if (dev_priv->engine.graph.accel_blocked)
+	if (!dev_priv->channel)
 		return -ENODEV;
 
 	s = kzalloc(sizeof(*s), GFP_KERNEL);
@@ -244,7 +293,7 @@ nouveau_crtc_page_flip(struct drm_crtc *crtc, struct drm_framebuffer *fb,
 
 	/* Initialize a page flip struct */
 	*s = (struct nouveau_page_flip_state)
-		{ { }, s->event, nouveau_crtc(crtc)->index,
+		{ { }, event, nouveau_crtc(crtc)->index,
 		  fb->bits_per_pixel, fb->pitch, crtc->x, crtc->y,
 		  new_bo->bo.offset };
 
@@ -255,6 +304,14 @@ nouveau_crtc_page_flip(struct drm_crtc *crtc, struct drm_framebuffer *fb,
 	mutex_lock(&chan->mutex);
 
 	/* Emit a page flip */
+	if (dev_priv->card_type >= NV_50) {
+		ret = nv50_display_flip_next(crtc, fb, chan);
+		if (ret) {
+			nouveau_channel_put(&chan);
+			goto fail_unreserve;
+		}
+	}
+
 	ret = nouveau_page_flip_emit(chan, old_bo, new_bo, s, &fence);
 	nouveau_channel_put(&chan);
 	if (ret)
@@ -305,9 +362,55 @@ nouveau_finish_page_flip(struct nouveau_channel *chan,
 	}
 
 	list_del(&s->head);
-	*ps = *s;
+	if (ps)
+		*ps = *s;
 	kfree(s);
 
 	spin_unlock_irqrestore(&dev->event_lock, flags);
 	return 0;
+}
+
+int
+nouveau_display_dumb_create(struct drm_file *file_priv, struct drm_device *dev,
+			    struct drm_mode_create_dumb *args)
+{
+	struct nouveau_bo *bo;
+	int ret;
+
+	args->pitch = roundup(args->width * (args->bpp / 8), 256);
+	args->size = args->pitch * args->height;
+	args->size = roundup(args->size, PAGE_SIZE);
+
+	ret = nouveau_gem_new(dev, args->size, 0, NOUVEAU_GEM_DOMAIN_VRAM, 0, 0, &bo);
+	if (ret)
+		return ret;
+
+	ret = drm_gem_handle_create(file_priv, bo->gem, &args->handle);
+	drm_gem_object_unreference_unlocked(bo->gem);
+	return ret;
+}
+
+int
+nouveau_display_dumb_destroy(struct drm_file *file_priv, struct drm_device *dev,
+			     uint32_t handle)
+{
+	return drm_gem_handle_delete(file_priv, handle);
+}
+
+int
+nouveau_display_dumb_map_offset(struct drm_file *file_priv,
+				struct drm_device *dev,
+				uint32_t handle, uint64_t *poffset)
+{
+	struct drm_gem_object *gem;
+
+	gem = drm_gem_object_lookup(dev, file_priv, handle);
+	if (gem) {
+		struct nouveau_bo *bo = gem->driver_private;
+		*poffset = bo->bo.addr_space_offset;
+		drm_gem_object_unreference_unlocked(gem);
+		return 0;
+	}
+
+	return -ENOENT;
 }

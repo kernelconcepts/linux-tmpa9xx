@@ -532,6 +532,13 @@ struct kobject *kobject_get(struct kobject *kobj)
 	return kobj;
 }
 
+static struct kobject *kobject_get_unless_zero(struct kobject *kobj)
+{
+	if (!kref_get_unless_zero(&kobj->kref))
+		kobj = NULL;
+	return kobj;
+}
+
 /*
  * kobject_cleanup - free kobject resources.
  * @kobj: object to cleanup
@@ -786,7 +793,7 @@ struct kobject *kset_find_obj_hinted(struct kset *kset, const char *name,
 slow_search:
 	list_for_each_entry(k, &kset->list, entry) {
 		if (kobject_name(k) && !strcmp(kobject_name(k), name)) {
-			ret = kobject_get(k);
+			ret = kobject_get_unless_zero(k);
 			break;
 		}
 	}
@@ -949,14 +956,14 @@ const struct kobj_ns_type_operations *kobj_ns_ops(struct kobject *kobj)
 }
 
 
-const void *kobj_ns_current(enum kobj_ns_type type)
+void *kobj_ns_grab_current(enum kobj_ns_type type)
 {
-	const void *ns = NULL;
+	void *ns = NULL;
 
 	spin_lock(&kobj_ns_type_lock);
 	if ((type > KOBJ_NS_TYPE_NONE) && (type < KOBJ_NS_TYPES) &&
 	    kobj_ns_ops_tbl[type])
-		ns = kobj_ns_ops_tbl[type]->current_ns();
+		ns = kobj_ns_ops_tbl[type]->grab_current_ns();
 	spin_unlock(&kobj_ns_type_lock);
 
 	return ns;
@@ -988,22 +995,14 @@ const void *kobj_ns_initial(enum kobj_ns_type type)
 	return ns;
 }
 
-/*
- * kobj_ns_exit - invalidate a namespace tag
- *
- * @type: the namespace type (i.e. KOBJ_NS_TYPE_NET)
- * @ns: the actual namespace being invalidated
- *
- * This is called when a tag is no longer valid.  For instance,
- * when a network namespace exits, it uses this helper to
- * make sure no sb's sysfs_info points to the now-invalidated
- * netns.
- */
-void kobj_ns_exit(enum kobj_ns_type type, const void *ns)
+void kobj_ns_drop(enum kobj_ns_type type, void *ns)
 {
-	sysfs_exit_ns(type, ns);
+	spin_lock(&kobj_ns_type_lock);
+	if ((type > KOBJ_NS_TYPE_NONE) && (type < KOBJ_NS_TYPES) &&
+	    kobj_ns_ops_tbl[type] && kobj_ns_ops_tbl[type]->drop_ns)
+		kobj_ns_ops_tbl[type]->drop_ns(ns);
+	spin_unlock(&kobj_ns_type_lock);
 }
-
 
 EXPORT_SYMBOL(kobject_get);
 EXPORT_SYMBOL(kobject_put);

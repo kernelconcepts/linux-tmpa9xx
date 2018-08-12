@@ -171,7 +171,9 @@ struct qib_ctxtdata {
 	/* how many alloc_pages() chunks in rcvegrbuf_pages */
 	u32 rcvegrbuf_chunks;
 	/* how many egrbufs per chunk */
-	u32 rcvegrbufs_perchunk;
+	u16 rcvegrbufs_perchunk;
+	/* ilog2 of above */
+	u16 rcvegrbufs_perchunk_shift;
 	/* order for rcvegrbuf_pages */
 	size_t rcvegrbuf_size;
 	/* rcvhdrq size (for freeing) */
@@ -221,6 +223,9 @@ struct qib_ctxtdata {
 	/* ctxt rcvhdrq head offset */
 	u32 head;
 	u32 pkt_count;
+	/* lookaside fields */
+	struct qib_qp *lookaside_qp;
+	u32 lookaside_qpn;
 	/* QPs waiting for context processing */
 	struct list_head qp_wait_list;
 };
@@ -653,7 +658,7 @@ struct diag_observer_list_elt;
 
 /* device data struct now contains only "general per-device" info.
  * fields related to a physical IB port are in a qib_pportdata struct,
- * described above) while fields only used by a particualr chip-type are in
+ * described above) while fields only used by a particular chip-type are in
  * a qib_chipdata struct, whose contents are opaque to this file.
  */
 struct qib_devdata {
@@ -807,6 +812,10 @@ struct qib_devdata {
 	 * supports, less gives more pio bufs/ctxt, etc.
 	 */
 	u32 cfgctxts;
+	/*
+	 * number of ctxts available for PSM open
+	 */
+	u32 freectxts;
 
 	/*
 	 * hint that we should update pioavailshadow before
@@ -936,7 +945,9 @@ struct qib_devdata {
 	/* chip address space used by 4k pio buffers */
 	u32 align4k;
 	/* size of each rcvegrbuffer */
-	u32 rcvegrbufsize;
+	u16 rcvegrbufsize;
+	/* log2 of above */
+	u16 rcvegrbufsize_shift;
 	/* localbus width (1, 2,4,8,16,32) from config space  */
 	u32 lbus_width;
 	/* localbus speed in MHz */
@@ -994,12 +1005,6 @@ struct qib_devdata {
 	/* control high-level access to EEPROM */
 	struct mutex eep_lock;
 	uint64_t traffic_wds;
-	/* active time is kept in seconds, but logged in hours */
-	atomic_t active_time;
-	/* Below are nominal shadow of EEPROM, new since last EEPROM update */
-	uint8_t eep_st_errs[QIB_EEP_LOG_CNT];
-	uint8_t eep_st_new_errs[QIB_EEP_LOG_CNT];
-	uint16_t eep_hrs;
 	/*
 	 * masks for which bits of errs, hwerrs that cause
 	 * each of the counters to increment.
@@ -1012,6 +1017,8 @@ struct qib_devdata {
 	u8 psxmitwait_supported;
 	/* cycle length of PS* counters in HW (in picoseconds) */
 	u16 psxmitwait_check_rate;
+	/* high volume overflow errors defered to tasklet */
+	struct tasklet_struct error_tasklet;
 };
 
 /* hol_state values */
@@ -1214,8 +1221,7 @@ int qib_twsi_blk_rd(struct qib_devdata *dd, int dev, int addr, void *buffer,
 int qib_twsi_blk_wr(struct qib_devdata *dd, int dev, int addr,
 		    const void *buffer, int len);
 void qib_get_eeprom_info(struct qib_devdata *);
-int qib_update_eeprom_log(struct qib_devdata *dd);
-void qib_inc_eeprom_err(struct qib_devdata *dd, u32 eidx, u32 incr);
+#define qib_inc_eeprom_err(dd, eidx, incr)
 void qib_dump_lookup_output_queue(struct qib_devdata *);
 void qib_force_pio_avail_update(struct qib_devdata *);
 void qib_clear_symerror_on_linkup(unsigned long opaque);
@@ -1415,6 +1421,10 @@ extern struct mutex qib_mutex;
 			qib_get_unit_name((dd)->unit), ##__VA_ARGS__); \
 	} while (0)
 
+#define qib_dev_warn(dd, fmt, ...) \
+	dev_warn(&(dd)->pcidev->dev, "%s: " fmt, \
+		qib_get_unit_name((dd)->unit), ##__VA_ARGS__)
+
 #define qib_dev_porterr(dd, port, fmt, ...) \
 	do { \
 		dev_err(&(dd)->pcidev->dev, "%s: IB%u:%u " fmt, \
@@ -1433,6 +1443,7 @@ extern struct mutex qib_mutex;
 struct qib_hwerror_msgs {
 	u64 mask;
 	const char *msg;
+	size_t sz;
 };
 
 #define QLOGIC_IB_HWE_MSG(a, b) { .mask = a, .msg = b }

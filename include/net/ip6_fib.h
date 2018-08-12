@@ -13,8 +13,6 @@
 #ifndef _IP6_FIB_H
 #define _IP6_FIB_H
 
-#ifdef __KERNEL__
-
 #include <linux/ipv6_route.h>
 #include <linux/rtnetlink.h>
 #include <linux/spinlock.h>
@@ -42,6 +40,7 @@ struct fib6_config {
 
 	struct in6_addr	fc_dst;
 	struct in6_addr	fc_src;
+	struct in6_addr	fc_prefsrc;
 	struct in6_addr	fc_gateway;
 
 	unsigned long	fc_expires;
@@ -64,6 +63,7 @@ struct fib6_node {
 	__u16			fn_flags;
 	__u32			fn_sernum;
 	struct rt6_info		*rr_ptr;
+	struct rcu_head		rcu;
 };
 
 #ifndef CONFIG_IPV6_SUBTREES
@@ -88,7 +88,6 @@ struct rt6_info {
 	struct dst_entry		dst;
 
 #define rt6i_dev			dst.dev
-#define rt6i_nexthop			dst.neighbour
 #define rt6i_expires			dst.expires
 
 	/*
@@ -97,7 +96,7 @@ struct rt6_info {
 	 * the same cache line.
 	 */
 	struct fib6_table		*rt6i_table;
-	struct fib6_node		*rt6i_node;
+	struct fib6_node __rcu		*rt6i_node;
 
 	struct in6_addr			rt6i_gateway;
 
@@ -107,7 +106,9 @@ struct rt6_info {
 	struct rt6key			rt6i_dst ____cacheline_aligned_in_smp;
 	u32				rt6i_flags;
 	struct rt6key			rt6i_src;
+	struct rt6key			rt6i_prefsrc;
 	u32				rt6i_metric;
+	u32				rt6i_peer_genid;
 
 	struct inet6_dev		*rt6i_idev;
 	struct inet_peer		*rt6i_peer;
@@ -124,6 +125,38 @@ struct rt6_info {
 static inline struct inet6_dev *ip6_dst_idev(struct dst_entry *dst)
 {
 	return ((struct rt6_info *)dst)->rt6i_idev;
+}
+
+/* Function to safely get fn->sernum for passed in rt
+ * and store result in passed in cookie.
+ * Return true if we can get cookie safely
+ * Return false if not
+ */
+static inline bool rt6_get_cookie_safe(const struct rt6_info *rt,
+				       u32 *cookie)
+{
+	struct fib6_node *fn;
+	bool status = false;
+
+	rcu_read_lock();
+	fn = rcu_dereference(rt->rt6i_node);
+
+	if (fn) {
+		*cookie = fn->fn_sernum;
+		status = true;
+	}
+
+	rcu_read_unlock();
+	return status;
+}
+
+static inline u32 rt6_get_cookie(const struct rt6_info *rt)
+{
+	u32 cookie = 0;
+
+	rt6_get_cookie_safe(rt, &cookie);
+
+	return cookie;
 }
 
 struct fib6_walker_t {
@@ -182,7 +215,7 @@ struct fib6_table {
 
 typedef struct rt6_info *(*pol_lookup_t)(struct net *,
 					 struct fib6_table *,
-					 struct flowi *, int);
+					 struct flowi6 *, int);
 
 /*
  *	exported functions
@@ -191,16 +224,16 @@ typedef struct rt6_info *(*pol_lookup_t)(struct net *,
 extern struct fib6_table        *fib6_get_table(struct net *net, u32 id);
 extern struct fib6_table        *fib6_new_table(struct net *net, u32 id);
 extern struct dst_entry         *fib6_rule_lookup(struct net *net,
-						  struct flowi *fl, int flags,
+						  struct flowi6 *fl6, int flags,
 						  pol_lookup_t lookup);
 
 extern struct fib6_node		*fib6_lookup(struct fib6_node *root,
-					     struct in6_addr *daddr,
-					     struct in6_addr *saddr);
+					     const struct in6_addr *daddr,
+					     const struct in6_addr *saddr);
 
 struct fib6_node		*fib6_locate(struct fib6_node *root,
-					     struct in6_addr *daddr, int dst_len,
-					     struct in6_addr *saddr, int src_len);
+					     const struct in6_addr *daddr, int dst_len,
+					     const struct in6_addr *saddr, int src_len);
 
 extern void			fib6_clean_all(struct net *net,
 					       int (*func)(struct rt6_info *, void *arg),
@@ -217,7 +250,7 @@ extern void			inet6_rt_notify(int event, struct rt6_info *rt,
 						struct nl_info *info);
 
 extern void			fib6_run_gc(unsigned long expires,
-					    struct net *net);
+					    struct net *net, bool force);
 
 extern void			fib6_gc_cleanup(void);
 
@@ -235,6 +268,5 @@ static inline void              fib6_rules_cleanup(void)
 {
 	return ;
 }
-#endif
 #endif
 #endif

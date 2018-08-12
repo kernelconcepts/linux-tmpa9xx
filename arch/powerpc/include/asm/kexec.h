@@ -2,7 +2,7 @@
 #define _ASM_POWERPC_KEXEC_H
 #ifdef __KERNEL__
 
-#ifdef CONFIG_FSL_BOOKE
+#if defined(CONFIG_FSL_BOOKE) || defined(CONFIG_44x)
 
 /*
  * On FSL-BookE we setup a 1:1 mapping which covers the first 2GiB of memory
@@ -76,7 +76,7 @@ extern void crash_send_ipi(void (*crash_ipi_callback)(struct pt_regs *));
 extern cpumask_t cpus_in_sr;
 static inline int kexec_sr_activated(int cpu)
 {
-	return cpu_isset(cpu,cpus_in_sr);
+	return cpumask_test_cpu(cpu, &cpus_in_sr);
 }
 
 struct kimage;

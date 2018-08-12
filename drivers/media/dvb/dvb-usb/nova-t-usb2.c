@@ -47,7 +47,7 @@ static struct rc_map_table rc_map_haupp_table[] = {
 	{ 0x1e17, KEY_RIGHT },
 	{ 0x1e18, KEY_VIDEO },
 	{ 0x1e19, KEY_AUDIO },
-	{ 0x1e1a, KEY_MEDIA },
+	{ 0x1e1a, KEY_IMAGES },
 	{ 0x1e1b, KEY_EPG },
 	{ 0x1e1c, KEY_TV },
 	{ 0x1e1e, KEY_NEXT },
@@ -166,6 +166,8 @@ static struct dvb_usb_device_properties nova_t_properties = {
 	.num_adapters     = 1,
 	.adapter          = {
 		{
+		.num_frontends = 1,
+		.fe = {{
 			.caps = DVB_USB_ADAP_HAS_PID_FILTER | DVB_USB_ADAP_PID_FILTER_CAN_BE_TURNED_OFF,
 			.pid_filter_count = 32,
 
@@ -186,7 +188,7 @@ static struct dvb_usb_device_properties nova_t_properties = {
 					}
 				}
 			},
-
+		}},
 			.size_of_priv     = sizeof(struct dibusb_state),
 		}
 	},

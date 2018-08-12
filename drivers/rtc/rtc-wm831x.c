@@ -24,7 +24,7 @@
 #include <linux/mfd/wm831x/core.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
-
+#include <linux/random.h>
 
 /*
  * R16416 (0x4020) - RTC Write Counter
@@ -95,6 +95,26 @@ struct wm831x_rtc {
 	struct rtc_device *rtc;
 	unsigned int alarm_enabled:1;
 };
+
+static void wm831x_rtc_add_randomness(struct wm831x *wm831x)
+{
+	int ret;
+	u16 reg;
+
+	/*
+	 * The write counter contains a pseudo-random number which is
+	 * regenerated every time we set the RTC so it should be a
+	 * useful per-system source of entropy.
+	 */
+	ret = wm831x_reg_read(wm831x, WM831X_RTC_WRITE_COUNTER);
+	if (ret >= 0) {
+		reg = ret;
+		add_device_randomness(&reg, sizeof(reg));
+	} else {
+		dev_warn(wm831x->dev, "Failed to read RTC write counter: %d\n",
+			 ret);
+	}
+}
 
 /*
  * Read current time and date in RTC
@@ -315,21 +335,6 @@ static int wm831x_rtc_alarm_irq_enable(struct device *dev,
 		return wm831x_rtc_stop_alarm(wm831x_rtc);
 }
 
-static int wm831x_rtc_update_irq_enable(struct device *dev,
-					unsigned int enabled)
-{
-	struct wm831x_rtc *wm831x_rtc = dev_get_drvdata(dev);
-	int val;
-
-	if (enabled)
-		val = 1 << WM831X_RTC_PINT_FREQ_SHIFT;
-	else
-		val = 0;
-
-	return wm831x_set_bits(wm831x_rtc->wm831x, WM831X_RTC_CONTROL,
-			       WM831X_RTC_PINT_FREQ_MASK, val);
-}
-
 static irqreturn_t wm831x_alm_irq(int irq, void *data)
 {
 	struct wm831x_rtc *wm831x_rtc = data;
@@ -354,7 +359,6 @@ static const struct rtc_class_ops wm831x_rtc_ops = {
 	.read_alarm = wm831x_rtc_readalarm,
 	.set_alarm = wm831x_rtc_setalarm,
 	.alarm_irq_enable = wm831x_rtc_alarm_irq_enable,
-	.update_irq_enable = wm831x_rtc_update_irq_enable,
 };
 
 #ifdef CONFIG_PM
@@ -464,6 +468,8 @@ static int wm831x_rtc_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to request alarm IRQ %d: %d\n",
 			alm_irq, ret);
 	}
+
+	wm831x_rtc_add_randomness(wm831x);
 
 	return 0;
 

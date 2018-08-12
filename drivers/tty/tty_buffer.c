@@ -114,11 +114,14 @@ static void __tty_buffer_flush(struct tty_struct *tty)
 {
 	struct tty_buffer *thead;
 
-	while ((thead = tty->buf.head) != NULL) {
-		tty->buf.head = thead->next;
-		tty_buffer_free(tty, thead);
+	if (tty->buf.head == NULL)
+		return;
+	while ((thead = tty->buf.head->next) != NULL) {
+		tty_buffer_free(tty, tty->buf.head);
+		tty->buf.head = thead;
 	}
-	tty->buf.tail = NULL;
+	WARN_ON(tty->buf.head != tty->buf.tail);
+	tty->buf.head->read = tty->buf.head->commit;
 }
 
 /**
@@ -322,7 +325,7 @@ void tty_schedule_flip(struct tty_struct *tty)
 	if (tty->buf.tail != NULL)
 		tty->buf.tail->commit = tty->buf.tail->used;
 	spin_unlock_irqrestore(&tty->buf.lock, flags);
-	schedule_delayed_work(&tty->buf.work, 1);
+	schedule_work(&tty->buf.work);
 }
 EXPORT_SYMBOL(tty_schedule_flip);
 
@@ -402,7 +405,7 @@ EXPORT_SYMBOL_GPL(tty_prepare_flip_string_flags);
 static void flush_to_ldisc(struct work_struct *work)
 {
 	struct tty_struct *tty =
-		container_of(work, struct tty_struct, buf.work.work);
+		container_of(work, struct tty_struct, buf.work);
 	unsigned long 	flags;
 	struct tty_ldisc *disc;
 
@@ -413,8 +416,7 @@ static void flush_to_ldisc(struct work_struct *work)
 	spin_lock_irqsave(&tty->buf.lock, flags);
 
 	if (!test_and_set_bit(TTY_FLUSHING, &tty->flags)) {
-		struct tty_buffer *head, *tail = tty->buf.tail;
-		int seen_tail = 0;
+		struct tty_buffer *head;
 		while ((head = tty->buf.head) != NULL) {
 			int count;
 			char *char_buf;
@@ -424,15 +426,6 @@ static void flush_to_ldisc(struct work_struct *work)
 			if (!count) {
 				if (head->next == NULL)
 					break;
-				/*
-				  There's a possibility tty might get new buffer
-				  added during the unlock window below. We could
-				  end up spinning in here forever hogging the CPU
-				  completely. To avoid this let's have a rest each
-				  time we processed the tail buffer.
-				*/
-				if (tail == head)
-					seen_tail = 1;
 				tty->buf.head = head->next;
 				tty_buffer_free(tty, head);
 				continue;
@@ -442,19 +435,19 @@ static void flush_to_ldisc(struct work_struct *work)
 			   line discipline as we want to empty the queue */
 			if (test_bit(TTY_FLUSHPENDING, &tty->flags))
 				break;
-			if (!tty->receive_room || seen_tail) {
-				schedule_delayed_work(&tty->buf.work, 1);
+			if (!tty->receive_room)
 				break;
-			}
 			if (count > tty->receive_room)
 				count = tty->receive_room;
 			char_buf = head->char_buf_ptr + head->read;
 			flag_buf = head->flag_buf_ptr + head->read;
 			head->read += count;
-			spin_unlock_irqrestore(&tty->buf.lock, flags);
-			disc->ops->receive_buf(tty, char_buf,
+			if (disc->ops->receive_buf) {
+				spin_unlock_irqrestore(&tty->buf.lock, flags);
+				disc->ops->receive_buf(tty, char_buf,
 							flag_buf, count);
-			spin_lock_irqsave(&tty->buf.lock, flags);
+				spin_lock_irqsave(&tty->buf.lock, flags);
+			}
 		}
 		clear_bit(TTY_FLUSHING, &tty->flags);
 	}
@@ -481,7 +474,7 @@ static void flush_to_ldisc(struct work_struct *work)
  */
 void tty_flush_to_ldisc(struct tty_struct *tty)
 {
-	flush_delayed_work(&tty->buf.work);
+	flush_work(&tty->buf.work);
 }
 
 /**
@@ -506,9 +499,9 @@ void tty_flip_buffer_push(struct tty_struct *tty)
 	spin_unlock_irqrestore(&tty->buf.lock, flags);
 
 	if (tty->low_latency)
-		flush_to_ldisc(&tty->buf.work.work);
+		flush_to_ldisc(&tty->buf.work);
 	else
-		schedule_delayed_work(&tty->buf.work, 1);
+		schedule_work(&tty->buf.work);
 }
 EXPORT_SYMBOL(tty_flip_buffer_push);
 
@@ -529,6 +522,6 @@ void tty_buffer_init(struct tty_struct *tty)
 	tty->buf.tail = NULL;
 	tty->buf.free = NULL;
 	tty->buf.memory_used = 0;
-	INIT_DELAYED_WORK(&tty->buf.work, flush_to_ldisc);
+	INIT_WORK(&tty->buf.work, flush_to_ldisc);
 }
 

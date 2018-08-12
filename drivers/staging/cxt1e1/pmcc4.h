@@ -31,7 +31,7 @@
  * $Log: pmcc4.h,v $
  * Revision 1.4  2005/11/01 19:24:48  rickd
  * Remove de-implement function prototypes.  Several <int> to
- * <status_t> changes for consistant usage of same.
+ * <status_t> changes for consistent usage of same.
  *
  * Revision 1.3  2005/09/28 00:10:08  rickd
  * Add GNU license info. Use config params from libsbew.h
@@ -138,7 +138,6 @@ void        sbeid_set_bdtype (ci_t * ci);
 void        sbeid_set_hdwbid (ci_t * ci);
 u_int32_t   sbeCrc (u_int8_t *, u_int32_t, u_int32_t, u_int32_t *);
 
-void        VMETRO_TRACE (void *);       /* put data into 8 LEDs */
 void        VMETRO_TRIGGER (ci_t *, int);       /* Note: int = 0(default)
                                                  * thru 15 */
 

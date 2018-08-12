@@ -37,7 +37,7 @@ static int show_schedstat(struct seq_file *seq, void *v)
 
 #ifdef CONFIG_SMP
 		/* domain-specific stats */
-		preempt_disable();
+		rcu_read_lock();
 		for_each_domain(cpu, sd) {
 			enum cpu_idle_type itype;
 
@@ -64,7 +64,7 @@ static int show_schedstat(struct seq_file *seq, void *v)
 			    sd->ttwu_wake_remote, sd->ttwu_move_affine,
 			    sd->ttwu_move_balance);
 		}
-		preempt_enable();
+		rcu_read_unlock();
 #endif
 	}
 	kfree(mask_str);
@@ -282,10 +282,10 @@ static inline void account_group_user_time(struct task_struct *tsk,
 	if (!cputimer->running)
 		return;
 
-	spin_lock(&cputimer->lock);
+	raw_spin_lock(&cputimer->lock);
 	cputimer->cputime.utime =
 		cputime_add(cputimer->cputime.utime, cputime);
-	spin_unlock(&cputimer->lock);
+	raw_spin_unlock(&cputimer->lock);
 }
 
 /**
@@ -306,10 +306,10 @@ static inline void account_group_system_time(struct task_struct *tsk,
 	if (!cputimer->running)
 		return;
 
-	spin_lock(&cputimer->lock);
+	raw_spin_lock(&cputimer->lock);
 	cputimer->cputime.stime =
 		cputime_add(cputimer->cputime.stime, cputime);
-	spin_unlock(&cputimer->lock);
+	raw_spin_unlock(&cputimer->lock);
 }
 
 /**
@@ -330,7 +330,7 @@ static inline void account_group_exec_runtime(struct task_struct *tsk,
 	if (!cputimer->running)
 		return;
 
-	spin_lock(&cputimer->lock);
+	raw_spin_lock(&cputimer->lock);
 	cputimer->cputime.sum_exec_runtime += ns;
-	spin_unlock(&cputimer->lock);
+	raw_spin_unlock(&cputimer->lock);
 }

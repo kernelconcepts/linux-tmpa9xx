@@ -3,7 +3,7 @@
  *
  * Copyright (C) Nokia Corporation
  *
- * Author: Peter Ujfalusi <peter.ujfalusi@nokia.com>
+ * Author: Peter Ujfalusi <peter.ujfalusi@ti.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -32,6 +32,11 @@
 #include <sound/tlv.h>
 
 #include "tpa6130a2.h"
+
+enum tpa_model {
+	TPA6130A2,
+	TPA6140A2,
+};
 
 static struct i2c_client *tpa6130a2_client;
 
@@ -383,7 +388,7 @@ static int __devinit tpa6130a2_probe(struct i2c_client *client,
 
 	pdata = client->dev.platform_data;
 	data->power_gpio = pdata->power_gpio;
-	data->id = pdata->id;
+	data->id = id->driver_data;
 
 	mutex_init(&data->mutex);
 
@@ -405,7 +410,7 @@ static int __devinit tpa6130a2_probe(struct i2c_client *client,
 	switch (data->id) {
 	default:
 		dev_warn(dev, "Unknown TPA model (%d). Assuming 6130A2\n",
-			 pdata->id);
+			 data->id);
 	case TPA6130A2:
 		regulator = "Vdd";
 		break;
@@ -446,7 +451,6 @@ err_regulator:
 		gpio_free(data->power_gpio);
 err_gpio:
 	kfree(data);
-	i2c_set_clientdata(tpa6130a2_client, NULL);
 	tpa6130a2_client = NULL;
 
 	return ret;
@@ -470,7 +474,8 @@ static int __devexit tpa6130a2_remove(struct i2c_client *client)
 }
 
 static const struct i2c_device_id tpa6130a2_id[] = {
-	{ "tpa6130a2", 0 },
+	{ "tpa6130a2", TPA6130A2 },
+	{ "tpa6140a2", TPA6140A2 },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, tpa6130a2_id);
@@ -495,7 +500,7 @@ static void __exit tpa6130a2_exit(void)
 	i2c_del_driver(&tpa6130a2_i2c_driver);
 }
 
-MODULE_AUTHOR("Peter Ujfalusi");
+MODULE_AUTHOR("Peter Ujfalusi <peter.ujfalusi@ti.com>");
 MODULE_DESCRIPTION("TPA6130A2 Headphone amplifier driver");
 MODULE_LICENSE("GPL");
 

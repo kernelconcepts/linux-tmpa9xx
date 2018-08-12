@@ -51,6 +51,15 @@ static int parse_no_kvmapf(char *arg)
 
 early_param("no-kvmapf", parse_no_kvmapf);
 
+static int steal_acc = 1;
+static int parse_no_stealacc(char *arg)
+{
+        steal_acc = 0;
+        return 0;
+}
+
+early_param("no-steal-acc", parse_no_stealacc);
+
 struct kvm_para_state {
 	u8 mmu_queue[MMU_QUEUE_SIZE];
 	int mmu_queue_len;
@@ -58,6 +67,8 @@ struct kvm_para_state {
 
 static DEFINE_PER_CPU(struct kvm_para_state, para_state);
 static DEFINE_PER_CPU(struct kvm_vcpu_pv_apf_data, apf_reason) __aligned(64);
+static DEFINE_PER_CPU(struct kvm_steal_time, steal_time) __aligned(64);
+static int has_steal_clock = 0;
 
 static struct kvm_para_state *kvm_para_state(void)
 {
@@ -80,7 +91,6 @@ struct kvm_task_sleep_node {
 	u32 token;
 	int cpu;
 	bool halted;
-	struct mm_struct *mm;
 };
 
 static struct kvm_task_sleep_head {
@@ -103,7 +113,11 @@ static struct kvm_task_sleep_node *_find_apf_task(struct kvm_task_sleep_head *b,
 	return NULL;
 }
 
-void kvm_async_pf_task_wait(u32 token)
+/*
+ * @interrupt_kernel: Is this called from a routine which interrupts the kernel
+ * 		      (other than user space)?
+ */
+void kvm_async_pf_task_wait(u32 token, int interrupt_kernel)
 {
 	u32 key = hash_32(token, KVM_TASK_SLEEP_HASHBITS);
 	struct kvm_task_sleep_head *b = &async_pf_sleepers[key];
@@ -127,9 +141,10 @@ void kvm_async_pf_task_wait(u32 token)
 
 	n.token = token;
 	n.cpu = smp_processor_id();
-	n.mm = current->active_mm;
-	n.halted = idle || preempt_count() > 1;
-	atomic_inc(&n.mm->mm_count);
+	n.halted = idle ||
+		   (IS_ENABLED(CONFIG_PREEMPT_COUNT)
+		    ? preempt_count() > 1 || rcu_preempt_depth()
+		    : interrupt_kernel);
 	init_waitqueue_head(&n.wq);
 	hlist_add_head(&n.link, &b->list);
 	spin_unlock(&b->lock);
@@ -162,9 +177,6 @@ EXPORT_SYMBOL_GPL(kvm_async_pf_task_wait);
 static void apf_task_wake_one(struct kvm_task_sleep_node *n)
 {
 	hlist_del_init(&n->link);
-	if (!n->mm)
-		return;
-	mmdrop(n->mm);
 	if (n->halted)
 		smp_send_reschedule(n->cpu);
 	else if (waitqueue_active(&n->wq))
@@ -208,7 +220,7 @@ again:
 		 * async PF was not yet handled.
 		 * Add dummy entry for the token.
 		 */
-		n = kmalloc(sizeof(*n), GFP_ATOMIC);
+		n = kzalloc(sizeof(*n), GFP_ATOMIC);
 		if (!n) {
 			/*
 			 * Allocation failed! Busy wait while other cpu
@@ -220,7 +232,6 @@ again:
 		}
 		n->token = token;
 		n->cpu = smp_processor_id();
-		n->mm = NULL;
 		init_waitqueue_head(&n->wq);
 		hlist_add_head(&n->link, &b->list);
 	} else
@@ -252,7 +263,7 @@ do_async_page_fault(struct pt_regs *regs, unsigned long error_code)
 		break;
 	case KVM_PV_REASON_PAGE_NOT_PRESENT:
 		/* page is swapped out by the host. */
-		kvm_async_pf_task_wait((u32)read_cr2());
+		kvm_async_pf_task_wait((u32)read_cr2(), !user_mode_vm(regs));
 		break;
 	case KVM_PV_REASON_PAGE_READY:
 		kvm_async_pf_task_wake((u32)read_cr2());
@@ -408,7 +419,14 @@ static void kvm_leave_lazy_mmu(void)
 static void __init paravirt_ops_setup(void)
 {
 	pv_info.name = "KVM";
-	pv_info.paravirt_enabled = 1;
+
+	/*
+	 * KVM isn't paravirt in the sense of paravirt_enabled.  A KVM
+	 * guest kernel works like a bare metal kernel with additional
+	 * features, and paravirt_enabled is about features that are
+	 * missing.
+	 */
+	pv_info.paravirt_enabled = 0;
 
 	if (kvm_para_has_feature(KVM_FEATURE_NOP_IO_DELAY))
 		pv_cpu_ops.io_delay = kvm_io_delay;
@@ -441,6 +459,21 @@ static void __init paravirt_ops_setup(void)
 #endif
 }
 
+static void kvm_register_steal_time(void)
+{
+	int cpu = smp_processor_id();
+	struct kvm_steal_time *st = &per_cpu(steal_time, cpu);
+
+	if (!has_steal_clock)
+		return;
+
+	memset(st, 0, sizeof(*st));
+
+	wrmsrl(MSR_KVM_STEAL_TIME, (__pa(st) | KVM_MSR_ENABLED));
+	printk(KERN_INFO "kvm-stealtime: cpu %d, msr %lx\n",
+		cpu, __pa(st));
+}
+
 void __cpuinit kvm_guest_cpu_init(void)
 {
 	if (!kvm_para_available())
@@ -457,6 +490,9 @@ void __cpuinit kvm_guest_cpu_init(void)
 		printk(KERN_INFO"KVM setup async PF for cpu %d\n",
 		       smp_processor_id());
 	}
+
+	if (has_steal_clock)
+		kvm_register_steal_time();
 }
 
 static void kvm_pv_disable_apf(void *unused)
@@ -483,6 +519,31 @@ static struct notifier_block kvm_pv_reboot_nb = {
 	.notifier_call = kvm_pv_reboot_notify,
 };
 
+static u64 kvm_steal_clock(int cpu)
+{
+	u64 steal;
+	struct kvm_steal_time *src;
+	int version;
+
+	src = &per_cpu(steal_time, cpu);
+	do {
+		version = src->version;
+		rmb();
+		steal = src->steal;
+		rmb();
+	} while ((version & 1) || (version != src->version));
+
+	return steal;
+}
+
+void kvm_disable_steal_time(void)
+{
+	if (!has_steal_clock)
+		return;
+
+	wrmsr(MSR_KVM_STEAL_TIME, 0, 0);
+}
+
 #ifdef CONFIG_SMP
 static void __init kvm_smp_prepare_boot_cpu(void)
 {
@@ -493,13 +554,14 @@ static void __init kvm_smp_prepare_boot_cpu(void)
 	native_smp_prepare_boot_cpu();
 }
 
-static void kvm_guest_cpu_online(void *dummy)
+static void __cpuinit kvm_guest_cpu_online(void *dummy)
 {
 	kvm_guest_cpu_init();
 }
 
 static void kvm_guest_cpu_offline(void *dummy)
 {
+	kvm_disable_steal_time();
 	kvm_pv_disable_apf(NULL);
 	apf_task_wake_all();
 }
@@ -548,6 +610,11 @@ void __init kvm_guest_init(void)
 	if (kvm_para_has_feature(KVM_FEATURE_ASYNC_PF))
 		x86_init.irqs.trap_init = kvm_apf_trap_init;
 
+	if (kvm_para_has_feature(KVM_FEATURE_STEAL_TIME)) {
+		has_steal_clock = 1;
+		pv_time_ops.steal_clock = kvm_steal_clock;
+	}
+
 #ifdef CONFIG_SMP
 	smp_ops.smp_prepare_boot_cpu = kvm_smp_prepare_boot_cpu;
 	register_cpu_notifier(&kvm_cpu_notifier);
@@ -555,3 +622,15 @@ void __init kvm_guest_init(void)
 	kvm_guest_cpu_init();
 #endif
 }
+
+static __init int activate_jump_labels(void)
+{
+	if (has_steal_clock) {
+		jump_label_inc(&paravirt_steal_enabled);
+		if (steal_acc)
+			jump_label_inc(&paravirt_steal_rq_enabled);
+	}
+
+	return 0;
+}
+arch_initcall(activate_jump_labels);

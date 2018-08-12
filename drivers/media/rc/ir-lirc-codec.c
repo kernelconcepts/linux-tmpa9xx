@@ -14,6 +14,7 @@
 
 #include <linux/sched.h>
 #include <linux/wait.h>
+#include <linux/module.h>
 #include <media/lirc.h>
 #include <media/lirc_dev.h>
 #include <media/rc-core.h>
@@ -41,11 +42,17 @@ static int ir_lirc_decode(struct rc_dev *dev, struct ir_raw_event ev)
 		return -EINVAL;
 
 	/* Packet start */
-	if (ev.reset)
-		return 0;
+	if (ev.reset) {
+		/* Userspace expects a long space event before the start of
+		 * the signal to use as a sync.  This may be done with repeat
+		 * packets and normal samples.  But if a reset has been sent
+		 * then we assume that a long time has passed, so we send a
+		 * space with the maximum time value. */
+		sample = LIRC_SPACE(LIRC_VALUE_MASK);
+		IR_dprintk(2, "delivering reset sync space to lirc_dev\n");
 
 	/* Carrier reports */
-	if (ev.carrier_report) {
+	} else if (ev.carrier_report) {
 		sample = LIRC_FREQUENCY(ev.carrier);
 		IR_dprintk(2, "carrier report (freq: %d)\n", sample);
 
@@ -98,24 +105,24 @@ static int ir_lirc_decode(struct rc_dev *dev, struct ir_raw_event ev)
 	return 0;
 }
 
-static ssize_t ir_lirc_transmit_ir(struct file *file, const char *buf,
+static ssize_t ir_lirc_transmit_ir(struct file *file, const char __user *buf,
 				   size_t n, loff_t *ppos)
 {
 	struct lirc_codec *lirc;
 	struct rc_dev *dev;
-	int *txbuf; /* buffer with values to transmit */
-	int ret = 0;
+	unsigned int *txbuf; /* buffer with values to transmit */
+	ssize_t ret = 0;
 	size_t count;
 
 	lirc = lirc_get_pdata(file);
 	if (!lirc)
 		return -EFAULT;
 
-	if (n % sizeof(int))
+	if (n < sizeof(unsigned) || n % sizeof(unsigned))
 		return -EINVAL;
 
-	count = n / sizeof(int);
-	if (count > LIRCBUF_SIZE || count % 2 == 0 || n % sizeof(int) != 0)
+	count = n / sizeof(unsigned);
+	if (count > LIRCBUF_SIZE || count % 2 == 0)
 		return -EINVAL;
 
 	txbuf = memdup_user(buf, n);
@@ -129,7 +136,10 @@ static ssize_t ir_lirc_transmit_ir(struct file *file, const char *buf,
 	}
 
 	if (dev->tx_ir)
-		ret = dev->tx_ir(dev, txbuf, (u32)n);
+		ret = dev->tx_ir(dev, txbuf, count);
+
+	if (ret > 0)
+		ret *= sizeof(unsigned);
 
 out:
 	kfree(txbuf);
@@ -137,10 +147,11 @@ out:
 }
 
 static long ir_lirc_ioctl(struct file *filep, unsigned int cmd,
-			unsigned long __user arg)
+			unsigned long arg)
 {
 	struct lirc_codec *lirc;
 	struct rc_dev *dev;
+	u32 __user *argp = (u32 __user *)(arg);
 	int ret = 0;
 	__u32 val = 0, tmp;
 
@@ -153,7 +164,7 @@ static long ir_lirc_ioctl(struct file *filep, unsigned int cmd,
 		return -EFAULT;
 
 	if (_IOC_DIR(cmd) & _IOC_WRITE) {
-		ret = get_user(val, (__u32 *)arg);
+		ret = get_user(val, argp);
 		if (ret)
 			return ret;
 	}
@@ -244,11 +255,14 @@ static long ir_lirc_ioctl(struct file *filep, unsigned int cmd,
 		if (!dev->max_timeout)
 			return -ENOSYS;
 
+		/* Check for multiply overflow */
+		if (val > (u32)(-1) / 1000)
+			return -EINVAL;
+
 		tmp = val * 1000;
 
-		if (tmp < dev->min_timeout ||
-		    tmp > dev->max_timeout)
-				return -EINVAL;
+		if (tmp < dev->min_timeout || tmp > dev->max_timeout)
+			return -EINVAL;
 
 		dev->timeout = tmp;
 		break;
@@ -262,7 +276,7 @@ static long ir_lirc_ioctl(struct file *filep, unsigned int cmd,
 	}
 
 	if (_IOC_DIR(cmd) & _IOC_READ)
-		ret = put_user(val, (__u32 *)arg);
+		ret = put_user(val, argp);
 
 	return ret;
 }

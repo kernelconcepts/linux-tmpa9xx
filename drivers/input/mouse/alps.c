@@ -23,13 +23,6 @@
 #include "psmouse.h"
 #include "alps.h"
 
-#undef DEBUG
-#ifdef DEBUG
-#define dbg(format, arg...) printk(KERN_INFO "alps.c: " format "\n", ## arg)
-#else
-#define dbg(format, arg...) do {} while (0)
-#endif
-
 #define ALPS_OLDPROTO		0x01	/* old style input */
 #define ALPS_DUALPOINT		0x02	/* touchpad has trackstick */
 #define ALPS_PASS		0x04	/* device has a pass-through port */
@@ -297,10 +290,10 @@ static psmouse_ret_t alps_handle_interleaved_ps2(struct psmouse *psmouse)
 		      psmouse->packet[4] |
 		      psmouse->packet[5]) & 0x80) ||
 		    (!alps_is_valid_first_byte(priv->i, psmouse->packet[6]))) {
-			dbg("refusing packet %x %x %x %x "
-			    "(suspected interleaved ps/2)\n",
-			    psmouse->packet[3], psmouse->packet[4],
-			    psmouse->packet[5], psmouse->packet[6]);
+			psmouse_dbg(psmouse,
+				    "refusing packet %x %x %x %x (suspected interleaved ps/2)\n",
+				    psmouse->packet[3], psmouse->packet[4],
+				    psmouse->packet[5], psmouse->packet[6]);
 			return PSMOUSE_BAD_DATA;
 		}
 
@@ -319,13 +312,13 @@ static psmouse_ret_t alps_handle_interleaved_ps2(struct psmouse *psmouse)
 		 * There is also possibility that we got 6-byte ALPS
 		 * packet followed  by 3-byte packet from trackpoint. We
 		 * can not distinguish between these 2 scenarios but
-		 * becase the latter is unlikely to happen in course of
+		 * because the latter is unlikely to happen in course of
 		 * normal operation (user would need to press all
 		 * buttons on the pad and start moving trackpoint
 		 * without touching the pad surface) we assume former.
 		 * Even if we are wrong the wost thing that would happen
 		 * the cursor would jump but we should not get protocol
-		 * desynchronization.
+		 * de-synchronization.
 		 */
 
 		alps_report_bare_ps2_packet(psmouse, &psmouse->packet[3],
@@ -361,10 +354,10 @@ static void alps_flush_packet(unsigned long data)
 		if ((psmouse->packet[3] |
 		     psmouse->packet[4] |
 		     psmouse->packet[5]) & 0x80) {
-			dbg("refusing packet %x %x %x "
-			    "(suspected interleaved ps/2)\n",
-			    psmouse->packet[3], psmouse->packet[4],
-			    psmouse->packet[5]);
+			psmouse_dbg(psmouse,
+				    "refusing packet %x %x %x (suspected interleaved ps/2)\n",
+				    psmouse->packet[3], psmouse->packet[4],
+				    psmouse->packet[5]);
 		} else {
 			alps_process_packet(psmouse);
 		}
@@ -379,7 +372,13 @@ static psmouse_ret_t alps_process_byte(struct psmouse *psmouse)
 	struct alps_data *priv = psmouse->private;
 	const struct alps_model_info *model = priv->i;
 
-	if ((psmouse->packet[0] & 0xc8) == 0x08) { /* PS/2 packet */
+	/*
+	 * Check if we are dealing with a bare PS/2 packet, presumably from
+	 * a device connected to the external PS/2 port. Because bare PS/2
+	 * protocol does not have enough constant bits to self-synchronize
+	 * properly we only do this if the device is fully synchronized.
+	 */
+	if (!psmouse->out_of_sync_cnt && (psmouse->packet[0] & 0xc8) == 0x08) {
 		if (psmouse->pktcnt == 3) {
 			alps_report_bare_ps2_packet(psmouse, psmouse->packet,
 						    true);
@@ -396,16 +395,18 @@ static psmouse_ret_t alps_process_byte(struct psmouse *psmouse)
 	}
 
 	if (!alps_is_valid_first_byte(model, psmouse->packet[0])) {
-		dbg("refusing packet[0] = %x (mask0 = %x, byte0 = %x)\n",
-		    psmouse->packet[0], model->mask0, model->byte0);
+		psmouse_dbg(psmouse,
+			    "refusing packet[0] = %x (mask0 = %x, byte0 = %x)\n",
+			    psmouse->packet[0], model->mask0, model->byte0);
 		return PSMOUSE_BAD_DATA;
 	}
 
 	/* Bytes 2 - 6 should have 0 in the highest bit */
 	if (psmouse->pktcnt >= 2 && psmouse->pktcnt <= 6 &&
 	    (psmouse->packet[psmouse->pktcnt - 1] & 0x80)) {
-		dbg("refusing packet[%i] = %x\n",
-		    psmouse->pktcnt - 1, psmouse->packet[psmouse->pktcnt - 1]);
+		psmouse_dbg(psmouse, "refusing packet[%i] = %x\n",
+			    psmouse->pktcnt - 1,
+			    psmouse->packet[psmouse->pktcnt - 1]);
 		return PSMOUSE_BAD_DATA;
 	}
 
@@ -426,7 +427,9 @@ static const struct alps_model_info *alps_get_model(struct psmouse *psmouse, int
 
 	/*
 	 * First try "E6 report".
-	 * ALPS should return 0,0,10 or 0,0,100
+	 * ALPS should return 0,0,10 or 0,0,100 if no buttons are pressed.
+	 * The bits 0-2 of the first byte will be 1s if some buttons are
+	 * pressed.
 	 */
 	param[0] = 0;
 	if (ps2_command(ps2dev, param, PSMOUSE_CMD_SETRES) ||
@@ -439,9 +442,11 @@ static const struct alps_model_info *alps_get_model(struct psmouse *psmouse, int
 	if (ps2_command(ps2dev, param, PSMOUSE_CMD_GETINFO))
 		return NULL;
 
-	dbg("E6 report: %2.2x %2.2x %2.2x", param[0], param[1], param[2]);
+	psmouse_dbg(psmouse, "E6 report: %2.2x %2.2x %2.2x",
+		    param[0], param[1], param[2]);
 
-	if (param[0] != 0 || param[1] != 0 || (param[2] != 10 && param[2] != 100))
+	if ((param[0] & 0xf8) != 0 || param[1] != 0 ||
+	    (param[2] != 10 && param[2] != 100))
 		return NULL;
 
 	/*
@@ -459,7 +464,8 @@ static const struct alps_model_info *alps_get_model(struct psmouse *psmouse, int
 	if (ps2_command(ps2dev, param, PSMOUSE_CMD_GETINFO))
 		return NULL;
 
-	dbg("E7 report: %2.2x %2.2x %2.2x", param[0], param[1], param[2]);
+	psmouse_dbg(psmouse, "E7 report: %2.2x %2.2x %2.2x",
+		    param[0], param[1], param[2]);
 
 	if (version) {
 		for (i = 0; i < ARRAY_SIZE(rates) && param[2] != rates[i]; i++)
@@ -527,7 +533,8 @@ static int alps_get_status(struct psmouse *psmouse, char *param)
 	    ps2_command(ps2dev, param, PSMOUSE_CMD_GETINFO))
 		return -1;
 
-	dbg("Status: %2.2x %2.2x %2.2x", param[0], param[1], param[2]);
+	psmouse_dbg(psmouse, "Status: %2.2x %2.2x %2.2x",
+		    param[0], param[1], param[2]);
 
 	return 0;
 }
@@ -605,12 +612,12 @@ static int alps_hw_init(struct psmouse *psmouse)
 	}
 
 	if (alps_tap_mode(psmouse, true)) {
-		printk(KERN_WARNING "alps.c: Failed to enable hardware tapping\n");
+		psmouse_warn(psmouse, "Failed to enable hardware tapping\n");
 		return -1;
 	}
 
 	if (alps_absolute_mode(psmouse)) {
-		printk(KERN_ERR "alps.c: Failed to enable absolute mode\n");
+		psmouse_err(psmouse, "Failed to enable absolute mode\n");
 		return -1;
 	}
 
@@ -621,7 +628,7 @@ static int alps_hw_init(struct psmouse *psmouse)
 
 	/* ALPS needs stream mode, otherwise it won't report any data */
 	if (ps2_command(&psmouse->ps2dev, NULL, PSMOUSE_CMD_SETSTREAM)) {
-		printk(KERN_ERR "alps.c: Failed to enable stream mode\n");
+		psmouse_err(psmouse, "Failed to enable stream mode\n");
 		return -1;
 	}
 
@@ -743,6 +750,9 @@ int alps_init(struct psmouse *psmouse)
 
 	/* We are having trouble resyncing ALPS touchpads so disable it for now */
 	psmouse->resync_time = 0;
+
+	/* Allow 2 invalid packets without resetting device */
+	psmouse->resetafter = psmouse->pktsize * 2;
 
 	return 0;
 

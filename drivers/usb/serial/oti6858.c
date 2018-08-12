@@ -135,7 +135,7 @@ static void oti6858_close(struct usb_serial_port *port);
 static void oti6858_set_termios(struct tty_struct *tty,
 			struct usb_serial_port *port, struct ktermios *old);
 static void oti6858_init_termios(struct tty_struct *tty);
-static int oti6858_ioctl(struct tty_struct *tty, struct file *file,
+static int oti6858_ioctl(struct tty_struct *tty,
 			unsigned int cmd, unsigned long arg);
 static void oti6858_read_int_callback(struct urb *urb);
 static void oti6858_read_bulk_callback(struct urb *urb);
@@ -144,8 +144,8 @@ static int oti6858_write(struct tty_struct *tty, struct usb_serial_port *port,
 			const unsigned char *buf, int count);
 static int oti6858_write_room(struct tty_struct *tty);
 static int oti6858_chars_in_buffer(struct tty_struct *tty);
-static int oti6858_tiocmget(struct tty_struct *tty, struct file *file);
-static int oti6858_tiocmset(struct tty_struct *tty, struct file *file,
+static int oti6858_tiocmget(struct tty_struct *tty);
+static int oti6858_tiocmset(struct tty_struct *tty,
 				unsigned int set, unsigned int clear);
 static int oti6858_startup(struct usb_serial *serial);
 static void oti6858_release(struct usb_serial *serial);
@@ -196,7 +196,6 @@ struct oti6858_private {
 	u8 setup_done;
 	struct delayed_work delayed_setup_work;
 
-	wait_queue_head_t intr_wait;
 	struct usb_serial_port *port;   /* USB port with which associated */
 };
 
@@ -348,8 +347,16 @@ static void send_data(struct work_struct *work)
 static int oti6858_startup(struct usb_serial *serial)
 {
 	struct usb_serial_port *port = serial->port[0];
+	unsigned char num_ports = serial->num_ports;
 	struct oti6858_private *priv;
 	int i;
+
+	if (serial->num_bulk_in < num_ports ||
+			serial->num_bulk_out < num_ports ||
+			serial->num_interrupt_in < num_ports) {
+		dev_err(&serial->interface->dev, "missing endpoints\n");
+		return -ENODEV;
+	}
 
 	for (i = 0; i < serial->num_ports; ++i) {
 		priv = kzalloc(sizeof(struct oti6858_private), GFP_KERNEL);
@@ -357,7 +364,6 @@ static int oti6858_startup(struct usb_serial *serial)
 			break;
 
 		spin_lock_init(&priv->lock);
-		init_waitqueue_head(&priv->intr_wait);
 /*		INIT_WORK(&priv->setup_work, setup_line, serial->port[i]); */
 /*		INIT_WORK(&priv->write_work, send_data, serial->port[i]); */
 		priv->port = port;
@@ -624,7 +630,7 @@ static void oti6858_close(struct usb_serial_port *port)
 	usb_kill_urb(port->interrupt_in_urb);
 }
 
-static int oti6858_tiocmset(struct tty_struct *tty, struct file *file,
+static int oti6858_tiocmset(struct tty_struct *tty,
 				unsigned int set, unsigned int clear)
 {
 	struct usb_serial_port *port = tty->driver_data;
@@ -657,7 +663,7 @@ static int oti6858_tiocmset(struct tty_struct *tty, struct file *file,
 	return 0;
 }
 
-static int oti6858_tiocmget(struct tty_struct *tty, struct file *file)
+static int oti6858_tiocmget(struct tty_struct *tty)
 {
 	struct usb_serial_port *port = tty->driver_data;
 	struct oti6858_private *priv = usb_get_serial_port_data(port);
@@ -705,10 +711,14 @@ static int wait_modem_info(struct usb_serial_port *port, unsigned int arg)
 	spin_unlock_irqrestore(&priv->lock, flags);
 
 	while (1) {
-		wait_event_interruptible(priv->intr_wait,
+		wait_event_interruptible(port->delta_msr_wait,
+					port->serial->disconnected ||
 					priv->status.pin_state != prev);
 		if (signal_pending(current))
 			return -ERESTARTSYS;
+
+		if (port->serial->disconnected)
+			return -EIO;
 
 		spin_lock_irqsave(&priv->lock, flags);
 		status = priv->status.pin_state & PIN_MASK;
@@ -728,7 +738,7 @@ static int wait_modem_info(struct usb_serial_port *port, unsigned int arg)
 	return 0;
 }
 
-static int oti6858_ioctl(struct tty_struct *tty, struct file *file,
+static int oti6858_ioctl(struct tty_struct *tty,
 			unsigned int cmd, unsigned long arg)
 {
 	struct usb_serial_port *port = tty->driver_data;
@@ -821,7 +831,7 @@ static void oti6858_read_int_callback(struct urb *urb)
 
 		if (!priv->transient) {
 			if (xs->pin_state != priv->status.pin_state)
-				wake_up_interruptible(&priv->intr_wait);
+				wake_up_interruptible(&port->delta_msr_wait);
 			memcpy(&priv->status, xs, OTI6858_CTRL_PKT_SIZE);
 		}
 

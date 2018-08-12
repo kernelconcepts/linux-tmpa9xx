@@ -8,6 +8,8 @@
  *
  */
 
+#include <linux/linkage.h>
+
 LC_EXT_NEW_PSW		= 0x58			# addr of ext int handler
 LC_EXT_NEW_PSW_64	= 0x1b0			# addr of ext int handler 64 bit
 LC_EXT_INT_PARAM	= 0x80			# addr of ext int parameter
@@ -260,8 +262,7 @@ _sclp_print:
 #   R2	= 0 on success, 1 on failure
 #
 
-	.globl _sclp_print_early
-_sclp_print_early:
+ENTRY(_sclp_print_early)
 	stm	%r6,%r15,24(%r15)		# save registers
 	ahi	%r15,-96			# create stack frame
 #ifdef CONFIG_64BIT
@@ -269,6 +270,8 @@ _sclp_print_early:
 	jno	.Lesa2
 	ahi	%r15,-80
 	stmh	%r6,%r15,96(%r15)		# store upper register halves
+	basr	%r13,0
+	lmh	%r0,%r15,.Lzeroes-.(%r13)	# clear upper register halves
 .Lesa2:
 #endif
 	lr	%r10,%r2			# save string pointer
@@ -292,6 +295,8 @@ _sclp_print_early:
 #endif
 	lm	%r6,%r15,120(%r15)		# restore registers
 	br	%r14
+.Lzeroes:
+	.fill	64,4,0
 
 .LwritedataS4:
 	.long	0x00760005			# SCLP command for write data

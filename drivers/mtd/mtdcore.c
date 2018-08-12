@@ -24,6 +24,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/ptrace.h>
+#include <linux/seq_file.h>
 #include <linux/string.h>
 #include <linux/timer.h>
 #include <linux/major.h>
@@ -37,13 +38,14 @@
 #include <linux/gfp.h>
 
 #include <linux/mtd/mtd.h>
+#include <linux/mtd/partitions.h>
 
 #include "mtdcore.h"
 /*
  * backing device capabilities for non-mappable devices (such as NAND flash)
  * - permits private mappings, copies are taken of the data
  */
-struct backing_dev_info mtd_bdi_unmappable = {
+static struct backing_dev_info mtd_bdi_unmappable = {
 	.capabilities	= BDI_CAP_MAP_COPY,
 };
 
@@ -52,7 +54,7 @@ struct backing_dev_info mtd_bdi_unmappable = {
  * - permits private mappings, copies are taken of the data
  * - permits non-writable shared mappings
  */
-struct backing_dev_info mtd_bdi_ro_mappable = {
+static struct backing_dev_info mtd_bdi_ro_mappable = {
 	.capabilities	= (BDI_CAP_MAP_COPY | BDI_CAP_MAP_DIRECT |
 			   BDI_CAP_EXEC_MAP | BDI_CAP_READ_MAP),
 };
@@ -62,7 +64,7 @@ struct backing_dev_info mtd_bdi_ro_mappable = {
  * - permits private mappings, copies are taken of the data
  * - permits non-writable shared mappings
  */
-struct backing_dev_info mtd_bdi_rw_mappable = {
+static struct backing_dev_info mtd_bdi_rw_mappable = {
 	.capabilities	= (BDI_CAP_MAP_COPY | BDI_CAP_MAP_DIRECT |
 			   BDI_CAP_EXEC_MAP | BDI_CAP_READ_MAP |
 			   BDI_CAP_WRITE_MAP),
@@ -360,7 +362,7 @@ int add_mtd_device(struct mtd_info *mtd)
 			      MTD_DEVT(i) + 1,
 			      NULL, "mtd%dro", i);
 
-	DEBUG(0, "mtd: Giving out device %d to %s\n", i, mtd->name);
+	pr_debug("mtd: Giving out device %d to %s\n", i, mtd->name);
 	/* No need to get a refcount on the module containing
 	   the notifier, since we hold the mtd_table_mutex */
 	list_for_each_entry(not, &mtd_notifiers, list)
@@ -391,7 +393,7 @@ fail_locked:
  *	if the requested device does not appear to be present in the list.
  */
 
-int del_mtd_device (struct mtd_info *mtd)
+int del_mtd_device(struct mtd_info *mtd)
 {
 	int ret;
 	struct mtd_notifier *not;
@@ -427,6 +429,86 @@ out_error:
 }
 
 /**
+ * mtd_device_parse_register - parse partitions and register an MTD device.
+ *
+ * @mtd: the MTD device to register
+ * @types: the list of MTD partition probes to try, see
+ *         'parse_mtd_partitions()' for more information
+ * @parser_data: MTD partition parser-specific data
+ * @parts: fallback partition information to register, if parsing fails;
+ *         only valid if %nr_parts > %0
+ * @nr_parts: the number of partitions in parts, if zero then the full
+ *            MTD device is registered if no partition info is found
+ *
+ * This function aggregates MTD partitions parsing (done by
+ * 'parse_mtd_partitions()') and MTD device and partitions registering. It
+ * basically follows the most common pattern found in many MTD drivers:
+ *
+ * * It first tries to probe partitions on MTD device @mtd using parsers
+ *   specified in @types (if @types is %NULL, then the default list of parsers
+ *   is used, see 'parse_mtd_partitions()' for more information). If none are
+ *   found this functions tries to fallback to information specified in
+ *   @parts/@nr_parts.
+ * * If any partitioning info was found, this function registers the found
+ *   partitions.
+ * * If no partitions were found this function just registers the MTD device
+ *   @mtd and exits.
+ *
+ * Returns zero in case of success and a negative error code in case of failure.
+ */
+int mtd_device_parse_register(struct mtd_info *mtd, const char **types,
+			      struct mtd_part_parser_data *parser_data,
+			      const struct mtd_partition *parts,
+			      int nr_parts)
+{
+	int err;
+	struct mtd_partition *real_parts;
+
+	err = parse_mtd_partitions(mtd, types, &real_parts, parser_data);
+	if (err <= 0 && nr_parts && parts) {
+		real_parts = kmemdup(parts, sizeof(*parts) * nr_parts,
+				     GFP_KERNEL);
+		if (!real_parts)
+			err = -ENOMEM;
+		else
+			err = nr_parts;
+	}
+
+	if (err > 0) {
+		err = add_mtd_partitions(mtd, real_parts, err);
+		kfree(real_parts);
+	} else if (err == 0) {
+		err = add_mtd_device(mtd);
+		if (err == 1)
+			err = -ENODEV;
+	}
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(mtd_device_parse_register);
+
+/**
+ * mtd_device_unregister - unregister an existing MTD device.
+ *
+ * @master: the MTD device to unregister.  This will unregister both the master
+ *          and any partitions if registered.
+ */
+int mtd_device_unregister(struct mtd_info *master)
+{
+	int err;
+
+	err = del_mtd_partitions(master);
+	if (err)
+		return err;
+
+	if (!device_is_registered(&master->dev))
+		return 0;
+
+	return del_mtd_device(master);
+}
+EXPORT_SYMBOL_GPL(mtd_device_unregister);
+
+/**
  *	register_mtd_user - register a 'user' of MTD devices.
  *	@new: pointer to notifier info structure
  *
@@ -443,7 +525,7 @@ void register_mtd_user (struct mtd_notifier *new)
 
 	list_add(&new->list, &mtd_notifiers);
 
- 	__module_get(THIS_MODULE);
+	__module_get(THIS_MODULE);
 
 	mtd_for_each_device(mtd)
 		new->add(mtd);
@@ -532,7 +614,6 @@ int __get_mtd_device(struct mtd_info *mtd)
 		return -ENODEV;
 
 	if (mtd->get_device) {
-
 		err = mtd->get_device(mtd);
 
 		if (err) {
@@ -570,21 +651,13 @@ struct mtd_info *get_mtd_device_nm(const char *name)
 	if (!mtd)
 		goto out_unlock;
 
-	if (!try_module_get(mtd->owner))
+	err = __get_mtd_device(mtd);
+	if (err)
 		goto out_unlock;
 
-	if (mtd->get_device) {
-		err = mtd->get_device(mtd);
-		if (err)
-			goto out_put;
-	}
-
-	mtd->usecount++;
 	mutex_unlock(&mtd_table_mutex);
 	return mtd;
 
-out_put:
-	module_put(mtd->owner);
 out_unlock:
 	mutex_unlock(&mtd_table_mutex);
 	return ERR_PTR(err);
@@ -638,21 +711,9 @@ int default_mtd_writev(struct mtd_info *mtd, const struct kvec *vecs,
 	return ret;
 }
 
-EXPORT_SYMBOL_GPL(add_mtd_device);
-EXPORT_SYMBOL_GPL(del_mtd_device);
-EXPORT_SYMBOL_GPL(get_mtd_device);
-EXPORT_SYMBOL_GPL(get_mtd_device_nm);
-EXPORT_SYMBOL_GPL(__get_mtd_device);
-EXPORT_SYMBOL_GPL(put_mtd_device);
-EXPORT_SYMBOL_GPL(__put_mtd_device);
-EXPORT_SYMBOL_GPL(register_mtd_user);
-EXPORT_SYMBOL_GPL(unregister_mtd_user);
-EXPORT_SYMBOL_GPL(default_mtd_writev);
-
 /**
  * mtd_kmalloc_up_to - allocate a contiguous buffer up to the specified size
- * @mtd: mtd device description object pointer
- * @size: a pointer to the ideal or maximum size of the allocation, points
+ * @size: A pointer to the ideal or maximum size of the allocation. Points
  *        to the actual allocation size on success.
  *
  * This routine attempts to allocate a contiguous kernel buffer up to
@@ -697,6 +758,15 @@ void *mtd_kmalloc_up_to(const struct mtd_info *mtd, size_t *size)
 	 */
 	return kmalloc(*size, GFP_KERNEL);
 }
+
+EXPORT_SYMBOL_GPL(get_mtd_device);
+EXPORT_SYMBOL_GPL(get_mtd_device_nm);
+EXPORT_SYMBOL_GPL(__get_mtd_device);
+EXPORT_SYMBOL_GPL(put_mtd_device);
+EXPORT_SYMBOL_GPL(__put_mtd_device);
+EXPORT_SYMBOL_GPL(register_mtd_user);
+EXPORT_SYMBOL_GPL(unregister_mtd_user);
+EXPORT_SYMBOL_GPL(default_mtd_writev);
 EXPORT_SYMBOL_GPL(mtd_kmalloc_up_to);
 
 #ifdef CONFIG_PROC_FS
@@ -706,44 +776,32 @@ EXPORT_SYMBOL_GPL(mtd_kmalloc_up_to);
 
 static struct proc_dir_entry *proc_mtd;
 
-static inline int mtd_proc_info(char *buf, struct mtd_info *this)
-{
-	return sprintf(buf, "mtd%d: %8.8llx %8.8x \"%s\"\n", this->index,
-		       (unsigned long long)this->size,
-		       this->erasesize, this->name);
-}
-
-static int mtd_read_proc (char *page, char **start, off_t off, int count,
-			  int *eof, void *data_unused)
+static int mtd_proc_show(struct seq_file *m, void *v)
 {
 	struct mtd_info *mtd;
-	int len, l;
-        off_t   begin = 0;
 
+	seq_puts(m, "dev:    size   erasesize  name\n");
 	mutex_lock(&mtd_table_mutex);
-
-	len = sprintf(page, "dev:    size   erasesize  name\n");
 	mtd_for_each_device(mtd) {
-		l = mtd_proc_info(page + len, mtd);
-                len += l;
-                if (len+begin > off+count)
-                        goto done;
-                if (len+begin < off) {
-                        begin += len;
-                        len = 0;
-                }
-        }
-
-        *eof = 1;
-
-done:
+		seq_printf(m, "mtd%d: %8.8llx %8.8x \"%s\"\n",
+			   mtd->index, (unsigned long long)mtd->size,
+			   mtd->erasesize, mtd->name);
+	}
 	mutex_unlock(&mtd_table_mutex);
-        if (off >= len+begin)
-                return 0;
-        *start = page + (off-begin);
-        return ((count < begin+len-off) ? count : begin+len-off);
+	return 0;
 }
 
+static int mtd_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, mtd_proc_show, NULL);
+}
+
+static const struct file_operations mtd_proc_ops = {
+	.open		= mtd_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
 #endif /* CONFIG_PROC_FS */
 
 /*====================================================================*/
@@ -784,8 +842,7 @@ static int __init init_mtd(void)
 		goto err_bdi3;
 
 #ifdef CONFIG_PROC_FS
-	if ((proc_mtd = create_proc_entry( "mtd", 0, NULL )))
-		proc_mtd->read_proc = mtd_read_proc;
+	proc_mtd = proc_create("mtd", 0, NULL, &mtd_proc_ops);
 #endif /* CONFIG_PROC_FS */
 	return 0;
 
@@ -803,7 +860,7 @@ err_reg:
 static void __exit cleanup_mtd(void)
 {
 #ifdef CONFIG_PROC_FS
-        if (proc_mtd)
+	if (proc_mtd)
 		remove_proc_entry( "mtd", NULL);
 #endif /* CONFIG_PROC_FS */
 	class_unregister(&mtd_class);

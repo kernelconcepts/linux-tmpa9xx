@@ -21,6 +21,8 @@
 #include <linux/random.h>
 #include <linux/if_arp.h>
 #include <linux/slab.h>
+#include <linux/export.h>
+#include <linux/moduleparam.h>
 
 #include "hostap_wlan.h"
 #include "hostap.h"
@@ -2359,7 +2361,7 @@ int prism2_ap_get_sta_qual(local_info_t *local, struct sockaddr addr[],
 }
 
 
-/* Translate our list of Access Points & Stations to a card independant
+/* Translate our list of Access Points & Stations to a card independent
  * format that the Wireless Tools will understand - Jean II */
 int prism2_ap_translate_scan(struct net_device *dev,
 			     struct iw_request_info *info, char *buffer)

@@ -35,6 +35,7 @@
 #include <linux/timer.h>
 #include <linux/slab.h>
 #include <linux/err.h>
+#include <linux/export.h>
 #include <asm/unaligned.h>
 
 #include <scsi/fc/fc_gs.h>
@@ -205,6 +206,7 @@ static void fc_disc_recv_req(struct fc_lport *lport, struct fc_frame *fp)
 	default:
 		FC_DISC_DBG(disc, "Received an unsupported request, "
 			    "the opcode is (%x)\n", op);
+		fc_frame_free(fp);
 		break;
 	}
 }

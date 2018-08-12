@@ -74,7 +74,6 @@ ACPI_MODULE_NAME("nsrepair")
  *
  * Additional possible repairs:
  *
- * Optional/unnecessary NULL package elements removed
  * Required package elements that are NULL replaced by Integer/String/Buffer
  * Incorrect standalone package wrapped with required outer package
  *
@@ -122,7 +121,7 @@ acpi_ns_repair_object(struct acpi_predefined_data *data,
 		      union acpi_operand_object **return_object_ptr)
 {
 	union acpi_operand_object *return_object = *return_object_ptr;
-	union acpi_operand_object *new_object;
+	union acpi_operand_object *new_object = NULL;
 	acpi_status status;
 
 	ACPI_FUNCTION_NAME(ns_repair_object);
@@ -623,16 +622,12 @@ acpi_ns_remove_null_elements(struct acpi_predefined_data *data,
 	ACPI_FUNCTION_NAME(ns_remove_null_elements);
 
 	/*
-	 * PTYPE1 packages contain no subpackages.
-	 * PTYPE2 packages contain a variable number of sub-packages. We can
-	 * safely remove all NULL elements from the PTYPE2 packages.
+	 * We can safely remove all NULL elements from these package types:
+	 * PTYPE1_VAR packages contain a variable number of simple data types.
+	 * PTYPE2 packages contain a variable number of sub-packages.
 	 */
 	switch (package_type) {
-	case ACPI_PTYPE1_FIXED:
 	case ACPI_PTYPE1_VAR:
-	case ACPI_PTYPE1_OPTION:
-		return;
-
 	case ACPI_PTYPE2:
 	case ACPI_PTYPE2_COUNT:
 	case ACPI_PTYPE2_PKG_COUNT:
@@ -642,6 +637,8 @@ acpi_ns_remove_null_elements(struct acpi_predefined_data *data,
 		break;
 
 	default:
+	case ACPI_PTYPE1_FIXED:
+	case ACPI_PTYPE1_OPTION:
 		return;
 	}
 

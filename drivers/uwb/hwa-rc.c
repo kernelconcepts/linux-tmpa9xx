@@ -645,7 +645,8 @@ void hwarc_neep_cb(struct urb *urb)
 		dev_err(dev, "NEEP: URB error %d\n", urb->status);
 	}
 	result = usb_submit_urb(urb, GFP_ATOMIC);
-	if (result < 0) {
+	if (result < 0 && result != -ENODEV && result != -EPERM) {
+		/* ignoring unrecoverable errors */
 		dev_err(dev, "NEEP: Can't resubmit URB (%d) resetting device\n",
 			result);
 		goto error;
@@ -809,6 +810,11 @@ static int hwarc_probe(struct usb_interface *iface,
 	struct uwb_rc *uwb_rc;
 	struct hwarc *hwarc;
 	struct device *dev = &iface->dev;
+
+	if (iface->cur_altsetting->desc.bNumEndpoints < 1)
+		return -ENODEV;
+	if (!usb_endpoint_xfer_int(&iface->cur_altsetting->endpoint[0].desc))
+		return -ENODEV;
 
 	result = -ENOMEM;
 	uwb_rc = uwb_rc_alloc();

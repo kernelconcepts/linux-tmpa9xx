@@ -57,19 +57,17 @@ EXPORT_SYMBOL(ps2_sendbyte);
 
 void ps2_begin_command(struct ps2dev *ps2dev)
 {
-	mutex_lock(&ps2dev->cmd_mutex);
+	struct mutex *m = ps2dev->serio->ps2_cmd_mutex ?: &ps2dev->cmd_mutex;
 
-	if (i8042_check_port_owner(ps2dev->serio))
-		i8042_lock_chip();
+	mutex_lock(m);
 }
 EXPORT_SYMBOL(ps2_begin_command);
 
 void ps2_end_command(struct ps2dev *ps2dev)
 {
-	if (i8042_check_port_owner(ps2dev->serio))
-		i8042_unlock_chip();
+	struct mutex *m = ps2dev->serio->ps2_cmd_mutex ?: &ps2dev->cmd_mutex;
 
-	mutex_unlock(&ps2dev->cmd_mutex);
+	mutex_unlock(m);
 }
 EXPORT_SYMBOL(ps2_end_command);
 
@@ -210,7 +208,7 @@ int __ps2_command(struct ps2dev *ps2dev, unsigned char *param, int command)
 	/*
 	 * Some devices (Synaptics) peform the reset before
 	 * ACKing the reset command, and so it can take a long
-	 * time before the ACK arrrives.
+	 * time before the ACK arrives.
 	 */
 	if (ps2_sendbyte(ps2dev, command & 0xff,
 			 command == PS2_CMD_RESET_BAT ? 1000 : 200))

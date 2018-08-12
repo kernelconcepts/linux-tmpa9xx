@@ -16,6 +16,7 @@
 #include <linux/io.h>
 #include <linux/of_platform.h>
 #include <linux/clk.h>
+#include <linux/module.h>
 
 struct fsl_usb2_dev_data {
 	char *dr_mode;		/* controller mode */
@@ -93,7 +94,6 @@ struct platform_device * __devinit fsl_usb2_device_register(
 	pdev->dev.parent = &ofdev->dev;
 
 	pdev->dev.coherent_dma_mask = ofdev->dev.coherent_dma_mask;
-	pdev->dev.dma_mask = &pdev->archdata.dma_mask;
 	*pdev->dev.dma_mask = *ofdev->dev.dma_mask;
 
 	retval = platform_device_add_data(pdev, pdata, sizeof(*pdata));
@@ -166,6 +166,10 @@ static int __devinit fsl_usb2_mph_dr_of_probe(struct platform_device *ofdev)
 
 	prop = of_get_property(np, "phy_type", NULL);
 	pdata->phy_mode = determine_usb_phy(prop);
+	if (of_get_property(np, "fsl,usb-erratum-a005275", NULL))
+		pdata->has_fsl_erratum_a005275 = 1;
+	else
+		pdata->has_fsl_erratum_a005275 = 0;
 
 	for (i = 0; i < ARRAY_SIZE(dev_data->drivers); i++) {
 		if (!dev_data->drivers[i])

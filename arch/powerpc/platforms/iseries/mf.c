@@ -30,6 +30,7 @@
 #include <linux/init.h>
 #include <linux/completion.h>
 #include <linux/delay.h>
+#include <linux/export.h>
 #include <linux/proc_fs.h>
 #include <linux/dma-mapping.h>
 #include <linux/bcd.h>
@@ -51,7 +52,7 @@
 static int mf_initialized;
 
 /*
- * This is the structure layout for the Machine Facilites LPAR event
+ * This is the structure layout for the Machine Facilities LPAR event
  * flows.
  */
 struct vsp_cmd_data {

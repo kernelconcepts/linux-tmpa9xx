@@ -35,14 +35,17 @@
 #include <rdma/ib_mad.h>
 #include <rdma/ib_user_verbs.h>
 #include <linux/io.h>
+#include <linux/module.h>
 #include <linux/utsname.h>
 #include <linux/rculist.h>
 #include <linux/mm.h>
+#include <linux/random.h>
+#include <linux/vmalloc.h>
 
 #include "qib.h"
 #include "qib_common.h"
 
-static unsigned int ib_qib_qp_table_size = 251;
+static unsigned int ib_qib_qp_table_size = 256;
 module_param_named(qp_table_size, ib_qib_qp_table_size, uint, S_IRUGO);
 MODULE_PARM_DESC(qp_table_size, "QP table size");
 
@@ -659,17 +662,25 @@ void qib_ib_rcv(struct qib_ctxtdata *rcd, void *rhdr, void *data, u32 tlen)
 		if (atomic_dec_return(&mcast->refcount) <= 1)
 			wake_up(&mcast->wait);
 	} else {
-		qp = qib_lookup_qpn(ibp, qp_num);
-		if (!qp)
-			goto drop;
+		if (rcd->lookaside_qp) {
+			if (rcd->lookaside_qpn != qp_num) {
+				if (atomic_dec_and_test(
+					&rcd->lookaside_qp->refcount))
+					wake_up(
+					 &rcd->lookaside_qp->wait);
+					rcd->lookaside_qp = NULL;
+				}
+		}
+		if (!rcd->lookaside_qp) {
+			qp = qib_lookup_qpn(ibp, qp_num);
+			if (!qp)
+				goto drop;
+			rcd->lookaside_qp = qp;
+			rcd->lookaside_qpn = qp_num;
+		} else
+			qp = rcd->lookaside_qp;
 		ibp->n_unicast_rcv++;
 		qib_qp_rcv(rcd, hdr, lnh == QIB_LRH_GRH, data, tlen, qp);
-		/*
-		 * Notify qib_destroy_qp() if it is waiting
-		 * for us to finish.
-		 */
-		if (atomic_dec_and_test(&qp->refcount))
-			wake_up(&qp->wait);
 	}
 	return;
 
@@ -1974,6 +1985,8 @@ static void init_ibport(struct qib_pportdata *ppd)
 	ibp->z_excessive_buffer_overrun_errors =
 		cntrs.excessive_buffer_overrun_errors;
 	ibp->z_vl15_dropped = cntrs.vl15_dropped;
+	RCU_INIT_POINTER(ibp->qp0, NULL);
+	RCU_INIT_POINTER(ibp->qp1, NULL);
 }
 
 /**
@@ -1990,12 +2003,15 @@ int qib_register_ib_device(struct qib_devdata *dd)
 	int ret;
 
 	dev->qp_table_size = ib_qib_qp_table_size;
-	dev->qp_table = kzalloc(dev->qp_table_size * sizeof *dev->qp_table,
+	get_random_bytes(&dev->qp_rnd, sizeof(dev->qp_rnd));
+	dev->qp_table = kmalloc(dev->qp_table_size * sizeof *dev->qp_table,
 				GFP_KERNEL);
 	if (!dev->qp_table) {
 		ret = -ENOMEM;
 		goto err_qpt;
 	}
+	for (i = 0; i < dev->qp_table_size; i++)
+		RCU_INIT_POINTER(dev->qp_table[i], NULL);
 
 	for (i = 0; i < dd->num_pports; i++)
 		init_ibport(ppd + i);
@@ -2020,10 +2036,16 @@ int qib_register_ib_device(struct qib_devdata *dd)
 	 * the LKEY).  The remaining bits act as a generation number or tag.
 	 */
 	spin_lock_init(&dev->lk_table.lock);
+	/* insure generation is at least 4 bits see keys.c */
+	if (ib_qib_lkey_table_size > MAX_LKEY_TABLE_BITS) {
+		qib_dev_warn(dd, "lkey bits %u too large, reduced to %u\n",
+			ib_qib_lkey_table_size, MAX_LKEY_TABLE_BITS);
+		ib_qib_lkey_table_size = MAX_LKEY_TABLE_BITS;
+	}
 	dev->lk_table.max = 1 << ib_qib_lkey_table_size;
 	lk_tab_size = dev->lk_table.max * sizeof(*dev->lk_table.table);
 	dev->lk_table.table = (struct qib_mregion **)
-		__get_free_pages(GFP_KERNEL, get_order(lk_tab_size));
+		vmalloc(lk_tab_size);
 	if (dev->lk_table.table == NULL) {
 		ret = -ENOMEM;
 		goto err_lk;
@@ -2193,7 +2215,7 @@ err_tx:
 					sizeof(struct qib_pio_header),
 				  dev->pio_hdrs, dev->pio_hdrs_phys);
 err_hdrs:
-	free_pages((unsigned long) dev->lk_table.table, get_order(lk_tab_size));
+	vfree(dev->lk_table.table);
 err_lk:
 	kfree(dev->qp_table);
 err_qpt:
@@ -2247,7 +2269,6 @@ void qib_unregister_ib_device(struct qib_devdata *dd)
 					sizeof(struct qib_pio_header),
 				  dev->pio_hdrs, dev->pio_hdrs_phys);
 	lk_tab_size = dev->lk_table.max * sizeof(*dev->lk_table.table);
-	free_pages((unsigned long) dev->lk_table.table,
-		   get_order(lk_tab_size));
+	vfree(dev->lk_table.table);
 	kfree(dev->qp_table);
 }

@@ -1,3 +1,4 @@
+#include <linux/notifier.h>
 
 /**
  * struct subsys_private - structure to hold the private to the driver core portions of the bus_type/class structure.
@@ -110,8 +111,6 @@ static inline int driver_match_device(struct device_driver *drv,
 {
 	return drv->bus->match ? drv->bus->match(dev, drv) : 1;
 }
-
-extern void sysdev_shutdown(void);
 
 extern char *make_class_name(const char *name, struct kobject *kobj);
 

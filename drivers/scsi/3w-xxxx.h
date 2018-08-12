@@ -8,7 +8,7 @@
 
    Copyright (C) 1999-2010 3ware Inc.
 
-   Kernel compatiblity By:	Andre Hedrick <andre@suse.com>
+   Kernel compatibility By:	Andre Hedrick <andre@suse.com>
    Non-Copyright (C) 2000	Andre Hedrick <andre@suse.com>
 
    This program is free software; you can redistribute it and/or modify
@@ -194,11 +194,6 @@ static unsigned char tw_sense_table[][4] =
 #define TW_AEN_DRIVE_ERROR       0x000A
 #define TW_AEN_SMART_FAIL        0x000F
 #define TW_AEN_SBUF_FAIL         0x0024
-
-/* Phase defines */
-#define TW_PHASE_INITIAL 0
-#define TW_PHASE_SINGLE 1
-#define TW_PHASE_SGLIST 2
 
 /* Misc defines */
 #define TW_ALIGNMENT_6000		      64 /* 64 bytes */

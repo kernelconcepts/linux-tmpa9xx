@@ -39,20 +39,29 @@
 #include "udf_i.h"
 #include "udf_sb.h"
 
-static int udf_adinicb_readpage(struct file *file, struct page *page)
+static void __udf_adinicb_readpage(struct page *page)
 {
 	struct inode *inode = page->mapping->host;
 	char *kaddr;
 	struct udf_inode_info *iinfo = UDF_I(inode);
+	loff_t isize = i_size_read(inode);
 
-	BUG_ON(!PageLocked(page));
-
+	/*
+	 * We have to be careful here as truncate can change i_size under us.
+	 * So just sample it once and use the same value everywhere.
+	 */
 	kaddr = kmap(page);
-	memset(kaddr, 0, PAGE_CACHE_SIZE);
-	memcpy(kaddr, iinfo->i_ext.i_data + iinfo->i_lenEAttr, inode->i_size);
+	memcpy(kaddr, iinfo->i_ext.i_data + iinfo->i_lenEAttr, isize);
+	memset(kaddr + isize, 0, PAGE_CACHE_SIZE - isize);
 	flush_dcache_page(page);
 	SetPageUptodate(page);
 	kunmap(page);
+}
+
+static int udf_adinicb_readpage(struct file *file, struct page *page)
+{
+	BUG_ON(!PageLocked(page));
+	__udf_adinicb_readpage(page);
 	unlock_page(page);
 
 	return 0;
@@ -77,6 +86,25 @@ static int udf_adinicb_writepage(struct page *page,
 	return 0;
 }
 
+static int udf_adinicb_write_begin(struct file *file,
+			struct address_space *mapping, loff_t pos,
+			unsigned len, unsigned flags, struct page **pagep,
+			void **fsdata)
+{
+	struct page *page;
+
+	if (WARN_ON_ONCE(pos >= PAGE_CACHE_SIZE))
+		return -EIO;
+	page = grab_cache_page_write_begin(mapping, 0, flags);
+	if (!page)
+		return -ENOMEM;
+	*pagep = page;
+
+	if (!PageUptodate(page) && len != PAGE_CACHE_SIZE)
+		__udf_adinicb_readpage(page);
+	return 0;
+}
+
 static int udf_adinicb_write_end(struct file *file,
 			struct address_space *mapping,
 			loff_t pos, unsigned len, unsigned copied,
@@ -98,9 +126,8 @@ static int udf_adinicb_write_end(struct file *file,
 const struct address_space_operations udf_adinicb_aops = {
 	.readpage	= udf_adinicb_readpage,
 	.writepage	= udf_adinicb_writepage,
-	.sync_page	= block_sync_page,
-	.write_begin = simple_write_begin,
-	.write_end = udf_adinicb_write_end,
+	.write_begin	= udf_adinicb_write_begin,
+	.write_end	= udf_adinicb_write_end,
 };
 
 static ssize_t udf_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
@@ -123,10 +150,9 @@ static ssize_t udf_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 		if (inode->i_sb->s_blocksize <
 				(udf_file_entry_alloc_offset(inode) +
 						pos + count)) {
-			udf_expand_file_adinicb(inode, pos + count, &err);
-			if (iinfo->i_alloc_type == ICBTAG_FLAG_AD_IN_ICB) {
+			err = udf_expand_file_adinicb(inode);
+			if (err) {
 				udf_debug("udf_expand_adinicb: err=%d\n", err);
-				up_write(&iinfo->i_data_sem);
 				return err;
 			}
 		} else {
@@ -134,9 +160,10 @@ static ssize_t udf_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 				iinfo->i_lenAlloc = pos + count;
 			else
 				iinfo->i_lenAlloc = inode->i_size;
+			up_write(&iinfo->i_data_sem);
 		}
-	}
-	up_write(&iinfo->i_data_sem);
+	} else
+		up_write(&iinfo->i_data_sem);
 
 	retval = generic_file_aio_write(iocb, iov, nr_segs, ppos);
 	if (retval > 0)
@@ -151,7 +178,7 @@ long udf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	long old_block, new_block;
 	int result = -EINVAL;
 
-	if (file_permission(filp, MAY_READ) != 0) {
+	if (inode_permission(inode, MAY_READ) != 0) {
 		udf_debug("no permission to access inode %lu\n", inode->i_ino);
 		result = -EPERM;
 		goto out;
@@ -202,12 +229,10 @@ out:
 static int udf_release_file(struct inode *inode, struct file *filp)
 {
 	if (filp->f_mode & FMODE_WRITE) {
-		mutex_lock(&inode->i_mutex);
 		down_write(&UDF_I(inode)->i_data_sem);
 		udf_discard_prealloc(inode);
 		udf_truncate_tail_extent(inode);
 		up_write(&UDF_I(inode)->i_data_sem);
-		mutex_unlock(&inode->i_mutex);
 	}
 	return 0;
 }
@@ -231,13 +256,13 @@ static int udf_setattr(struct dentry *dentry, struct iattr *attr)
 	struct inode *inode = dentry->d_inode;
 	int error;
 
-	error = inode_change_ok(inode, attr);
+	error = setattr_prepare(dentry, attr);
 	if (error)
 		return error;
 
 	if ((attr->ia_valid & ATTR_SIZE) &&
 	    attr->ia_size != i_size_read(inode)) {
-		error = vmtruncate(inode, attr->ia_size);
+		error = udf_setsize(inode, attr->ia_size);
 		if (error)
 			return error;
 	}
@@ -249,5 +274,4 @@ static int udf_setattr(struct dentry *dentry, struct iattr *attr)
 
 const struct inode_operations udf_file_inode_operations = {
 	.setattr		= udf_setattr,
-	.truncate		= udf_truncate,
 };

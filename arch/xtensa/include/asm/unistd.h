@@ -394,7 +394,8 @@ __SYSCALL(174, sys_chroot, 1)
 #define __NR_pivot_root 			175
 __SYSCALL(175, sys_pivot_root, 2)
 #define __NR_umount 				176
-__SYSCALL(176, sys_umount, 2)
+__SYSCALL(176, sys_oldumount, 1)
+#define __ARCH_WANT_SYS_OLDUMOUNT
 #define __NR_swapoff 				177
 __SYSCALL(177, sys_swapoff, 1)
 #define __NR_sync 				178
@@ -455,7 +456,7 @@ __SYSCALL(203, sys_reboot, 3)
 #define __NR_quotactl 				204
 __SYSCALL(204, sys_quotactl, 4)
 #define __NR_nfsservctl 			205
-__SYSCALL(205, sys_nfsservctl, 3)
+__SYSCALL(205, sys_ni_syscall, 0)
 #define __NR__sysctl 				206
 __SYSCALL(206, sys_sysctl, 1)
 #define __NR_bdflush 				207
@@ -683,8 +684,10 @@ __SYSCALL(305, sys_ni_syscall, 0)
 __SYSCALL(306, sys_eventfd, 1)
 #define __NR_recvmmsg				307
 __SYSCALL(307, sys_recvmmsg, 5)
+#define __NR_setns				308
+__SYSCALL(308, sys_setns, 2)
 
-#define __NR_syscall_count			308
+#define __NR_syscall_count			309
 
 /*
  * sysxtensa syscall handler

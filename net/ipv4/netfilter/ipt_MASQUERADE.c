@@ -60,7 +60,7 @@ masquerade_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	nat = nfct_nat(ct);
 
 	NF_CT_ASSERT(ct && (ctinfo == IP_CT_NEW || ctinfo == IP_CT_RELATED ||
-			    ctinfo == IP_CT_RELATED + IP_CT_IS_REPLY));
+			    ctinfo == IP_CT_RELATED_REPLY));
 
 	/* Source address is 0.0.0.0 - locally generated packet that is
 	 * probably not supposed to be masqueraded.
@@ -123,8 +123,16 @@ static int masq_inet_event(struct notifier_block *this,
 			   unsigned long event,
 			   void *ptr)
 {
-	struct net_device *dev = ((struct in_ifaddr *)ptr)->ifa_dev->dev;
-	return masq_device_event(this, event, dev);
+	struct in_device *idev = ((struct in_ifaddr *)ptr)->ifa_dev;
+	/* The masq_dev_notifier will catch the case of the device going
+	 * down.  So if the inetdev is dead and being destroyed we have
+	 * no work to do.  Otherwise this is an individual address removal
+	 * and we have to perform the flush.
+	 */
+	if (idev->dead)
+		return NOTIFY_DONE;
+
+	return masq_device_event(this, event, idev->dev);
 }
 
 static struct notifier_block masq_dev_notifier = {

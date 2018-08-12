@@ -50,7 +50,7 @@ void die(const char *str, struct pt_regs *fp, long err)
 }
 
 /* for user application debugging */
-void sw_exception(struct pt_regs *regs)
+asmlinkage void sw_exception(struct pt_regs *regs)
 {
 	_exception(SIGTRAP, regs, TRAP_BRKPT, regs->r16);
 	flush_dcache_range(regs->r16, regs->r16 + 0x4);
@@ -119,7 +119,7 @@ asmlinkage void full_exception(struct pt_regs *regs, unsigned int type,
 	case MICROBLAZE_DIV_ZERO_EXCEPTION:
 		if (user_mode(regs)) {
 			pr_debug("Divide by zero exception in user mode\n");
-			_exception(SIGILL, regs, FPE_INTDIV, addr);
+			_exception(SIGFPE, regs, FPE_INTDIV, addr);
 			return;
 		}
 		printk(KERN_WARNING "Divide by zero exception " \

@@ -430,6 +430,9 @@ EXPORT_SYMBOL(clk_disable);
 
 unsigned long clk_get_rate(struct clk *clk)
 {
+	if (!clk)
+		return 0;
+
 	return clk->rate;
 }
 EXPORT_SYMBOL(clk_get_rate);
@@ -443,7 +446,7 @@ struct clk *clk_get(struct device *dev, const char *id)
 		return &vbus_clk;
 	if (!strcmp(id, "cpu"))
 		return &cpu_clk;
-	if (!strcmp(id, "dsp"));
+	if (!strcmp(id, "dsp"))
 		return &dsp_clk;
 	if (!strcmp(id, "vbus"))
 		return &vbus_clk;

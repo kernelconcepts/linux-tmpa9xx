@@ -93,7 +93,7 @@ config SATA_FSL
 	  If unsure, say N.
 
 config SATA_INIC162X
-	tristate "Initio 162x SATA support"
+	tristate "Initio 162x SATA support (Very Experimental)"
 	depends on PCI
 	help
 	  This option enables support for Initio 162x Serial ATA.
@@ -202,6 +202,18 @@ config SATA_DWC
 
 	  If unsure, say N.
 
+config SATA_DWC_DEBUG
+	bool "Debugging driver version"
+	depends on SATA_DWC
+	help
+	  This option enables debugging output in the driver.
+
+config SATA_DWC_VDEBUG
+	bool "Verbose debug output"
+	depends on SATA_DWC_DEBUG
+	help
+	  This option enables the taskfile dumping and NCQ debugging.
+
 config SATA_MV
 	tristate "Marvell SATA support"
 	help
@@ -298,6 +310,13 @@ config PATA_AMD
 	  interfaces found on the chipsets for Athlon/Athlon64.
 
 	  If unsure, say N.
+
+config PATA_ARASAN_CF
+	tristate "ARASAN CompactFlash PATA Controller Support"
+	depends on DMADEVICES
+	select DMA_ENGINE
+	help
+	  Say Y here to support the ARASAN CompactFlash PATA controller
 
 config PATA_ARTOP
 	tristate "ARTOP 6210/6260 PATA support"
@@ -448,6 +467,15 @@ config PATA_ICSIDE
 	  On Acorn systems, say Y here if you wish to use the ICS PATA
 	  interface card.  This is not required for ICS partition support.
 	  If you are unsure, say N to this.
+
+config PATA_IMX
+	tristate "PATA support for Freescale iMX"
+	depends on ARCH_MXC
+	help
+	  This option enables support for the PATA host available on Freescale
+          iMX SoCs.
+
+	  If unsure, say N.
 
 config PATA_IT8213
 	tristate "IT8213 PATA support (Experimental)"
@@ -792,7 +820,7 @@ config PATA_PLATFORM
 
 config PATA_OF_PLATFORM
 	tristate "OpenFirmware platform device PATA support"
-	depends on PATA_PLATFORM && PPC_OF
+	depends on PATA_PLATFORM && OF && OF_IRQ
 	help
 	  This option enables support for generic directly connected ATA
 	  devices commonly found on embedded systems with OpenFirmware
@@ -803,6 +831,7 @@ config PATA_OF_PLATFORM
 config PATA_QDI
 	tristate "QDI VLB PATA support"
 	depends on ISA
+	select PATA_LEGACY
 	help
 	  Support for QDI 6500 and 6580 PATA controllers on VESA local bus.
 

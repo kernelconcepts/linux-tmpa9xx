@@ -32,6 +32,7 @@
 #include <linux/io.h>
 #include <linux/mutex.h>
 #include <linux/linux_logo.h>
+#include <linux/syscore_ops.h>
 #include <asm/spu.h>
 #include <asm/spu_priv1.h>
 #include <asm/spu_csa.h>
@@ -441,8 +442,7 @@ static int spu_request_irqs(struct spu *spu)
 		snprintf(spu->irq_c0, sizeof (spu->irq_c0), "spe%02d.0",
 			 spu->number);
 		ret = request_irq(spu->irqs[0], spu_irq_class_0,
-				  IRQF_DISABLED,
-				  spu->irq_c0, spu);
+				  0, spu->irq_c0, spu);
 		if (ret)
 			goto bail0;
 	}
@@ -450,8 +450,7 @@ static int spu_request_irqs(struct spu *spu)
 		snprintf(spu->irq_c1, sizeof (spu->irq_c1), "spe%02d.1",
 			 spu->number);
 		ret = request_irq(spu->irqs[1], spu_irq_class_1,
-				  IRQF_DISABLED,
-				  spu->irq_c1, spu);
+				  0, spu->irq_c1, spu);
 		if (ret)
 			goto bail1;
 	}
@@ -459,8 +458,7 @@ static int spu_request_irqs(struct spu *spu)
 		snprintf(spu->irq_c2, sizeof (spu->irq_c2), "spe%02d.2",
 			 spu->number);
 		ret = request_irq(spu->irqs[2], spu_irq_class_2,
-				  IRQF_DISABLED,
-				  spu->irq_c2, spu);
+				  0, spu->irq_c2, spu);
 		if (ret)
 			goto bail2;
 	}
@@ -521,18 +519,8 @@ void spu_init_channels(struct spu *spu)
 }
 EXPORT_SYMBOL_GPL(spu_init_channels);
 
-static int spu_shutdown(struct sys_device *sysdev)
-{
-	struct spu *spu = container_of(sysdev, struct spu, sysdev);
-
-	spu_free_irqs(spu);
-	spu_destroy_spu(spu);
-	return 0;
-}
-
 static struct sysdev_class spu_sysdev_class = {
 	.name = "spu",
-	.shutdown = spu_shutdown,
 };
 
 int spu_add_sysdev_attr(struct sysdev_attribute *attr)
@@ -797,6 +785,22 @@ static inline void crash_register_spus(struct list_head *list)
 }
 #endif
 
+static void spu_shutdown(void)
+{
+	struct spu *spu;
+
+	mutex_lock(&spu_full_list_mutex);
+	list_for_each_entry(spu, &spu_full_list, full_list) {
+		spu_free_irqs(spu);
+		spu_destroy_spu(spu);
+	}
+	mutex_unlock(&spu_full_list_mutex);
+}
+
+static struct syscore_ops spu_syscore_ops = {
+	.shutdown = spu_shutdown,
+};
+
 static int __init init_spu_base(void)
 {
 	int i, ret = 0;
@@ -830,6 +834,7 @@ static int __init init_spu_base(void)
 	crash_register_spus(&spu_full_list);
 	mutex_unlock(&spu_full_list_mutex);
 	spu_add_sysdev_attr(&attr_stat);
+	register_syscore_ops(&spu_syscore_ops);
 
 	spu_init_affinity();
 

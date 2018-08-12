@@ -10,6 +10,7 @@
 
 #include <linux/bio.h>
 #include <linux/blkdev.h>
+#include <linux/ratelimit.h>
 
 struct dm_dev;
 struct dm_target;
@@ -71,8 +72,8 @@ typedef void (*dm_postsuspend_fn) (struct dm_target *ti);
 typedef int (*dm_preresume_fn) (struct dm_target *ti);
 typedef void (*dm_resume_fn) (struct dm_target *ti);
 
-typedef int (*dm_status_fn) (struct dm_target *ti, status_type_t status_type,
-			     char *result, unsigned int maxlen);
+typedef void (*dm_status_fn) (struct dm_target *ti, status_type_t status_type,
+			      char *result, unsigned maxlen);
 
 typedef int (*dm_message_fn) (struct dm_target *ti, unsigned argc, char **argv);
 
@@ -115,6 +116,8 @@ struct dm_dev {
 	char name[16];
 };
 
+dev_t dm_get_dev_t(const char *path);
+
 /*
  * Constructors should call these functions to ensure destination devices
  * are opened/closed correctly.
@@ -125,10 +128,6 @@ void dm_put_device(struct dm_target *ti, struct dm_dev *d);
 
 /*
  * Information about a target type
- */
-
-/*
- * Target features
  */
 
 struct target_type {
@@ -158,6 +157,30 @@ struct target_type {
 	/* For internal device-mapper use. */
 	struct list_head list;
 };
+
+/*
+ * Target features
+ */
+
+/*
+ * Any table that contains an instance of this target must have only one.
+ */
+#define DM_TARGET_SINGLETON		0x00000001
+#define dm_target_needs_singleton(type)	((type)->features & DM_TARGET_SINGLETON)
+
+/*
+ * Indicates that a target does not support read-only devices.
+ */
+#define DM_TARGET_ALWAYS_WRITEABLE	0x00000002
+#define dm_target_always_writeable(type) \
+		((type)->features & DM_TARGET_ALWAYS_WRITEABLE)
+
+/*
+ * Any device that contains a table with an instance of this target may never
+ * have tables containing any different target type.
+ */
+#define DM_TARGET_IMMUTABLE		0x00000004
+#define dm_target_is_immutable(type)	((type)->features & DM_TARGET_IMMUTABLE)
 
 struct dm_target {
 	struct dm_table *table;
@@ -191,17 +214,70 @@ struct dm_target {
 
 	/* Used to provide an error string from the ctr */
 	char *error;
+
+	/*
+	 * Set if this target needs to receive discards regardless of
+	 * whether or not its underlying devices have support.
+	 */
+	unsigned discards_supported:1;
+
+	/*
+	 * Set if this target does not return zeroes on discarded blocks.
+	 */
+	unsigned discard_zeroes_data_unsupported:1;
 };
 
 /* Each target can link one of these into the table */
 struct dm_target_callbacks {
 	struct list_head list;
 	int (*congested_fn) (struct dm_target_callbacks *, int);
-	void (*unplug_fn)(struct dm_target_callbacks *);
 };
 
 int dm_register_target(struct target_type *t);
 void dm_unregister_target(struct target_type *t);
+
+/*
+ * Target argument parsing.
+ */
+struct dm_arg_set {
+	unsigned argc;
+	char **argv;
+};
+
+/*
+ * The minimum and maximum value of a numeric argument, together with
+ * the error message to use if the number is found to be outside that range.
+ */
+struct dm_arg {
+	unsigned min;
+	unsigned max;
+	char *error;
+};
+
+/*
+ * Validate the next argument, either returning it as *value or, if invalid,
+ * returning -EINVAL and setting *error.
+ */
+int dm_read_arg(struct dm_arg *arg, struct dm_arg_set *arg_set,
+		unsigned *value, char **error);
+
+/*
+ * Process the next argument as the start of a group containing between
+ * arg->min and arg->max further arguments. Either return the size as
+ * *num_args or, if invalid, return -EINVAL and set *error.
+ */
+int dm_read_arg_group(struct dm_arg *arg, struct dm_arg_set *arg_set,
+		      unsigned *num_args, char **error);
+
+/*
+ * Return the current argument and shift to the next.
+ */
+const char *dm_shift_arg(struct dm_arg_set *as);
+
+/*
+ * Move through num_args arguments.
+ */
+void dm_consume_args(struct dm_arg_set *as, unsigned num_args);
 
 /*-----------------------------------------------------------------
  * Functions for creating and manipulating mapped devices.
@@ -286,11 +362,6 @@ void dm_table_add_target_callbacks(struct dm_table *t, struct dm_target_callback
 int dm_table_complete(struct dm_table *t);
 
 /*
- * Unplug all devices in a table.
- */
-void dm_table_unplug_all(struct dm_table *t);
-
-/*
  * Table reference counting.
  */
 struct dm_table *dm_get_live_table(struct mapped_device *md);
@@ -327,48 +398,32 @@ void *dm_vcalloc(unsigned long nmemb, unsigned long elem_size);
  *---------------------------------------------------------------*/
 #define DM_NAME "device-mapper"
 
-#define DMCRIT(f, arg...) \
-	printk(KERN_CRIT DM_NAME ": " DM_MSG_PREFIX ": " f "\n", ## arg)
+#define DM_RATELIMIT(pr_func, fmt, ...)					\
+do {									\
+	static DEFINE_RATELIMIT_STATE(rs, DEFAULT_RATELIMIT_INTERVAL,	\
+				      DEFAULT_RATELIMIT_BURST);		\
+									\
+	if (__ratelimit(&rs))						\
+		pr_func(DM_FMT(fmt), ##__VA_ARGS__);			\
+} while (0)
 
-#define DMERR(f, arg...) \
-	printk(KERN_ERR DM_NAME ": " DM_MSG_PREFIX ": " f "\n", ## arg)
-#define DMERR_LIMIT(f, arg...) \
-	do { \
-		if (printk_ratelimit())	\
-			printk(KERN_ERR DM_NAME ": " DM_MSG_PREFIX ": " \
-			       f "\n", ## arg); \
-	} while (0)
+#define DM_FMT(fmt) DM_NAME ": " DM_MSG_PREFIX ": " fmt "\n"
 
-#define DMWARN(f, arg...) \
-	printk(KERN_WARNING DM_NAME ": " DM_MSG_PREFIX ": " f "\n", ## arg)
-#define DMWARN_LIMIT(f, arg...) \
-	do { \
-		if (printk_ratelimit())	\
-			printk(KERN_WARNING DM_NAME ": " DM_MSG_PREFIX ": " \
-			       f "\n", ## arg); \
-	} while (0)
+#define DMCRIT(fmt, ...) pr_crit(DM_FMT(fmt), ##__VA_ARGS__)
 
-#define DMINFO(f, arg...) \
-	printk(KERN_INFO DM_NAME ": " DM_MSG_PREFIX ": " f "\n", ## arg)
-#define DMINFO_LIMIT(f, arg...) \
-	do { \
-		if (printk_ratelimit())	\
-			printk(KERN_INFO DM_NAME ": " DM_MSG_PREFIX ": " f \
-			       "\n", ## arg); \
-	} while (0)
+#define DMERR(fmt, ...) pr_err(DM_FMT(fmt), ##__VA_ARGS__)
+#define DMERR_LIMIT(fmt, ...) DM_RATELIMIT(pr_err, fmt, ##__VA_ARGS__)
+#define DMWARN(fmt, ...) pr_warn(DM_FMT(fmt), ##__VA_ARGS__)
+#define DMWARN_LIMIT(fmt, ...) DM_RATELIMIT(pr_warn, fmt, ##__VA_ARGS__)
+#define DMINFO(fmt, ...) pr_info(DM_FMT(fmt), ##__VA_ARGS__)
+#define DMINFO_LIMIT(fmt, ...) DM_RATELIMIT(pr_info, fmt, ##__VA_ARGS__)
 
 #ifdef CONFIG_DM_DEBUG
-#  define DMDEBUG(f, arg...) \
-	printk(KERN_DEBUG DM_NAME ": " DM_MSG_PREFIX " DEBUG: " f "\n", ## arg)
-#  define DMDEBUG_LIMIT(f, arg...) \
-	do { \
-		if (printk_ratelimit())	\
-			printk(KERN_DEBUG DM_NAME ": " DM_MSG_PREFIX ": " f \
-			       "\n", ## arg); \
-	} while (0)
+#define DMDEBUG(fmt, ...) printk(KERN_DEBUG DM_FMT(fmt), ##__VA_ARGS__)
+#define DMDEBUG_LIMIT(fmt, ...) DM_RATELIMIT(pr_debug, fmt, ##__VA_ARGS__)
 #else
-#  define DMDEBUG(f, arg...) do {} while (0)
-#  define DMDEBUG_LIMIT(f, arg...) do {} while (0)
+#define DMDEBUG(fmt, ...) no_printk(fmt, ##__VA_ARGS__)
+#define DMDEBUG_LIMIT(fmt, ...) no_printk(fmt, ##__VA_ARGS__)
 #endif
 
 #define DMEMIT(x...) sz += ((sz >= maxlen) ? \

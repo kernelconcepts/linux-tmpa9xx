@@ -36,13 +36,6 @@
 
 #include <prom.h>
 
-#define UART1_ADDR	KSEG1ADDR(UART1_PHYS_ADDR)
-#define UART3_ADDR	KSEG1ADDR(UART3_PHYS_ADDR)
-
-char irq_tab_alchemy[][5] __initdata = {
-	[0] = { -1, AU1500_PCI_INTA, AU1500_PCI_INTB, 0xff, 0xff },
-};
-
 static void gpr_reset(char *c)
 {
 	/* switch System-LED to orange (red# and green# on) */
@@ -67,27 +60,16 @@ static void gpr_power_off(void)
 
 void __init board_setup(void)
 {
-	printk(KERN_INFO "Tarpeze ITS GPR board\n");
+	printk(KERN_INFO "Trapeze ITS GPR board\n");
 
 	pm_power_off = gpr_power_off;
 	_machine_halt = gpr_power_off;
 	_machine_restart = gpr_reset;
 
-	/* Enable UART3 */
-	au_writel(0x1, UART3_ADDR + UART_MOD_CNTRL);/* clock enable (CE) */
-	au_writel(0x3, UART3_ADDR + UART_MOD_CNTRL); /* CE and "enable" */
-	/* Enable UART1 */
-	au_writel(0x1, UART1_ADDR + UART_MOD_CNTRL); /* clock enable (CE) */
-	au_writel(0x3, UART1_ADDR + UART_MOD_CNTRL); /* CE and "enable" */
+	/* Enable UART1/3 */
+	alchemy_uart_enable(AU1000_UART3_PHYS_ADDR);
+	alchemy_uart_enable(AU1000_UART1_PHYS_ADDR);
 
 	/* Take away Reset of UMTS-card */
 	alchemy_gpio_direction_output(215, 1);
-
-#ifdef CONFIG_PCI
-#if defined(__MIPSEB__)
-	au_writel(0xf | (2 << 6) | (1 << 4), Au1500_PCI_CFG);
-#else
-	au_writel(0xf, Au1500_PCI_CFG);
-#endif
-#endif
 }

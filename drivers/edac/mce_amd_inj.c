@@ -13,6 +13,7 @@
 #include <linux/kobject.h>
 #include <linux/sysdev.h>
 #include <linux/edac.h>
+#include <linux/module.h>
 #include <asm/mce.h>
 
 #include "mce_amd.h"
@@ -90,7 +91,7 @@ static ssize_t edac_inject_bank_store(struct kobject *kobj,
 
 	if (value > 5)
 		if (boot_cpu_data.x86 != 0x15 || value > 6) {
-			printk(KERN_ERR "Non-existant MCE bank: %lu\n", value);
+			printk(KERN_ERR "Non-existent MCE bank: %lu\n", value);
 			return -EINVAL;
 		}
 

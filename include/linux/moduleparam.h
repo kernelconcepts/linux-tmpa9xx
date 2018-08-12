@@ -31,6 +31,11 @@ static const char __module_cat(name,__LINE__)[]				  \
 #define __MODULE_PARM_TYPE(name, _type)					  \
   __MODULE_INFO(parmtype, name##type, #name ":" _type)
 
+/* One for each parameter, describing how to use it.  Some files do
+   multiple of these per line, so can't just use MODULE_INFO. */
+#define MODULE_PARM_DESC(_parm, desc) \
+	__MODULE_INFO(parm, _parm, #_parm ":" desc)
+
 struct kernel_param;
 
 struct kernel_param_ops {
@@ -67,9 +72,9 @@ struct kparam_string {
 struct kparam_array
 {
 	unsigned int max;
+	unsigned int elemsize;
 	unsigned int *num;
 	const struct kernel_param_ops *ops;
-	unsigned int elemsize;
 	void *elem;
 };
 
@@ -262,6 +267,26 @@ static inline void __kernel_param_unlock(void)
 			    .str = &__param_string_##name, 0, perm);	\
 	__MODULE_PARM_TYPE(name, "string")
 
+/**
+ * parameq - checks if two parameter names match
+ * @name1: parameter name 1
+ * @name2: parameter name 2
+ *
+ * Returns true if the two parameter names are equal.
+ * Dashes (-) are considered equal to underscores (_).
+ */
+extern bool parameq(const char *name1, const char *name2);
+
+/**
+ * parameqn - checks if two parameter names match
+ * @name1: parameter name 1
+ * @name2: parameter name 2
+ * @n: the length to compare
+ *
+ * Similar to parameq(), except it compares @n characters.
+ */
+extern bool parameqn(const char *name1, const char *name2, size_t n);
+
 /* Called on module insert or kernel boot */
 extern int parse_args(const char *name,
 		      char *args,
@@ -371,8 +396,9 @@ extern int param_get_invbool(char *buffer, const struct kernel_param *kp);
  */
 #define module_param_array_named(name, array, type, nump, perm)		\
 	static const struct kparam_array __param_arr_##name		\
-	= { ARRAY_SIZE(array), nump, &param_ops_##type,			\
-	    sizeof(array[0]), array };					\
+	= { .max = ARRAY_SIZE(array), .num = nump,                      \
+	    .ops = &param_ops_##type,					\
+	    .elemsize = sizeof(array[0]), .elem = array };		\
 	__module_param_call(MODULE_PARAM_PREFIX, name,			\
 			    &param_array_ops,				\
 			    .arr = &__param_arr_##name,			\

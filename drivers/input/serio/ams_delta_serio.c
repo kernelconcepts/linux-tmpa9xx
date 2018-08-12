@@ -24,6 +24,7 @@
 #include <linux/irq.h>
 #include <linux/serio.h>
 #include <linux/slab.h>
+#include <linux/module.h>
 
 #include <asm/mach-types.h>
 #include <plat/board-ams-delta.h>
@@ -149,7 +150,7 @@ static int __init ams_delta_serio_init(void)
 	 * at FIQ level, switch back from edge to simple interrupt handler
 	 * to avoid bad interaction.
 	 */
-	set_irq_handler(gpio_to_irq(AMS_DELTA_GPIO_PIN_KEYBRD_CLK),
+	irq_set_handler(gpio_to_irq(AMS_DELTA_GPIO_PIN_KEYBRD_CLK),
 			handle_simple_irq);
 
 	serio_register_port(ams_delta_serio);

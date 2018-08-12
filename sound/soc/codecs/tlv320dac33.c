@@ -1,7 +1,7 @@
 /*
  * ALSA SoC Texas Instruments TLV320DAC33 codec driver
  *
- * Author:	Peter Ujfalusi <peter.ujfalusi@nokia.com>
+ * Author: Peter Ujfalusi <peter.ujfalusi@ti.com>
  *
  * Copyright:   (C) 2009 Nokia Corporation
  *
@@ -55,13 +55,13 @@
 #define BURST_BASEFREQ_HZ	49152000
 
 #define SAMPLES_TO_US(rate, samples) \
-	(1000000000 / ((rate * 1000) / samples))
+	(1000000000 / (((rate) * 1000) / (samples)))
 
 #define US_TO_SAMPLES(rate, us) \
-	(rate / (1000000 / (us < 1000000 ? us : 1000000)))
+	((rate) / (1000000 / ((us) < 1000000 ? (us) : 1000000)))
 
 #define UTHR_FROM_PERIOD_SIZE(samples, playrate, burstrate) \
-	((samples * 5000) / ((burstrate * 5000) / (burstrate - playrate)))
+	(((samples)*5000) / (((burstrate)*5000) / ((burstrate) - (playrate))))
 
 static void dac33_calculate_times(struct snd_pcm_substream *substream);
 static int dac33_prepare_chip(struct snd_pcm_substream *substream);
@@ -324,6 +324,10 @@ static void dac33_init_chip(struct snd_soc_codec *codec)
 	dac33_write(codec, DAC33_OUT_AMP_CTRL,
 		    dac33_read_reg_cache(codec, DAC33_OUT_AMP_CTRL));
 
+	dac33_write(codec, DAC33_LDAC_PWR_CTRL,
+		    dac33_read_reg_cache(codec, DAC33_LDAC_PWR_CTRL));
+	dac33_write(codec, DAC33_RDAC_PWR_CTRL,
+		    dac33_read_reg_cache(codec, DAC33_RDAC_PWR_CTRL));
 }
 
 static inline int dac33_read_id(struct snd_soc_codec *codec)
@@ -583,6 +587,9 @@ static const struct snd_soc_dapm_widget dac33_dapm_widgets[] = {
 	SND_SOC_DAPM_SUPPLY("Right DAC Power",
 			    DAC33_RDAC_PWR_CTRL, 2, 0, NULL, 0),
 
+	SND_SOC_DAPM_SUPPLY("Codec Power",
+			    DAC33_PWR_CTRL, 4, 0, NULL, 0),
+
 	SND_SOC_DAPM_PRE("Pre Playback", dac33_playback_event),
 	SND_SOC_DAPM_POST("Post Playback", dac33_playback_event),
 };
@@ -615,30 +622,18 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	/* output */
 	{"LEFT_LO", NULL, "Output Left Amplifier"},
 	{"RIGHT_LO", NULL, "Output Right Amplifier"},
+
+	{"LEFT_LO", NULL, "Codec Power"},
+	{"RIGHT_LO", NULL, "Codec Power"},
 };
-
-static int dac33_add_widgets(struct snd_soc_codec *codec)
-{
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
-
-	snd_soc_dapm_new_controls(dapm, dac33_dapm_widgets,
-				  ARRAY_SIZE(dac33_dapm_widgets));
-	/* set up audio path interconnects */
-	snd_soc_dapm_add_routes(dapm, audio_map, ARRAY_SIZE(audio_map));
-
-	return 0;
-}
 
 static int dac33_set_bias_level(struct snd_soc_codec *codec,
 				enum snd_soc_bias_level level)
 {
-	struct tlv320dac33_priv *dac33 = snd_soc_codec_get_drvdata(codec);
 	int ret;
 
 	switch (level) {
 	case SND_SOC_BIAS_ON:
-		if (!dac33->substream)
-			dac33_soft_power(codec, 1);
 		break;
 	case SND_SOC_BIAS_PREPARE:
 		break;
@@ -670,6 +665,7 @@ static inline void dac33_prefill_handler(struct tlv320dac33_priv *dac33)
 {
 	struct snd_soc_codec *codec = dac33->codec;
 	unsigned int delay;
+	unsigned long flags;
 
 	switch (dac33->fifo_mode) {
 	case DAC33_FIFO_MODE1:
@@ -677,10 +673,10 @@ static inline void dac33_prefill_handler(struct tlv320dac33_priv *dac33)
 			DAC33_THRREG(dac33->nsample));
 
 		/* Take the timestamps */
-		spin_lock_irq(&dac33->lock);
+		spin_lock_irqsave(&dac33->lock, flags);
 		dac33->t_stamp2 = ktime_to_us(ktime_get());
 		dac33->t_stamp1 = dac33->t_stamp2;
-		spin_unlock_irq(&dac33->lock);
+		spin_unlock_irqrestore(&dac33->lock, flags);
 
 		dac33_write16(codec, DAC33_PREFILL_MSB,
 				DAC33_THRREG(dac33->alarm_threshold));
@@ -692,11 +688,11 @@ static inline void dac33_prefill_handler(struct tlv320dac33_priv *dac33)
 		break;
 	case DAC33_FIFO_MODE7:
 		/* Take the timestamp */
-		spin_lock_irq(&dac33->lock);
+		spin_lock_irqsave(&dac33->lock, flags);
 		dac33->t_stamp1 = ktime_to_us(ktime_get());
 		/* Move back the timestamp with drain time */
 		dac33->t_stamp1 -= dac33->mode7_us_to_lthr;
-		spin_unlock_irq(&dac33->lock);
+		spin_unlock_irqrestore(&dac33->lock, flags);
 
 		dac33_write16(codec, DAC33_PREFILL_MSB,
 				DAC33_THRREG(DAC33_MODE7_MARGIN));
@@ -714,13 +710,14 @@ static inline void dac33_prefill_handler(struct tlv320dac33_priv *dac33)
 static inline void dac33_playback_handler(struct tlv320dac33_priv *dac33)
 {
 	struct snd_soc_codec *codec = dac33->codec;
+	unsigned long flags;
 
 	switch (dac33->fifo_mode) {
 	case DAC33_FIFO_MODE1:
 		/* Take the timestamp */
-		spin_lock_irq(&dac33->lock);
+		spin_lock_irqsave(&dac33->lock, flags);
 		dac33->t_stamp2 = ktime_to_us(ktime_get());
-		spin_unlock_irq(&dac33->lock);
+		spin_unlock_irqrestore(&dac33->lock, flags);
 
 		dac33_write16(codec, DAC33_NSAMPLE_MSB,
 				DAC33_THRREG(dac33->nsample));
@@ -773,10 +770,11 @@ static irqreturn_t dac33_interrupt_handler(int irq, void *dev)
 {
 	struct snd_soc_codec *codec = dev;
 	struct tlv320dac33_priv *dac33 = snd_soc_codec_get_drvdata(codec);
+	unsigned long flags;
 
-	spin_lock(&dac33->lock);
+	spin_lock_irqsave(&dac33->lock, flags);
 	dac33->t_stamp1 = ktime_to_us(ktime_get());
-	spin_unlock(&dac33->lock);
+	spin_unlock_irqrestore(&dac33->lock, flags);
 
 	/* Do not schedule the workqueue in Mode7 */
 	if (dac33->fifo_mode != DAC33_FIFO_MODE7)
@@ -936,8 +934,8 @@ static int dac33_prepare_chip(struct snd_pcm_substream *substream)
 	/* Write registers 0x08 and 0x09 (MSB, LSB) */
 	dac33_write16(codec, DAC33_INT_OSC_FREQ_RAT_A, oscset);
 
-	/* calib time: 128 is a nice number ;) */
-	dac33_write(codec, DAC33_CALIB_TIME, 128);
+	/* OSC calibration time */
+	dac33_write(codec, DAC33_CALIB_TIME, 96);
 
 	/* adjustment treshold & step */
 	dac33_write(codec, DAC33_INT_OSC_CTRL_B, DAC33_ADJTHRSHLD(2) |
@@ -1020,7 +1018,7 @@ static int dac33_prepare_chip(struct snd_pcm_substream *substream)
 		/*
 		 * For FIFO bypass mode:
 		 * Enable the FIFO bypass (Disable the FIFO use)
-		 * Set the BCLK as continous
+		 * Set the BCLK as continuous
 		 */
 		fifoctrl_a |= DAC33_FBYPAS;
 		aictrl_b |= DAC33_BCLKON;
@@ -1173,15 +1171,16 @@ static snd_pcm_sframes_t dac33_dai_delay(
 	unsigned int time_delta, uthr;
 	int samples_out, samples_in, samples;
 	snd_pcm_sframes_t delay = 0;
+	unsigned long flags;
 
 	switch (dac33->fifo_mode) {
 	case DAC33_FIFO_BYPASS:
 		break;
 	case DAC33_FIFO_MODE1:
-		spin_lock(&dac33->lock);
+		spin_lock_irqsave(&dac33->lock, flags);
 		t0 = dac33->t_stamp1;
 		t1 = dac33->t_stamp2;
-		spin_unlock(&dac33->lock);
+		spin_unlock_irqrestore(&dac33->lock, flags);
 		t_now = ktime_to_us(ktime_get());
 
 		/* We have not started to fill the FIFO yet, delay is 0 */
@@ -1246,10 +1245,10 @@ static snd_pcm_sframes_t dac33_dai_delay(
 		}
 		break;
 	case DAC33_FIFO_MODE7:
-		spin_lock(&dac33->lock);
+		spin_lock_irqsave(&dac33->lock, flags);
 		t0 = dac33->t_stamp1;
 		uthr = dac33->uthr;
-		spin_unlock(&dac33->lock);
+		spin_unlock_irqrestore(&dac33->lock, flags);
 		t_now = ktime_to_us(ktime_get());
 
 		/* We have not started to fill the FIFO yet, delay is 0 */
@@ -1420,7 +1419,7 @@ static int dac33_soc_probe(struct snd_soc_codec *codec)
 	/* Check if the IRQ number is valid and request it */
 	if (dac33->irq >= 0) {
 		ret = request_irq(dac33->irq, dac33_interrupt_handler,
-				  IRQF_TRIGGER_RISING | IRQF_DISABLED,
+				  IRQF_TRIGGER_RISING,
 				  codec->name, codec);
 		if (ret < 0) {
 			dev_err(codec->dev, "Could not request IRQ%d (%d)\n",
@@ -1440,14 +1439,10 @@ static int dac33_soc_probe(struct snd_soc_codec *codec)
 		}
 	}
 
-	snd_soc_add_controls(codec, dac33_snd_controls,
-			     ARRAY_SIZE(dac33_snd_controls));
 	/* Only add the FIFO controls, if we have valid IRQ number */
 	if (dac33->irq >= 0)
 		snd_soc_add_controls(codec, dac33_mode_snd_controls,
 				     ARRAY_SIZE(dac33_mode_snd_controls));
-
-	dac33_add_widgets(codec);
 
 err_power:
 	return ret;
@@ -1491,6 +1486,13 @@ static struct snd_soc_codec_driver soc_codec_dev_tlv320dac33 = {
 	.remove = dac33_soc_remove,
 	.suspend = dac33_soc_suspend,
 	.resume = dac33_soc_resume,
+
+	.controls = dac33_snd_controls,
+	.num_controls = ARRAY_SIZE(dac33_snd_controls),
+	.dapm_widgets = dac33_dapm_widgets,
+	.num_dapm_widgets = ARRAY_SIZE(dac33_dapm_widgets),
+	.dapm_routes = audio_map,
+	.num_dapm_routes = ARRAY_SIZE(audio_map),
 };
 
 #define DAC33_RATES	(SNDRV_PCM_RATE_44100 | \
@@ -1615,6 +1617,7 @@ static const struct i2c_device_id tlv320dac33_i2c_id[] = {
 	},
 	{ },
 };
+MODULE_DEVICE_TABLE(i2c, tlv320dac33_i2c_id);
 
 static struct i2c_driver tlv320dac33_i2c_driver = {
 	.driver = {
@@ -1646,5 +1649,5 @@ module_exit(dac33_module_exit);
 
 
 MODULE_DESCRIPTION("ASoC TLV320DAC33 codec driver");
-MODULE_AUTHOR("Peter Ujfalusi <peter.ujfalusi@nokia.com>");
+MODULE_AUTHOR("Peter Ujfalusi <peter.ujfalusi@ti.com>");
 MODULE_LICENSE("GPL");

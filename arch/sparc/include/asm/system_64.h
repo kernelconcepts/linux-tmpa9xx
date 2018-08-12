@@ -29,10 +29,6 @@ enum sparc_cpu {
 /* This cannot ever be a sun4c :) That's just history. */
 #define ARCH_SUN4C 0
 
-extern const char *sparc_cpu_type;
-extern const char *sparc_fpu_type;
-extern const char *sparc_pmu_type;
-
 extern char reboot_command[];
 
 /* These are here in an effort to more fully work around Spitfire Errata
@@ -144,8 +140,7 @@ do {						\
 	 * and 2 stores in this critical code path.  -DaveM
 	 */
 #define switch_to(prev, next, last)					\
-do {	flush_tlb_pending();						\
-	save_and_clear_fpu();						\
+do {	save_and_clear_fpu();						\
 	/* If you are tempted to conditionalize the following */	\
 	/* so that ASI is only written if it changes, think again. */	\
 	__asm__ __volatile__("wr %%g0, %0, %%asi"			\
@@ -238,7 +233,7 @@ static inline unsigned long __xchg(unsigned long x, __volatile__ void * ptr,
 		return xchg32(ptr, x);
 	case 8:
 		return xchg64(ptr, x);
-	};
+	}
 	__xchg_called_with_bad_pointer();
 	return x;
 }

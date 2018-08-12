@@ -4,7 +4,7 @@
  * This file provides the necessary glue to tie NetLabel into the SELinux
  * subsystem.
  *
- * Author: Paul Moore <paul.moore@hp.com>
+ * Author: Paul Moore <paul@paul-moore.com>
  *
  */
 
@@ -151,7 +151,7 @@ void selinux_netlbl_sk_security_free(struct sk_security_struct *sksec)
  *
  * Description:
  * Called when the NetLabel state of a sk_security_struct needs to be reset.
- * The caller is responsibile for all the NetLabel sk_security_struct locking.
+ * The caller is responsible for all the NetLabel sk_security_struct locking.
  *
  */
 void selinux_netlbl_sk_security_reset(struct sk_security_struct *sksec)
@@ -442,8 +442,7 @@ int selinux_netlbl_socket_connect(struct sock *sk, struct sockaddr *addr)
 	    sksec->nlbl_state != NLBL_CONNLABELED)
 		return 0;
 
-	local_bh_disable();
-	bh_lock_sock_nested(sk);
+	lock_sock(sk);
 
 	/* connected sockets are allowed to disconnect when the address family
 	 * is set to AF_UNSPEC, if that is what is happening we want to reset
@@ -464,7 +463,6 @@ int selinux_netlbl_socket_connect(struct sock *sk, struct sockaddr *addr)
 		sksec->nlbl_state = NLBL_CONNLABELED;
 
 socket_connect_return:
-	bh_unlock_sock(sk);
-	local_bh_enable();
+	release_sock(sk);
 	return rc;
 }

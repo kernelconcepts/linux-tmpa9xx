@@ -270,7 +270,7 @@ SOC_DAPM_ENUM("Route", wm9712_enum[9]);
 
 /* Mic select */
 static const struct snd_kcontrol_new wm9712_mic_src_controls =
-SOC_DAPM_ENUM("Route", wm9712_enum[7]);
+SOC_DAPM_ENUM("Mic Source Select", wm9712_enum[7]);
 
 /* diff select */
 static const struct snd_kcontrol_new wm9712_diff_sel_controls =
@@ -289,7 +289,9 @@ SND_SOC_DAPM_MUX("Left Capture Select", SND_SOC_NOPM, 0, 0,
 	&wm9712_capture_selectl_controls),
 SND_SOC_DAPM_MUX("Right Capture Select", SND_SOC_NOPM, 0, 0,
 	&wm9712_capture_selectr_controls),
-SND_SOC_DAPM_MUX("Mic Select Source", SND_SOC_NOPM, 0, 0,
+SND_SOC_DAPM_MUX("Left Mic Select Source", SND_SOC_NOPM, 0, 0,
+	&wm9712_mic_src_controls),
+SND_SOC_DAPM_MUX("Right Mic Select Source", SND_SOC_NOPM, 0, 0,
 	&wm9712_mic_src_controls),
 SND_SOC_DAPM_MUX("Differential Source", SND_SOC_NOPM, 0, 0,
 	&wm9712_diff_sel_controls),
@@ -317,6 +319,7 @@ SND_SOC_DAPM_PGA("Out 3 PGA", AC97_INT_PAGING, 5, 1, NULL, 0),
 SND_SOC_DAPM_PGA("Line PGA", AC97_INT_PAGING, 2, 1, NULL, 0),
 SND_SOC_DAPM_PGA("Phone PGA", AC97_INT_PAGING, 1, 1, NULL, 0),
 SND_SOC_DAPM_PGA("Mic PGA", AC97_INT_PAGING, 0, 1, NULL, 0),
+SND_SOC_DAPM_PGA("Differential Mic", SND_SOC_NOPM, 0, 0, NULL, 0),
 SND_SOC_DAPM_MICBIAS("Mic Bias", AC97_INT_PAGING, 10, 1),
 SND_SOC_DAPM_OUTPUT("MONOOUT"),
 SND_SOC_DAPM_OUTPUT("HPOUTL"),
@@ -332,7 +335,7 @@ SND_SOC_DAPM_INPUT("MIC1"),
 SND_SOC_DAPM_INPUT("MIC2"),
 };
 
-static const struct snd_soc_dapm_route audio_map[] = {
+static const struct snd_soc_dapm_route wm9712_audio_map[] = {
 	/* virtual mixer - mixes left & right channels for spk and mono */
 	{"AC97 Mixer", NULL, "Left DAC"},
 	{"AC97 Mixer", NULL, "Right DAC"},
@@ -376,6 +379,18 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"Phone PGA", NULL, "PHONE"},
 	{"Mic PGA", NULL, "MIC1"},
 	{"Mic PGA", NULL, "MIC2"},
+
+	/* microphones */
+	{"Differential Mic", NULL, "MIC1"},
+	{"Differential Mic", NULL, "MIC2"},
+	{"Left Mic Select Source", "Mic 1", "MIC1"},
+	{"Left Mic Select Source", "Mic 2", "MIC2"},
+	{"Left Mic Select Source", "Stereo", "MIC1"},
+	{"Left Mic Select Source", "Differential", "Differential Mic"},
+	{"Right Mic Select Source", "Mic 1", "MIC1"},
+	{"Right Mic Select Source", "Mic 2", "MIC2"},
+	{"Right Mic Select Source", "Stereo", "MIC2"},
+	{"Right Mic Select Source", "Differential", "Differential Mic"},
 
 	/* left capture selector */
 	{"Left Capture Select", "Mic", "MIC1"},
@@ -428,17 +443,6 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"LOUT2", NULL, "Speaker PGA"},
 	{"ROUT2", NULL, "Speaker PGA"},
 };
-
-static int wm9712_add_widgets(struct snd_soc_codec *codec)
-{
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
-
-	snd_soc_dapm_new_controls(dapm, wm9712_dapm_widgets,
-				  ARRAY_SIZE(wm9712_dapm_widgets));
-	snd_soc_dapm_add_routes(dapm, audio_map, ARRAY_SIZE(audio_map));
-
-	return 0;
-}
 
 static unsigned int ac97_read(struct snd_soc_codec *codec,
 	unsigned int reg)
@@ -651,7 +655,6 @@ static int wm9712_soc_probe(struct snd_soc_codec *codec)
 	wm9712_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
 	snd_soc_add_controls(codec, wm9712_snd_ac97_controls,
 				ARRAY_SIZE(wm9712_snd_ac97_controls));
-	wm9712_add_widgets(codec);
 
 	return 0;
 
@@ -678,6 +681,10 @@ static struct snd_soc_codec_driver soc_codec_dev_wm9712 = {
 	.reg_word_size = sizeof(u16),
 	.reg_cache_step = 2,
 	.reg_cache_default = wm9712_reg,
+	.dapm_widgets = wm9712_dapm_widgets,
+	.num_dapm_widgets = ARRAY_SIZE(wm9712_dapm_widgets),
+	.dapm_routes = wm9712_audio_map,
+	.num_dapm_routes = ARRAY_SIZE(wm9712_audio_map),
 };
 
 static __devinit int wm9712_probe(struct platform_device *pdev)

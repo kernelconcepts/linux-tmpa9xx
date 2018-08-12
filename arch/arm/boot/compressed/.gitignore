@@ -5,7 +5,19 @@ piggy.lzo
 piggy.lzma
 vmlinux
 vmlinux.lds
+<<<<<<< HEAD
 piggy.lzo
 piggy.gzip
 lib1funcs.S
 vmlinux
+=======
+
+# borrowed libfdt files
+fdt.c
+fdt.h
+fdt_ro.c
+fdt_rw.c
+fdt_wip.c
+libfdt.h
+libfdt_internal.h
+>>>>>>> linux-3.2.y

@@ -85,9 +85,8 @@ struct machine_data {
  *
  * Here we program the DMACR and PMUXCR registers.
  */
-static int p1022_ds_machine_probe(struct platform_device *sound_device)
+static int p1022_ds_machine_probe(struct snd_soc_card *card)
 {
-	struct snd_soc_card *card = platform_get_drvdata(sound_device);
 	struct machine_data *mdata =
 		container_of(card, struct machine_data, card);
 	struct ccsr_guts_85xx __iomem *guts;
@@ -160,9 +159,8 @@ static int p1022_ds_startup(struct snd_pcm_substream *substream)
  * This function is called to remove the sound device for one SSI.  We
  * de-program the DMACR and PMUXCR register.
  */
-static int p1022_ds_machine_remove(struct platform_device *sound_device)
+static int p1022_ds_machine_remove(struct snd_soc_card *card)
 {
-	struct snd_soc_card *card = platform_get_drvdata(sound_device);
 	struct machine_data *mdata =
 		container_of(card, struct machine_data, card);
 	struct ccsr_guts_85xx __iomem *guts;
@@ -234,7 +232,7 @@ static int get_parent_cell_index(struct device_node *np)
 
 	iprop = of_get_property(parent, "cell-index", NULL);
 	if (iprop)
-		ret = *iprop;
+		ret = be32_to_cpup(iprop);
 
 	of_node_put(parent);
 
@@ -263,13 +261,13 @@ static int codec_node_dev_name(struct device_node *np, char *buf, size_t len)
 	if (!iprop)
 		return -EINVAL;
 
-	addr = *iprop;
+	addr = be32_to_cpup(iprop);
 
 	bus = get_parent_cell_index(np);
 	if (bus < 0)
 		return bus;
 
-	snprintf(buf, len, "%s-codec.%u-%04x", temp, bus, addr);
+	snprintf(buf, len, "%s.%u-%04x", temp, bus, addr);
 
 	return 0;
 }
@@ -299,8 +297,10 @@ static int get_dma_channel(struct device_node *ssi_np,
 	 * dai->platform name should already point to an allocated buffer.
 	 */
 	ret = of_address_to_resource(dma_channel_np, 0, &res);
-	if (ret)
+	if (ret) {
+		of_node_put(dma_channel_np);
 		return ret;
+	}
 	snprintf((char *)dai->platform_name, DAI_NAME_SIZE, "%llx.%s",
 		 (unsigned long long) res.start, dma_channel_np->name);
 
@@ -310,7 +310,7 @@ static int get_dma_channel(struct device_node *ssi_np,
 		return -EINVAL;
 	}
 
-	*dma_channel_id = *iprop;
+	*dma_channel_id = be32_to_cpup(iprop);
 	*dma_id = get_parent_cell_index(dma_channel_np);
 	of_node_put(dma_channel_np);
 
@@ -381,7 +381,7 @@ static int p1022_ds_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto error;
 	}
-	mdata->ssi_id = *iprop;
+	mdata->ssi_id = be32_to_cpup(iprop);
 
 	/* Get the serial format and clock direction. */
 	sprop = of_get_property(np, "fsl,mode", NULL);
@@ -392,7 +392,8 @@ static int p1022_ds_probe(struct platform_device *pdev)
 	}
 
 	if (strcasecmp(sprop, "i2s-slave") == 0) {
-		mdata->dai_format = SND_SOC_DAIFMT_I2S;
+		mdata->dai_format = SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_CBM_CFM;
 		mdata->codec_clk_direction = SND_SOC_CLOCK_OUT;
 		mdata->cpu_clk_direction = SND_SOC_CLOCK_IN;
 
@@ -407,33 +408,40 @@ static int p1022_ds_probe(struct platform_device *pdev)
 			ret = -EINVAL;
 			goto error;
 		}
-		mdata->clk_frequency = *iprop;
+		mdata->clk_frequency = be32_to_cpup(iprop);
 	} else if (strcasecmp(sprop, "i2s-master") == 0) {
-		mdata->dai_format = SND_SOC_DAIFMT_I2S;
+		mdata->dai_format = SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_CBS_CFS;
 		mdata->codec_clk_direction = SND_SOC_CLOCK_IN;
 		mdata->cpu_clk_direction = SND_SOC_CLOCK_OUT;
 	} else if (strcasecmp(sprop, "lj-slave") == 0) {
-		mdata->dai_format = SND_SOC_DAIFMT_LEFT_J;
+		mdata->dai_format = SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_LEFT_J | SND_SOC_DAIFMT_CBM_CFM;
 		mdata->codec_clk_direction = SND_SOC_CLOCK_OUT;
 		mdata->cpu_clk_direction = SND_SOC_CLOCK_IN;
 	} else if (strcasecmp(sprop, "lj-master") == 0) {
-		mdata->dai_format = SND_SOC_DAIFMT_LEFT_J;
+		mdata->dai_format = SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_LEFT_J | SND_SOC_DAIFMT_CBS_CFS;
 		mdata->codec_clk_direction = SND_SOC_CLOCK_IN;
 		mdata->cpu_clk_direction = SND_SOC_CLOCK_OUT;
 	} else if (strcasecmp(sprop, "rj-slave") == 0) {
-		mdata->dai_format = SND_SOC_DAIFMT_RIGHT_J;
+		mdata->dai_format = SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_RIGHT_J | SND_SOC_DAIFMT_CBM_CFM;
 		mdata->codec_clk_direction = SND_SOC_CLOCK_OUT;
 		mdata->cpu_clk_direction = SND_SOC_CLOCK_IN;
 	} else if (strcasecmp(sprop, "rj-master") == 0) {
-		mdata->dai_format = SND_SOC_DAIFMT_RIGHT_J;
+		mdata->dai_format = SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_RIGHT_J | SND_SOC_DAIFMT_CBS_CFS;
 		mdata->codec_clk_direction = SND_SOC_CLOCK_IN;
 		mdata->cpu_clk_direction = SND_SOC_CLOCK_OUT;
 	} else if (strcasecmp(sprop, "ac97-slave") == 0) {
-		mdata->dai_format = SND_SOC_DAIFMT_AC97;
+		mdata->dai_format = SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_AC97 | SND_SOC_DAIFMT_CBM_CFM;
 		mdata->codec_clk_direction = SND_SOC_CLOCK_OUT;
 		mdata->cpu_clk_direction = SND_SOC_CLOCK_IN;
 	} else if (strcasecmp(sprop, "ac97-master") == 0) {
-		mdata->dai_format = SND_SOC_DAIFMT_AC97;
+		mdata->dai_format = SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_AC97 | SND_SOC_DAIFMT_CBS_CFS;
 		mdata->codec_clk_direction = SND_SOC_CLOCK_IN;
 		mdata->cpu_clk_direction = SND_SOC_CLOCK_OUT;
 	} else {
@@ -506,7 +514,7 @@ static int p1022_ds_probe(struct platform_device *pdev)
 
 error:
 	if (sound_device)
-		platform_device_unregister(sound_device);
+		platform_device_put(sound_device);
 
 	kfree(mdata);
 error_put:

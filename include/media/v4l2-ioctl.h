@@ -37,6 +37,10 @@ struct v4l2_ioctl_ops {
 					    struct v4l2_fmtdesc *f);
 	int (*vidioc_enum_fmt_vid_out)     (struct file *file, void *fh,
 					    struct v4l2_fmtdesc *f);
+	int (*vidioc_enum_fmt_vid_cap_mplane)(struct file *file, void *fh,
+					      struct v4l2_fmtdesc *f);
+	int (*vidioc_enum_fmt_vid_out_mplane)(struct file *file, void *fh,
+					      struct v4l2_fmtdesc *f);
 	int (*vidioc_enum_fmt_type_private)(struct file *file, void *fh,
 					    struct v4l2_fmtdesc *f);
 
@@ -57,6 +61,10 @@ struct v4l2_ioctl_ops {
 					struct v4l2_format *f);
 	int (*vidioc_g_fmt_sliced_vbi_out)(struct file *file, void *fh,
 					struct v4l2_format *f);
+	int (*vidioc_g_fmt_vid_cap_mplane)(struct file *file, void *fh,
+					   struct v4l2_format *f);
+	int (*vidioc_g_fmt_vid_out_mplane)(struct file *file, void *fh,
+					   struct v4l2_format *f);
 	int (*vidioc_g_fmt_type_private)(struct file *file, void *fh,
 					struct v4l2_format *f);
 
@@ -77,6 +85,10 @@ struct v4l2_ioctl_ops {
 					struct v4l2_format *f);
 	int (*vidioc_s_fmt_sliced_vbi_out)(struct file *file, void *fh,
 					struct v4l2_format *f);
+	int (*vidioc_s_fmt_vid_cap_mplane)(struct file *file, void *fh,
+					   struct v4l2_format *f);
+	int (*vidioc_s_fmt_vid_out_mplane)(struct file *file, void *fh,
+					   struct v4l2_format *f);
 	int (*vidioc_s_fmt_type_private)(struct file *file, void *fh,
 					struct v4l2_format *f);
 
@@ -97,6 +109,10 @@ struct v4l2_ioctl_ops {
 					  struct v4l2_format *f);
 	int (*vidioc_try_fmt_sliced_vbi_out)(struct file *file, void *fh,
 					  struct v4l2_format *f);
+	int (*vidioc_try_fmt_vid_cap_mplane)(struct file *file, void *fh,
+					     struct v4l2_format *f);
+	int (*vidioc_try_fmt_vid_out_mplane)(struct file *file, void *fh,
+					     struct v4l2_format *f);
 	int (*vidioc_try_fmt_type_private)(struct file *file, void *fh,
 					  struct v4l2_format *f);
 
@@ -106,6 +122,8 @@ struct v4l2_ioctl_ops {
 	int (*vidioc_qbuf)    (struct file *file, void *fh, struct v4l2_buffer *b);
 	int (*vidioc_dqbuf)   (struct file *file, void *fh, struct v4l2_buffer *b);
 
+	int (*vidioc_create_bufs)(struct file *file, void *fh, struct v4l2_create_buffers *b);
+	int (*vidioc_prepare_buf)(struct file *file, void *fh, struct v4l2_buffer *b);
 
 	int (*vidioc_overlay) (struct file *file, void *fh, unsigned int i);
 	int (*vidioc_g_fbuf)   (struct file *file, void *fh,
@@ -254,7 +272,7 @@ struct v4l2_ioctl_ops {
 
 	/* For other private ioctls */
 	long (*vidioc_default)	       (struct file *file, void *fh,
-					int cmd, void *arg);
+					bool valid_prio, int cmd, void *arg);
 };
 
 

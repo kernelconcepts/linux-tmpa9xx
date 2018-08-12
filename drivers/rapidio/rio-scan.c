@@ -295,7 +295,7 @@ static int __devinit rio_add_device(struct rio_dev *rdev)
 }
 
 /**
- * rio_enable_rx_tx_port - enable input reciever and output transmitter of
+ * rio_enable_rx_tx_port - enable input receiver and output transmitter of
  * given port
  * @port: Master port associated with the RIO network
  * @local: local=1 select local port otherwise a far device is reached
@@ -505,8 +505,7 @@ static struct rio_dev __devinit *rio_setup_device(struct rio_net *net,
 	rdev->dev.dma_mask = &rdev->dma_mask;
 	rdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
 
-	if ((rdev->pef & RIO_PEF_INB_DOORBELL) &&
-	    (rdev->dst_ops & RIO_DST_OPS_DOORBELL))
+	if (rdev->dst_ops & RIO_DST_OPS_DOORBELL)
 		rio_init_dbell_res(&rdev->riores[RIO_DOORBELL_RESOURCE],
 				   0, 0xffff);
 
@@ -517,7 +516,7 @@ static struct rio_dev __devinit *rio_setup_device(struct rio_net *net,
 	return rdev;
 
 cleanup:
-	if (rswitch->route_table)
+	if (rswitch)
 		kfree(rswitch->route_table);
 
 	kfree(rdev);
@@ -924,7 +923,7 @@ static int __devinit rio_enum_peer(struct rio_net *net, struct rio_mport *port,
  * rio_enum_complete- Tests if enumeration of a network is complete
  * @port: Master port to send transaction
  *
- * Tests the Component Tag CSR for non-zero value (enumeration
+ * Tests the PGCCSR discovered bit for non-zero value (enumeration
  * complete flag). Return %1 if enumeration is complete or %0 if
  * enumeration is incomplete.
  */
@@ -934,7 +933,7 @@ static int rio_enum_complete(struct rio_mport *port)
 
 	rio_local_read_config_32(port, port->phys_efptr + RIO_PORT_GEN_CTL_CSR,
 				 &regval);
-	return (regval & RIO_PORT_GEN_MASTER) ? 1 : 0;
+	return (regval & RIO_PORT_GEN_DISCOVERED) ? 1 : 0;
 }
 
 /**

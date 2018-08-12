@@ -62,8 +62,8 @@ const struct wm8994_access_mask wm8994_access_masks[WM8994_CACHE_SIZE] = {
 	{ 0x00FF, 0x00FF }, /* R58    - MICBIAS */
 	{ 0x000F, 0x000F }, /* R59    - LDO 1 */
 	{ 0x0007, 0x0007 }, /* R60    - LDO 2 */
-	{ 0x0000, 0x0000 }, /* R61 */
-	{ 0x0000, 0x0000 }, /* R62 */
+	{ 0xFFFF, 0xFFFF }, /* R61 */
+	{ 0xFFFF, 0xFFFF }, /* R62 */
 	{ 0x0000, 0x0000 }, /* R63 */
 	{ 0x0000, 0x0000 }, /* R64 */
 	{ 0x0000, 0x0000 }, /* R65 */
@@ -209,9 +209,9 @@ const struct wm8994_access_mask wm8994_access_masks[WM8994_CACHE_SIZE] = {
 	{ 0x0000, 0x0000 }, /* R205 */
 	{ 0x0000, 0x0000 }, /* R206 */
 	{ 0x0000, 0x0000 }, /* R207 */
-	{ 0x0000, 0x0000 }, /* R208 */
-	{ 0x0000, 0x0000 }, /* R209 */
-	{ 0x0000, 0x0000 }, /* R210 */
+	{ 0xFFFF, 0xFFFF }, /* R208 */
+	{ 0xFFFF, 0xFFFF }, /* R209 */
+	{ 0xFFFF, 0xFFFF }, /* R210 */
 	{ 0x0000, 0x0000 }, /* R211 */
 	{ 0x0000, 0x0000 }, /* R212 */
 	{ 0x0000, 0x0000 }, /* R213 */
@@ -1073,8 +1073,8 @@ const struct wm8994_access_mask wm8994_access_masks[WM8994_CACHE_SIZE] = {
 	{ 0x0000, 0x0000 }, /* R1069 */
 	{ 0x0000, 0x0000 }, /* R1070 */
 	{ 0x0000, 0x0000 }, /* R1071 */
-	{ 0x0000, 0x0000 }, /* R1072 */
-	{ 0x0000, 0x0000 }, /* R1073 */
+	{ 0x006F, 0x006F }, /* R1072  - AIF1 DAC1 Noise Gate */
+	{ 0x006F, 0x006F }, /* R1073  - AIF1 DAC2 Noise Gate */
 	{ 0x0000, 0x0000 }, /* R1074 */
 	{ 0x0000, 0x0000 }, /* R1075 */
 	{ 0x0000, 0x0000 }, /* R1076 */
@@ -1329,7 +1329,7 @@ const struct wm8994_access_mask wm8994_access_masks[WM8994_CACHE_SIZE] = {
 	{ 0x0000, 0x0000 }, /* R1325 */
 	{ 0x0000, 0x0000 }, /* R1326 */
 	{ 0x0000, 0x0000 }, /* R1327 */
-	{ 0x0000, 0x0000 }, /* R1328 */
+	{ 0x006F, 0x006F }, /* R1328  - AIF2 DAC Noise Gate */
 	{ 0x0000, 0x0000 }, /* R1329 */
 	{ 0x0000, 0x0000 }, /* R1330 */
 	{ 0x0000, 0x0000 }, /* R1331 */
@@ -1573,7 +1573,7 @@ const struct wm8994_access_mask wm8994_access_masks[WM8994_CACHE_SIZE] = {
 	{ 0x03C3, 0x03C3 }, /* R1569  - Sidetone */
 };
 
-const __devinitdata u16 wm8994_reg_defaults[WM8994_CACHE_SIZE] = {
+const u16 wm8994_reg_defaults[WM8994_CACHE_SIZE] = {
 	0x8994,     /* R0     - Software Reset */
 	0x0000,     /* R1     - Power Management (1) */
 	0x6000,     /* R2     - Power Management (2) */
@@ -1635,8 +1635,8 @@ const __devinitdata u16 wm8994_reg_defaults[WM8994_CACHE_SIZE] = {
 	0x0000,     /* R58    - MICBIAS */
 	0x000D,     /* R59    - LDO 1 */
 	0x0003,     /* R60    - LDO 2 */
-	0x0000,     /* R61 */
-	0x0000,     /* R62 */
+	0x0039,     /* R61    - MICBIAS1 */
+	0x0039,     /* R62    - MICBIAS2 */
 	0x0000,     /* R63 */
 	0x0000,     /* R64 */
 	0x0000,     /* R65 */
@@ -2646,8 +2646,8 @@ const __devinitdata u16 wm8994_reg_defaults[WM8994_CACHE_SIZE] = {
 	0x0000,     /* R1069 */
 	0x0000,     /* R1070 */
 	0x0000,     /* R1071 */
-	0x0000,     /* R1072 */
-	0x0000,     /* R1073 */
+	0x0068,     /* R1072  - AIF1 DAC1 Noise Gate */
+	0x0068,     /* R1073  - AIF1 DAC2 Noise Gate */
 	0x0000,     /* R1074 */
 	0x0000,     /* R1075 */
 	0x0000,     /* R1076 */
@@ -2902,7 +2902,7 @@ const __devinitdata u16 wm8994_reg_defaults[WM8994_CACHE_SIZE] = {
 	0x0000,     /* R1325 */
 	0x0000,     /* R1326 */
 	0x0000,     /* R1327 */
-	0x0000,     /* R1328 */
+	0x0068,     /* R1328  - AIF2 DAC Noise Gate */
 	0x0000,     /* R1329 */
 	0x0000,     /* R1330 */
 	0x0000,     /* R1331 */

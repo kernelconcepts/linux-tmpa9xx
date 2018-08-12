@@ -38,8 +38,10 @@ struct max1111_data {
 	struct device		*hwmon_dev;
 	struct spi_message	msg;
 	struct spi_transfer	xfer[2];
-	uint8_t *tx_buf;
-	uint8_t *rx_buf;
+	uint8_t tx_buf[MAX1111_TX_BUF_SIZE];
+	uint8_t rx_buf[MAX1111_RX_BUF_SIZE];
+	struct mutex		drvdata_lock;
+	/* protect msg, xfer and buffers from multiple access */
 };
 
 static int max1111_read(struct device *dev, int channel)
@@ -48,6 +50,9 @@ static int max1111_read(struct device *dev, int channel)
 	uint8_t v1, v2;
 	int err;
 
+	/* writing to drvdata struct is not thread safe, wait on mutex */
+	mutex_lock(&data->drvdata_lock);
+
 	data->tx_buf[0] = (channel << MAX1111_CTRL_SEL_SH) |
 		MAX1111_CTRL_PD0 | MAX1111_CTRL_PD1 |
 		MAX1111_CTRL_SGL | MAX1111_CTRL_UNI | MAX1111_CTRL_STR;
@@ -55,11 +60,14 @@ static int max1111_read(struct device *dev, int channel)
 	err = spi_sync(data->spi, &data->msg);
 	if (err < 0) {
 		dev_err(dev, "spi_sync failed with %d\n", err);
+		mutex_unlock(&data->drvdata_lock);
 		return err;
 	}
 
 	v1 = data->rx_buf[0];
 	v2 = data->rx_buf[1];
+
+	mutex_unlock(&data->drvdata_lock);
 
 	if ((v1 & 0xc0) || (v2 & 0x3f))
 		return -EINVAL;
@@ -72,6 +80,9 @@ static struct max1111_data *the_max1111;
 
 int max1111_read_channel(int channel)
 {
+	if (!the_max1111 || !the_max1111->spi)
+		return -ENODEV;
+
 	return max1111_read(&the_max1111->spi->dev, channel);
 }
 EXPORT_SYMBOL(max1111_read_channel);
@@ -123,20 +134,10 @@ static const struct attribute_group max1111_attr_group = {
 	.attrs	= max1111_attributes,
 };
 
-static int setup_transfer(struct max1111_data *data)
+static int __devinit setup_transfer(struct max1111_data *data)
 {
 	struct spi_message *m;
 	struct spi_transfer *x;
-
-	data->tx_buf = kmalloc(MAX1111_TX_BUF_SIZE, GFP_KERNEL);
-	if (!data->tx_buf)
-		return -ENOMEM;
-
-	data->rx_buf = kmalloc(MAX1111_RX_BUF_SIZE, GFP_KERNEL);
-	if (!data->rx_buf) {
-		kfree(data->tx_buf);
-		return -ENOMEM;
-	}
 
 	m = &data->msg;
 	x = &data->xfer[0];
@@ -144,12 +145,12 @@ static int setup_transfer(struct max1111_data *data)
 	spi_message_init(m);
 
 	x->tx_buf = &data->tx_buf[0];
-	x->len = 1;
+	x->len = MAX1111_TX_BUF_SIZE;
 	spi_message_add_tail(x, m);
 
 	x++;
 	x->rx_buf = &data->rx_buf[0];
-	x->len = 2;
+	x->len = MAX1111_RX_BUF_SIZE;
 	spi_message_add_tail(x, m);
 
 	return 0;
@@ -176,13 +177,15 @@ static int __devinit max1111_probe(struct spi_device *spi)
 	if (err)
 		goto err_free_data;
 
+	mutex_init(&data->drvdata_lock);
+
 	data->spi = spi;
 	spi_set_drvdata(spi, data);
 
 	err = sysfs_create_group(&spi->dev.kobj, &max1111_attr_group);
 	if (err) {
 		dev_err(&spi->dev, "failed to create attribute group\n");
-		goto err_free_all;
+		goto err_free_data;
 	}
 
 	data->hwmon_dev = hwmon_device_register(&spi->dev);
@@ -199,9 +202,6 @@ static int __devinit max1111_probe(struct spi_device *spi)
 
 err_remove:
 	sysfs_remove_group(&spi->dev.kobj, &max1111_attr_group);
-err_free_all:
-	kfree(data->rx_buf);
-	kfree(data->tx_buf);
 err_free_data:
 	kfree(data);
 	return err;
@@ -211,10 +211,12 @@ static int __devexit max1111_remove(struct spi_device *spi)
 {
 	struct max1111_data *data = spi_get_drvdata(spi);
 
+#ifdef CONFIG_SHARPSL_PM
+	the_max1111 = NULL;
+#endif
 	hwmon_device_unregister(data->hwmon_dev);
 	sysfs_remove_group(&spi->dev.kobj, &max1111_attr_group);
-	kfree(data->rx_buf);
-	kfree(data->tx_buf);
+	mutex_destroy(&data->drvdata_lock);
 	kfree(data);
 	return 0;
 }

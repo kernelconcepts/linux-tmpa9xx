@@ -1,12 +1,9 @@
 /*
- * wm8983.c  --  WM8983 ALSA SoC Audio Codec driver
+ * wm8983.c  --  WM8983 ALSA SoC Audio driver
  *
- * Copyright (C) 2010 Nils Faerber <nils.faerber@kernelconcepts.de>
- * based on WM8978 driver by
- * Copyright (C) 2009-2010 Guennadi Liakhovetski <g.liakhovetski@gmx.de>
- * Copyright (C) 2007 Carlos Munoz <carlos@kenati.com>
- * Copyright 2006-2009 Wolfson Microelectronics PLC.
- * Based on wm8974 and wm8990 by Liam Girdwood <lrg@slimlogic.co.uk>
+ * Copyright 2011 Wolfson Microelectronics plc
+ *
+ * Author: Dimitris Papastamos <dp@opensource.wolfsonmicro.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -15,267 +12,457 @@
 
 #include <linux/module.h>
 #include <linux/moduleparam.h>
-#include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/pm.h>
 #include <linux/i2c.h>
-#include <linux/platform_device.h>
+#include <linux/spi/spi.h>
 #include <linux/slab.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
-#include <sound/soc-dapm.h>
 #include <sound/initval.h>
 #include <sound/tlv.h>
-#include <asm/div64.h>
 
 #include "wm8983.h"
 
-static struct snd_soc_codec *wm8983_codec;
-
-/* wm8983 register cache. Note that register 0 is not included in the cache. */
-static const u16 wm8983_reg[WM8983_CACHEREGNUM] = {
-	0x0000, 0x0000, 0x0000, 0x0000,	/* 0x00...0x03 */
-	0x0050, 0x0000, 0x0140, 0x0000,	/* 0x04...0x07 */
-	0x0000, 0x0000, 0x0000, 0x00ff,	/* 0x08...0x0b */
-	0x00ff, 0x0000, 0x0100, 0x00ff,	/* 0x0c...0x0f */
-	0x00ff, 0x0000, 0x012c, 0x002c,	/* 0x10...0x13 */
-	0x002c, 0x002c, 0x002c, 0x0000,	/* 0x14...0x17 */
-	0x0032, 0x0000, 0x0000, 0x0000,	/* 0x18...0x1b */
-	0x0000, 0x0000, 0x0000, 0x0000,	/* 0x1c...0x1f */
-	0x0038, 0x000b, 0x0032, 0x0000,	/* 0x20...0x23 */
-	0x0008, 0x000c, 0x0093, 0x00e9,	/* 0x24...0x27 */
-	0x0000, 0x0000, 0x0000, 0x0000,	/* 0x28...0x2b */
-	0x0033, 0x0010, 0x0010, 0x0100,	/* 0x2c...0x2f */
-	0x0100, 0x0002, 0x0001, 0x0001,	/* 0x30...0x33 */
-	0x0039, 0x0039, 0x0039, 0x0039,	/* 0x34...0x37 */
-	0x0001,	0x0001,			/* 0x38...0x3b */
+static const u16 wm8983_reg_defs[WM8983_MAX_REGISTER + 1] = {
+	[0x00] = 0x0000,     /* R0  - Software Reset */
+	[0x01] = 0x0000,     /* R1  - Power management 1 */
+	[0x02] = 0x0000,     /* R2  - Power management 2 */
+	[0x03] = 0x0000,     /* R3  - Power management 3 */
+	[0x04] = 0x0050,     /* R4  - Audio Interface */
+	[0x05] = 0x0000,     /* R5  - Companding control */
+	[0x06] = 0x0140,     /* R6  - Clock Gen control */
+	[0x07] = 0x0000,     /* R7  - Additional control */
+	[0x08] = 0x0000,     /* R8  - GPIO Control */
+	[0x09] = 0x0000,     /* R9  - Jack Detect Control 1 */
+	[0x0A] = 0x0000,     /* R10 - DAC Control */
+	[0x0B] = 0x00FF,     /* R11 - Left DAC digital Vol */
+	[0x0C] = 0x00FF,     /* R12 - Right DAC digital vol */
+	[0x0D] = 0x0000,     /* R13 - Jack Detect Control 2 */
+	[0x0E] = 0x0100,     /* R14 - ADC Control */
+	[0x0F] = 0x00FF,     /* R15 - Left ADC Digital Vol */
+	[0x10] = 0x00FF,     /* R16 - Right ADC Digital Vol */
+	[0x12] = 0x012C,     /* R18 - EQ1 - low shelf */
+	[0x13] = 0x002C,     /* R19 - EQ2 - peak 1 */
+	[0x14] = 0x002C,     /* R20 - EQ3 - peak 2 */
+	[0x15] = 0x002C,     /* R21 - EQ4 - peak 3 */
+	[0x16] = 0x002C,     /* R22 - EQ5 - high shelf */
+	[0x18] = 0x0032,     /* R24 - DAC Limiter 1 */
+	[0x19] = 0x0000,     /* R25 - DAC Limiter 2 */
+	[0x1B] = 0x0000,     /* R27 - Notch Filter 1 */
+	[0x1C] = 0x0000,     /* R28 - Notch Filter 2 */
+	[0x1D] = 0x0000,     /* R29 - Notch Filter 3 */
+	[0x1E] = 0x0000,     /* R30 - Notch Filter 4 */
+	[0x20] = 0x0038,     /* R32 - ALC control 1 */
+	[0x21] = 0x000B,     /* R33 - ALC control 2 */
+	[0x22] = 0x0032,     /* R34 - ALC control 3 */
+	[0x23] = 0x0000,     /* R35 - Noise Gate */
+	[0x24] = 0x0008,     /* R36 - PLL N */
+	[0x25] = 0x000C,     /* R37 - PLL K 1 */
+	[0x26] = 0x0093,     /* R38 - PLL K 2 */
+	[0x27] = 0x00E9,     /* R39 - PLL K 3 */
+	[0x29] = 0x0000,     /* R41 - 3D control */
+	[0x2A] = 0x0000,     /* R42 - OUT4 to ADC */
+	[0x2B] = 0x0000,     /* R43 - Beep control */
+	[0x2C] = 0x0033,     /* R44 - Input ctrl */
+	[0x2D] = 0x0010,     /* R45 - Left INP PGA gain ctrl */
+	[0x2E] = 0x0010,     /* R46 - Right INP PGA gain ctrl */
+	[0x2F] = 0x0100,     /* R47 - Left ADC BOOST ctrl */
+	[0x30] = 0x0100,     /* R48 - Right ADC BOOST ctrl */
+	[0x31] = 0x0002,     /* R49 - Output ctrl */
+	[0x32] = 0x0001,     /* R50 - Left mixer ctrl */
+	[0x33] = 0x0001,     /* R51 - Right mixer ctrl */
+	[0x34] = 0x0039,     /* R52 - LOUT1 (HP) volume ctrl */
+	[0x35] = 0x0039,     /* R53 - ROUT1 (HP) volume ctrl */
+	[0x36] = 0x0039,     /* R54 - LOUT2 (SPK) volume ctrl */
+	[0x37] = 0x0039,     /* R55 - ROUT2 (SPK) volume ctrl */
+	[0x38] = 0x0001,     /* R56 - OUT3 mixer ctrl */
+	[0x39] = 0x0001,     /* R57 - OUT4 (MONO) mix ctrl */
+	[0x3D] = 0x0000      /* R61 - BIAS CTRL */
 };
 
-/* codec private data */
+static const struct wm8983_reg_access {
+	u16 read; /* Mask of readable bits */
+	u16 write; /* Mask of writable bits */
+} wm8983_access_masks[WM8983_MAX_REGISTER + 1] = {
+	[0x00] = { 0x0000, 0x01FF }, /* R0  - Software Reset */
+	[0x01] = { 0x0000, 0x01FF }, /* R1  - Power management 1 */
+	[0x02] = { 0x0000, 0x01FF }, /* R2  - Power management 2 */
+	[0x03] = { 0x0000, 0x01EF }, /* R3  - Power management 3 */
+	[0x04] = { 0x0000, 0x01FF }, /* R4  - Audio Interface */
+	[0x05] = { 0x0000, 0x003F }, /* R5  - Companding control */
+	[0x06] = { 0x0000, 0x01FD }, /* R6  - Clock Gen control */
+	[0x07] = { 0x0000, 0x000F }, /* R7  - Additional control */
+	[0x08] = { 0x0000, 0x003F }, /* R8  - GPIO Control */
+	[0x09] = { 0x0000, 0x0070 }, /* R9  - Jack Detect Control 1 */
+	[0x0A] = { 0x0000, 0x004F }, /* R10 - DAC Control */
+	[0x0B] = { 0x0000, 0x01FF }, /* R11 - Left DAC digital Vol */
+	[0x0C] = { 0x0000, 0x01FF }, /* R12 - Right DAC digital vol */
+	[0x0D] = { 0x0000, 0x00FF }, /* R13 - Jack Detect Control 2 */
+	[0x0E] = { 0x0000, 0x01FB }, /* R14 - ADC Control */
+	[0x0F] = { 0x0000, 0x01FF }, /* R15 - Left ADC Digital Vol */
+	[0x10] = { 0x0000, 0x01FF }, /* R16 - Right ADC Digital Vol */
+	[0x12] = { 0x0000, 0x017F }, /* R18 - EQ1 - low shelf */
+	[0x13] = { 0x0000, 0x017F }, /* R19 - EQ2 - peak 1 */
+	[0x14] = { 0x0000, 0x017F }, /* R20 - EQ3 - peak 2 */
+	[0x15] = { 0x0000, 0x017F }, /* R21 - EQ4 - peak 3 */
+	[0x16] = { 0x0000, 0x007F }, /* R22 - EQ5 - high shelf */
+	[0x18] = { 0x0000, 0x01FF }, /* R24 - DAC Limiter 1 */
+	[0x19] = { 0x0000, 0x007F }, /* R25 - DAC Limiter 2 */
+	[0x1B] = { 0x0000, 0x01FF }, /* R27 - Notch Filter 1 */
+	[0x1C] = { 0x0000, 0x017F }, /* R28 - Notch Filter 2 */
+	[0x1D] = { 0x0000, 0x017F }, /* R29 - Notch Filter 3 */
+	[0x1E] = { 0x0000, 0x017F }, /* R30 - Notch Filter 4 */
+	[0x20] = { 0x0000, 0x01BF }, /* R32 - ALC control 1 */
+	[0x21] = { 0x0000, 0x00FF }, /* R33 - ALC control 2 */
+	[0x22] = { 0x0000, 0x01FF }, /* R34 - ALC control 3 */
+	[0x23] = { 0x0000, 0x000F }, /* R35 - Noise Gate */
+	[0x24] = { 0x0000, 0x001F }, /* R36 - PLL N */
+	[0x25] = { 0x0000, 0x003F }, /* R37 - PLL K 1 */
+	[0x26] = { 0x0000, 0x01FF }, /* R38 - PLL K 2 */
+	[0x27] = { 0x0000, 0x01FF }, /* R39 - PLL K 3 */
+	[0x29] = { 0x0000, 0x000F }, /* R41 - 3D control */
+	[0x2A] = { 0x0000, 0x01E7 }, /* R42 - OUT4 to ADC */
+	[0x2B] = { 0x0000, 0x01BF }, /* R43 - Beep control */
+	[0x2C] = { 0x0000, 0x0177 }, /* R44 - Input ctrl */
+	[0x2D] = { 0x0000, 0x01FF }, /* R45 - Left INP PGA gain ctrl */
+	[0x2E] = { 0x0000, 0x01FF }, /* R46 - Right INP PGA gain ctrl */
+	[0x2F] = { 0x0000, 0x0177 }, /* R47 - Left ADC BOOST ctrl */
+	[0x30] = { 0x0000, 0x0177 }, /* R48 - Right ADC BOOST ctrl */
+	[0x31] = { 0x0000, 0x007F }, /* R49 - Output ctrl */
+	[0x32] = { 0x0000, 0x01FF }, /* R50 - Left mixer ctrl */
+	[0x33] = { 0x0000, 0x01FF }, /* R51 - Right mixer ctrl */
+	[0x34] = { 0x0000, 0x01FF }, /* R52 - LOUT1 (HP) volume ctrl */
+	[0x35] = { 0x0000, 0x01FF }, /* R53 - ROUT1 (HP) volume ctrl */
+	[0x36] = { 0x0000, 0x01FF }, /* R54 - LOUT2 (SPK) volume ctrl */
+	[0x37] = { 0x0000, 0x01FF }, /* R55 - ROUT2 (SPK) volume ctrl */
+	[0x38] = { 0x0000, 0x004F }, /* R56 - OUT3 mixer ctrl */
+	[0x39] = { 0x0000, 0x00FF }, /* R57 - OUT4 (MONO) mix ctrl */
+	[0x3D] = { 0x0000, 0x0100 }  /* R61 - BIAS CTRL */
+};
+
+/* vol/gain update regs */
+static const int vol_update_regs[] = {
+	WM8983_LEFT_DAC_DIGITAL_VOL,
+	WM8983_RIGHT_DAC_DIGITAL_VOL,
+	WM8983_LEFT_ADC_DIGITAL_VOL,
+	WM8983_RIGHT_ADC_DIGITAL_VOL,
+	WM8983_LOUT1_HP_VOLUME_CTRL,
+	WM8983_ROUT1_HP_VOLUME_CTRL,
+	WM8983_LOUT2_SPK_VOLUME_CTRL,
+	WM8983_ROUT2_SPK_VOLUME_CTRL,
+	WM8983_LEFT_INP_PGA_GAIN_CTRL,
+	WM8983_RIGHT_INP_PGA_GAIN_CTRL
+};
+
 struct wm8983_priv {
-	struct snd_soc_codec codec;
-	unsigned int f_pllout;
-	unsigned int f_mclk;
-	unsigned int f_256fs;
-	unsigned int f_opclk;
-	int mclk_idx;
-	enum wm8983_sysclk_src sysclk;
-	u16 reg_cache[WM8983_CACHEREGNUM];
+	enum snd_soc_control_type control_type;
+	u32 sysclk;
+	u32 bclk;
 };
 
-static const char *wm8983_companding[] = {"Off", "NC", "u-law", "A-law"};
-static const char *wm8983_eqmode[] = {"Capture", "Playback"};
-static const char *wm8983_bw[] = {"Narrow", "Wide"};
-static const char *wm8983_eq1[] = {"80Hz", "105Hz", "135Hz", "175Hz"};
-static const char *wm8983_eq2[] = {"230Hz", "300Hz", "385Hz", "500Hz"};
-static const char *wm8983_eq3[] = {"650Hz", "850Hz", "1.1kHz", "1.4kHz"};
-static const char *wm8983_eq4[] = {"1.8kHz", "2.4kHz", "3.2kHz", "4.1kHz"};
-static const char *wm8983_eq5[] = {"5.3kHz", "6.9kHz", "9kHz", "11.7kHz"};
-static const char *wm8983_alc3[] = {"ALC", "Limiter"};
-static const char *wm8983_alc1[] = {"Off", "Right", "Left", "Both"};
+static const struct {
+	int div;
+	int ratio;
+} fs_ratios[] = {
+	{ 10, 128 },
+	{ 15, 192 },
+	{ 20, 256 },
+	{ 30, 384 },
+	{ 40, 512 },
+	{ 60, 768 },
+	{ 80, 1024 },
+	{ 120, 1536 }
+};
 
-static const SOC_ENUM_SINGLE_DECL(adc_compand, WM8983_COMPANDING_CONTROL, 1,
-				  wm8983_companding);
-static const SOC_ENUM_SINGLE_DECL(dac_compand, WM8983_COMPANDING_CONTROL, 3,
-				  wm8983_companding);
-static const SOC_ENUM_SINGLE_DECL(eqmode, WM8983_EQ1, 8, wm8983_eqmode);
-static const SOC_ENUM_SINGLE_DECL(eq1, WM8983_EQ1, 5, wm8983_eq1);
-static const SOC_ENUM_SINGLE_DECL(eq2bw, WM8983_EQ2, 8, wm8983_bw);
-static const SOC_ENUM_SINGLE_DECL(eq2, WM8983_EQ2, 5, wm8983_eq2);
-static const SOC_ENUM_SINGLE_DECL(eq3bw, WM8983_EQ3, 8, wm8983_bw);
-static const SOC_ENUM_SINGLE_DECL(eq3, WM8983_EQ3, 5, wm8983_eq3);
-static const SOC_ENUM_SINGLE_DECL(eq4bw, WM8983_EQ4, 8, wm8983_bw);
-static const SOC_ENUM_SINGLE_DECL(eq4, WM8983_EQ4, 5, wm8983_eq4);
-static const SOC_ENUM_SINGLE_DECL(eq5, WM8983_EQ5, 5, wm8983_eq5);
-static const SOC_ENUM_SINGLE_DECL(alc3, WM8983_ALC_CONTROL_3, 8, wm8983_alc3);
-static const SOC_ENUM_SINGLE_DECL(alc1, WM8983_ALC_CONTROL_1, 7, wm8983_alc1);
+static const int srates[] = { 48000, 32000, 24000, 16000, 12000, 8000 };
 
-static const DECLARE_TLV_DB_SCALE(digital_tlv, -12750, 50, 1);
+static const int bclk_divs[] = {
+	1, 2, 4, 8, 16, 32
+};
+
+static int eqmode_get(struct snd_kcontrol *kcontrol,
+		      struct snd_ctl_elem_value *ucontrol);
+static int eqmode_put(struct snd_kcontrol *kcontrol,
+		      struct snd_ctl_elem_value *ucontrol);
+
+static const DECLARE_TLV_DB_SCALE(dac_tlv, -12700, 50, 1);
+static const DECLARE_TLV_DB_SCALE(adc_tlv, -12700, 50, 1);
+static const DECLARE_TLV_DB_SCALE(out_tlv, -5700, 100, 0);
+static const DECLARE_TLV_DB_SCALE(lim_thresh_tlv, -600, 100, 0);
+static const DECLARE_TLV_DB_SCALE(lim_boost_tlv, 0, 100, 0);
+static const DECLARE_TLV_DB_SCALE(alc_min_tlv, -1200, 600, 0);
+static const DECLARE_TLV_DB_SCALE(alc_max_tlv, -675, 600, 0);
+static const DECLARE_TLV_DB_SCALE(alc_tar_tlv, -2250, 150, 0);
+static const DECLARE_TLV_DB_SCALE(pga_vol_tlv, -1200, 75, 0);
+static const DECLARE_TLV_DB_SCALE(boost_tlv, -1200, 300, 1);
 static const DECLARE_TLV_DB_SCALE(eq_tlv, -1200, 100, 0);
-static const DECLARE_TLV_DB_SCALE(inpga_tlv, -1200, 75, 0);
-static const DECLARE_TLV_DB_SCALE(spk_tlv, -5700, 100, 0);
-static const DECLARE_TLV_DB_SCALE(boost_tlv, -1500, 300, 1);
+static const DECLARE_TLV_DB_SCALE(aux_tlv, -1500, 300, 0);
+static const DECLARE_TLV_DB_SCALE(bypass_tlv, -1500, 300, 0);
+static const DECLARE_TLV_DB_SCALE(pga_boost_tlv, 0, 2000, 0);
+
+static const char *alc_sel_text[] = { "Off", "Right", "Left", "Stereo" };
+static const SOC_ENUM_SINGLE_DECL(alc_sel, WM8983_ALC_CONTROL_1, 7,
+				  alc_sel_text);
+
+static const char *alc_mode_text[] = { "ALC", "Limiter" };
+static const SOC_ENUM_SINGLE_DECL(alc_mode, WM8983_ALC_CONTROL_3, 8,
+				  alc_mode_text);
+
+static const char *filter_mode_text[] = { "Audio", "Application" };
+static const SOC_ENUM_SINGLE_DECL(filter_mode, WM8983_ADC_CONTROL, 7,
+				  filter_mode_text);
+
+static const char *eq_bw_text[] = { "Narrow", "Wide" };
+static const char *eqmode_text[] = { "Capture", "Playback" };
+static const SOC_ENUM_SINGLE_EXT_DECL(eqmode, eqmode_text);
+
+static const char *eq1_cutoff_text[] = {
+	"80Hz", "105Hz", "135Hz", "175Hz"
+};
+static const SOC_ENUM_SINGLE_DECL(eq1_cutoff, WM8983_EQ1_LOW_SHELF, 5,
+				  eq1_cutoff_text);
+static const char *eq2_cutoff_text[] = {
+	"230Hz", "300Hz", "385Hz", "500Hz"
+};
+static const SOC_ENUM_SINGLE_DECL(eq2_bw, WM8983_EQ2_PEAK_1, 8, eq_bw_text);
+static const SOC_ENUM_SINGLE_DECL(eq2_cutoff, WM8983_EQ2_PEAK_1, 5,
+				  eq2_cutoff_text);
+static const char *eq3_cutoff_text[] = {
+	"650Hz", "850Hz", "1.1kHz", "1.4kHz"
+};
+static const SOC_ENUM_SINGLE_DECL(eq3_bw, WM8983_EQ3_PEAK_2, 8, eq_bw_text);
+static const SOC_ENUM_SINGLE_DECL(eq3_cutoff, WM8983_EQ3_PEAK_2, 5,
+				  eq3_cutoff_text);
+static const char *eq4_cutoff_text[] = {
+	"1.8kHz", "2.4kHz", "3.2kHz", "4.1kHz"
+};
+static const SOC_ENUM_SINGLE_DECL(eq4_bw, WM8983_EQ4_PEAK_3, 8, eq_bw_text);
+static const SOC_ENUM_SINGLE_DECL(eq4_cutoff, WM8983_EQ4_PEAK_3, 5,
+				  eq4_cutoff_text);
+static const char *eq5_cutoff_text[] = {
+	"5.3kHz", "6.9kHz", "9kHz", "11.7kHz"
+};
+static const SOC_ENUM_SINGLE_DECL(eq5_cutoff, WM8983_EQ5_HIGH_SHELF, 5,
+				  eq5_cutoff_text);
+
+static const char *speaker_mode_text[] = { "Class A/B", "Class D" };
+static const SOC_ENUM_SINGLE_DECL(speaker_mode, 0x17, 8, speaker_mode_text);
+
+static const char *depth_3d_text[] = {
+	"Off",
+	"6.67%",
+	"13.3%",
+	"20%",
+	"26.7%",
+	"33.3%",
+	"40%",
+	"46.6%",
+	"53.3%",
+	"60%",
+	"66.7%",
+	"73.3%",
+	"80%",
+	"86.7%",
+	"93.3%",
+	"100%"
+};
+static const SOC_ENUM_SINGLE_DECL(depth_3d, WM8983_3D_CONTROL, 0,
+				  depth_3d_text);
 
 static const struct snd_kcontrol_new wm8983_snd_controls[] = {
+	SOC_SINGLE("Digital Loopback Switch", WM8983_COMPANDING_CONTROL,
+		   0, 1, 0),
 
-	SOC_SINGLE("Digital Loopback Switch",
-		WM8983_COMPANDING_CONTROL, 0, 1, 0),
+	SOC_ENUM("ALC Capture Function", alc_sel),
+	SOC_SINGLE_TLV("ALC Capture Max Volume", WM8983_ALC_CONTROL_1,
+		       3, 7, 0, alc_max_tlv),
+	SOC_SINGLE_TLV("ALC Capture Min Volume", WM8983_ALC_CONTROL_1,
+		       0, 7, 0, alc_min_tlv),
+	SOC_SINGLE_TLV("ALC Capture Target Volume", WM8983_ALC_CONTROL_2,
+		       0, 15, 0, alc_tar_tlv),
+	SOC_SINGLE("ALC Capture Attack", WM8983_ALC_CONTROL_3, 0, 10, 0),
+	SOC_SINGLE("ALC Capture Hold", WM8983_ALC_CONTROL_2, 4, 10, 0),
+	SOC_SINGLE("ALC Capture Decay", WM8983_ALC_CONTROL_3, 4, 10, 0),
+	SOC_ENUM("ALC Mode", alc_mode),
+	SOC_SINGLE("ALC Capture NG Switch", WM8983_NOISE_GATE,
+		   3, 1, 0),
+	SOC_SINGLE("ALC Capture NG Threshold", WM8983_NOISE_GATE,
+		   0, 7, 1),
 
-	SOC_ENUM("ADC Companding", adc_compand),
-	SOC_ENUM("DAC Companding", dac_compand),
+	SOC_DOUBLE_R_TLV("Capture Volume", WM8983_LEFT_ADC_DIGITAL_VOL,
+			 WM8983_RIGHT_ADC_DIGITAL_VOL, 0, 255, 0, adc_tlv),
+	SOC_DOUBLE_R("Capture PGA ZC Switch", WM8983_LEFT_INP_PGA_GAIN_CTRL,
+		     WM8983_RIGHT_INP_PGA_GAIN_CTRL, 7, 1, 0),
+	SOC_DOUBLE_R_TLV("Capture PGA Volume", WM8983_LEFT_INP_PGA_GAIN_CTRL,
+			 WM8983_RIGHT_INP_PGA_GAIN_CTRL, 0, 63, 0, pga_vol_tlv),
 
+	SOC_DOUBLE_R_TLV("Capture PGA Boost Volume",
+			 WM8983_LEFT_ADC_BOOST_CTRL, WM8983_RIGHT_ADC_BOOST_CTRL,
+			 8, 1, 0, pga_boost_tlv),
+
+	SOC_DOUBLE("ADC Inversion Switch", WM8983_ADC_CONTROL, 0, 1, 1, 0),
+	SOC_SINGLE("ADC 128x Oversampling Switch", WM8983_ADC_CONTROL, 8, 1, 0),
+
+	SOC_DOUBLE_R_TLV("Playback Volume", WM8983_LEFT_DAC_DIGITAL_VOL,
+			 WM8983_RIGHT_DAC_DIGITAL_VOL, 0, 255, 0, dac_tlv),
+
+	SOC_SINGLE("DAC Playback Limiter Switch", WM8983_DAC_LIMITER_1, 8, 1, 0),
+	SOC_SINGLE("DAC Playback Limiter Decay", WM8983_DAC_LIMITER_1, 4, 10, 0),
+	SOC_SINGLE("DAC Playback Limiter Attack", WM8983_DAC_LIMITER_1, 0, 11, 0),
+	SOC_SINGLE_TLV("DAC Playback Limiter Threshold", WM8983_DAC_LIMITER_2,
+		       4, 7, 1, lim_thresh_tlv),
+	SOC_SINGLE_TLV("DAC Playback Limiter Boost Volume", WM8983_DAC_LIMITER_2,
+		       0, 12, 0, lim_boost_tlv),
 	SOC_DOUBLE("DAC Inversion Switch", WM8983_DAC_CONTROL, 0, 1, 1, 0),
+	SOC_SINGLE("DAC Auto Mute Switch", WM8983_DAC_CONTROL, 2, 1, 0),
+	SOC_SINGLE("DAC 128x Oversampling Switch", WM8983_DAC_CONTROL, 3, 1, 0),
 
-	SOC_DOUBLE_R_TLV("PCM Volume",
-		WM8983_LEFT_DAC_DIGITAL_VOLUME, WM8983_RIGHT_DAC_DIGITAL_VOLUME,
-		0, 255, 0, digital_tlv),
+	SOC_DOUBLE_R_TLV("Headphone Playback Volume", WM8983_LOUT1_HP_VOLUME_CTRL,
+			 WM8983_ROUT1_HP_VOLUME_CTRL, 0, 63, 0, out_tlv),
+	SOC_DOUBLE_R("Headphone Playback ZC Switch", WM8983_LOUT1_HP_VOLUME_CTRL,
+		     WM8983_ROUT1_HP_VOLUME_CTRL, 7, 1, 0),
+	SOC_DOUBLE_R("Headphone Switch", WM8983_LOUT1_HP_VOLUME_CTRL,
+		     WM8983_ROUT1_HP_VOLUME_CTRL, 6, 1, 1),
+
+	SOC_DOUBLE_R_TLV("Speaker Playback Volume", WM8983_LOUT2_SPK_VOLUME_CTRL,
+			 WM8983_ROUT2_SPK_VOLUME_CTRL, 0, 63, 0, out_tlv),
+	SOC_DOUBLE_R("Speaker Playback ZC Switch", WM8983_LOUT2_SPK_VOLUME_CTRL,
+		     WM8983_ROUT2_SPK_VOLUME_CTRL, 7, 1, 0),
+	SOC_DOUBLE_R("Speaker Switch", WM8983_LOUT2_SPK_VOLUME_CTRL,
+		     WM8983_ROUT2_SPK_VOLUME_CTRL, 6, 1, 1),
+
+	SOC_SINGLE("OUT3 Switch", WM8983_OUT3_MIXER_CTRL,
+		   6, 1, 1),
+
+	SOC_SINGLE("OUT4 Switch", WM8983_OUT4_MONO_MIX_CTRL,
+		   6, 1, 1),
 
 	SOC_SINGLE("High Pass Filter Switch", WM8983_ADC_CONTROL, 8, 1, 0),
-	SOC_SINGLE("High Pass Cut Off", WM8983_ADC_CONTROL, 4, 7, 0),
-	SOC_DOUBLE("ADC Inversion Switch", WM8983_ADC_CONTROL, 0, 1, 1, 0),
+	SOC_ENUM("High Pass Filter Mode", filter_mode),
+	SOC_SINGLE("High Pass Filter Cutoff", WM8983_ADC_CONTROL, 4, 7, 0),
 
-	SOC_DOUBLE_R_TLV("ADC Volume",
-		WM8983_LEFT_ADC_DIGITAL_VOLUME, WM8983_RIGHT_ADC_DIGITAL_VOLUME,
-		0, 255, 0, digital_tlv),
+	SOC_DOUBLE_R_TLV("Aux Bypass Volume",
+			 WM8983_LEFT_MIXER_CTRL, WM8983_RIGHT_MIXER_CTRL, 6, 7, 0,
+			 aux_tlv),
 
-	SOC_ENUM("Equaliser Function", eqmode),
-	SOC_ENUM("EQ1 Cut Off", eq1),
-	SOC_SINGLE_TLV("EQ1 Volume", WM8983_EQ1,  0, 24, 1, eq_tlv),
+	SOC_DOUBLE_R_TLV("Input PGA Bypass Volume",
+			 WM8983_LEFT_MIXER_CTRL, WM8983_RIGHT_MIXER_CTRL, 2, 7, 0,
+			 bypass_tlv),
 
-	SOC_ENUM("Equaliser EQ2 Bandwith", eq2bw),
-	SOC_ENUM("EQ2 Cut Off", eq2),
-	SOC_SINGLE_TLV("EQ2 Volume", WM8983_EQ2,  0, 24, 1, eq_tlv),
+	SOC_ENUM_EXT("Equalizer Function", eqmode, eqmode_get, eqmode_put),
+	SOC_ENUM("EQ1 Cutoff", eq1_cutoff),
+	SOC_SINGLE_TLV("EQ1 Volume", WM8983_EQ1_LOW_SHELF,  0, 24, 1, eq_tlv),
+	SOC_ENUM("EQ2 Bandwith", eq2_bw),
+	SOC_ENUM("EQ2 Cutoff", eq2_cutoff),
+	SOC_SINGLE_TLV("EQ2 Volume", WM8983_EQ2_PEAK_1, 0, 24, 1, eq_tlv),
+	SOC_ENUM("EQ3 Bandwith", eq3_bw),
+	SOC_ENUM("EQ3 Cutoff", eq3_cutoff),
+	SOC_SINGLE_TLV("EQ3 Volume", WM8983_EQ3_PEAK_2, 0, 24, 1, eq_tlv),
+	SOC_ENUM("EQ4 Bandwith", eq4_bw),
+	SOC_ENUM("EQ4 Cutoff", eq4_cutoff),
+	SOC_SINGLE_TLV("EQ4 Volume", WM8983_EQ4_PEAK_3, 0, 24, 1, eq_tlv),
+	SOC_ENUM("EQ5 Cutoff", eq5_cutoff),
+	SOC_SINGLE_TLV("EQ5 Volume", WM8983_EQ5_HIGH_SHELF, 0, 24, 1, eq_tlv),
 
-	SOC_ENUM("Equaliser EQ3 Bandwith", eq3bw),
-	SOC_ENUM("EQ3 Cut Off", eq3),
-	SOC_SINGLE_TLV("EQ3 Volume", WM8983_EQ3,  0, 24, 1, eq_tlv),
+	SOC_ENUM("3D Depth", depth_3d),
 
-	SOC_ENUM("Equaliser EQ4 Bandwith", eq4bw),
-	SOC_ENUM("EQ4 Cut Off", eq4),
-	SOC_SINGLE_TLV("EQ4 Volume", WM8983_EQ4,  0, 24, 1, eq_tlv),
-
-	SOC_ENUM("EQ5 Cut Off", eq5),
-	SOC_SINGLE_TLV("EQ5 Volume", WM8983_EQ5, 0, 24, 1, eq_tlv),
-
-	SOC_SINGLE("DAC Playback Limiter Switch",
-		WM8983_DAC_LIMITER_1, 8, 1, 0),
-	SOC_SINGLE("DAC Playback Limiter Decay",
-		WM8983_DAC_LIMITER_1, 4, 15, 0),
-	SOC_SINGLE("DAC Playback Limiter Attack",
-		WM8983_DAC_LIMITER_1, 0, 15, 0),
-
-	SOC_SINGLE("DAC Playback Limiter Threshold",
-		WM8983_DAC_LIMITER_2, 4, 7, 0),
-	SOC_SINGLE("DAC Playback Limiter Boost",
-		WM8983_DAC_LIMITER_2, 0, 15, 0),
-
-	SOC_ENUM("ALC Enable Switch", alc1),
-	SOC_SINGLE("ALC Capture Min Gain", WM8983_ALC_CONTROL_1, 0, 7, 0),
-	SOC_SINGLE("ALC Capture Max Gain", WM8983_ALC_CONTROL_1, 3, 7, 0),
-
-	SOC_SINGLE("ALC Capture Hold", WM8983_ALC_CONTROL_2, 4, 7, 0),
-	SOC_SINGLE("ALC Capture Target", WM8983_ALC_CONTROL_2, 0, 15, 0),
-
-	SOC_ENUM("ALC Capture Mode", alc3),
-	SOC_SINGLE("ALC Capture Decay", WM8983_ALC_CONTROL_3, 4, 15, 0),
-	SOC_SINGLE("ALC Capture Attack", WM8983_ALC_CONTROL_3, 0, 15, 0),
-
-	SOC_SINGLE("ALC Capture Noise Gate Switch", WM8983_NOISE_GATE, 3, 1, 0),
-	SOC_SINGLE("ALC Capture Noise Gate Threshold",
-		WM8983_NOISE_GATE, 0, 7, 0),
-
-	SOC_DOUBLE_R("Capture PGA ZC Switch",
-		WM8983_LEFT_INP_PGA_CONTROL, WM8983_RIGHT_INP_PGA_CONTROL,
-		7, 1, 0),
-
-	/* OUT1 - Headphones */
-	SOC_DOUBLE_R("Headphone Playback ZC Switch",
-		WM8983_LOUT1_HP_CONTROL, WM8983_ROUT1_HP_CONTROL, 7, 1, 0),
-
-	SOC_DOUBLE_R_TLV("Headphone Playback Volume",
-		WM8983_LOUT1_HP_CONTROL, WM8983_ROUT1_HP_CONTROL,
-		0, 63, 0, spk_tlv),
-
-	/* OUT2 - Speakers */
-	SOC_DOUBLE_R("Speaker Playback ZC Switch",
-		WM8983_LOUT2_SPK_CONTROL, WM8983_ROUT2_SPK_CONTROL, 7, 1, 0),
-
-	SOC_DOUBLE_R_TLV("Speaker Playback Volume",
-		WM8983_LOUT2_SPK_CONTROL, WM8983_ROUT2_SPK_CONTROL,
-		0, 63, 0, spk_tlv),
-
-	/* OUT3/4 - Line Output */
-	SOC_DOUBLE_R("Line Playback Switch",
-		WM8983_OUT3_MIXER_CONTROL, WM8983_OUT4_MIXER_CONTROL, 6, 1, 1),
-
-	/* Mixer #3: Boost (Input) mixer */
-	SOC_DOUBLE_R("PGA Boost (+20dB)",
-		WM8983_LEFT_ADC_BOOST_CONTROL, WM8983_RIGHT_ADC_BOOST_CONTROL,
-		8, 1, 0),
-	SOC_DOUBLE_R_TLV("L2/R2 Boost Volume",
-		WM8983_LEFT_ADC_BOOST_CONTROL, WM8983_RIGHT_ADC_BOOST_CONTROL,
-		4, 7, 0, boost_tlv),
-	SOC_DOUBLE_R_TLV("Aux Boost Volume",
-		WM8983_LEFT_ADC_BOOST_CONTROL, WM8983_RIGHT_ADC_BOOST_CONTROL,
-		0, 7, 0, boost_tlv),
-
-	/* Input PGA volume */
-	SOC_DOUBLE_R_TLV("Input PGA Volume",
-		WM8983_LEFT_INP_PGA_CONTROL, WM8983_RIGHT_INP_PGA_CONTROL,
-		0, 63, 0, inpga_tlv),
-
-	/* Headphone */
-	SOC_DOUBLE_R("Headphone Switch",
-		WM8983_LOUT1_HP_CONTROL, WM8983_ROUT1_HP_CONTROL, 6, 1, 1),
-
-	/* Speaker */
-	SOC_DOUBLE_R("Speaker Switch",
-		WM8983_LOUT2_SPK_CONTROL, WM8983_ROUT2_SPK_CONTROL, 6, 1, 1),
-
-	/* DAC / ADC oversampling */
-	SOC_SINGLE("DAC 128x Oversampling Switch", WM8983_DAC_CONTROL, 8, 1, 0),
-	SOC_SINGLE("ADC 128x Oversampling Switch", WM8983_ADC_CONTROL, 8, 1, 0),
+	SOC_ENUM("Speaker Mode", speaker_mode)
 };
 
-/* Mixer #1: Output (OUT1, OUT2) Mixer: mix AUX, Input mixer output and DAC */
-static const struct snd_kcontrol_new wm8983_left_out_mixer[] = {
-	SOC_DAPM_SINGLE("Line Bypass Switch", WM8983_LEFT_MIXER_CONTROL, 1, 1, 0),
-	SOC_DAPM_SINGLE("Aux Playback Switch", WM8983_LEFT_MIXER_CONTROL, 5, 1, 0),
-	SOC_DAPM_SINGLE("PCM Playback Switch", WM8983_LEFT_MIXER_CONTROL, 0, 1, 0),
+static const struct snd_kcontrol_new left_out_mixer[] = {
+	SOC_DAPM_SINGLE("Line Switch", WM8983_LEFT_MIXER_CTRL, 1, 1, 0),
+	SOC_DAPM_SINGLE("Aux Switch", WM8983_LEFT_MIXER_CTRL, 5, 1, 0),
+	SOC_DAPM_SINGLE("PCM Switch", WM8983_LEFT_MIXER_CTRL, 0, 1, 0),
 };
 
-static const struct snd_kcontrol_new wm8983_right_out_mixer[] = {
-	SOC_DAPM_SINGLE("Line Bypass Switch", WM8983_RIGHT_MIXER_CONTROL, 1, 1, 0),
-	SOC_DAPM_SINGLE("Aux Playback Switch", WM8983_RIGHT_MIXER_CONTROL, 5, 1, 0),
-	SOC_DAPM_SINGLE("PCM Playback Switch", WM8983_RIGHT_MIXER_CONTROL, 0, 1, 0),
+static const struct snd_kcontrol_new right_out_mixer[] = {
+	SOC_DAPM_SINGLE("Line Switch", WM8983_RIGHT_MIXER_CTRL, 1, 1, 0),
+	SOC_DAPM_SINGLE("Aux Switch", WM8983_RIGHT_MIXER_CTRL, 5, 1, 0),
+	SOC_DAPM_SINGLE("PCM Switch", WM8983_RIGHT_MIXER_CTRL, 0, 1, 0),
 };
 
-/* OUT3/OUT4 Mixer not implemented */
-
-/* Mixer #2: Input PGA Mute */
-static const struct snd_kcontrol_new wm8983_left_input_mixer[] = {
-	SOC_DAPM_SINGLE("L2 Switch", WM8983_INPUT_CONTROL, 2, 1, 0),
-	SOC_DAPM_SINGLE("MicN Switch", WM8983_INPUT_CONTROL, 1, 1, 0),
-	SOC_DAPM_SINGLE("MicP Switch", WM8983_INPUT_CONTROL, 0, 1, 0),
+static const struct snd_kcontrol_new left_input_mixer[] = {
+	SOC_DAPM_SINGLE("L2 Switch", WM8983_INPUT_CTRL, 2, 1, 0),
+	SOC_DAPM_SINGLE("MicN Switch", WM8983_INPUT_CTRL, 1, 1, 0),
+	SOC_DAPM_SINGLE("MicP Switch", WM8983_INPUT_CTRL, 0, 1, 0),
 };
-static const struct snd_kcontrol_new wm8983_right_input_mixer[] = {
-	SOC_DAPM_SINGLE("R2 Switch", WM8983_INPUT_CONTROL, 6, 1, 0),
-	SOC_DAPM_SINGLE("MicN Switch", WM8983_INPUT_CONTROL, 5, 1, 0),
-	SOC_DAPM_SINGLE("MicP Switch", WM8983_INPUT_CONTROL, 4, 1, 0),
+
+static const struct snd_kcontrol_new right_input_mixer[] = {
+	SOC_DAPM_SINGLE("R2 Switch", WM8983_INPUT_CTRL, 6, 1, 0),
+	SOC_DAPM_SINGLE("MicN Switch", WM8983_INPUT_CTRL, 5, 1, 0),
+	SOC_DAPM_SINGLE("MicP Switch", WM8983_INPUT_CTRL, 4, 1, 0),
+};
+
+static const struct snd_kcontrol_new left_boost_mixer[] = {
+	SOC_DAPM_SINGLE_TLV("L2 Volume", WM8983_LEFT_ADC_BOOST_CTRL,
+			    4, 7, 0, boost_tlv),
+	SOC_DAPM_SINGLE_TLV("AUXL Volume", WM8983_LEFT_ADC_BOOST_CTRL,
+			    0, 7, 0, boost_tlv)
+};
+
+static const struct snd_kcontrol_new out3_mixer[] = {
+	SOC_DAPM_SINGLE("LMIX2OUT3 Switch", WM8983_OUT3_MIXER_CTRL,
+			1, 1, 0),
+	SOC_DAPM_SINGLE("LDAC2OUT3 Switch", WM8983_OUT3_MIXER_CTRL,
+			0, 1, 0),
+};
+
+static const struct snd_kcontrol_new out4_mixer[] = {
+	SOC_DAPM_SINGLE("LMIX2OUT4 Switch", WM8983_OUT4_MONO_MIX_CTRL,
+			4, 1, 0),
+	SOC_DAPM_SINGLE("RMIX2OUT4 Switch", WM8983_OUT4_MONO_MIX_CTRL,
+			1, 1, 0),
+	SOC_DAPM_SINGLE("LDAC2OUT4 Switch", WM8983_OUT4_MONO_MIX_CTRL,
+			3, 1, 0),
+	SOC_DAPM_SINGLE("RDAC2OUT4 Switch", WM8983_OUT4_MONO_MIX_CTRL,
+			0, 1, 0),
+};
+
+static const struct snd_kcontrol_new right_boost_mixer[] = {
+	SOC_DAPM_SINGLE_TLV("R2 Volume", WM8983_RIGHT_ADC_BOOST_CTRL,
+			    4, 7, 0, boost_tlv),
+	SOC_DAPM_SINGLE_TLV("AUXR Volume", WM8983_RIGHT_ADC_BOOST_CTRL,
+			    0, 7, 0, boost_tlv)
 };
 
 static const struct snd_soc_dapm_widget wm8983_dapm_widgets[] = {
-	SND_SOC_DAPM_DAC("Left DAC", "Left HiFi Playback",
-			 WM8983_POWER_MANAGEMENT_3, 0, 0),
-	SND_SOC_DAPM_DAC("Right DAC", "Right HiFi Playback",
-			 WM8983_POWER_MANAGEMENT_3, 1, 0),
-	SND_SOC_DAPM_ADC("Left ADC", "Left HiFi Capture",
-			 WM8983_POWER_MANAGEMENT_2, 0, 0),
-	SND_SOC_DAPM_ADC("Right ADC", "Right HiFi Capture",
-			 WM8983_POWER_MANAGEMENT_2, 1, 0),
+	SND_SOC_DAPM_DAC("Left DAC", "Left Playback", WM8983_POWER_MANAGEMENT_3,
+			 0, 0),
+	SND_SOC_DAPM_DAC("Right DAC", "Right Playback", WM8983_POWER_MANAGEMENT_3,
+			 1, 0),
+	SND_SOC_DAPM_ADC("Left ADC", "Left Capture", WM8983_POWER_MANAGEMENT_2,
+			 0, 0),
+	SND_SOC_DAPM_ADC("Right ADC", "Right Capture", WM8983_POWER_MANAGEMENT_2,
+			 1, 0),
 
-	/* Mixer #1: OUT1,2 */
-	SOC_MIXER_ARRAY("Left Output Mixer", WM8983_POWER_MANAGEMENT_3,
-			2, 0, wm8983_left_out_mixer),
-	SOC_MIXER_ARRAY("Right Output Mixer", WM8983_POWER_MANAGEMENT_3,
-			3, 0, wm8983_right_out_mixer),
+	SND_SOC_DAPM_MIXER("Left Output Mixer", WM8983_POWER_MANAGEMENT_3,
+			   2, 0, left_out_mixer, ARRAY_SIZE(left_out_mixer)),
+	SND_SOC_DAPM_MIXER("Right Output Mixer", WM8983_POWER_MANAGEMENT_3,
+			   3, 0, right_out_mixer, ARRAY_SIZE(right_out_mixer)),
 
-	SOC_MIXER_ARRAY("Left Input Mixer", WM8983_POWER_MANAGEMENT_2,
-			2, 0, wm8983_left_input_mixer),
-	SOC_MIXER_ARRAY("Right Input Mixer", WM8983_POWER_MANAGEMENT_2,
-			3, 0, wm8983_right_input_mixer),
+	SND_SOC_DAPM_MIXER("Left Input Mixer", WM8983_POWER_MANAGEMENT_2,
+			   2, 0, left_input_mixer, ARRAY_SIZE(left_input_mixer)),
+	SND_SOC_DAPM_MIXER("Right Input Mixer", WM8983_POWER_MANAGEMENT_2,
+			   3, 0, right_input_mixer, ARRAY_SIZE(right_input_mixer)),
 
-	SND_SOC_DAPM_PGA("Left Boost Mixer", WM8983_POWER_MANAGEMENT_2,
-			 4, 0, NULL, 0),
-	SND_SOC_DAPM_PGA("Right Boost Mixer", WM8983_POWER_MANAGEMENT_2,
-			 5, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("Left Boost Mixer", WM8983_POWER_MANAGEMENT_2,
+			   4, 0, left_boost_mixer, ARRAY_SIZE(left_boost_mixer)),
+	SND_SOC_DAPM_MIXER("Right Boost Mixer", WM8983_POWER_MANAGEMENT_2,
+			   5, 0, right_boost_mixer, ARRAY_SIZE(right_boost_mixer)),
 
-	SND_SOC_DAPM_PGA("Left Capture PGA", WM8983_LEFT_INP_PGA_CONTROL,
+	SND_SOC_DAPM_MIXER("OUT3 Mixer", WM8983_POWER_MANAGEMENT_1,
+			   6, 0, out3_mixer, ARRAY_SIZE(out3_mixer)),
+
+	SND_SOC_DAPM_MIXER("OUT4 Mixer", WM8983_POWER_MANAGEMENT_1,
+			   7, 0, out4_mixer, ARRAY_SIZE(out4_mixer)),
+
+	SND_SOC_DAPM_PGA("Left Capture PGA", WM8983_LEFT_INP_PGA_GAIN_CTRL,
 			 6, 1, NULL, 0),
-	SND_SOC_DAPM_PGA("Right Capture PGA", WM8983_RIGHT_INP_PGA_CONTROL,
+	SND_SOC_DAPM_PGA("Right Capture PGA", WM8983_RIGHT_INP_PGA_GAIN_CTRL,
 			 6, 1, NULL, 0),
 
 	SND_SOC_DAPM_PGA("Left Headphone Out", WM8983_POWER_MANAGEMENT_2,
@@ -284,843 +471,683 @@ static const struct snd_soc_dapm_widget wm8983_dapm_widgets[] = {
 			 8, 0, NULL, 0),
 
 	SND_SOC_DAPM_PGA("Left Speaker Out", WM8983_POWER_MANAGEMENT_3,
-			 6, 0, NULL, 0),
-	SND_SOC_DAPM_PGA("Right Speaker Out", WM8983_POWER_MANAGEMENT_3,
 			 5, 0, NULL, 0),
+	SND_SOC_DAPM_PGA("Right Speaker Out", WM8983_POWER_MANAGEMENT_3,
+			 6, 0, NULL, 0),
 
-	SND_SOC_DAPM_MIXER("OUT4 VMID", WM8983_POWER_MANAGEMENT_3,
-			   8, 0, NULL, 0),
+	SND_SOC_DAPM_PGA("OUT3 Out", WM8983_POWER_MANAGEMENT_3,
+			 7, 0, NULL, 0),
+
+	SND_SOC_DAPM_PGA("OUT4 Out", WM8983_POWER_MANAGEMENT_3,
+			 8, 0, NULL, 0),
 
 	SND_SOC_DAPM_MICBIAS("Mic Bias", WM8983_POWER_MANAGEMENT_1, 4, 0),
 
-	SND_SOC_DAPM_INPUT("LMICN"),
-	SND_SOC_DAPM_INPUT("LMICP"),
-	SND_SOC_DAPM_INPUT("RMICN"),
-	SND_SOC_DAPM_INPUT("RMICP"),
-	SND_SOC_DAPM_INPUT("LAUX"),
-	SND_SOC_DAPM_INPUT("RAUX"),
+	SND_SOC_DAPM_INPUT("LIN"),
+	SND_SOC_DAPM_INPUT("LIP"),
+	SND_SOC_DAPM_INPUT("RIN"),
+	SND_SOC_DAPM_INPUT("RIP"),
+	SND_SOC_DAPM_INPUT("AUXL"),
+	SND_SOC_DAPM_INPUT("AUXR"),
 	SND_SOC_DAPM_INPUT("L2"),
 	SND_SOC_DAPM_INPUT("R2"),
-	SND_SOC_DAPM_OUTPUT("LHP"),
-	SND_SOC_DAPM_OUTPUT("RHP"),
-	SND_SOC_DAPM_OUTPUT("LSPK"),
-	SND_SOC_DAPM_OUTPUT("RSPK"),
+	SND_SOC_DAPM_OUTPUT("HPL"),
+	SND_SOC_DAPM_OUTPUT("HPR"),
+	SND_SOC_DAPM_OUTPUT("SPKL"),
+	SND_SOC_DAPM_OUTPUT("SPKR"),
+	SND_SOC_DAPM_OUTPUT("OUT3"),
+	SND_SOC_DAPM_OUTPUT("OUT4")
 };
 
-static const struct snd_soc_dapm_route audio_map[] = {
-	/* Output mixer */
-	{"Right Output Mixer", "PCM Playback Switch", "Right DAC"},
-	{"Right Output Mixer", "Aux Playback Switch", "RAUX"},
-	{"Right Output Mixer", "Line Bypass Switch", "Right Boost Mixer"},
+static const struct snd_soc_dapm_route wm8983_audio_map[] = {
+	{ "OUT3 Mixer", "LMIX2OUT3 Switch", "Left Output Mixer" },
+	{ "OUT3 Mixer", "LDAC2OUT3 Switch", "Left DAC" },
 
-	{"Left Output Mixer", "PCM Playback Switch", "Left DAC"},
-	{"Left Output Mixer", "Aux Playback Switch", "LAUX"},
-	{"Left Output Mixer", "Line Bypass Switch", "Left Boost Mixer"},
+	{ "OUT3 Out", NULL, "OUT3 Mixer" },
+	{ "OUT3", NULL, "OUT3 Out" },
 
-	/* Outputs */
-	{"Right Headphone Out", NULL, "Right Output Mixer"},
-	{"RHP", NULL, "Right Headphone Out"},
+	{ "OUT4 Mixer", "LMIX2OUT4 Switch", "Left Output Mixer" },
+	{ "OUT4 Mixer", "RMIX2OUT4 Switch", "Right Output Mixer" },
+	{ "OUT4 Mixer", "LDAC2OUT4 Switch", "Left DAC" },
+	{ "OUT4 Mixer", "RDAC2OUT4 Switch", "Right DAC" },
 
-	{"Left Headphone Out", NULL, "Left Output Mixer"},
-	{"LHP", NULL, "Left Headphone Out"},
+	{ "OUT4 Out", NULL, "OUT4 Mixer" },
+	{ "OUT4", NULL, "OUT4 Out" },
 
-	{"Right Speaker Out", NULL, "Right Output Mixer"},
-	{"RSPK", NULL, "Right Speaker Out"},
+	{ "Right Output Mixer", "PCM Switch", "Right DAC" },
+	{ "Right Output Mixer", "Aux Switch", "AUXR" },
+	{ "Right Output Mixer", "Line Switch", "Right Boost Mixer" },
 
-	{"Left Speaker Out", NULL, "Left Output Mixer"},
-	{"LSPK", NULL, "Left Speaker Out"},
+	{ "Left Output Mixer", "PCM Switch", "Left DAC" },
+	{ "Left Output Mixer", "Aux Switch", "AUXL" },
+	{ "Left Output Mixer", "Line Switch", "Left Boost Mixer" },
 
-	/* Boost Mixer */
-	{"Right ADC", NULL, "Right Boost Mixer"},
+	{ "Right Headphone Out", NULL, "Right Output Mixer" },
+	{ "HPR", NULL, "Right Headphone Out" },
 
-	{"Right Boost Mixer", NULL, "RAUX"},
-	{"Right Boost Mixer", NULL, "Right Capture PGA"},
-	{"Right Boost Mixer", NULL, "R2"},
+	{ "Left Headphone Out", NULL, "Left Output Mixer" },
+	{ "HPL", NULL, "Left Headphone Out" },
 
-	{"Left ADC", NULL, "Left Boost Mixer"},
+	{ "Right Speaker Out", NULL, "Right Output Mixer" },
+	{ "SPKR", NULL, "Right Speaker Out" },
 
-	{"Left Boost Mixer", NULL, "LAUX"},
-	{"Left Boost Mixer", NULL, "Left Capture PGA"},
-	{"Left Boost Mixer", NULL, "L2"},
+	{ "Left Speaker Out", NULL, "Left Output Mixer" },
+	{ "SPKL", NULL, "Left Speaker Out" },
 
-	/* Input PGA */
-	{"Right Capture PGA", NULL, "Right Input Mixer"},
-	{"Left Capture PGA", NULL, "Left Input Mixer"},
+	{ "Right ADC", NULL, "Right Boost Mixer" },
 
-	{"Right Input Mixer", "R2 Switch", "R2"},
-	{"Right Input Mixer", "MicN Switch", "RMICN"},
-	{"Right Input Mixer", "MicP Switch", "RMICP"},
+	{ "Right Boost Mixer", "AUXR Volume", "AUXR" },
+	{ "Right Boost Mixer", NULL, "Right Capture PGA" },
+	{ "Right Boost Mixer", "R2 Volume", "R2" },
 
-	{"Left Input Mixer", "L2 Switch", "L2"},
-	{"Left Input Mixer", "MicN Switch", "LMICN"},
-	{"Left Input Mixer", "MicP Switch", "LMICP"},
+	{ "Left ADC", NULL, "Left Boost Mixer" },
+
+	{ "Left Boost Mixer", "AUXL Volume", "AUXL" },
+	{ "Left Boost Mixer", NULL, "Left Capture PGA" },
+	{ "Left Boost Mixer", "L2 Volume", "L2" },
+
+	{ "Right Capture PGA", NULL, "Right Input Mixer" },
+	{ "Left Capture PGA", NULL, "Left Input Mixer" },
+
+	{ "Right Input Mixer", "R2 Switch", "R2" },
+	{ "Right Input Mixer", "MicN Switch", "RIN" },
+	{ "Right Input Mixer", "MicP Switch", "RIP" },
+
+	{ "Left Input Mixer", "L2 Switch", "L2" },
+	{ "Left Input Mixer", "MicN Switch", "LIN" },
+	{ "Left Input Mixer", "MicP Switch", "LIP" },
 };
 
-static int wm8983_add_widgets(struct snd_soc_codec *codec)
+static int eqmode_get(struct snd_kcontrol *kcontrol,
+		      struct snd_ctl_elem_value *ucontrol)
 {
-	snd_soc_dapm_new_controls(codec, wm8983_dapm_widgets,
-				  ARRAY_SIZE(wm8983_dapm_widgets));
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	unsigned int reg;
 
-	/* set up the WM8983 audio map */
-	snd_soc_dapm_add_routes(codec, audio_map, ARRAY_SIZE(audio_map));
+	reg = snd_soc_read(codec, WM8983_EQ1_LOW_SHELF);
+	if (reg & WM8983_EQ3DMODE)
+		ucontrol->value.integer.value[0] = 1;
+	else
+		ucontrol->value.integer.value[0] = 0;
 
 	return 0;
 }
 
-/* PLL divisors */
-struct wm8983_pll_div {
-	u32 k;
-	u8 n;
-	u8 div2;
-};
-
-#define FIXED_PLL_SIZE (1 << 24)
-
-static void pll_factors(struct wm8983_pll_div *pll_div, unsigned int target,
-			unsigned int source)
+static int eqmode_put(struct snd_kcontrol *kcontrol,
+		      struct snd_ctl_elem_value *ucontrol)
 {
-	u64 k_part;
-	unsigned int k, n_div, n_mod;
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	unsigned int regpwr2, regpwr3;
+	unsigned int reg_eq;
 
-	n_div = target / source;
-	if (n_div < 6) {
-		source >>= 1;
-		pll_div->div2 = 1;
-		n_div = target / source;
-	} else {
-		pll_div->div2 = 0;
-	}
-
-	if (n_div < 6 || n_div > 12)
-		dev_warn(wm8983_codec->dev,
-			 "WM8983 N value exceeds recommended range! N = %u\n",
-			 n_div);
-
-	pll_div->n = n_div;
-	n_mod = target - source * n_div;
-	k_part = FIXED_PLL_SIZE * (long long)n_mod + source / 2;
-
-	do_div(k_part, source);
-
-	k = k_part & 0xFFFFFFFF;
-
-	pll_div->k = k;
-}
-
-/* MCLK dividers */
-static const int mclk_numerator[]	= {1, 3, 2, 3, 4, 6, 8, 12};
-static const int mclk_denominator[]	= {1, 2, 1, 1, 1, 1, 1, 1};
-
-/*
- * find index >= idx, such that, for a given f_out,
- * 3 * f_mclk / 4 <= f_PLLOUT < 13 * f_mclk / 4
- * f_out can be f_256fs or f_opclk, currently only used for f_256fs. Can be
- * generalised for f_opclk with suitable coefficient arrays, but currently
- * the OPCLK divisor is calculated directly, not iteratively.
- */
-static int wm8983_enum_mclk(unsigned int f_out, unsigned int f_mclk,
-			    unsigned int *f_pllout)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(mclk_numerator); i++) {
-		unsigned int f_pllout_x4 = 4 * f_out * mclk_numerator[i] /
-			mclk_denominator[i];
-		if (3 * f_mclk <= f_pllout_x4 && f_pllout_x4 < 13 * f_mclk) {
-			*f_pllout = f_pllout_x4 / 4;
-			return i;
-		}
-	}
-
-	return -EINVAL;
-}
-
-/*
- * Calculate internal frequencies and dividers, according to Figure 40
- * "PLL and Clock Select Circuit" in WM8983 datasheet Rev. 2.6
- */
-static int wm8983_configure_pll(struct snd_soc_codec *codec)
-{
-	struct wm8983_priv *wm8983 = snd_soc_codec_get_drvdata(codec);
-	struct wm8983_pll_div pll_div;
-	unsigned int f_opclk = wm8983->f_opclk, f_mclk = wm8983->f_mclk,
-		f_256fs = wm8983->f_256fs;
-	unsigned int f2;
-
-	if (!f_mclk)
+	if (ucontrol->value.integer.value[0] != 0
+	    && ucontrol->value.integer.value[0] != 1)
 		return -EINVAL;
 
-	if (f_opclk) {
-		unsigned int opclk_div;
-		/* Cannot set up MCLK divider now, do later */
-		wm8983->mclk_idx = -1;
-
-		/*
-		 * The user needs OPCLK. Choose OPCLKDIV to put
-		 * 6 <= R = f2 / f1 < 13, 1 <= OPCLKDIV <= 4.
-		 * f_opclk = f_mclk * prescale * R / 4 / OPCLKDIV, where
-		 * prescale = 1, or prescale = 2. Prescale is calculated inside
-		 * pll_factors(). We have to select f_PLLOUT, such that
-		 * f_mclk * 3 / 4 <= f_PLLOUT < f_mclk * 13 / 4. Must be
-		 * f_mclk * 3 / 16 <= f_opclk < f_mclk * 13 / 4.
-		 */
-		if (16 * f_opclk < 3 * f_mclk || 4 * f_opclk >= 13 * f_mclk)
-			return -EINVAL;
-
-		if (4 * f_opclk < 3 * f_mclk)
-			/* Have to use OPCLKDIV */
-			opclk_div = (3 * f_mclk / 4 + f_opclk - 1) / f_opclk;
-		else
-			opclk_div = 1;
-
-		dev_dbg(codec->dev, "%s: OPCLKDIV=%d\n", __func__, opclk_div);
-
-		snd_soc_update_bits(codec, WM8983_GPIO_CONTROL, 0x30,
-				    (opclk_div - 1) << 4);
-
-		wm8983->f_pllout = f_opclk * opclk_div;
-	} else if (f_256fs) {
-		/*
-		 * Not using OPCLK, but PLL is used for the codec, choose R:
-		 * 6 <= R = f2 / f1 < 13, to put 1 <= MCLKDIV <= 12.
-		 * f_256fs = f_mclk * prescale * R / 4 / MCLKDIV, where
-		 * prescale = 1, or prescale = 2. Prescale is calculated inside
-		 * pll_factors(). We have to select f_PLLOUT, such that
-		 * f_mclk * 3 / 4 <= f_PLLOUT < f_mclk * 13 / 4. Must be
-		 * f_mclk * 3 / 48 <= f_256fs < f_mclk * 13 / 4. This means MCLK
-		 * must be 3.781MHz <= f_MCLK <= 32.768MHz
-		 */
-		int idx = wm8983_enum_mclk(f_256fs, f_mclk, &wm8983->f_pllout);
-		if (idx < 0)
-			return idx;
-
-		wm8983->mclk_idx = idx;
-
-		/* GPIO1 into default mode as input - before configuring PLL */
-		snd_soc_update_bits(codec, WM8983_GPIO_CONTROL, 7, 0);
-	} else {
-		return -EINVAL;
+	reg_eq = snd_soc_read(codec, WM8983_EQ1_LOW_SHELF);
+	switch ((reg_eq & WM8983_EQ3DMODE) >> WM8983_EQ3DMODE_SHIFT) {
+	case 0:
+		if (!ucontrol->value.integer.value[0])
+			return 0;
+		break;
+	case 1:
+		if (ucontrol->value.integer.value[0])
+			return 0;
+		break;
 	}
 
-	f2 = wm8983->f_pllout * 4;
-
-	dev_dbg(codec->dev, "%s: f_MCLK=%uHz, f_PLLOUT=%uHz\n", __func__,
-		wm8983->f_mclk, wm8983->f_pllout);
-
-	pll_factors(&pll_div, f2, wm8983->f_mclk);
-
-	dev_dbg(codec->dev, "%s: calculated PLL N=0x%x, K=0x%x, div2=%d\n",
-		__func__, pll_div.n, pll_div.k, pll_div.div2);
-
-	/* Turn PLL off for configuration... */
-	snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1, 0x20, 0);
-
-	snd_soc_write(codec, WM8983_PLL_N, (pll_div.div2 << 4) | pll_div.n);
-	snd_soc_write(codec, WM8983_PLL_K1, pll_div.k >> 18);
-	snd_soc_write(codec, WM8983_PLL_K2, (pll_div.k >> 9) & 0x1ff);
-	snd_soc_write(codec, WM8983_PLL_K3, pll_div.k & 0x1ff);
-
-	/* ...and on again */
-	snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1, 0x20, 0x20);
-
-	if (f_opclk)
-		/* Output PLL (OPCLK) to GPIO1 */
-		snd_soc_update_bits(codec, WM8983_GPIO_CONTROL, 7, 4);
-
+	regpwr2 = snd_soc_read(codec, WM8983_POWER_MANAGEMENT_2);
+	regpwr3 = snd_soc_read(codec, WM8983_POWER_MANAGEMENT_3);
+	/* disable the DACs and ADCs */
+	snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_2,
+			    WM8983_ADCENR_MASK | WM8983_ADCENL_MASK, 0);
+	snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_3,
+			    WM8983_DACENR_MASK | WM8983_DACENL_MASK, 0);
+	/* set the desired eqmode */
+	snd_soc_update_bits(codec, WM8983_EQ1_LOW_SHELF,
+			    WM8983_EQ3DMODE_MASK,
+			    ucontrol->value.integer.value[0]
+			    << WM8983_EQ3DMODE_SHIFT);
+	/* restore DAC/ADC configuration */
+	snd_soc_write(codec, WM8983_POWER_MANAGEMENT_2, regpwr2);
+	snd_soc_write(codec, WM8983_POWER_MANAGEMENT_3, regpwr3);
 	return 0;
 }
 
-/*
- * Configure WM8983 clock dividers.
- */
-static int wm8983_set_dai_clkdiv(struct snd_soc_dai *codec_dai,
-				 int div_id, int div)
+static int wm8983_readable(struct snd_soc_codec *codec, unsigned int reg)
 {
-	struct snd_soc_codec *codec = codec_dai->codec;
-	struct wm8983_priv *wm8983 = snd_soc_codec_get_drvdata(codec);
-	int ret = 0;
+	if (reg > WM8983_MAX_REGISTER)
+		return 0;
 
-	switch (div_id) {
-	case WM8983_OPCLKRATE:
-		wm8983->f_opclk = div;
-
-		if (wm8983->f_mclk)
-			/*
-			 * We know the MCLK frequency, the user has requested
-			 * OPCLK, configure the PLL based on that and start it
-			 * and OPCLK immediately. We will configure PLL to match
-			 * user-requested OPCLK frquency as good as possible.
-			 * In fact, it is likely, that matching the sampling
-			 * rate, when it becomes known, is more important, and
-			 * we will not be reconfiguring PLL then, because we
-			 * must not interrupt OPCLK. But it should be fine,
-			 * because typically the user will request OPCLK to run
-			 * at 256fs or 512fs, and for these cases we will also
-			 * find an exact MCLK divider configuration - it will
-			 * be equal to or double the OPCLK divisor.
-			 */
-			ret = wm8983_configure_pll(codec);
-		break;
-	case WM8983_BCLKDIV:
-		if (div & ~0x1c)
-			return -EINVAL;
-		snd_soc_update_bits(codec, WM8983_CLOCKING, 0x1c, div);
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	dev_dbg(codec->dev, "%s: ID %d, value %u\n", __func__, div_id, div);
-
-	return ret;
+	return wm8983_access_masks[reg].read != 0;
 }
 
-/*
- * @freq:	when .set_pll() us not used, freq is codec MCLK input frequency
- */
-static int wm8983_set_dai_sysclk(struct snd_soc_dai *codec_dai, int clk_id,
-				 unsigned int freq, int dir)
+static int wm8983_dac_mute(struct snd_soc_dai *dai, int mute)
 {
-	struct snd_soc_codec *codec = codec_dai->codec;
-	struct wm8983_priv *wm8983 = snd_soc_codec_get_drvdata(codec);
-	int ret = 0;
+	struct snd_soc_codec *codec = dai->codec;
 
-	dev_dbg(codec->dev, "%s: ID %d, freq %u\n", __func__, clk_id, freq);
-
-	if (freq) {
-		wm8983->f_mclk = freq;
-
-		/* Even if MCLK is used for system clock, might have to drive OPCLK */
-		if (wm8983->f_opclk)
-			ret = wm8983_configure_pll(codec);
-
-		/* Our sysclk is fixed to 256 * fs, will configure in .hw_params()  */
-
-		if (!ret)
-			wm8983->sysclk = clk_id;
-	}
-
-	if (wm8983->sysclk == WM8983_PLL && (!freq || clk_id == WM8983_MCLK)) {
-		/* Clock CODEC directly from MCLK */
-		snd_soc_update_bits(codec, WM8983_CLOCKING, 0x100, 0);
-
-		/* GPIO1 into default mode as input - before configuring PLL */
-		snd_soc_update_bits(codec, WM8983_GPIO_CONTROL, 7, 0);
-
-		/* Turn off PLL */
-		snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1, 0x20, 0);
-		wm8983->sysclk = WM8983_MCLK;
-		wm8983->f_pllout = 0;
-		wm8983->f_opclk = 0;
-	}
-
-	return ret;
+	return snd_soc_update_bits(codec, WM8983_DAC_CONTROL,
+				   WM8983_SOFTMUTE_MASK,
+				   !!mute << WM8983_SOFTMUTE_SHIFT);
 }
 
-/*
- * Set ADC and Voice DAC format.
- */
-static int wm8983_set_dai_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
+static int wm8983_set_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 {
-	struct snd_soc_codec *codec = codec_dai->codec;
-	/*
-	 * BCLK polarity mask = 0x100, LRC clock polarity mask = 0x80,
-	 * Data Format mask = 0x18: all will be calculated anew
-	 */
-	u16 iface = snd_soc_read(codec, WM8983_AUDIO_INTERFACE) & ~0x198;
-	u16 clk = snd_soc_read(codec, WM8983_CLOCKING);
+	struct snd_soc_codec *codec = dai->codec;
+	u16 format, master, bcp, lrp;
 
-	dev_dbg(codec->dev, "%s\n", __func__);
-
-	/* set master/slave audio interface */
-	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
-	case SND_SOC_DAIFMT_CBM_CFM:
-		clk |= 1;
-		break;
-	case SND_SOC_DAIFMT_CBS_CFS:
-		clk &= ~1;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	/* interface format */
 	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
 	case SND_SOC_DAIFMT_I2S:
-		iface |= 0x10;
+		format = 0x2;
 		break;
 	case SND_SOC_DAIFMT_RIGHT_J:
+		format = 0x0;
 		break;
 	case SND_SOC_DAIFMT_LEFT_J:
-		iface |= 0x8;
+		format = 0x1;
 		break;
 	case SND_SOC_DAIFMT_DSP_A:
-		iface |= 0x18;
+	case SND_SOC_DAIFMT_DSP_B:
+		format = 0x3;
 		break;
 	default:
+		dev_err(dai->dev, "Unknown dai format\n");
 		return -EINVAL;
 	}
 
-	/* clock inversion */
+	snd_soc_update_bits(codec, WM8983_AUDIO_INTERFACE,
+			    WM8983_FMT_MASK, format << WM8983_FMT_SHIFT);
+
+	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
+	case SND_SOC_DAIFMT_CBM_CFM:
+		master = 1;
+		break;
+	case SND_SOC_DAIFMT_CBS_CFS:
+		master = 0;
+		break;
+	default:
+		dev_err(dai->dev, "Unknown master/slave configuration\n");
+		return -EINVAL;
+	}
+
+	snd_soc_update_bits(codec, WM8983_CLOCK_GEN_CONTROL,
+			    WM8983_MS_MASK, master << WM8983_MS_SHIFT);
+
+	/* FIXME: We don't currently support DSP A/B modes */
+	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
+	case SND_SOC_DAIFMT_DSP_A:
+	case SND_SOC_DAIFMT_DSP_B:
+		dev_err(dai->dev, "DSP A/B modes are not supported\n");
+		return -EINVAL;
+	default:
+		break;
+	}
+
+	bcp = lrp = 0;
 	switch (fmt & SND_SOC_DAIFMT_INV_MASK) {
 	case SND_SOC_DAIFMT_NB_NF:
 		break;
 	case SND_SOC_DAIFMT_IB_IF:
-		iface |= 0x180;
+		bcp = lrp = 1;
 		break;
 	case SND_SOC_DAIFMT_IB_NF:
-		iface |= 0x100;
+		bcp = 1;
 		break;
 	case SND_SOC_DAIFMT_NB_IF:
-		iface |= 0x80;
+		lrp = 1;
 		break;
 	default:
+		dev_err(dai->dev, "Unknown polarity configuration\n");
 		return -EINVAL;
 	}
 
-	snd_soc_write(codec, WM8983_AUDIO_INTERFACE, iface);
-	snd_soc_write(codec, WM8983_CLOCKING, clk);
-
+	snd_soc_update_bits(codec, WM8983_AUDIO_INTERFACE,
+			    WM8983_LRCP_MASK, lrp << WM8983_LRCP_SHIFT);
+	snd_soc_update_bits(codec, WM8983_AUDIO_INTERFACE,
+			    WM8983_BCP_MASK, bcp << WM8983_BCP_SHIFT);
 	return 0;
 }
 
-/*
- * Set PCM DAI bit size and sample rate.
- */
 static int wm8983_hw_params(struct snd_pcm_substream *substream,
 			    struct snd_pcm_hw_params *params,
 			    struct snd_soc_dai *dai)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_device *socdev = rtd->socdev;
-	struct snd_soc_codec *codec = socdev->card->codec;
+	int i;
+	struct snd_soc_codec *codec = dai->codec;
 	struct wm8983_priv *wm8983 = snd_soc_codec_get_drvdata(codec);
-	/* Word length mask = 0x60 */
-	u16 iface_ctl = snd_soc_read(codec, WM8983_AUDIO_INTERFACE) & ~0x60;
-	/* Sampling rate mask = 0xe (for filters) */
-	u16 add_ctl = snd_soc_read(codec, WM8983_ADDITIONAL_CONTROL) & ~0xe;
-	u16 clking = snd_soc_read(codec, WM8983_CLOCKING);
-	enum wm8983_sysclk_src current_clk_id = clking & 0x100 ?
-		WM8983_PLL : WM8983_MCLK;
-	unsigned int f_sel, diff, diff_best = INT_MAX;
-	int i, best = 0;
+	u16 blen, srate_idx;
+	u32 tmp;
+	int srate_best;
+	int ret;
 
-	if (!wm8983->f_mclk)
-		return -EINVAL;
+	ret = snd_soc_params_to_bclk(params);
+	if (ret < 0) {
+		dev_err(codec->dev, "Failed to convert params to bclk: %d\n", ret);
+		return ret;
+	}
 
-	/* bit size */
+	wm8983->bclk = ret;
+
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S16_LE:
+		blen = 0x0;
 		break;
 	case SNDRV_PCM_FORMAT_S20_3LE:
-		iface_ctl |= 0x20;
+		blen = 0x1;
 		break;
 	case SNDRV_PCM_FORMAT_S24_LE:
-		iface_ctl |= 0x40;
+		blen = 0x2;
 		break;
 	case SNDRV_PCM_FORMAT_S32_LE:
-		iface_ctl |= 0x60;
+		blen = 0x3;
 		break;
+	default:
+		dev_err(dai->dev, "Unsupported word length %u\n",
+			params_format(params));
+		return -EINVAL;
 	}
 
-	/* filter coefficient */
-	switch (params_rate(params)) {
-	case 8000:
-		add_ctl |= 0x5 << 1;
-		break;
-	case 11025:
-		add_ctl |= 0x4 << 1;
-		break;
-	case 16000:
-		add_ctl |= 0x3 << 1;
-		break;
-	case 22050:
-		add_ctl |= 0x2 << 1;
-		break;
-	case 32000:
-		add_ctl |= 0x1 << 1;
-		break;
-	case 44100:
-	case 48000:
-		break;
+	snd_soc_update_bits(codec, WM8983_AUDIO_INTERFACE,
+			    WM8983_WL_MASK, blen << WM8983_WL_SHIFT);
+
+	/*
+	 * match to the nearest possible sample rate and rely
+	 * on the array index to configure the SR register
+	 */
+	srate_idx = 0;
+	srate_best = abs(srates[0] - params_rate(params));
+	for (i = 1; i < ARRAY_SIZE(srates); ++i) {
+		if (abs(srates[i] - params_rate(params)) >= srate_best)
+			continue;
+		srate_idx = i;
+		srate_best = abs(srates[i] - params_rate(params));
 	}
 
-	/* Sampling rate is known now, can configure the MCLK divider */
-	wm8983->f_256fs = params_rate(params) * 256;
+	dev_dbg(dai->dev, "Selected SRATE = %d\n", srates[srate_idx]);
+	snd_soc_update_bits(codec, WM8983_ADDITIONAL_CONTROL,
+			    WM8983_SR_MASK, srate_idx << WM8983_SR_SHIFT);
 
-	if (wm8983->sysclk == WM8983_MCLK) {
-		wm8983->mclk_idx = -1;
-		f_sel = wm8983->f_mclk;
+	dev_dbg(dai->dev, "Target BCLK = %uHz\n", wm8983->bclk);
+	dev_dbg(dai->dev, "SYSCLK = %uHz\n", wm8983->sysclk);
+
+	for (i = 0; i < ARRAY_SIZE(fs_ratios); ++i) {
+		if (wm8983->sysclk / params_rate(params)
+		    == fs_ratios[i].ratio)
+			break;
+	}
+
+	if (i == ARRAY_SIZE(fs_ratios)) {
+		dev_err(dai->dev, "Unable to configure MCLK ratio %u/%u\n",
+			wm8983->sysclk, params_rate(params));
+		return -EINVAL;
+	}
+
+	dev_dbg(dai->dev, "MCLK ratio = %dfs\n", fs_ratios[i].ratio);
+	snd_soc_update_bits(codec, WM8983_CLOCK_GEN_CONTROL,
+			    WM8983_MCLKDIV_MASK, i << WM8983_MCLKDIV_SHIFT);
+
+	/* select the appropriate bclk divider */
+	tmp = (wm8983->sysclk / fs_ratios[i].div) * 10;
+	for (i = 0; i < ARRAY_SIZE(bclk_divs); ++i) {
+		if (wm8983->bclk == tmp / bclk_divs[i])
+			break;
+	}
+
+	if (i == ARRAY_SIZE(bclk_divs)) {
+		dev_err(dai->dev, "No matching BCLK divider found\n");
+		return -EINVAL;
+	}
+
+	dev_dbg(dai->dev, "BCLK div = %d\n", i);
+	snd_soc_update_bits(codec, WM8983_CLOCK_GEN_CONTROL,
+			    WM8983_BCLKDIV_MASK, i << WM8983_BCLKDIV_SHIFT);
+
+	return 0;
+}
+
+struct pll_div {
+	u32 div2:1;
+	u32 n:4;
+	u32 k:24;
+};
+
+#define FIXED_PLL_SIZE ((1ULL << 24) * 10)
+static int pll_factors(struct pll_div *pll_div, unsigned int target,
+		       unsigned int source)
+{
+	u64 Kpart;
+	unsigned long int K, Ndiv, Nmod;
+
+	pll_div->div2 = 0;
+	Ndiv = target / source;
+	if (Ndiv < 6) {
+		source >>= 1;
+		pll_div->div2 = 1;
+		Ndiv = target / source;
+	}
+
+	if (Ndiv < 6 || Ndiv > 12) {
+		printk(KERN_ERR "%s: WM8983 N value is not within"
+		       " the recommended range: %lu\n", __func__, Ndiv);
+		return -EINVAL;
+	}
+	pll_div->n = Ndiv;
+
+	Nmod = target % source;
+	Kpart = FIXED_PLL_SIZE * (u64)Nmod;
+
+	do_div(Kpart, source);
+
+	K = Kpart & 0xffffffff;
+	if ((K % 10) >= 5)
+		K += 5;
+	K /= 10;
+	pll_div->k = K;
+	return 0;
+}
+
+static int wm8983_set_pll(struct snd_soc_dai *dai, int pll_id,
+			  int source, unsigned int freq_in,
+			  unsigned int freq_out)
+{
+	int ret;
+	struct snd_soc_codec *codec;
+	struct pll_div pll_div;
+
+	codec = dai->codec;
+	if (!freq_in || !freq_out) {
+		/* disable the PLL */
+		snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1,
+				    WM8983_PLLEN_MASK, 0);
+		return 0;
 	} else {
-		if (!wm8983->f_pllout) {
-			/* We only enter here, if OPCLK is not used */
-			int ret = wm8983_configure_pll(codec);
-			if (ret < 0)
-				return ret;
-		}
-		f_sel = wm8983->f_pllout;
-	}
+		ret = pll_factors(&pll_div, freq_out * 4 * 2, freq_in);
+		if (ret)
+			return ret;
 
-	if (wm8983->mclk_idx < 0) {
-		/* Either MCLK is used directly, or OPCLK is used */
-		if (f_sel < wm8983->f_256fs || f_sel > 12 * wm8983->f_256fs)
-			return -EINVAL;
+		/* disable the PLL before re-programming it */
+		snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1,
+				    WM8983_PLLEN_MASK, 0);
 
-		for (i = 0; i < ARRAY_SIZE(mclk_numerator); i++) {
-			diff = abs(wm8983->f_256fs * 3 -
-				   f_sel * 3 * mclk_denominator[i] / mclk_numerator[i]);
-
-			if (diff < diff_best) {
-				diff_best = diff;
-				best = i;
-			}
-
-			if (!diff)
-				break;
-		}
-	} else {
-		/* OPCLK not used, codec driven by PLL */
-		best = wm8983->mclk_idx;
-		diff = 0;
-	}
-
-	if (diff)
-		dev_warn(codec->dev, "Imprecise sampling rate: %uHz%s\n",
-			f_sel * mclk_denominator[best] / mclk_numerator[best] / 256,
-			wm8983->sysclk == WM8983_MCLK ?
-			", consider using PLL" : "");
-
-	dev_dbg(codec->dev, "%s: fmt %d, rate %u, MCLK divisor #%d\n", __func__,
-		params_format(params), params_rate(params), best);
-
-	/* MCLK divisor mask = 0xe0 */
-	snd_soc_update_bits(codec, WM8983_CLOCKING, 0xe0, best << 5);
-
-	snd_soc_write(codec, WM8983_AUDIO_INTERFACE, iface_ctl);
-	snd_soc_write(codec, WM8983_ADDITIONAL_CONTROL, add_ctl);
-
-	if (wm8983->sysclk != current_clk_id) {
-		if (wm8983->sysclk == WM8983_PLL)
-			/* Run CODEC from PLL instead of MCLK */
-			snd_soc_update_bits(codec, WM8983_CLOCKING,
-					    0x100, 0x100);
-		else
-			/* Clock CODEC directly from MCLK */
-			snd_soc_update_bits(codec, WM8983_CLOCKING, 0x100, 0);
+		/* set PLLN and PRESCALE */
+		snd_soc_write(codec, WM8983_PLL_N,
+			(pll_div.div2 << WM8983_PLL_PRESCALE_SHIFT)
+			| pll_div.n);
+		/* set PLLK */
+		snd_soc_write(codec, WM8983_PLL_K_3, pll_div.k & 0x1ff);
+		snd_soc_write(codec, WM8983_PLL_K_2, (pll_div.k >> 9) & 0x1ff);
+		snd_soc_write(codec, WM8983_PLL_K_1, (pll_div.k >> 18));
+		/* enable the PLL */
+		snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1,
+					WM8983_PLLEN_MASK, WM8983_PLLEN);
 	}
 
 	return 0;
 }
 
-static int wm8983_mute(struct snd_soc_dai *dai, int mute)
+static int wm8983_set_sysclk(struct snd_soc_dai *dai,
+			     int clk_id, unsigned int freq, int dir)
 {
 	struct snd_soc_codec *codec = dai->codec;
+	struct wm8983_priv *wm8983 = snd_soc_codec_get_drvdata(codec);
 
-	dev_dbg(codec->dev, "%s: %d\n", __func__, mute);
+	switch (clk_id) {
+	case WM8983_CLKSRC_MCLK:
+		snd_soc_update_bits(codec, WM8983_CLOCK_GEN_CONTROL,
+				    WM8983_CLKSEL_MASK, 0);
+		break;
+	case WM8983_CLKSRC_PLL:
+		snd_soc_update_bits(codec, WM8983_CLOCK_GEN_CONTROL,
+				    WM8983_CLKSEL_MASK, WM8983_CLKSEL);
+		break;
+	default:
+		dev_err(dai->dev, "Unknown clock source: %d\n", clk_id);
+		return -EINVAL;
+	}
 
-	if (mute)
-		snd_soc_update_bits(codec, WM8983_DAC_CONTROL, 0x40, 0x40);
-	else
-		snd_soc_update_bits(codec, WM8983_DAC_CONTROL, 0x40, 0);
-
+	wm8983->sysclk = freq;
 	return 0;
 }
 
 static int wm8983_set_bias_level(struct snd_soc_codec *codec,
 				 enum snd_soc_bias_level level)
 {
-	u16 power1 = snd_soc_read(codec, WM8983_POWER_MANAGEMENT_1) & ~3;
+	int ret;
 
 	switch (level) {
 	case SND_SOC_BIAS_ON:
 	case SND_SOC_BIAS_PREPARE:
-		power1 |= 1;  /* VMID 75k */
-		snd_soc_write(codec, WM8983_POWER_MANAGEMENT_1, power1);
+		/* VMID at 100k */
+		snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1,
+				    WM8983_VMIDSEL_MASK,
+				    1 << WM8983_VMIDSEL_SHIFT);
 		break;
 	case SND_SOC_BIAS_STANDBY:
-		/* bit 3: enable bias, bit 2: enable I/O tie off buffer */
-		power1 |= 0xc;
-
-		if (codec->bias_level == SND_SOC_BIAS_OFF) {
-			/* Initial cap charge at VMID 5k */
-			snd_soc_write(codec, WM8983_POWER_MANAGEMENT_1,
-				      power1 | 0x3);
-			mdelay(100);
+		if (codec->dapm.bias_level == SND_SOC_BIAS_OFF) {
+			ret = snd_soc_cache_sync(codec);
+			if (ret < 0) {
+				dev_err(codec->dev, "Failed to sync cache: %d\n", ret);
+				return ret;
+			}
+			/* enable anti-pop features */
+			snd_soc_update_bits(codec, WM8983_OUT4_TO_ADC,
+					    WM8983_POBCTRL_MASK | WM8983_DELEN_MASK,
+					    WM8983_POBCTRL | WM8983_DELEN);
+			/* enable thermal shutdown */
+			snd_soc_update_bits(codec, WM8983_OUTPUT_CTRL,
+					    WM8983_TSDEN_MASK, WM8983_TSDEN);
+			/* enable BIASEN */
+			snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1,
+					    WM8983_BIASEN_MASK, WM8983_BIASEN);
+			/* VMID at 100k */
+			snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1,
+					    WM8983_VMIDSEL_MASK,
+					    1 << WM8983_VMIDSEL_SHIFT);
+			msleep(250);
+			/* disable anti-pop features */
+			snd_soc_update_bits(codec, WM8983_OUT4_TO_ADC,
+					    WM8983_POBCTRL_MASK |
+					    WM8983_DELEN_MASK, 0);
 		}
 
-		power1 |= 0x2;  /* VMID 500k */
-		snd_soc_write(codec, WM8983_POWER_MANAGEMENT_1, power1);
+		/* VMID at 500k */
+		snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1,
+				    WM8983_VMIDSEL_MASK,
+				    2 << WM8983_VMIDSEL_SHIFT);
 		break;
 	case SND_SOC_BIAS_OFF:
-		/* Preserve PLL - OPCLK may be used by someone */
-		snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1, ~0x20, 0);
+		/* disable thermal shutdown */
+		snd_soc_update_bits(codec, WM8983_OUTPUT_CTRL,
+				    WM8983_TSDEN_MASK, 0);
+		/* disable VMIDSEL and BIASEN */
+		snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1,
+				    WM8983_VMIDSEL_MASK | WM8983_BIASEN_MASK,
+				    0);
+		/* wait for VMID to discharge */
+		msleep(100);
+		snd_soc_write(codec, WM8983_POWER_MANAGEMENT_1, 0);
 		snd_soc_write(codec, WM8983_POWER_MANAGEMENT_2, 0);
 		snd_soc_write(codec, WM8983_POWER_MANAGEMENT_3, 0);
 		break;
 	}
 
-	dev_dbg(codec->dev, "%s: %d, %x\n", __func__, level, power1);
-
-	codec->bias_level = level;
+	codec->dapm.bias_level = level;
 	return 0;
 }
 
-#define WM8983_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE | \
-	SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE)
+#ifdef CONFIG_PM
+static int wm8983_suspend(struct snd_soc_codec *codec, pm_message_t state)
+{
+	wm8983_set_bias_level(codec, SND_SOC_BIAS_OFF);
+	return 0;
+}
+
+static int wm8983_resume(struct snd_soc_codec *codec)
+{
+	wm8983_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
+	return 0;
+}
+#else
+#define wm8983_suspend NULL
+#define wm8983_resume NULL
+#endif
+
+static int wm8983_remove(struct snd_soc_codec *codec)
+{
+	wm8983_set_bias_level(codec, SND_SOC_BIAS_OFF);
+	return 0;
+}
+
+static int wm8983_probe(struct snd_soc_codec *codec)
+{
+	int ret;
+	struct wm8983_priv *wm8983 = snd_soc_codec_get_drvdata(codec);
+	int i;
+
+	ret = snd_soc_codec_set_cache_io(codec, 7, 9, wm8983->control_type);
+	if (ret < 0) {
+		dev_err(codec->dev, "Failed to set cache i/o: %d\n", ret);
+		return ret;
+	}
+
+	ret = snd_soc_write(codec, WM8983_SOFTWARE_RESET, 0);
+	if (ret < 0) {
+		dev_err(codec->dev, "Failed to issue reset: %d\n", ret);
+		return ret;
+	}
+
+	/* set the vol/gain update bits */
+	for (i = 0; i < ARRAY_SIZE(vol_update_regs); ++i)
+		snd_soc_update_bits(codec, vol_update_regs[i],
+				    0x100, 0x100);
+
+	/* mute all outputs and set PGAs to minimum gain */
+	for (i = WM8983_LOUT1_HP_VOLUME_CTRL;
+	     i <= WM8983_OUT4_MONO_MIX_CTRL; ++i)
+		snd_soc_update_bits(codec, i, 0x40, 0x40);
+
+	/* enable soft mute */
+	snd_soc_update_bits(codec, WM8983_DAC_CONTROL,
+			    WM8983_SOFTMUTE_MASK,
+			    WM8983_SOFTMUTE);
+
+	/* enable BIASCUT */
+	snd_soc_update_bits(codec, WM8983_BIAS_CTRL,
+			    WM8983_BIASCUT, WM8983_BIASCUT);
+	return 0;
+}
 
 static struct snd_soc_dai_ops wm8983_dai_ops = {
-	.hw_params	= wm8983_hw_params,
-	.digital_mute	= wm8983_mute,
-	.set_fmt	= wm8983_set_dai_fmt,
-	.set_clkdiv	= wm8983_set_dai_clkdiv,
-	.set_sysclk	= wm8983_set_dai_sysclk,
+	.digital_mute = wm8983_dac_mute,
+	.hw_params = wm8983_hw_params,
+	.set_fmt = wm8983_set_fmt,
+	.set_sysclk = wm8983_set_sysclk,
+	.set_pll = wm8983_set_pll
 };
 
-/* Also supports 12kHz */
-struct snd_soc_dai wm8983_dai = {
-	.name = "WM8983 HiFi",
-	.id = 1,
+#define WM8983_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE | \
+			SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE)
+
+static struct snd_soc_dai_driver wm8983_dai = {
+	.name = "wm8983-hifi",
 	.playback = {
 		.stream_name = "Playback",
-		.channels_min = 1,
+		.channels_min = 2,
 		.channels_max = 2,
 		.rates = SNDRV_PCM_RATE_8000_48000,
 		.formats = WM8983_FORMATS,
 	},
 	.capture = {
 		.stream_name = "Capture",
-		.channels_min = 1,
+		.channels_min = 2,
 		.channels_max = 2,
 		.rates = SNDRV_PCM_RATE_8000_48000,
 		.formats = WM8983_FORMATS,
 	},
 	.ops = &wm8983_dai_ops,
+	.symmetric_rates = 1
 };
-EXPORT_SYMBOL_GPL(wm8983_dai);
 
-static int wm8983_suspend(struct platform_device *pdev, pm_message_t state)
+static struct snd_soc_codec_driver soc_codec_dev_wm8983 = {
+	.probe = wm8983_probe,
+	.remove = wm8983_remove,
+	.suspend = wm8983_suspend,
+	.resume = wm8983_resume,
+	.set_bias_level = wm8983_set_bias_level,
+	.reg_cache_size = ARRAY_SIZE(wm8983_reg_defs),
+	.reg_word_size = sizeof(u16),
+	.reg_cache_default = wm8983_reg_defs,
+	.controls = wm8983_snd_controls,
+	.num_controls = ARRAY_SIZE(wm8983_snd_controls),
+	.dapm_widgets = wm8983_dapm_widgets,
+	.num_dapm_widgets = ARRAY_SIZE(wm8983_dapm_widgets),
+	.dapm_routes = wm8983_audio_map,
+	.num_dapm_routes = ARRAY_SIZE(wm8983_audio_map),
+	.readable_register = wm8983_readable
+};
+
+#if defined(CONFIG_SPI_MASTER)
+static int __devinit wm8983_spi_probe(struct spi_device *spi)
 {
-	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_codec *codec = socdev->card->codec;
+	struct wm8983_priv *wm8983;
+	int ret;
 
-	wm8983_set_bias_level(codec, SND_SOC_BIAS_OFF);
-	/* Also switch PLL off */
-	snd_soc_write(codec, WM8983_POWER_MANAGEMENT_1, 0);
+	wm8983 = kzalloc(sizeof *wm8983, GFP_KERNEL);
+	if (!wm8983)
+		return -ENOMEM;
 
-	return 0;
-}
+	wm8983->control_type = SND_SOC_SPI;
+	spi_set_drvdata(spi, wm8983);
 
-static int wm8983_resume(struct platform_device *pdev)
-{
-	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_codec *codec = socdev->card->codec;
-	struct wm8983_priv *wm8983 = snd_soc_codec_get_drvdata(codec);
-	int i;
-	u16 *cache = codec->reg_cache;
-
-	/* Sync reg_cache with the hardware */
-	for (i = 0; i < ARRAY_SIZE(wm8983_reg); i++) {
-		if (i == WM8983_RESET)
-			continue;
-		if (cache[i] != wm8983_reg[i])
-			snd_soc_write(codec, i, cache[i]);
-	}
-
-	wm8983_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
-
-	if (wm8983->f_pllout)
-		/* Switch PLL on */
-		snd_soc_update_bits(codec, WM8983_POWER_MANAGEMENT_1, 0x20, 0x20);
-
-	return 0;
-}
-
-static int wm8983_probe(struct platform_device *pdev)
-{
-	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_codec *codec;
-	int ret = 0;
-
-	if (wm8983_codec == NULL) {
-		dev_err(&pdev->dev, "Codec device not registered\n");
-		return -ENODEV;
-	}
-
-	socdev->card->codec = wm8983_codec;
-	codec = wm8983_codec;
-
-	/* register pcms */
-	ret = snd_soc_new_pcms(socdev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1);
-	if (ret < 0) {
-		dev_err(codec->dev, "failed to create pcms: %d\n", ret);
-		goto pcm_err;
-	}
-
-	snd_soc_add_controls(codec, wm8983_snd_controls,
-			     ARRAY_SIZE(wm8983_snd_controls));
-	wm8983_add_widgets(codec);
-
-pcm_err:
+	ret = snd_soc_register_codec(&spi->dev,
+				     &soc_codec_dev_wm8983, &wm8983_dai, 1);
+	if (ret < 0)
+		kfree(wm8983);
 	return ret;
 }
 
-/* power down chip */
-static int wm8983_remove(struct platform_device *pdev)
+static int __devexit wm8983_spi_remove(struct spi_device *spi)
 {
-	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-
-	snd_soc_free_pcms(socdev);
-	snd_soc_dapm_free(socdev);
-
+	snd_soc_unregister_codec(&spi->dev);
+	kfree(spi_get_drvdata(spi));
 	return 0;
 }
 
-struct snd_soc_codec_device soc_codec_dev_wm8983 = {
-	.probe		= wm8983_probe,
-	.remove		= wm8983_remove,
-	.suspend	= wm8983_suspend,
-	.resume		= wm8983_resume,
+static struct spi_driver wm8983_spi_driver = {
+	.driver = {
+		.name = "wm8983",
+		.owner = THIS_MODULE,
+	},
+	.probe = wm8983_spi_probe,
+	.remove = __devexit_p(wm8983_spi_remove)
 };
-EXPORT_SYMBOL_GPL(soc_codec_dev_wm8983);
+#endif
 
-/*
- * These registers contain an "update" bit - bit 8. This means, for example,
- * that one can write new DAC digital volume for both channels, but only when
- * the update bit is set, will also the volume be updated - simultaneously for
- * both channels.
- */
-static const int update_reg[] = {
-	WM8983_LEFT_DAC_DIGITAL_VOLUME,
-	WM8983_RIGHT_DAC_DIGITAL_VOLUME,
-	WM8983_LEFT_ADC_DIGITAL_VOLUME,
-	WM8983_RIGHT_ADC_DIGITAL_VOLUME,
-	WM8983_LEFT_INP_PGA_CONTROL,
-	WM8983_RIGHT_INP_PGA_CONTROL,
-	WM8983_LOUT1_HP_CONTROL,
-	WM8983_ROUT1_HP_CONTROL,
-	WM8983_LOUT2_SPK_CONTROL,
-	WM8983_ROUT2_SPK_CONTROL,
-};
-
-static __devinit int wm8983_register(struct wm8983_priv *wm8983)
-{
-	int ret, i;
-	struct snd_soc_codec *codec = &wm8983->codec;
-
-	if (wm8983_codec) {
-		dev_err(codec->dev, "Another WM8983 is registered\n");
-		return -EINVAL;
-	}
-
-	/*
-	 * Set default system clock to PLL, it is more precise, this is also the
-	 * default hardware setting
-	 */
-	wm8983->sysclk = WM8983_PLL;
-
-	mutex_init(&codec->mutex);
-	INIT_LIST_HEAD(&codec->dapm_widgets);
-	INIT_LIST_HEAD(&codec->dapm_paths);
-
-	snd_soc_codec_set_drvdata(codec, wm8983);
-	codec->name = "WM8983";
-	codec->owner = THIS_MODULE;
-	codec->bias_level = SND_SOC_BIAS_OFF;
-	codec->set_bias_level = wm8983_set_bias_level;
-	codec->dai = &wm8983_dai;
-	codec->num_dai = 1;
-	codec->reg_cache_size = WM8983_CACHEREGNUM;
-	codec->reg_cache = &wm8983->reg_cache;
-
-	ret = snd_soc_codec_set_cache_io(codec, 7, 9, SND_SOC_I2C);
-	if (ret < 0) {
-		dev_err(codec->dev, "Failed to set cache I/O: %d\n", ret);
-		goto err;
-	}
-
-	memcpy(codec->reg_cache, wm8983_reg, sizeof(wm8983_reg));
-
-	/*
-	 * Set the update bit in all registers, that have one. This way all
-	 * writes to those registers will also cause the update bit to be
-	 * written.
-	 */
-	for (i = 0; i < ARRAY_SIZE(update_reg); i++)
-		((u16 *)codec->reg_cache)[update_reg[i]] |= 0x100;
-
-	/* Reset the codec */
-	ret = snd_soc_write(codec, WM8983_RESET, 0);
-	if (ret < 0) {
-		dev_err(codec->dev, "Failed to issue reset\n");
-		goto err;
-	}
-
-	wm8983_dai.dev = codec->dev;
-
-	wm8983_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
-
-	wm8983_codec = codec;
-
-	ret = snd_soc_register_codec(codec);
-	if (ret != 0) {
-		dev_err(codec->dev, "Failed to register codec: %d\n", ret);
-		goto err;
-	}
-
-	ret = snd_soc_register_dai(&wm8983_dai);
-	if (ret != 0) {
-		dev_err(codec->dev, "Failed to register DAI: %d\n", ret);
-		goto err_codec;
-	}
-
-	return 0;
-
-err_codec:
-	snd_soc_unregister_codec(codec);
-err:
-	kfree(wm8983);
-	return ret;
-}
-
-static __devexit void wm8983_unregister(struct wm8983_priv *wm8983)
-{
-	wm8983_set_bias_level(&wm8983->codec, SND_SOC_BIAS_OFF);
-	snd_soc_unregister_dai(&wm8983_dai);
-	snd_soc_unregister_codec(&wm8983->codec);
-	kfree(wm8983);
-	wm8983_codec = NULL;
-}
-
+#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
 static __devinit int wm8983_i2c_probe(struct i2c_client *i2c,
 				      const struct i2c_device_id *id)
 {
 	struct wm8983_priv *wm8983;
-	struct snd_soc_codec *codec;
 	int ret;
 
-	wm8983 = kzalloc(sizeof(struct wm8983_priv), GFP_KERNEL);
-	if (wm8983 == NULL) {
-		printk(KERN_ERR "wm8983_i2c_probe(): kzalloc() failed\n");
+	wm8983 = kzalloc(sizeof *wm8983, GFP_KERNEL);
+	if (!wm8983)
 		return -ENOMEM;
-	}
 
-	codec = &wm8983->codec;
-	codec->hw_write = (hw_write_t)i2c_master_send;
-
+	wm8983->control_type = SND_SOC_I2C;
 	i2c_set_clientdata(i2c, wm8983);
-	codec->control_data = i2c;
 
-	codec->dev = &i2c->dev;
-
-	ret = wm8983_register(wm8983);
-
+	ret = snd_soc_register_codec(&i2c->dev,
+				     &soc_codec_dev_wm8983, &wm8983_dai, 1);
+	if (ret < 0)
+		kfree(wm8983);
 	return ret;
 }
 
 static __devexit int wm8983_i2c_remove(struct i2c_client *client)
 {
-	struct wm8983_priv *wm8983 = i2c_get_clientdata(client);
-	wm8983_unregister(wm8983);
+	snd_soc_unregister_codec(&client->dev);
+	kfree(i2c_get_clientdata(client));
 	return 0;
 }
 
@@ -1132,30 +1159,48 @@ MODULE_DEVICE_TABLE(i2c, wm8983_i2c_id);
 
 static struct i2c_driver wm8983_i2c_driver = {
 	.driver = {
-		.name = "WM8983",
+		.name = "wm8983",
 		.owner = THIS_MODULE,
 	},
-	.probe =    wm8983_i2c_probe,
-	.remove =   __devexit_p(wm8983_i2c_remove),
-	.id_table = wm8983_i2c_id,
+	.probe = wm8983_i2c_probe,
+	.remove = __devexit_p(wm8983_i2c_remove),
+	.id_table = wm8983_i2c_id
 };
+#endif
 
 static int __init wm8983_modinit(void)
 {
-	int ret;
+	int ret = 0;
 
+#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
 	ret = i2c_add_driver(&wm8983_i2c_driver);
-
+	if (ret) {
+		printk(KERN_ERR "Failed to register wm8983 I2C driver: %d\n",
+		       ret);
+	}
+#endif
+#if defined(CONFIG_SPI_MASTER)
+	ret = spi_register_driver(&wm8983_spi_driver);
+	if (ret != 0) {
+		printk(KERN_ERR "Failed to register wm8983 SPI driver: %d\n",
+		       ret);
+	}
+#endif
 	return ret;
 }
 module_init(wm8983_modinit);
 
 static void __exit wm8983_exit(void)
 {
+#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
 	i2c_del_driver(&wm8983_i2c_driver);
+#endif
+#if defined(CONFIG_SPI_MASTER)
+	spi_unregister_driver(&wm8983_spi_driver);
+#endif
 }
 module_exit(wm8983_exit);
 
-MODULE_DESCRIPTION("ASoC WM8983 codec driver");
-MODULE_AUTHOR("Nils Faerber <nils.faerber@kernelconcepts.de>");
+MODULE_DESCRIPTION("ASoC WM8983 driver");
+MODULE_AUTHOR("Dimitris Papastamos <dp@opensource.wolfsonmicro.com>");
 MODULE_LICENSE("GPL");

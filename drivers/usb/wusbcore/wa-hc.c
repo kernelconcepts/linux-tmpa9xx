@@ -23,6 +23,7 @@
  * FIXME: docs
  */
 #include <linux/slab.h>
+#include <linux/module.h>
 #include "wusbhc.h"
 #include "wa-hc.h"
 
@@ -37,13 +38,16 @@ int wa_create(struct wahc *wa, struct usb_interface *iface)
 	int result;
 	struct device *dev = &iface->dev;
 
+	if (iface->cur_altsetting->desc.bNumEndpoints < 3)
+		return -ENODEV;
+
 	result = wa_rpipes_create(wa);
 	if (result < 0)
 		goto error_rpipes_create;
 	/* Fill up Data Transfer EP pointers */
 	wa->dti_epd = &iface->cur_altsetting->endpoint[1].desc;
 	wa->dto_epd = &iface->cur_altsetting->endpoint[2].desc;
-	wa->xfer_result_size = le16_to_cpu(wa->dti_epd->wMaxPacketSize);
+	wa->xfer_result_size = usb_endpoint_maxp(wa->dti_epd);
 	wa->xfer_result = kmalloc(wa->xfer_result_size, GFP_KERNEL);
 	if (wa->xfer_result == NULL)
 		goto error_xfer_result_alloc;

@@ -36,6 +36,11 @@ void hvr950q_cs5340_audio(void *priv, int enable)
 		au0828_clear(dev, REG_000, 0x10);
 }
 
+/*
+ * WARNING: There's a quirks table at sound/usb/quirks-table.h
+ * that should also be updated every time a new device with V4L2 support
+ * is added here.
+ */
 struct au0828_board au0828_boards[] = {
 	[AU0828_BOARD_UNKNOWN] = {
 		.name	= "Unknown board",
@@ -162,11 +167,14 @@ static void hauppauge_eeprom(struct au0828_dev *dev, u8 *eeprom_data)
 	switch (tv.model) {
 	case 72000: /* WinTV-HVR950q (Retail, IR, ATSC/QAM */
 	case 72001: /* WinTV-HVR950q (Retail, IR, ATSC/QAM and analog video */
+	case 72101: /* WinTV-HVR950q (Retail, IR, ATSC/QAM and analog video */
+	case 72201: /* WinTV-HVR950q (OEM, IR, ATSC/QAM and analog video */
 	case 72211: /* WinTV-HVR950q (OEM, IR, ATSC/QAM and analog video */
 	case 72221: /* WinTV-HVR950q (OEM, IR, ATSC/QAM and analog video */
 	case 72231: /* WinTV-HVR950q (OEM, IR, ATSC/QAM and analog video */
 	case 72241: /* WinTV-HVR950q (OEM, No IR, ATSC/QAM and analog video */
 	case 72251: /* WinTV-HVR950q (Retail, IR, ATSC/QAM and analog video */
+	case 72261: /* WinTV-HVR950q (OEM, IR, ATSC/QAM and analog video */
 	case 72301: /* WinTV-HVR850 (Retail, IR, ATSC and analog video */
 	case 72500: /* WinTV-HVR950q (OEM, No IR, ATSC/QAM */
 		break;
@@ -185,8 +193,7 @@ void au0828_card_setup(struct au0828_dev *dev)
 	static u8 eeprom[256];
 	struct tuner_setup tun_setup;
 	struct v4l2_subdev *sd;
-	unsigned int mode_mask = T_ANALOG_TV |
-				 T_DIGITAL_TV;
+	unsigned int mode_mask = T_ANALOG_TV;
 
 	dprintk(1, "%s()\n", __func__);
 
@@ -325,6 +332,10 @@ struct usb_device_id au0828_usb_id_table[] = {
 		.driver_info = AU0828_BOARD_HAUPPAUGE_HVR950Q_MXL },
 	{ USB_DEVICE(0x2040, 0x8200),
 		.driver_info = AU0828_BOARD_HAUPPAUGE_WOODBURY },
+	{ USB_DEVICE(0x2040, 0x7260),
+		.driver_info = AU0828_BOARD_HAUPPAUGE_HVR950Q },
+	{ USB_DEVICE(0x2040, 0x7213),
+		.driver_info = AU0828_BOARD_HAUPPAUGE_HVR950Q },
 	{ },
 };
 

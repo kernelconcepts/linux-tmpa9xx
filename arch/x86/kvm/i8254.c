@@ -38,6 +38,7 @@
 
 #include "irq.h"
 #include "i8254.h"
+#include "x86.h"
 
 #ifndef CONFIG_X86_64
 #define mod_64(x, y) ((x) - (y) * div64_u64(x, y))
@@ -245,7 +246,7 @@ static void kvm_pit_ack_irq(struct kvm_irq_ack_notifier *kian)
 		 * PIC is being reset.  Handle it gracefully here
 		 */
 		atomic_inc(&ps->pit_timer.pending);
-	else if (value > 0)
+	else if (value > 0 && ps->pit_timer.reinject)
 		/* in this case, we had multiple outstanding pit interrupts
 		 * that we needed to inject.  Reinject
 		 */
@@ -263,8 +264,10 @@ void __kvm_migrate_pit_timer(struct kvm_vcpu *vcpu)
 		return;
 
 	timer = &pit->pit_state.pit_timer.timer;
+	mutex_lock(&pit->pit_state.lock);
 	if (hrtimer_cancel(timer))
 		hrtimer_start_expires(timer, HRTIMER_MODE_ABS);
+	mutex_unlock(&pit->pit_state.lock);
 }
 
 static void destroy_pit_timer(struct kvm_pit *pit)
@@ -297,7 +300,9 @@ static void pit_do_work(struct work_struct *work)
 	 * last one has been acked.
 	 */
 	spin_lock(&ps->inject_lock);
-	if (ps->irq_ack) {
+	if (!ps->pit_timer.reinject)
+		inject = 1;
+	else if (ps->irq_ack) {
 		ps->irq_ack = 0;
 		inject = 1;
 	}
@@ -315,7 +320,7 @@ static void pit_do_work(struct work_struct *work)
 		 * LVT0 to NMI delivery. Other PIC interrupts are just sent to
 		 * VCPU0, and only if its LVT0 is in EXTINT mode.
 		 */
-		if (kvm->arch.vapics_in_nmi_mode > 0)
+		if (atomic_read(&kvm->arch.vapics_in_nmi_mode) > 0)
 			kvm_for_each_vcpu(i, vcpu, kvm)
 				kvm_apic_nmi_wd_deliver(vcpu);
 	}
@@ -326,10 +331,10 @@ static enum hrtimer_restart pit_timer_fn(struct hrtimer *data)
 	struct kvm_timer *ktimer = container_of(data, struct kvm_timer, timer);
 	struct kvm_pit *pt = ktimer->kvm->arch.vpit;
 
-	if (ktimer->reinject || !atomic_read(&ktimer->pending)) {
+	if (ktimer->reinject)
 		atomic_inc(&ktimer->pending);
-		queue_work(pt->wq, &pt->expired);
-	}
+
+	queue_work(pt->wq, &pt->expired);
 
 	if (ktimer->t_ops->is_periodic(ktimer)) {
 		hrtimer_add_expires_ns(&ktimer->timer, ktimer->period);
@@ -338,10 +343,14 @@ static enum hrtimer_restart pit_timer_fn(struct hrtimer *data)
 		return HRTIMER_NORESTART;
 }
 
-static void create_pit_timer(struct kvm_kpit_state *ps, u32 val, int is_period)
+static void create_pit_timer(struct kvm *kvm, u32 val, int is_period)
 {
+	struct kvm_kpit_state *ps = &kvm->arch.vpit->pit_state;
 	struct kvm_timer *pt = &ps->pit_timer;
 	s64 interval;
+
+	if (!irqchip_in_kernel(kvm))
+		return;
 
 	interval = muldiv64(val, NSEC_PER_SEC, KVM_PIT_FREQ);
 
@@ -359,6 +368,23 @@ static void create_pit_timer(struct kvm_kpit_state *ps, u32 val, int is_period)
 
 	atomic_set(&pt->pending, 0);
 	ps->irq_ack = 1;
+
+	/*
+	 * Do not allow the guest to program periodic timers with small
+	 * interval, since the hrtimers are not throttled by the host
+	 * scheduler.
+	 */
+	if (ps->is_periodic) {
+		s64 min_period = min_timer_period_us * 1000LL;
+
+		if (pt->period < min_period) {
+			pr_info_ratelimited(
+			    "kvm: requested %lld ns "
+			    "i8254 timer period limited to %lld ns\n",
+			    pt->period, min_period);
+			pt->period = min_period;
+		}
+	}
 
 	hrtimer_start(&pt->timer, ktime_add_ns(ktime_get(), interval),
 		      HRTIMER_MODE_ABS);
@@ -394,13 +420,13 @@ static void pit_load_count(struct kvm *kvm, int channel, u32 val)
         /* FIXME: enhance mode 4 precision */
 	case 4:
 		if (!(ps->flags & KVM_PIT_FLAGS_HPET_LEGACY)) {
-			create_pit_timer(ps, val, 0);
+			create_pit_timer(kvm, val, 0);
 		}
 		break;
 	case 2:
 	case 3:
 		if (!(ps->flags & KVM_PIT_FLAGS_HPET_LEGACY)){
-			create_pit_timer(ps, val, 1);
+			create_pit_timer(kvm, val, 1);
 		}
 		break;
 	default:
@@ -413,6 +439,7 @@ void kvm_pit_load_count(struct kvm *kvm, int channel, u32 val, int hpet_legacy_s
 	u8 saved_mode;
 	if (hpet_legacy_start) {
 		/* save existing mode for later reenablement */
+		WARN_ON(channel != 0);
 		saved_mode = kvm->arch.vpit->pit_state.channels[0].mode;
 		kvm->arch.vpit->pit_state.channels[0].mode = 0xff; /* disable timer */
 		pit_load_count(kvm, channel, val);
@@ -713,14 +740,16 @@ struct kvm_pit *kvm_create_pit(struct kvm *kvm, u32 flags)
 	kvm_register_irq_mask_notifier(kvm, 0, &pit->mask_notifier);
 
 	kvm_iodevice_init(&pit->dev, &pit_dev_ops);
-	ret = kvm_io_bus_register_dev(kvm, KVM_PIO_BUS, &pit->dev);
+	ret = kvm_io_bus_register_dev(kvm, KVM_PIO_BUS, KVM_PIT_BASE_ADDRESS,
+				      KVM_PIT_MEM_LENGTH, &pit->dev);
 	if (ret < 0)
 		goto fail;
 
 	if (flags & KVM_PIT_SPEAKER_DUMMY) {
 		kvm_iodevice_init(&pit->speaker_dev, &speaker_dev_ops);
 		ret = kvm_io_bus_register_dev(kvm, KVM_PIO_BUS,
-						&pit->speaker_dev);
+					      KVM_SPEAKER_BASE_ADDRESS, 4,
+					      &pit->speaker_dev);
 		if (ret < 0)
 			goto fail_unregister;
 	}

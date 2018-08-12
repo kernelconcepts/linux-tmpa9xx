@@ -16,6 +16,7 @@
 #include <linux/delay.h>
 #include <linux/pm.h>
 #include <linux/i2c.h>
+#include <linux/of_device.h>
 #include <linux/spi/spi.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
@@ -175,7 +176,7 @@ static int txsrc_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int wm8804_volatile(unsigned int reg)
+static int wm8804_volatile(struct snd_soc_codec *codec, unsigned int reg)
 {
 	switch (reg) {
 	case WM8804_RST_DEVID1:
@@ -680,20 +681,25 @@ static struct snd_soc_dai_ops wm8804_dai_ops = {
 #define WM8804_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE | \
 			SNDRV_PCM_FMTBIT_S24_LE)
 
+#define WM8804_RATES (SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 | \
+		      SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_64000 | \
+		      SNDRV_PCM_RATE_88200 | SNDRV_PCM_RATE_96000 | \
+		      SNDRV_PCM_RATE_176400 | SNDRV_PCM_RATE_192000)
+
 static struct snd_soc_dai_driver wm8804_dai = {
 	.name = "wm8804-spdif",
 	.playback = {
 		.stream_name = "Playback",
 		.channels_min = 2,
 		.channels_max = 2,
-		.rates = SNDRV_PCM_RATE_8000_192000,
+		.rates = WM8804_RATES,
 		.formats = WM8804_FORMATS,
 	},
 	.capture = {
 		.stream_name = "Capture",
 		.channels_min = 2,
 		.channels_max = 2,
-		.rates = SNDRV_PCM_RATE_8000_192000,
+		.rates = WM8804_RATES,
 		.formats = WM8804_FORMATS,
 	},
 	.ops = &wm8804_dai_ops,
@@ -711,6 +717,12 @@ static struct snd_soc_codec_driver soc_codec_dev_wm8804 = {
 	.reg_cache_default = wm8804_reg_defs,
 	.volatile_register = wm8804_volatile
 };
+
+static const struct of_device_id wm8804_of_match[] = {
+	{ .compatible = "wlf,wm8804", },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, wm8804_of_match);
 
 #if defined(CONFIG_SPI_MASTER)
 static int __devinit wm8804_spi_probe(struct spi_device *spi)
@@ -743,6 +755,7 @@ static struct spi_driver wm8804_spi_driver = {
 	.driver = {
 		.name = "wm8804",
 		.owner = THIS_MODULE,
+		.of_match_table = wm8804_of_match,
 	},
 	.probe = wm8804_spi_probe,
 	.remove = __devexit_p(wm8804_spi_remove)
@@ -787,6 +800,7 @@ static struct i2c_driver wm8804_i2c_driver = {
 	.driver = {
 		.name = "wm8804",
 		.owner = THIS_MODULE,
+		.of_match_table = wm8804_of_match,
 	},
 	.probe = wm8804_i2c_probe,
 	.remove = __devexit_p(wm8804_i2c_remove),

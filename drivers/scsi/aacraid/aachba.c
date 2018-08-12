@@ -5,7 +5,8 @@
  * based on the old aacraid driver that is..
  * Adaptec aacraid device driver for Linux.
  *
- * Copyright (c) 2000-2007 Adaptec, Inc. (aacraid@adaptec.com)
+ * Copyright (c) 2000-2010 Adaptec, Inc.
+ *               2010 PMC-Sierra, Inc. (aacraid@pmc-sierra.com)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,6 +34,7 @@
 #include <linux/blkdev.h>
 #include <asm/uaccess.h>
 #include <linux/highmem.h> /* For flush_kernel_dcache_page */
+#include <linux/module.h>
 
 #include <scsi/scsi.h>
 #include <scsi/scsi_cmnd.h>
@@ -466,6 +468,7 @@ static int aac_get_container_name(struct scsi_cmnd * scsicmd)
 
 	aac_fib_init(cmd_fibcontext);
 	dinfo = (struct aac_get_name *) fib_data(cmd_fibcontext);
+	scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
 
 	dinfo->command = cpu_to_le32(VM_ContainerConfig);
 	dinfo->type = cpu_to_le32(CT_READ_NAME);
@@ -483,10 +486,8 @@ static int aac_get_container_name(struct scsi_cmnd * scsicmd)
 	/*
 	 *	Check that the command queued to the controller
 	 */
-	if (status == -EINPROGRESS) {
-		scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
+	if (status == -EINPROGRESS)
 		return 0;
-	}
 
 	printk(KERN_WARNING "aac_get_container_name: aac_fib_send failed with status: %d.\n", status);
 	aac_fib_complete(cmd_fibcontext);
@@ -575,6 +576,7 @@ static void _aac_probe_container1(void * context, struct fib * fibptr)
 	dinfo->command = cpu_to_le32(VM_NameServe64);
 	dinfo->count = cpu_to_le32(scmd_id(scsicmd));
 	dinfo->type = cpu_to_le32(FT_FILESYS);
+	scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
 
 	status = aac_fib_send(ContainerCommand,
 			  fibptr,
@@ -586,9 +588,7 @@ static void _aac_probe_container1(void * context, struct fib * fibptr)
 	/*
 	 *	Check that the command queued to the controller
 	 */
-	if (status == -EINPROGRESS)
-		scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
-	else if (status < 0) {
+	if (status < 0 && status != -EINPROGRESS) {
 		/* Inherit results from VM_NameServe, if any */
 		dresp->status = cpu_to_le32(ST_OK);
 		_aac_probe_container2(context, fibptr);
@@ -611,6 +611,7 @@ static int _aac_probe_container(struct scsi_cmnd * scsicmd, int (*callback)(stru
 		dinfo->count = cpu_to_le32(scmd_id(scsicmd));
 		dinfo->type = cpu_to_le32(FT_FILESYS);
 		scsicmd->SCp.ptr = (char *)callback;
+		scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
 
 		status = aac_fib_send(ContainerCommand,
 			  fibptr,
@@ -622,10 +623,9 @@ static int _aac_probe_container(struct scsi_cmnd * scsicmd, int (*callback)(stru
 		/*
 		 *	Check that the command queued to the controller
 		 */
-		if (status == -EINPROGRESS) {
-			scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
+		if (status == -EINPROGRESS)
 			return 0;
-		}
+
 		if (status < 0) {
 			scsicmd->SCp.ptr = NULL;
 			aac_fib_complete(fibptr);
@@ -746,8 +746,8 @@ char * get_container_type(unsigned tindex)
  * Arguments: [1] pointer to void [1] int
  *
  * Purpose: Sets SCSI inquiry data strings for vendor, product
- * and revision level. Allows strings to be set in platform dependant
- * files instead of in OS dependant driver source.
+ * and revision level. Allows strings to be set in platform dependent
+ * files instead of in OS dependent driver source.
  */
 
 static void setinqstr(struct aac_dev *dev, void *data, int tindex)
@@ -758,8 +758,16 @@ static void setinqstr(struct aac_dev *dev, void *data, int tindex)
 	memset(str, ' ', sizeof(*str));
 
 	if (dev->supplement_adapter_info.AdapterTypeText[0]) {
-		char * cp = dev->supplement_adapter_info.AdapterTypeText;
 		int c;
+		char *cp;
+		char *cname = kmemdup(dev->supplement_adapter_info.AdapterTypeText,
+				sizeof(dev->supplement_adapter_info.AdapterTypeText),
+								GFP_ATOMIC);
+
+		if (!cname)
+			return;
+
+		cp = cname;
 		if ((cp[0] == 'A') && (cp[1] == 'O') && (cp[2] == 'C'))
 			inqstrcpy("SMC", str->vid);
 		else {
@@ -768,8 +776,7 @@ static void setinqstr(struct aac_dev *dev, void *data, int tindex)
 				++cp;
 			c = *cp;
 			*cp = '\0';
-			inqstrcpy (dev->supplement_adapter_info.AdapterTypeText,
-				   str->vid);
+			inqstrcpy(cname, str->vid);
 			*cp = c;
 			while (*cp && *cp != ' ')
 				++cp;
@@ -777,14 +784,11 @@ static void setinqstr(struct aac_dev *dev, void *data, int tindex)
 		while (*cp == ' ')
 			++cp;
 		/* last six chars reserved for vol type */
-		c = 0;
-		if (strlen(cp) > sizeof(str->pid)) {
-			c = cp[sizeof(str->pid)];
+		if (strlen(cp) > sizeof(str->pid))
 			cp[sizeof(str->pid)] = '\0';
-		}
 		inqstrcpy (cp, str->pid);
-		if (c)
-			cp[sizeof(str->pid)] = c;
+
+		kfree(cname);
 	} else {
 		struct aac_driver_ident *mp = aac_get_driver_ident(dev->cardtype);
 
@@ -859,6 +863,7 @@ static int aac_get_container_serial(struct scsi_cmnd * scsicmd)
 	dinfo->command = cpu_to_le32(VM_ContainerConfig);
 	dinfo->type = cpu_to_le32(CT_CID_TO_32BITS_UID);
 	dinfo->cid = cpu_to_le32(scmd_id(scsicmd));
+	scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
 
 	status = aac_fib_send(ContainerCommand,
 		  cmd_fibcontext,
@@ -871,10 +876,8 @@ static int aac_get_container_serial(struct scsi_cmnd * scsicmd)
 	/*
 	 *	Check that the command queued to the controller
 	 */
-	if (status == -EINPROGRESS) {
-		scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
+	if (status == -EINPROGRESS)
 		return 0;
-	}
 
 	printk(KERN_WARNING "aac_get_container_serial: aac_fib_send failed with status: %d.\n", status);
 	aac_fib_complete(cmd_fibcontext);
@@ -1486,7 +1489,9 @@ int aac_get_adapter_info(struct aac_dev* dev)
 			dev->a_ops.adapter_write = aac_write_block;
 		}
 		dev->scsi_host_ptr->max_sectors = AAC_MAX_32BIT_SGBCOUNT;
-		if(!(dev->adapter_info.options & AAC_OPT_NEW_COMM)) {
+		if (dev->adapter_info.options & AAC_OPT_NEW_COMM_TYPE1)
+			dev->adapter_info.options |= AAC_OPT_NEW_COMM;
+		if (!(dev->adapter_info.options & AAC_OPT_NEW_COMM)) {
 			/*
 			 * Worst case size that could cause sg overflow when
 			 * we break up SG elements that are larger than 64KB.
@@ -1685,16 +1690,14 @@ static int aac_read(struct scsi_cmnd * scsicmd)
 		printk(KERN_WARNING "aac_read: fib allocation failed\n");
 		return -1;
 	}
-
+	scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
 	status = aac_adapter_read(cmd_fibcontext, scsicmd, lba, count);
 
 	/*
 	 *	Check that the command queued to the controller
 	 */
-	if (status == -EINPROGRESS) {
-		scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
+	if (status == -EINPROGRESS)
 		return 0;
-	}
 
 	printk(KERN_WARNING "aac_read: aac_fib_send failed with status: %d.\n", status);
 	/*
@@ -1788,16 +1791,14 @@ static int aac_write(struct scsi_cmnd * scsicmd)
 		printk(KERN_WARNING "aac_write: fib allocation failed\n");
 		return -1;
 	}
-
+	scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
 	status = aac_adapter_write(cmd_fibcontext, scsicmd, lba, count, fua);
 
 	/*
 	 *	Check that the command queued to the controller
 	 */
-	if (status == -EINPROGRESS) {
-		scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
+	if (status == -EINPROGRESS)
 		return 0;
-	}
 
 	printk(KERN_WARNING "aac_write: aac_fib_send failed with status: %d\n", status);
 	/*
@@ -1947,6 +1948,7 @@ static int aac_synchronize(struct scsi_cmnd *scsicmd)
 	synchronizecmd->cid = cpu_to_le32(scmd_id(scsicmd));
 	synchronizecmd->count =
 	     cpu_to_le32(sizeof(((struct aac_synchronize_reply *)NULL)->data));
+	scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
 
 	/*
 	 *	Now send the Fib to the adapter
@@ -1962,10 +1964,8 @@ static int aac_synchronize(struct scsi_cmnd *scsicmd)
 	/*
 	 *	Check that the command queued to the controller
 	 */
-	if (status == -EINPROGRESS) {
-		scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
+	if (status == -EINPROGRESS)
 		return 0;
-	}
 
 	printk(KERN_WARNING
 		"aac_synchronize: aac_fib_send failed with status: %d.\n", status);
@@ -2027,6 +2027,7 @@ static int aac_start_stop(struct scsi_cmnd *scsicmd)
 	pmcmd->cid = cpu_to_le32(sdev_id(sdev));
 	pmcmd->parm = (scsicmd->cmnd[1] & 1) ?
 		cpu_to_le32(CT_PM_UNIT_IMMEDIATE) : 0;
+	scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
 
 	/*
 	 *	Now send the Fib to the adapter
@@ -2042,10 +2043,8 @@ static int aac_start_stop(struct scsi_cmnd *scsicmd)
 	/*
 	 *	Check that the command queued to the controller
 	 */
-	if (status == -EINPROGRESS) {
-		scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
+	if (status == -EINPROGRESS)
 		return 0;
-	}
 
 	aac_fib_complete(cmd_fibcontext);
 	aac_fib_free(cmd_fibcontext);
@@ -2794,15 +2793,14 @@ static int aac_send_srb_fib(struct scsi_cmnd* scsicmd)
 	if (!(cmd_fibcontext = aac_fib_alloc(dev))) {
 		return -1;
 	}
+	scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
 	status = aac_adapter_scsi(cmd_fibcontext, scsicmd);
 
 	/*
 	 *	Check that the command queued to the controller
 	 */
-	if (status == -EINPROGRESS) {
-		scsicmd->SCp.phase = AAC_OWNER_FIRMWARE;
+	if (status == -EINPROGRESS)
 		return 0;
-	}
 
 	printk(KERN_WARNING "aac_srb: aac_fib_send failed with status: %d\n", status);
 	aac_fib_complete(cmd_fibcontext);

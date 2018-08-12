@@ -127,6 +127,11 @@ static int stv0288_set_symbolrate(struct dvb_frontend *fe, u32 srate)
 	if ((srate < 1000000) || (srate > 45000000))
 		return -EINVAL;
 
+	stv0288_writeregI(state, 0x22, 0);
+	stv0288_writeregI(state, 0x23, 0);
+	stv0288_writeregI(state, 0x2b, 0xff);
+	stv0288_writeregI(state, 0x2c, 0xf7);
+
 	temp = (unsigned int)srate / 1000;
 
 		temp = temp * 32768;
@@ -253,7 +258,7 @@ static u8 stv0288_inittab[] = {
 	0x3d, 0x30,
 	0x40, 0x63,
 	0x41, 0x04,
-	0x42, 0x60,
+	0x42, 0x20,
 	0x43, 0x00,
 	0x44, 0x00,
 	0x45, 0x00,
@@ -367,8 +372,11 @@ static int stv0288_read_status(struct dvb_frontend *fe, fe_status_t *status)
 	dprintk("%s : FE_READ_STATUS : VSTATUS: 0x%02x\n", __func__, sync);
 
 	*status = 0;
-
-	if ((sync & 0x08) == 0x08) {
+	if (sync & 0x80)
+		*status |= FE_HAS_CARRIER | FE_HAS_SIGNAL;
+	if (sync & 0x10)
+		*status |= FE_HAS_VITERBI;
+	if (sync & 0x08) {
 		*status |= FE_HAS_LOCK;
 		dprintk("stv0288 has locked\n");
 	}
@@ -458,6 +466,7 @@ static int stv0288_set_frontend(struct dvb_frontend *fe,
 
 	char tm;
 	unsigned char tda[3];
+	u8 reg, time_out = 0;
 
 	dprintk("%s : FE_SET_FRONTEND\n", __func__);
 
@@ -485,22 +494,29 @@ static int stv0288_set_frontend(struct dvb_frontend *fe,
 	/* Carrier lock control register */
 	stv0288_writeregI(state, 0x15, 0xc5);
 
-	tda[0] = 0x2b; /* CFRM */
 	tda[2] = 0x0; /* CFRL */
-	for (tm = -6; tm < 7;) {
+	for (tm = -9; tm < 7;) {
 		/* Viterbi status */
-		if (stv0288_readreg(state, 0x24) & 0x8)
-			break;
-
-		tda[2] += 40;
-		if (tda[2] < 40)
+		reg = stv0288_readreg(state, 0x24);
+		if (reg & 0x8)
+				break;
+		if (reg & 0x80) {
+			time_out++;
+			if (time_out > 10)
+				break;
+			tda[2] += 40;
+			if (tda[2] < 40)
+				tm++;
+		} else {
 			tm++;
+			tda[2] = 0;
+			time_out = 0;
+		}
 		tda[1] = (unsigned char)tm;
 		stv0288_writeregI(state, 0x2b, tda[1]);
 		stv0288_writeregI(state, 0x2c, tda[2]);
 		udelay(30);
 	}
-
 	state->tuner_frequency = c->frequency;
 	state->fec_inner = FEC_AUTO;
 	state->symbol_rate = c->symbol_rate;

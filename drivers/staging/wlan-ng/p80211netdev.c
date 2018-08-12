@@ -354,6 +354,8 @@ static int p80211knetdev_hard_start_xmit(struct sk_buff *skb,
 	union p80211_hdr p80211_hdr;
 	struct p80211_metawep p80211_wep;
 
+	p80211_wep.data = NULL;
+
 	if (skb == NULL)
 		return NETDEV_TX_OK;
 
@@ -715,7 +717,7 @@ static const struct net_device_ops p80211_netdev_ops = {
 	.ndo_stop = p80211knetdev_stop,
 	.ndo_get_stats = p80211knetdev_get_stats,
 	.ndo_start_xmit = p80211knetdev_hard_start_xmit,
-	.ndo_set_multicast_list = p80211knetdev_set_multicast_list,
+	.ndo_set_rx_mode = p80211knetdev_set_multicast_list,
 	.ndo_do_ioctl = p80211knetdev_do_ioctl,
 	.ndo_set_mac_address = p80211knetdev_set_mac_address,
 	.ndo_tx_timeout = p80211knetdev_tx_timeout,

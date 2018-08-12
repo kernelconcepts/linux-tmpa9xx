@@ -90,7 +90,7 @@ irqfd_shutdown(struct work_struct *work)
 	 * We know no new events will be scheduled at this point, so block
 	 * until all previously outstanding events have completed
 	 */
-	flush_work(&irqfd->inject);
+	flush_work_sync(&irqfd->inject);
 
 	/*
 	 * It is now safe to release the object's resources
@@ -313,8 +313,9 @@ kvm_irqfd_deassign(struct kvm *kvm, int fd, int gsi)
 		if (irqfd->eventfd == eventfd && irqfd->gsi == gsi) {
 			/*
 			 * This rcu_assign_pointer is needed for when
-			 * another thread calls kvm_irqfd_update before
-			 * we flush workqueue below.
+			 * another thread calls kvm_irq_routing_update before
+			 * we flush workqueue below (we synchronize with
+			 * kvm_irq_routing_update using irqfds.lock).
 			 * It is paired with synchronize_rcu done by caller
 			 * of that function.
 			 */
@@ -577,7 +578,7 @@ kvm_assign_ioeventfd(struct kvm *kvm, struct kvm_ioeventfd *args)
 
 	mutex_lock(&kvm->slots_lock);
 
-	/* Verify that there isnt a match already */
+	/* Verify that there isn't a match already */
 	if (ioeventfd_check_collision(kvm, p)) {
 		ret = -EEXIST;
 		goto unlock_fail;
@@ -585,7 +586,8 @@ kvm_assign_ioeventfd(struct kvm *kvm, struct kvm_ioeventfd *args)
 
 	kvm_iodevice_init(&p->dev, &ioeventfd_ops);
 
-	ret = kvm_io_bus_register_dev(kvm, bus_idx, &p->dev);
+	ret = kvm_io_bus_register_dev(kvm, bus_idx, p->addr, p->length,
+				      &p->dev);
 	if (ret < 0)
 		goto unlock_fail;
 

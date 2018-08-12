@@ -18,6 +18,7 @@
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/percpu.h>
+#include <linux/export.h>
 #include <linux/sysdev.h>
 #include <linux/types.h>
 #include <linux/init.h>
@@ -187,8 +188,6 @@ static int therm_throt_process(bool new_event, int event, int level)
 				this_cpu,
 				level == CORE_LEVEL ? "Core" : "Package",
 				state->count);
-
-		add_taint(TAINT_MACHINE_CHECK);
 		return 1;
 	}
 	if (old_event) {
@@ -324,17 +323,6 @@ device_initcall(thermal_throttle_init_device);
 
 #endif /* CONFIG_SYSFS */
 
-/*
- * Set up the most two significant bit to notify mce log that this thermal
- * event type.
- * This is a temp solution. May be changed in the future with mce log
- * infrasture.
- */
-#define CORE_THROTTLED		(0)
-#define CORE_POWER_LIMIT	((__u64)1 << 62)
-#define PACKAGE_THROTTLED	((__u64)2 << 62)
-#define PACKAGE_POWER_LIMIT	((__u64)3 << 62)
-
 static void notify_thresholds(__u64 msr_val)
 {
 	/* check whether the interrupt handler is defined;
@@ -355,7 +343,6 @@ static void notify_thresholds(__u64 msr_val)
 static void intel_thermal_interrupt(void)
 {
 	__u64 msr_val;
-	struct cpuinfo_x86 *c = &cpu_data(smp_processor_id());
 
 	rdmsrl(MSR_IA32_THERM_STATUS, msr_val);
 
@@ -365,27 +352,23 @@ static void intel_thermal_interrupt(void)
 	if (therm_throt_process(msr_val & THERM_STATUS_PROCHOT,
 				THERMAL_THROTTLING_EVENT,
 				CORE_LEVEL) != 0)
-		mce_log_therm_throt_event(CORE_THROTTLED | msr_val);
+		mce_log_therm_throt_event(msr_val);
 
-	if (cpu_has(c, X86_FEATURE_PLN))
-		if (therm_throt_process(msr_val & THERM_STATUS_POWER_LIMIT,
+	if (this_cpu_has(X86_FEATURE_PLN))
+		therm_throt_process(msr_val & THERM_STATUS_POWER_LIMIT,
 					POWER_LIMIT_EVENT,
-					CORE_LEVEL) != 0)
-			mce_log_therm_throt_event(CORE_POWER_LIMIT | msr_val);
+					CORE_LEVEL);
 
-	if (cpu_has(c, X86_FEATURE_PTS)) {
+	if (this_cpu_has(X86_FEATURE_PTS)) {
 		rdmsrl(MSR_IA32_PACKAGE_THERM_STATUS, msr_val);
-		if (therm_throt_process(msr_val & PACKAGE_THERM_STATUS_PROCHOT,
+		therm_throt_process(msr_val & PACKAGE_THERM_STATUS_PROCHOT,
 					THERMAL_THROTTLING_EVENT,
-					PACKAGE_LEVEL) != 0)
-			mce_log_therm_throt_event(PACKAGE_THROTTLED | msr_val);
-		if (cpu_has(c, X86_FEATURE_PLN))
-			if (therm_throt_process(msr_val &
+					PACKAGE_LEVEL);
+		if (this_cpu_has(X86_FEATURE_PLN))
+			therm_throt_process(msr_val &
 					PACKAGE_THERM_STATUS_POWER_LIMIT,
 					POWER_LIMIT_EVENT,
-					PACKAGE_LEVEL) != 0)
-				mce_log_therm_throt_event(PACKAGE_POWER_LIMIT
-							  | msr_val);
+					PACKAGE_LEVEL);
 	}
 }
 
@@ -393,7 +376,6 @@ static void unexpected_thermal_interrupt(void)
 {
 	printk(KERN_ERR "CPU%d: Unexpected LVT thermal interrupt!\n",
 			smp_processor_id());
-	add_taint(TAINT_MACHINE_CHECK);
 }
 
 static void (*smp_thermal_vector)(void) = unexpected_thermal_interrupt;
@@ -446,18 +428,20 @@ void intel_init_thermal(struct cpuinfo_x86 *c)
 	 */
 	rdmsr(MSR_IA32_MISC_ENABLE, l, h);
 
+	h = lvtthmr_init;
 	/*
 	 * The initial value of thermal LVT entries on all APs always reads
 	 * 0x10000 because APs are woken up by BSP issuing INIT-SIPI-SIPI
 	 * sequence to them and LVT registers are reset to 0s except for
 	 * the mask bits which are set to 1s when APs receive INIT IPI.
-	 * Always restore the value that BIOS has programmed on AP based on
-	 * BSP's info we saved since BIOS is always setting the same value
-	 * for all threads/cores
+	 * If BIOS takes over the thermal interrupt and sets its interrupt
+	 * delivery mode to SMI (not fixed), it restores the value that the
+	 * BIOS has programmed on AP based on BSP's info we saved since BIOS
+	 * is always setting the same value for all threads/cores.
 	 */
-	apic_write(APIC_LVTTHMR, lvtthmr_init);
+	if ((h & APIC_DM_FIXED_MASK) != APIC_DM_FIXED)
+		apic_write(APIC_LVTTHMR, lvtthmr_init);
 
-	h = lvtthmr_init;
 
 	if ((l & MSR_IA32_MISC_ENABLE_TM1) && (h & APIC_DM_SMI)) {
 		printk(KERN_DEBUG

@@ -40,9 +40,9 @@ static DEFINE_RWLOCK(cls_mod_lock);
 
 /* Find classifier type by string name */
 
-static struct tcf_proto_ops *tcf_proto_lookup_ops(struct nlattr *kind)
+static const struct tcf_proto_ops *tcf_proto_lookup_ops(struct nlattr *kind)
 {
-	struct tcf_proto_ops *t = NULL;
+	const struct tcf_proto_ops *t = NULL;
 
 	if (kind) {
 		read_lock(&cls_mod_lock);
@@ -85,7 +85,7 @@ int unregister_tcf_proto_ops(struct tcf_proto_ops *ops)
 	int rc = -ENOENT;
 
 	write_lock(&cls_mod_lock);
-	for (tp = &tcf_proto_base; (t=*tp) != NULL; tp = &t->next)
+	for (tp = &tcf_proto_base; (t = *tp) != NULL; tp = &t->next)
 		if (t == ops)
 			break;
 
@@ -111,7 +111,7 @@ static inline u32 tcf_auto_prio(struct tcf_proto *tp)
 	u32 first = TC_H_MAKE(0xC0000000U, 0U);
 
 	if (tp)
-		first = tp->prio-1;
+		first = tp->prio - 1;
 
 	return first;
 }
@@ -132,14 +132,16 @@ static int tc_ctl_tfilter(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 	struct Qdisc  *q;
 	struct tcf_proto **back, **chain;
 	struct tcf_proto *tp;
-	struct tcf_proto_ops *tp_ops;
+	const struct tcf_proto_ops *tp_ops;
 	const struct Qdisc_class_ops *cops;
 	unsigned long cl;
 	unsigned long fh;
 	int err;
-	int tp_created = 0;
+	int tp_created;
 
 replay:
+	tp_created = 0;
+
 	t = NLMSG_DATA(n);
 	protocol = TC_H_MIN(t->tcm_info);
 	prio = TC_H_MAJ(t->tcm_info);
@@ -149,7 +151,8 @@ replay:
 
 	if (prio == 0) {
 		/* If no priority is given, user wants we allocated it. */
-		if (n->nlmsg_type != RTM_NEWTFILTER || !(n->nlmsg_flags&NLM_F_CREATE))
+		if (n->nlmsg_type != RTM_NEWTFILTER ||
+		    !(n->nlmsg_flags & NLM_F_CREATE))
 			return -ENOENT;
 		prio = TC_H_MAKE(0x80000000U, 0U);
 	}
@@ -176,7 +179,8 @@ replay:
 	}
 
 	/* Is it classful? */
-	if ((cops = q->ops->cl_ops) == NULL)
+	cops = q->ops->cl_ops;
+	if (!cops)
 		return -EINVAL;
 
 	if (cops->tcf_chain == NULL)
@@ -196,10 +200,11 @@ replay:
 		goto errout;
 
 	/* Check the chain for existence of proto-tcf with this priority */
-	for (back = chain; (tp=*back) != NULL; back = &tp->next) {
+	for (back = chain; (tp = *back) != NULL; back = &tp->next) {
 		if (tp->prio >= prio) {
 			if (tp->prio == prio) {
-				if (!nprio || (tp->protocol != protocol && protocol))
+				if (!nprio ||
+				    (tp->protocol != protocol && protocol))
 					goto errout;
 			} else
 				tp = NULL;
@@ -216,7 +221,8 @@ replay:
 			goto errout;
 
 		err = -ENOENT;
-		if (n->nlmsg_type != RTM_NEWTFILTER || !(n->nlmsg_flags&NLM_F_CREATE))
+		if (n->nlmsg_type != RTM_NEWTFILTER ||
+		    !(n->nlmsg_flags & NLM_F_CREATE))
 			goto errout;
 
 
@@ -304,7 +310,8 @@ replay:
 		case RTM_DELTFILTER:
 			err = tp->ops->delete(tp, fh);
 			if (err == 0)
-				tfilter_notify(net, skb, n, tp, fh, RTM_DELTFILTER);
+				tfilter_notify(net, skb, n, tp,
+					       t->tcm_handle, RTM_DELTFILTER);
 			goto errout;
 		case RTM_GETTFILTER:
 			err = tfilter_notify(net, skb, n, tp, fh, RTM_NEWTFILTER);
@@ -420,7 +427,8 @@ static int tc_dump_tfilter(struct sk_buff *skb, struct netlink_callback *cb)
 
 	if (cb->nlh->nlmsg_len < NLMSG_LENGTH(sizeof(*tcm)))
 		return skb->len;
-	if ((dev = __dev_get_by_index(net, tcm->tcm_ifindex)) == NULL)
+	dev = __dev_get_by_index(net, tcm->tcm_ifindex);
+	if (!dev)
 		return skb->len;
 
 	if (!tcm->tcm_parent)
@@ -429,7 +437,8 @@ static int tc_dump_tfilter(struct sk_buff *skb, struct netlink_callback *cb)
 		q = qdisc_lookup(dev, TC_H_MAJ(tcm->tcm_parent));
 	if (!q)
 		goto out;
-	if ((cops = q->ops->cl_ops) == NULL)
+	cops = q->ops->cl_ops;
+	if (!cops)
 		goto errout;
 	if (cops->tcf_chain == NULL)
 		goto errout;
@@ -444,8 +453,9 @@ static int tc_dump_tfilter(struct sk_buff *skb, struct netlink_callback *cb)
 
 	s_t = cb->args[0];
 
-	for (tp=*chain, t=0; tp; tp = tp->next, t++) {
-		if (t < s_t) continue;
+	for (tp = *chain, t = 0; tp; tp = tp->next, t++) {
+		if (t < s_t)
+			continue;
 		if (TC_H_MAJ(tcm->tcm_info) &&
 		    TC_H_MAJ(tcm->tcm_info) != tp->prio)
 			continue;
@@ -468,10 +478,10 @@ static int tc_dump_tfilter(struct sk_buff *skb, struct netlink_callback *cb)
 		arg.skb = skb;
 		arg.cb = cb;
 		arg.w.stop = 0;
-		arg.w.skip = cb->args[1]-1;
+		arg.w.skip = cb->args[1] - 1;
 		arg.w.count = 0;
 		tp->ops->walk(tp, &arg.w);
-		cb->args[1] = arg.w.count+1;
+		cb->args[1] = arg.w.count + 1;
 		if (arg.w.stop)
 			break;
 	}
@@ -603,10 +613,10 @@ EXPORT_SYMBOL(tcf_exts_dump_stats);
 
 static int __init tc_filter_init(void)
 {
-	rtnl_register(PF_UNSPEC, RTM_NEWTFILTER, tc_ctl_tfilter, NULL);
-	rtnl_register(PF_UNSPEC, RTM_DELTFILTER, tc_ctl_tfilter, NULL);
+	rtnl_register(PF_UNSPEC, RTM_NEWTFILTER, tc_ctl_tfilter, NULL, NULL);
+	rtnl_register(PF_UNSPEC, RTM_DELTFILTER, tc_ctl_tfilter, NULL, NULL);
 	rtnl_register(PF_UNSPEC, RTM_GETTFILTER, tc_ctl_tfilter,
-						 tc_dump_tfilter);
+		      tc_dump_tfilter, NULL);
 
 	return 0;
 }

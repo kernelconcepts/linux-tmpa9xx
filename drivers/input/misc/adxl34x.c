@@ -16,6 +16,7 @@
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/input/adxl34x.h>
+#include <linux/module.h>
 
 #include "adxl34x.h"
 
@@ -716,7 +717,7 @@ struct adxl34x *adxl34x_probe(struct device *dev, int irq,
 	pdata = dev->platform_data;
 	if (!pdata) {
 		dev_dbg(dev,
-			"No platfrom data: Using default initialization\n");
+			"No platform data: Using default initialization\n");
 		pdata = &adxl34x_default_init;
 	}
 
@@ -796,7 +797,7 @@ struct adxl34x *adxl34x_probe(struct device *dev, int irq,
 
 	if (pdata->watermark) {
 		ac->int_mask |= WATERMARK;
-		if (!FIFO_MODE(pdata->fifo_mode))
+		if (FIFO_MODE(pdata->fifo_mode) == FIFO_BYPASS)
 			ac->pdata.fifo_mode |= FIFO_STREAM;
 	} else {
 		ac->int_mask |= DATA_READY;

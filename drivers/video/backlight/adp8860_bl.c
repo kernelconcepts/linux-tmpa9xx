@@ -7,7 +7,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/version.h>
 #include <linux/init.h>
 #include <linux/errno.h>
 #include <linux/pm.h>
@@ -709,6 +708,7 @@ static int __devinit adp8860_probe(struct i2c_client *client,
 	i2c_set_clientdata(client, data);
 
 	memset(&props, 0, sizeof(props));
+	props.type = BACKLIGHT_RAW;
 	props.max_brightness = ADP8860_MAX_BRIGHTNESS;
 
 	mutex_init(&data->lock);
@@ -721,8 +721,7 @@ static int __devinit adp8860_probe(struct i2c_client *client,
 		goto out2;
 	}
 
-	bl->props.max_brightness =
-		bl->props.brightness = ADP8860_MAX_BRIGHTNESS;
+	bl->props.brightness = ADP8860_MAX_BRIGHTNESS;
 
 	data->bl = bl;
 
@@ -792,7 +791,7 @@ static int adp8860_i2c_suspend(struct i2c_client *client, pm_message_t message)
 
 static int adp8860_i2c_resume(struct i2c_client *client)
 {
-	adp8860_set_bits(client, ADP8860_MDCR, NSTBY);
+	adp8860_set_bits(client, ADP8860_MDCR, NSTBY | BLEN);
 
 	return 0;
 }

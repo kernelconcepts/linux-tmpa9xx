@@ -20,6 +20,7 @@
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/memstick.h>
+#include <linux/module.h>
 
 #define DRIVER_NAME "mspro_block"
 
@@ -759,7 +760,7 @@ static int mspro_block_complete_req(struct memstick_dev *card, int error)
 
 		if (error || (card->current_mrq.tpc == MSPRO_CMD_STOP)) {
 			if (msb->data_dir == READ) {
-				for (cnt = 0; cnt < msb->current_seg; cnt++)
+				for (cnt = 0; cnt < msb->current_seg; cnt++) {
 					t_len += msb->req_sg[cnt].length
 						 / msb->page_size;
 
@@ -767,6 +768,7 @@ static int mspro_block_complete_req(struct memstick_dev *card, int error)
 						t_len += msb->current_page - 1;
 
 					t_len *= msb->page_size;
+				}
 			}
 		} else
 			t_len = blk_rq_bytes(msb->block_req);
@@ -973,7 +975,7 @@ try_again:
 }
 
 /* Memory allocated for attributes by this function should be freed by
- * mspro_block_data_clear, no matter if the initialization process succeded
+ * mspro_block_data_clear, no matter if the initialization process succeeded
  * or failed.
  */
 static int mspro_block_read_attributes(struct memstick_dev *card)

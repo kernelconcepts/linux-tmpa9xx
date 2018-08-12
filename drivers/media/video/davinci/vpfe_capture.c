@@ -1691,7 +1691,7 @@ static int vpfe_s_crop(struct file *file, void *priv,
 		goto unlock_out;
 	}
 
-	/* adjust the width to 16 pixel boundry */
+	/* adjust the width to 16 pixel boundary */
 	crop->c.width = ((crop->c.width + 15) & ~0xf);
 
 	/* make sure parameters are valid */
@@ -1719,7 +1719,7 @@ unlock_out:
 
 
 static long vpfe_param_handler(struct file *file, void *priv,
-		int cmd, void *param)
+		bool valid_prio, int cmd, void *param)
 {
 	struct vpfe_device *vpfe_dev = video_drvdata(file);
 	int ret = 0;
@@ -2002,6 +2002,7 @@ static __init int vpfe_probe(struct platform_device *pdev)
 			v4l2_info(&vpfe_dev->v4l2_dev,
 				  "v4l2 sub device %s register fails\n",
 				  sdinfo->name);
+			ret = -ENXIO;
 			goto probe_sd_out;
 		}
 	}

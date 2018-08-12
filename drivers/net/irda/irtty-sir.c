@@ -167,7 +167,7 @@ static int irtty_set_dtr_rts(struct sir_dev *dev, int dtr, int rts)
 	 * let's be careful... Jean II
 	 */
 	IRDA_ASSERT(priv->tty->ops->tiocmset != NULL, return -1;);
-	priv->tty->ops->tiocmset(priv->tty, NULL, set, clear);
+	priv->tty->ops->tiocmset(priv->tty, set, clear);
 
 	return 0;
 }
@@ -429,16 +429,6 @@ static int irtty_open(struct tty_struct *tty)
 	int ret = 0;
 
 	/* Module stuff handled via irda_ldisc.owner - Jean II */
-
-	/* First make sure we're not already connected. */
-	if (tty->disc_data != NULL) {
-		priv = tty->disc_data;
-		if (priv && priv->magic == IRTTY_MAGIC) {
-			ret = -EEXIST;
-			goto out;
-		}
-		tty->disc_data = NULL;		/* ### */
-	}
 
 	/* stop the underlying  driver */
 	irtty_stop_receiver(tty, TRUE);

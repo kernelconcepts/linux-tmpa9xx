@@ -18,7 +18,6 @@
 #include <linux/percpu.h>
 #include <linux/profile.h>
 #include <linux/sched.h>
-#include <linux/tick.h>
 
 #include <asm/irq_regs.h>
 
@@ -95,7 +94,7 @@ void tick_handle_periodic(struct clock_event_device *dev)
 	 */
 	next = ktime_add(dev->next_event, tick_period);
 	for (;;) {
-		if (!clockevents_program_event(dev, next, ktime_get()))
+		if (!clockevents_program_event(dev, next, false))
 			return;
 		/*
 		 * Have to be careful here. If we're in oneshot mode,
@@ -138,7 +137,7 @@ void tick_setup_periodic(struct clock_event_device *dev, int broadcast)
 		clockevents_set_mode(dev, CLOCK_EVT_MODE_ONESHOT);
 
 		for (;;) {
-			if (!clockevents_program_event(dev, next, ktime_get()))
+			if (!clockevents_program_event(dev, next, false))
 				return;
 			next = ktime_add(next, tick_period);
 		}
@@ -324,6 +323,7 @@ static void tick_shutdown(unsigned int *cpup)
 		 */
 		dev->mode = CLOCK_EVT_MODE_UNUSED;
 		clockevents_exchange_device(dev, NULL);
+		dev->event_handler = clockevents_handle_noop;
 		td->evtdev = NULL;
 	}
 	raw_spin_unlock_irqrestore(&tick_device_lock, flags);

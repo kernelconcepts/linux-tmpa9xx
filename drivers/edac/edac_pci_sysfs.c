@@ -257,7 +257,7 @@ static ssize_t edac_pci_dev_store(struct kobject *kobj,
 	struct edac_pci_dev_attribute *edac_pci_dev;
 	edac_pci_dev = (struct edac_pci_dev_attribute *)attr;
 
-	if (edac_pci_dev->show)
+	if (edac_pci_dev->store)
 		return edac_pci_dev->store(edac_pci_dev->value, buffer, count);
 	return -EIO;
 }
@@ -352,7 +352,7 @@ static int edac_pci_main_kobj_setup(void)
 		return 0;
 
 	/* First time, so create the main kobject and its
-	 * controls and atributes
+	 * controls and attributes
 	 */
 	edac_class = edac_get_sysfs_class();
 	if (edac_class == NULL) {
@@ -551,7 +551,7 @@ static void edac_pci_dev_parity_clear(struct pci_dev *dev)
 /*
  *  PCI Parity polling
  *
- *	Fucntion to retrieve the current parity status
+ *	Function to retrieve the current parity status
  *	and decode it
  *
  */

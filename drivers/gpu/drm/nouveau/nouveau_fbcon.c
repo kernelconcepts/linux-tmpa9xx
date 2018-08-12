@@ -181,13 +181,13 @@ nouveau_fbcon_sync(struct fb_info *info)
 		OUT_RING  (chan, 0);
 	}
 
-	nouveau_bo_wr32(chan->notifier_bo, chan->m2mf_ntfy + 3, 0xffffffff);
+	nouveau_bo_wr32(chan->notifier_bo, chan->m2mf_ntfy/4 + 3, 0xffffffff);
 	FIRE_RING(chan);
 	mutex_unlock(&chan->mutex);
 
 	ret = -EBUSY;
 	for (i = 0; i < 100000; i++) {
-		if (!nouveau_bo_rd32(chan->notifier_bo, chan->m2mf_ntfy + 3)) {
+		if (!nouveau_bo_rd32(chan->notifier_bo, chan->m2mf_ntfy/4 + 3)) {
 			ret = 0;
 			break;
 		}
@@ -279,6 +279,7 @@ nouveau_fbcon_create(struct nouveau_fbdev *nfbdev,
 	struct fb_info *info;
 	struct drm_framebuffer *fb;
 	struct nouveau_framebuffer *nouveau_fb;
+	struct nouveau_channel *chan;
 	struct nouveau_bo *nvbo;
 	struct drm_mode_fb_cmd mode_cmd;
 	struct pci_dev *pdev = dev->pdev;
@@ -296,8 +297,8 @@ nouveau_fbcon_create(struct nouveau_fbdev *nfbdev,
 	size = mode_cmd.pitch * mode_cmd.height;
 	size = roundup(size, PAGE_SIZE);
 
-	ret = nouveau_gem_new(dev, dev_priv->channel, size, 0, TTM_PL_FLAG_VRAM,
-			      0, 0x0000, false, true, &nvbo);
+	ret = nouveau_gem_new(dev, size, 0, NOUVEAU_GEM_DOMAIN_VRAM,
+			      0, 0x0000, &nvbo);
 	if (ret) {
 		NV_ERROR(dev, "failed to allocate framebuffer\n");
 		goto out;
@@ -316,6 +317,15 @@ nouveau_fbcon_create(struct nouveau_fbdev *nfbdev,
 		nouveau_bo_unpin(nvbo);
 		nouveau_bo_ref(NULL, &nvbo);
 		goto out;
+	}
+
+	chan = nouveau_nofbaccel ? NULL : dev_priv->channel;
+	if (chan && dev_priv->card_type >= NV_50) {
+		ret = nouveau_bo_vma_add(nvbo, chan->vm, &nfbdev->nouveau_fb.vma);
+		if (ret) {
+			NV_ERROR(dev, "failed to map fb into chan: %d\n", ret);
+			chan = NULL;
+		}
 	}
 
 	mutex_lock(&dev->struct_mutex);
@@ -448,6 +458,7 @@ nouveau_fbcon_destroy(struct drm_device *dev, struct nouveau_fbdev *nfbdev)
 
 	if (nouveau_fb->nvbo) {
 		nouveau_bo_unmap(nouveau_fb->nvbo);
+		nouveau_bo_vma_del(nouveau_fb->nvbo, &nouveau_fb->vma);
 		drm_gem_object_unreference_unlocked(nouveau_fb->nvbo->gem);
 		nouveau_fb->nvbo = NULL;
 	}
@@ -476,6 +487,7 @@ int nouveau_fbcon_init(struct drm_device *dev)
 {
 	struct drm_nouveau_private *dev_priv = dev->dev_private;
 	struct nouveau_fbdev *nfbdev;
+	int preferred_bpp;
 	int ret;
 
 	nfbdev = kzalloc(sizeof(struct nouveau_fbdev), GFP_KERNEL);
@@ -487,14 +499,22 @@ int nouveau_fbcon_init(struct drm_device *dev)
 	nfbdev->helper.funcs = &nouveau_fbcon_helper_funcs;
 
 	ret = drm_fb_helper_init(dev, &nfbdev->helper,
-				 nv_two_heads(dev) ? 2 : 1, 4);
+				 dev->mode_config.num_crtc, 4);
 	if (ret) {
 		kfree(nfbdev);
 		return ret;
 	}
 
 	drm_fb_helper_single_add_all_connectors(&nfbdev->helper);
-	drm_fb_helper_initial_config(&nfbdev->helper, 32);
+
+	if (dev_priv->vram_size <= 32 * 1024 * 1024)
+		preferred_bpp = 8;
+	else if (dev_priv->vram_size <= 64 * 1024 * 1024)
+		preferred_bpp = 16;
+	else
+		preferred_bpp = 32;
+
+	drm_fb_helper_initial_config(&nfbdev->helper, preferred_bpp);
 	return 0;
 }
 

@@ -219,17 +219,20 @@ out_err2:
 
 /* ---------- Device registration and unregistration ---------- */
 
-static inline void sas_unregister_common_dev(struct domain_device *dev)
+static void sas_unregister_common_dev(struct asd_sas_port *port, struct domain_device *dev)
 {
 	sas_notify_lldd_dev_gone(dev);
 	if (!dev->parent)
 		dev->port->port_dev = NULL;
 	else
 		list_del_init(&dev->siblings);
+
+	spin_lock_irq(&port->dev_list_lock);
 	list_del_init(&dev->dev_list_node);
+	spin_unlock_irq(&port->dev_list_lock);
 }
 
-void sas_unregister_dev(struct domain_device *dev)
+void sas_unregister_dev(struct asd_sas_port *port, struct domain_device *dev)
 {
 	if (dev->rphy) {
 		sas_remove_children(&dev->rphy->dev);
@@ -241,15 +244,15 @@ void sas_unregister_dev(struct domain_device *dev)
 		kfree(dev->ex_dev.ex_phy);
 		dev->ex_dev.ex_phy = NULL;
 	}
-	sas_unregister_common_dev(dev);
+	sas_unregister_common_dev(port, dev);
 }
 
 void sas_unregister_domain_devices(struct asd_sas_port *port)
 {
 	struct domain_device *dev, *n;
 
-	list_for_each_entry_safe_reverse(dev,n,&port->dev_list,dev_list_node)
-		sas_unregister_dev(dev);
+	list_for_each_entry_safe_reverse(dev, n, &port->dev_list, dev_list_node)
+		sas_unregister_dev(port, dev);
 
 	port->port->rphy = NULL;
 
@@ -333,14 +336,16 @@ static void sas_revalidate_domain(struct work_struct *work)
 	struct sas_discovery_event *ev =
 		container_of(work, struct sas_discovery_event, work);
 	struct asd_sas_port *port = ev->port;
+	struct domain_device *ddev = port->port_dev;
 
 	sas_begin_event(DISCE_REVALIDATE_DOMAIN, &port->disc.disc_event_lock,
 			&port->disc.pending);
 
 	SAS_DPRINTK("REVALIDATING DOMAIN on port %d, pid:%d\n", port->id,
 		    task_pid_nr(current));
-	if (port->port_dev)
-		res = sas_ex_revalidate_domain(port->port_dev);
+	if (ddev && (ddev->dev_type == FANOUT_DEV ||
+		     ddev->dev_type == EDGE_DEV))
+		res = sas_ex_revalidate_domain(ddev);
 
 	SAS_DPRINTK("done REVALIDATING DOMAIN on port %d, pid:%d, res 0x%x\n",
 		    port->id, task_pid_nr(current), res);

@@ -8,7 +8,7 @@
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  */
-
+#include <linux/gpio.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -24,88 +24,8 @@
 #include <plat/tc.h>
 #include <plat/board.h>
 #include <plat/mmc.h>
-#include <mach/gpio.h>
 #include <plat/menelaus.h>
-#include <plat/mcbsp.h>
 #include <plat/omap44xx.h>
-
-/*-------------------------------------------------------------------------*/
-
-#if defined(CONFIG_OMAP_MCBSP) || defined(CONFIG_OMAP_MCBSP_MODULE)
-
-static struct platform_device **omap_mcbsp_devices;
-
-void omap_mcbsp_register_board_cfg(struct omap_mcbsp_platform_data *config,
-					int size)
-{
-	int i;
-
-	omap_mcbsp_devices = kzalloc(size * sizeof(struct platform_device *),
-				     GFP_KERNEL);
-	if (!omap_mcbsp_devices) {
-		printk(KERN_ERR "Could not register McBSP devices\n");
-		return;
-	}
-
-	for (i = 0; i < size; i++) {
-		struct platform_device *new_mcbsp;
-		int ret;
-
-		new_mcbsp = platform_device_alloc("omap-mcbsp", i + 1);
-		if (!new_mcbsp)
-			continue;
-		new_mcbsp->dev.platform_data = &config[i];
-		ret = platform_device_add(new_mcbsp);
-		if (ret) {
-			platform_device_put(new_mcbsp);
-			continue;
-		}
-		omap_mcbsp_devices[i] = new_mcbsp;
-	}
-}
-
-#else
-void omap_mcbsp_register_board_cfg(struct omap_mcbsp_platform_data *config,
-					int size)
-{  }
-#endif
-
-/*-------------------------------------------------------------------------*/
-
-#if defined(CONFIG_SND_OMAP_SOC_MCPDM) || \
-		defined(CONFIG_SND_OMAP_SOC_MCPDM_MODULE)
-
-static struct resource mcpdm_resources[] = {
-	{
-		.name		= "mcpdm_mem",
-		.start		= OMAP44XX_MCPDM_BASE,
-		.end		= OMAP44XX_MCPDM_BASE + SZ_4K,
-		.flags		= IORESOURCE_MEM,
-	},
-	{
-		.name		= "mcpdm_irq",
-		.start		= OMAP44XX_IRQ_MCPDM,
-		.end		= OMAP44XX_IRQ_MCPDM,
-		.flags		= IORESOURCE_IRQ,
-	},
-};
-
-static struct platform_device omap_mcpdm_device = {
-	.name		= "omap-mcpdm",
-	.id		= -1,
-	.num_resources	= ARRAY_SIZE(mcpdm_resources),
-	.resource	= mcpdm_resources,
-};
-
-static void omap_init_mcpdm(void)
-{
-	(void) platform_device_register(&omap_mcpdm_device);
-}
-#else
-static inline void omap_init_mcpdm(void) {}
-#endif
-
-/*-------------------------------------------------------------------------*/
 
 #if defined(CONFIG_MMC_OMAP) || defined(CONFIG_MMC_OMAP_MODULE) || \
 	defined(CONFIG_MMC_OMAP_HS) || defined(CONFIG_MMC_OMAP_HS_MODULE)
@@ -278,7 +198,7 @@ EXPORT_SYMBOL(omap_dsp_get_mempool_base);
  * Claiming GPIOs, and setting their direction and initial values, is the
  * responsibility of the device drivers.  So is responding to probe().
  *
- * Board-specific knowlege like creating devices or pin setup is to be
+ * Board-specific knowledge like creating devices or pin setup is to be
  * kept out of drivers as much as possible.  In particular, pin setup
  * may be handled by the boot loader, and drivers should expect it will
  * normally have been done by the time they're probed.
@@ -289,7 +209,6 @@ static int __init omap_init_devices(void)
 	 * in alphabetical order so they're easier to sort through.
 	 */
 	omap_init_rng();
-	omap_init_mcpdm();
 	omap_init_uwire();
 	return 0;
 }

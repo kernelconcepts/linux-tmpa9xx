@@ -211,7 +211,6 @@ static int tosa_ac97_init(struct snd_soc_pcm_runtime *rtd)
 	/* set up tosa specific audio path audio_map */
 	snd_soc_dapm_add_routes(dapm, audio_map, ARRAY_SIZE(audio_map));
 
-	snd_soc_dapm_sync(dapm);
 	return 0;
 }
 
@@ -237,7 +236,7 @@ static struct snd_soc_dai_link tosa_dai[] = {
 },
 };
 
-static int tosa_probe(struct platform_device *dev)
+static int tosa_probe(struct snd_soc_card *card)
 {
 	int ret;
 
@@ -251,7 +250,7 @@ static int tosa_probe(struct platform_device *dev)
 	return ret;
 }
 
-static int tosa_remove(struct platform_device *dev)
+static int tosa_remove(struct snd_soc_card *card)
 {
 	gpio_free(TOSA_GPIO_L_MUTE);
 	return 0;

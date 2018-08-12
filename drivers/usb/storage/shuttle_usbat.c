@@ -340,7 +340,7 @@ static int usbat_check_status(struct us_data *us)
 }
 
 /*
- * Stores critical information in internal registers in prepartion for the execution
+ * Stores critical information in internal registers in preparation for the execution
  * of a conditional usbat_read_blocks or usbat_write_blocks call.
  */
 static int usbat_set_shuttle_features(struct us_data *us,
@@ -1846,7 +1846,7 @@ static int usbat_probe(struct usb_interface *intf,
 	us->transport_name = "Shuttle USBAT";
 	us->transport = usbat_flash_transport;
 	us->transport_reset = usb_stor_CB_reset;
-	us->max_lun = 1;
+	us->max_lun = 0;
 
 	result = usb_stor_probe2(us);
 	return result;

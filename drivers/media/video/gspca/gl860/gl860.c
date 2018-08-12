@@ -18,6 +18,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include "gspca.h"
 #include "gl860.h"
 
@@ -499,21 +502,8 @@ MODULE_DEVICE_TABLE(usb, device_table);
 static int sd_probe(struct usb_interface *intf,
 				const struct usb_device_id *id)
 {
-	struct gspca_dev *gspca_dev;
-	s32 ret;
-
-	ret = gspca_dev_probe(intf, id,
+	return gspca_dev_probe(intf, id,
 			&sd_desc_mi1320, sizeof(struct sd), THIS_MODULE);
-
-	if (ret >= 0) {
-		gspca_dev = usb_get_intfdata(intf);
-
-		PDEBUG(D_PROBE,
-			"Camera is now controlling video device %s",
-			video_device_node_name(&gspca_dev->vdev));
-	}
-
-	return ret;
 }
 
 static void sd_disconnect(struct usb_interface *intf)
@@ -585,9 +575,8 @@ int gl860_RTx(struct gspca_dev *gspca_dev,
 	}
 
 	if (r < 0)
-		err("ctrl transfer failed %4d "
-			"[p%02x r%d v%04x i%04x len%d]",
-			r, pref, req, val, index, len);
+		pr_err("ctrl transfer failed %4d [p%02x r%d v%04x i%04x len%d]\n",
+		       r, pref, req, val, index, len);
 	else if (len > 1 && r < len)
 		PDEBUG(D_ERR, "short ctrl transfer %d/%d", r, len);
 

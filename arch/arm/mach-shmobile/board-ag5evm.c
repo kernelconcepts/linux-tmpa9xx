@@ -34,7 +34,10 @@
 #include <linux/input/sh_keysc.h>
 #include <linux/mmc/host.h>
 #include <linux/mmc/sh_mmcif.h>
+#include <linux/mmc/sh_mobile_sdhi.h>
+#include <linux/mfd/tmio.h>
 #include <linux/sh_clk.h>
+#include <linux/dma-mapping.h>
 #include <video/sh_mobile_lcdc.h>
 #include <video/sh_mipi_dsi.h>
 #include <sound/sh_fsi.h>
@@ -56,7 +59,7 @@ static struct resource smsc9220_resources[] = {
 		.flags		= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start		= gic_spi(33), /* PINT1 */
+		.start		= SH73A0_PINT0_IRQ(2), /* PINTA2 */
 		.flags		= IORESOURCE_IRQ,
 	},
 };
@@ -119,13 +122,6 @@ static struct platform_device keysc_device = {
 };
 
 /* FSI A */
-static struct sh_fsi_platform_info fsi_info = {
-	.porta_flags = SH_FSI_OUT_SLAVE_MODE	|
-		       SH_FSI_IN_SLAVE_MODE	|
-		       SH_FSI_OFMT(I2S)		|
-		       SH_FSI_IFMT(I2S),
-};
-
 static struct resource fsi_resources[] = {
 	[0] = {
 		.name	= "FSI",
@@ -144,9 +140,6 @@ static struct platform_device fsi_device = {
 	.id		= -1,
 	.num_resources	= ARRAY_SIZE(fsi_resources),
 	.resource	= fsi_resources,
-	.dev	= {
-		.platform_data	= &fsi_info,
-	},
 };
 
 static struct resource sh_mmcif_resources[] = {
@@ -166,10 +159,19 @@ static struct resource sh_mmcif_resources[] = {
 	},
 };
 
+static struct sh_mmcif_dma sh_mmcif_dma = {
+	.chan_priv_rx	= {
+		.slave_id	= SHDMA_SLAVE_MMCIF_RX,
+	},
+	.chan_priv_tx	= {
+		.slave_id	= SHDMA_SLAVE_MMCIF_TX,
+	},
+};
 static struct sh_mmcif_plat_data sh_mmcif_platdata = {
 	.sup_pclk	= 0,
 	.ocr		= MMC_VDD_165_195,
 	.caps		= MMC_CAP_8_BIT_DATA | MMC_CAP_NONREMOVABLE,
+	.dma		= &sh_mmcif_dma,
 };
 
 static struct platform_device mmc_device = {
@@ -306,11 +308,13 @@ static struct platform_device lcdc0_device = {
 /* MIPI-DSI */
 static struct resource mipidsi0_resources[] = {
 	[0] = {
+		.name	= "DSI0",
 		.start  = 0xfeab0000,
 		.end    = 0xfeab3fff,
 		.flags  = IORESOURCE_MEM,
 	},
 	[1] = {
+		.name	= "DSI0",
 		.start  = 0xfeab4000,
 		.end    = 0xfeab7fff,
 		.flags  = IORESOURCE_MEM,
@@ -335,6 +339,106 @@ static struct platform_device mipidsi0_device = {
 	},
 };
 
+/* SDHI0 */
+static irqreturn_t ag5evm_sdhi0_gpio_cd(int irq, void *arg)
+{
+	struct device *dev = arg;
+	struct sh_mobile_sdhi_info *info = dev->platform_data;
+	struct tmio_mmc_data *pdata = info->pdata;
+
+	tmio_mmc_cd_wakeup(pdata);
+
+	return IRQ_HANDLED;
+}
+
+static struct sh_mobile_sdhi_info sdhi0_info = {
+	.dma_slave_tx	= SHDMA_SLAVE_SDHI0_TX,
+	.dma_slave_rx	= SHDMA_SLAVE_SDHI0_RX,
+	.tmio_flags	= TMIO_MMC_HAS_IDLE_WAIT,
+	.tmio_caps	= MMC_CAP_SD_HIGHSPEED,
+	.tmio_ocr_mask	= MMC_VDD_27_28 | MMC_VDD_28_29,
+};
+
+static struct resource sdhi0_resources[] = {
+	[0] = {
+		.name	= "SDHI0",
+		.start	= 0xee100000,
+		.end	= 0xee1000ff,
+		.flags	= IORESOURCE_MEM,
+	},
+	[1] = {
+		.name	= SH_MOBILE_SDHI_IRQ_CARD_DETECT,
+		.start	= gic_spi(83),
+		.flags	= IORESOURCE_IRQ,
+	},
+	[2] = {
+		.name	= SH_MOBILE_SDHI_IRQ_SDCARD,
+		.start	= gic_spi(84),
+		.flags	= IORESOURCE_IRQ,
+	},
+	[3] = {
+		.name	= SH_MOBILE_SDHI_IRQ_SDIO,
+		.start	= gic_spi(85),
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device sdhi0_device = {
+	.name		= "sh_mobile_sdhi",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(sdhi0_resources),
+	.resource	= sdhi0_resources,
+	.dev	= {
+		.platform_data	= &sdhi0_info,
+	},
+};
+
+void ag5evm_sdhi1_set_pwr(struct platform_device *pdev, int state)
+{
+	gpio_set_value(GPIO_PORT114, state);
+}
+
+static struct sh_mobile_sdhi_info sh_sdhi1_info = {
+	.tmio_flags	= TMIO_MMC_WRPROTECT_DISABLE | TMIO_MMC_HAS_IDLE_WAIT,
+	.tmio_caps	= MMC_CAP_NONREMOVABLE | MMC_CAP_SDIO_IRQ,
+	.tmio_ocr_mask	= MMC_VDD_32_33 | MMC_VDD_33_34,
+	.set_pwr	= ag5evm_sdhi1_set_pwr,
+};
+
+static struct resource sdhi1_resources[] = {
+	[0] = {
+		.name	= "SDHI1",
+		.start	= 0xee120000,
+		.end	= 0xee1200ff,
+		.flags	= IORESOURCE_MEM,
+	},
+	[1] = {
+		.name	= SH_MOBILE_SDHI_IRQ_CARD_DETECT,
+		.start	= gic_spi(87),
+		.flags	= IORESOURCE_IRQ,
+	},
+	[2] = {
+		.name	= SH_MOBILE_SDHI_IRQ_SDCARD,
+		.start	= gic_spi(88),
+		.flags	= IORESOURCE_IRQ,
+	},
+	[3] = {
+		.name	= SH_MOBILE_SDHI_IRQ_SDIO,
+		.start	= gic_spi(89),
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device sdhi1_device = {
+	.name		= "sh_mobile_sdhi",
+	.id		= 1,
+	.dev		= {
+		.platform_data	= &sh_sdhi1_info,
+	},
+	.num_resources	= ARRAY_SIZE(sdhi1_resources),
+	.resource	= sdhi1_resources,
+};
+
 static struct platform_device *ag5evm_devices[] __initdata = {
 	&eth_device,
 	&keysc_device,
@@ -343,6 +447,8 @@ static struct platform_device *ag5evm_devices[] __initdata = {
 	&irda_device,
 	&lcdc0_device,
 	&mipidsi0_device,
+	&sdhi0_device,
+	&sdhi1_device,
 };
 
 static struct map_desc ag5evm_io_desc[] __initdata = {
@@ -360,23 +466,12 @@ static struct map_desc ag5evm_io_desc[] __initdata = {
 static void __init ag5evm_map_io(void)
 {
 	iotable_init(ag5evm_io_desc, ARRAY_SIZE(ag5evm_io_desc));
+	/* DMA memory at 0xf6000000 - 0xffdfffff */
+	init_consistent_dma_size(158 << 20);
 
 	/* setup early devices and console here as well */
 	sh73a0_add_early_devices();
 	shmobile_setup_console();
-}
-
-#define PINTC_ADDR	0xe6900000
-#define PINTER0A	(PINTC_ADDR + 0xa0)
-#define PINTCR0A	(PINTC_ADDR + 0xb0)
-
-void __init ag5evm_init_irq(void)
-{
-	sh73a0_init_irq();
-
-	/* setup PINT: enable PINTA2 as active low */
-	__raw_writel(__raw_readl(PINTER0A) | (1<<29), PINTER0A);
-	__raw_writew(__raw_readw(PINTCR0A) | (2<<10), PINTCR0A);
 }
 
 #define DSI0PHYCR	0xe615006c
@@ -420,14 +515,14 @@ static void __init ag5evm_init(void)
 	/* enable MMCIF */
 	gpio_request(GPIO_FN_MMCCLK0, NULL);
 	gpio_request(GPIO_FN_MMCCMD0_PU, NULL);
-	gpio_request(GPIO_FN_MMCD0_0, NULL);
-	gpio_request(GPIO_FN_MMCD0_1, NULL);
-	gpio_request(GPIO_FN_MMCD0_2, NULL);
-	gpio_request(GPIO_FN_MMCD0_3, NULL);
-	gpio_request(GPIO_FN_MMCD0_4, NULL);
-	gpio_request(GPIO_FN_MMCD0_5, NULL);
-	gpio_request(GPIO_FN_MMCD0_6, NULL);
-	gpio_request(GPIO_FN_MMCD0_7, NULL);
+	gpio_request(GPIO_FN_MMCD0_0_PU, NULL);
+	gpio_request(GPIO_FN_MMCD0_1_PU, NULL);
+	gpio_request(GPIO_FN_MMCD0_2_PU, NULL);
+	gpio_request(GPIO_FN_MMCD0_3_PU, NULL);
+	gpio_request(GPIO_FN_MMCD0_4_PU, NULL);
+	gpio_request(GPIO_FN_MMCD0_5_PU, NULL);
+	gpio_request(GPIO_FN_MMCD0_6_PU, NULL);
+	gpio_request(GPIO_FN_MMCD0_7_PU, NULL);
 	gpio_request(GPIO_PORT208, NULL); /* Reset */
 	gpio_direction_output(GPIO_PORT208, 1);
 
@@ -464,6 +559,33 @@ static void __init ag5evm_init(void)
 	/* MIPI-DSI clock setup */
 	__raw_writel(0x2a809010, DSI0PHYCR);
 
+	/* enable SDHI0 on CN15 [SD I/F] */
+	gpio_request(GPIO_FN_SDHICD0, NULL);
+	gpio_request(GPIO_FN_SDHIWP0, NULL);
+	gpio_request(GPIO_FN_SDHICMD0, NULL);
+	gpio_request(GPIO_FN_SDHICLK0, NULL);
+	gpio_request(GPIO_FN_SDHID0_3, NULL);
+	gpio_request(GPIO_FN_SDHID0_2, NULL);
+	gpio_request(GPIO_FN_SDHID0_1, NULL);
+	gpio_request(GPIO_FN_SDHID0_0, NULL);
+
+	if (!request_irq(intcs_evt2irq(0x3c0), ag5evm_sdhi0_gpio_cd,
+			 IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
+			 "sdhi0 cd", &sdhi0_device.dev))
+		sdhi0_info.tmio_flags |= TMIO_MMC_HAS_COLD_CD;
+	else
+		pr_warn("Unable to setup SDHI0 GPIO IRQ\n");
+
+	/* enable SDHI1 on CN4 [WLAN I/F] */
+	gpio_request(GPIO_FN_SDHICLK1, NULL);
+	gpio_request(GPIO_FN_SDHICMD1_PU, NULL);
+	gpio_request(GPIO_FN_SDHID1_3_PU, NULL);
+	gpio_request(GPIO_FN_SDHID1_2_PU, NULL);
+	gpio_request(GPIO_FN_SDHID1_1_PU, NULL);
+	gpio_request(GPIO_FN_SDHID1_0_PU, NULL);
+	gpio_request(GPIO_PORT114, "sdhi1_power");
+	gpio_direction_output(GPIO_PORT114, 0);
+
 #ifdef CONFIG_CACHE_L2X0
 	/* Shared attribute override enable, 64K*8way */
 	l2x0_init(__io(0xf0100000), 0x00460000, 0xc2000fff);
@@ -485,7 +607,8 @@ struct sys_timer ag5evm_timer = {
 
 MACHINE_START(AG5EVM, "ag5evm")
 	.map_io		= ag5evm_map_io,
-	.init_irq	= ag5evm_init_irq,
+	.nr_irqs	= NR_IRQS_LEGACY,
+	.init_irq	= sh73a0_init_irq,
 	.handle_irq	= shmobile_handle_irq_gic,
 	.init_machine	= ag5evm_init,
 	.timer		= &ag5evm_timer,

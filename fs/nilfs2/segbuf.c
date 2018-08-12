@@ -239,12 +239,15 @@ nilfs_segbuf_fill_in_super_root_crc(struct nilfs_segment_buffer *segbuf,
 				    u32 seed)
 {
 	struct nilfs_super_root *raw_sr;
+	struct the_nilfs *nilfs = segbuf->sb_super->s_fs_info;
+	unsigned srsize;
 	u32 crc;
 
 	raw_sr = (struct nilfs_super_root *)segbuf->sb_super_root->b_data;
+	srsize = NILFS_SR_BYTES(nilfs->ns_inode_size);
 	crc = crc32_le(seed,
 		       (unsigned char *)raw_sr + sizeof(raw_sr->sr_sum),
-		       NILFS_SR_BYTES - sizeof(raw_sr->sr_sum));
+		       srsize - sizeof(raw_sr->sr_sum));
 	raw_sr->sr_sum = cpu_to_le32(crc);
 }
 
@@ -254,18 +257,6 @@ static void nilfs_release_buffers(struct list_head *list)
 
 	list_for_each_entry_safe(bh, n, list, b_assoc_buffers) {
 		list_del_init(&bh->b_assoc_buffers);
-		if (buffer_nilfs_allocated(bh)) {
-			struct page *clone_page = bh->b_page;
-
-			/* remove clone page */
-			brelse(bh);
-			page_cache_release(clone_page); /* for each bh */
-			if (page_count(clone_page) <= 2) {
-				lock_page(clone_page);
-				nilfs_free_private_page(clone_page);
-			}
-			continue;
-		}
 		brelse(bh);
 	}
 }
@@ -354,8 +345,7 @@ static void nilfs_end_bio_write(struct bio *bio, int err)
 
 	if (err == -EOPNOTSUPP) {
 		set_bit(BIO_EOPNOTSUPP, &bio->bi_flags);
-		bio_put(bio);
-		/* to be detected by submit_seg_bio() */
+		/* to be detected by nilfs_segbuf_submit_bio() */
 	}
 
 	if (!uptodate)
@@ -386,12 +376,12 @@ static int nilfs_segbuf_submit_bio(struct nilfs_segment_buffer *segbuf,
 	bio->bi_private = segbuf;
 	bio_get(bio);
 	submit_bio(mode, bio);
+	segbuf->sb_nbio++;
 	if (bio_flagged(bio, BIO_EOPNOTSUPP)) {
 		bio_put(bio);
 		err = -EOPNOTSUPP;
 		goto failed;
 	}
-	segbuf->sb_nbio++;
 	bio_put(bio);
 
 	wi->bio = NULL;
@@ -509,7 +499,7 @@ static int nilfs_segbuf_write(struct nilfs_segment_buffer *segbuf,
 		 * Last BIO is always sent through the following
 		 * submission.
 		 */
-		rw |= REQ_SYNC | REQ_UNPLUG;
+		rw |= REQ_SYNC;
 		res = nilfs_segbuf_submit_bio(segbuf, &wi, rw);
 	}
 

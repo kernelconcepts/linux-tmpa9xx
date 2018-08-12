@@ -346,30 +346,18 @@ fail1:
 }
 
 /*
- * complete_edac_device_list_del
- *
- *	callback function when reference count is zero
- */
-static void complete_edac_device_list_del(struct rcu_head *head)
-{
-	struct edac_device_ctl_info *edac_dev;
-
-	edac_dev = container_of(head, struct edac_device_ctl_info, rcu);
-	INIT_LIST_HEAD(&edac_dev->link);
-}
-
-/*
  * del_edac_device_from_global_list
- *
- *	remove the RCU, setup for a callback call,
- *	then wait for the callback to occur
  */
 static void del_edac_device_from_global_list(struct edac_device_ctl_info
 						*edac_device)
 {
 	list_del_rcu(&edac_device->link);
-	call_rcu(&edac_device->rcu, complete_edac_device_list_del);
-	rcu_barrier();
+
+	/* these are for safe removal of devices from global list while
+	 * NMI handlers may be traversing list
+	 */
+	synchronize_rcu();
+	INIT_LIST_HEAD(&edac_device->link);
 }
 
 /*
@@ -456,13 +444,10 @@ void edac_device_workq_setup(struct edac_device_ctl_info *edac_dev,
  */
 void edac_device_workq_teardown(struct edac_device_ctl_info *edac_dev)
 {
-	int status;
+	edac_dev->op_state = OP_OFFLINE;
 
-	status = cancel_delayed_work(&edac_dev->work);
-	if (status == 0) {
-		/* workq instance might be running, wait for it */
-		flush_workqueue(edac_workqueue);
-	}
+	cancel_delayed_work_sync(&edac_dev->work);
+	flush_workqueue(edac_workqueue);
 }
 
 /*
@@ -672,7 +657,7 @@ void edac_device_handle_ce(struct edac_device_ctl_info *edac_dev,
 		block->counters.ce_count++;
 	}
 
-	/* Propogate the count up the 'totals' tree */
+	/* Propagate the count up the 'totals' tree */
 	instance->counters.ce_count++;
 	edac_dev->counters.ce_count++;
 
@@ -718,7 +703,7 @@ void edac_device_handle_ue(struct edac_device_ctl_info *edac_dev,
 		block->counters.ue_count++;
 	}
 
-	/* Propogate the count up the 'totals' tree */
+	/* Propagate the count up the 'totals' tree */
 	instance->counters.ue_count++;
 	edac_dev->counters.ue_count++;
 

@@ -184,8 +184,10 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 		size -= n;
 		buf += n;
 		copied += n;
-		if (!m->count)
+		if (!m->count) {
+			m->from = 0;
 			m->index++;
+		}
 		if (!size)
 			goto Done;
 	}
@@ -449,8 +451,6 @@ EXPORT_SYMBOL(seq_path);
 
 /*
  * Same as seq_path, but relative to supplied root.
- *
- * root may be changed, see __d_path().
  */
 int seq_path_root(struct seq_file *m, struct path *path, struct path *root,
 		  char *esc)
@@ -463,6 +463,8 @@ int seq_path_root(struct seq_file *m, struct path *path, struct path *root,
 		char *p;
 
 		p = __d_path(path, root, buf, size);
+		if (!p)
+			return SEQ_SKIP;
 		res = PTR_ERR(p);
 		if (!IS_ERR(p)) {
 			char *end = mangle_path(buf, p, esc);
@@ -474,7 +476,7 @@ int seq_path_root(struct seq_file *m, struct path *path, struct path *root,
 	}
 	seq_commit(m, res);
 
-	return res < 0 ? res : 0;
+	return res < 0 && res != -ENAMETOOLONG ? res : 0;
 }
 
 /*

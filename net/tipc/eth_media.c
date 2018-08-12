@@ -2,7 +2,7 @@
  * net/tipc/eth_media.c: Ethernet bearer support for TIPC
  *
  * Copyright (c) 2001-2007, Ericsson AB
- * Copyright (c) 2005-2007, Wind River Systems
+ * Copyright (c) 2005-2008, 2011, Wind River Systems
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,7 @@
 #include "core.h"
 #include "bearer.h"
 
-#define MAX_ETH_BEARERS		2
+#define MAX_ETH_BEARERS		MAX_BEARERS
 #define ETH_LINK_PRIORITY	TIPC_DEF_LINK_PRI
 #define ETH_LINK_TOLERANCE	TIPC_DEF_LINK_TOL
 #define ETH_LINK_WINDOW		TIPC_DEF_LINK_WIN
@@ -53,6 +53,7 @@ struct eth_bearer {
 	struct tipc_bearer *bearer;
 	struct net_device *dev;
 	struct packet_type tipc_packet_type;
+	struct work_struct setup;
 };
 
 static struct eth_bearer eth_bearers[MAX_ETH_BEARERS];
@@ -121,6 +122,17 @@ static int recv_msg(struct sk_buff *buf, struct net_device *dev,
 }
 
 /**
+ * setup_bearer - setup association between Ethernet bearer and interface
+ */
+static void setup_bearer(struct work_struct *work)
+{
+	struct eth_bearer *eb_ptr =
+		container_of(work, struct eth_bearer, setup);
+
+	dev_add_pack(&eb_ptr->tipc_packet_type);
+}
+
+/**
  * enable_bearer - attach TIPC bearer to an Ethernet interface
  */
 
@@ -144,31 +156,32 @@ static int enable_bearer(struct tipc_bearer *tb_ptr)
 
 	/* Find device with specified name */
 
+	read_lock(&dev_base_lock);
 	for_each_netdev(&init_net, pdev) {
 		if (!strncmp(pdev->name, driver_name, IFNAMSIZ)) {
 			dev = pdev;
+			dev_hold(dev);
 			break;
 		}
 	}
+	read_unlock(&dev_base_lock);
 	if (!dev)
 		return -ENODEV;
-
-	/* Find Ethernet bearer for device (or create one) */
-
-	while ((eb_ptr != stop) && eb_ptr->dev && (eb_ptr->dev != dev))
-		eb_ptr++;
-	if (eb_ptr == stop)
-		return -EDQUOT;
-	if (!eb_ptr->dev) {
-		eb_ptr->dev = dev;
-		eb_ptr->tipc_packet_type.type = htons(ETH_P_TIPC);
-		eb_ptr->tipc_packet_type.dev = dev;
-		eb_ptr->tipc_packet_type.func = recv_msg;
-		eb_ptr->tipc_packet_type.af_packet_priv = eb_ptr;
-		INIT_LIST_HEAD(&(eb_ptr->tipc_packet_type.list));
-		dev_hold(dev);
-		dev_add_pack(&eb_ptr->tipc_packet_type);
+	if (tipc_mtu_bad(dev, 0)) {
+		dev_put(dev);
+		return -EINVAL;
 	}
+
+	/* Create Ethernet bearer for device */
+
+	eb_ptr->dev = dev;
+	eb_ptr->tipc_packet_type.type = htons(ETH_P_TIPC);
+	eb_ptr->tipc_packet_type.dev = dev;
+	eb_ptr->tipc_packet_type.func = recv_msg;
+	eb_ptr->tipc_packet_type.af_packet_priv = eb_ptr;
+	INIT_LIST_HEAD(&(eb_ptr->tipc_packet_type.list));
+	INIT_WORK(&eb_ptr->setup, setup_bearer);
+	schedule_work(&eb_ptr->setup);
 
 	/* Associate TIPC bearer with Ethernet bearer */
 
@@ -218,8 +231,6 @@ static int recv_notification(struct notifier_block *nb, unsigned long evt,
 	if (!eb_ptr->bearer)
 		return NOTIFY_DONE;		/* bearer had been disabled */
 
-	eb_ptr->bearer->mtu = dev->mtu;
-
 	switch (evt) {
 	case NETDEV_CHANGE:
 		if (netif_carrier_ok(dev))
@@ -234,6 +245,12 @@ static int recv_notification(struct notifier_block *nb, unsigned long evt,
 		tipc_block_bearer(eb_ptr->bearer->name);
 		break;
 	case NETDEV_CHANGEMTU:
+		if (tipc_mtu_bad(dev, 0)) {
+			tipc_disable_bearer(eb_ptr->bearer->name);
+			break;
+		}
+		eb_ptr->bearer->mtu = dev->mtu;
+		/* fall through */
 	case NETDEV_CHANGEADDR:
 		tipc_block_bearer(eb_ptr->bearer->name);
 		tipc_continue(eb_ptr->bearer);

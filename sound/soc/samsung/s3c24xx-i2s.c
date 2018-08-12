@@ -14,28 +14,17 @@
  *  option) any later version.
  */
 
-#include <linux/init.h>
-#include <linux/module.h>
-#include <linux/device.h>
 #include <linux/delay.h>
 #include <linux/clk.h>
-#include <linux/jiffies.h>
 #include <linux/io.h>
 #include <linux/gpio.h>
+#include <linux/module.h>
 
-#include <sound/core.h>
-#include <sound/pcm.h>
-#include <sound/pcm_params.h>
-#include <sound/initval.h>
 #include <sound/soc.h>
+#include <sound/pcm_params.h>
 
-#include <mach/hardware.h>
 #include <mach/regs-gpio.h>
-#include <mach/regs-clock.h>
-
-#include <asm/dma.h>
 #include <mach/dma.h>
-
 #include <plat/regs-iis.h>
 
 #include "dma.h"
@@ -395,10 +384,10 @@ static int s3c24xx_i2s_probe(struct snd_soc_dai *dai)
 		return -ENXIO;
 
 	s3c24xx_i2s.iis_clk = clk_get(dai->dev, "iis");
-	if (s3c24xx_i2s.iis_clk == NULL) {
+	if (IS_ERR(s3c24xx_i2s.iis_clk)) {
 		pr_err("failed to get iis_clock\n");
 		iounmap(s3c24xx_i2s.regs);
-		return -ENODEV;
+		return PTR_ERR(s3c24xx_i2s.iis_clk);
 	}
 	clk_enable(s3c24xx_i2s.iis_clk);
 
@@ -493,7 +482,7 @@ static __devexit int s3c24xx_iis_dev_remove(struct platform_device *pdev)
 
 static struct platform_driver s3c24xx_iis_driver = {
 	.probe  = s3c24xx_iis_dev_probe,
-	.remove = s3c24xx_iis_dev_remove,
+	.remove = __devexit_p(s3c24xx_iis_dev_remove),
 	.driver = {
 		.name = "s3c24xx-iis",
 		.owner = THIS_MODULE,

@@ -150,6 +150,12 @@ typedef unsigned long blkcnt_t;
 #define pgoff_t unsigned long
 #endif
 
+#ifdef CONFIG_ARCH_DMA_ADDR_T_64BIT
+typedef u64 dma_addr_t;
+#else
+typedef u32 dma_addr_t;
+#endif /* dma_addr_t */
+
 #endif /* __KERNEL__ */
 
 /*
@@ -230,6 +236,16 @@ struct ustat {
 	__kernel_ino_t		f_tinode;
 	char			f_fname[6];
 	char			f_fpack[6];
+};
+
+/**
+ * struct rcu_head - callback structure for use with RCU
+ * @next: next update requests in a list
+ * @func: actual update function to call after the grace period.
+ */
+struct rcu_head {
+	struct rcu_head *next;
+	void (*func)(struct rcu_head *head);
 };
 
 #endif	/* __KERNEL__ */

@@ -944,8 +944,8 @@ int shpc_init(struct controller *ctrl, struct pci_dev *pdev)
 	ctrl->pci_dev = pdev;  /* pci_dev of the P2P bridge */
 	ctrl_dbg(ctrl, "Hotplug Controller:\n");
 
-	if ((pdev->vendor == PCI_VENDOR_ID_AMD) || (pdev->device ==
-				PCI_DEVICE_ID_AMD_GOLAM_7450)) {
+	if (pdev->vendor == PCI_VENDOR_ID_AMD &&
+	    pdev->device == PCI_DEVICE_ID_AMD_GOLAM_7450) {
 		/* amd shpc driver doesn't use Base Offset; assume 0 */
 		ctrl->mmio_base = pci_resource_start(pdev, 0);
 		ctrl->mmio_size = pci_resource_len(pdev, 0);
@@ -1064,6 +1064,8 @@ int shpc_init(struct controller *ctrl, struct pci_dev *pdev)
 				  "Can't get msi for the hotplug controller\n");
 			ctrl_info(ctrl,
 				  "Use INTx for the hotplug controller\n");
+		} else {
+			pci_set_master(pdev);
 		}
 
 		rc = request_irq(ctrl->pci_dev->irq, shpc_isr, IRQF_SHARED,

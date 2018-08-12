@@ -14,9 +14,72 @@
 #include <linux/personality.h>
 #include <linux/random.h>
 #include <linux/uaccess.h>
+#include <linux/elf.h>
 
 #include <asm/ia32.h>
 #include <asm/syscalls.h>
+
+/*
+ * Align a virtual address to avoid aliasing in the I$ on AMD F15h.
+ *
+ * @flags denotes the allocation direction - bottomup or topdown -
+ * or vDSO; see call sites below.
+ */
+unsigned long align_addr(unsigned long addr, struct file *filp,
+			 enum align_flags flags)
+{
+	unsigned long tmp_addr;
+
+	/* handle 32- and 64-bit case with a single conditional */
+	if (va_align.flags < 0 || !(va_align.flags & (2 - mmap_is_ia32())))
+		return addr;
+
+	if (!(current->flags & PF_RANDOMIZE))
+		return addr;
+
+	if (!((flags & ALIGN_VDSO) || filp))
+		return addr;
+
+	tmp_addr = addr;
+
+	/*
+	 * We need an address which is <= than the original
+	 * one only when in topdown direction.
+	 */
+	if (!(flags & ALIGN_TOPDOWN))
+		tmp_addr += va_align.mask;
+
+	tmp_addr &= ~va_align.mask;
+
+	return tmp_addr;
+}
+
+static int __init control_va_addr_alignment(char *str)
+{
+	/* guard against enabling this on other CPU families */
+	if (va_align.flags < 0)
+		return 1;
+
+	if (*str == 0)
+		return 1;
+
+	if (*str == '=')
+		str++;
+
+	if (!strcmp(str, "32"))
+		va_align.flags = ALIGN_VA_32;
+	else if (!strcmp(str, "64"))
+		va_align.flags = ALIGN_VA_64;
+	else if (!strcmp(str, "off"))
+		va_align.flags = 0;
+	else if (!strcmp(str, "on"))
+		va_align.flags = ALIGN_VA_32 | ALIGN_VA_64;
+	else
+		return 0;
+
+	return 1;
+}
+__setup("align_va_addr", control_va_addr_alignment);
 
 SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
 		unsigned long, prot, unsigned long, flags,
@@ -52,7 +115,7 @@ static void find_start_end(unsigned long flags, unsigned long *begin,
 				*begin = new_begin;
 		}
 	} else {
-		*begin = TASK_UNMAPPED_BASE;
+		*begin = current->mm->mmap_legacy_base;
 		*end = TASK_SIZE;
 	}
 }
@@ -63,7 +126,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 {
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
-	unsigned long start_addr;
+	unsigned long start_addr, vm_start;
 	unsigned long begin, end;
 
 	if (flags & MAP_FIXED)
@@ -78,7 +141,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 		addr = PAGE_ALIGN(addr);
 		vma = find_vma(mm, addr);
 		if (end - len >= addr &&
-		    (!vma || addr + len <= vma->vm_start))
+		    (!vma || addr + len <= vm_start_gap(vma)))
 			return addr;
 	}
 	if (((flags & MAP_32BIT) || test_thread_flag(TIF_IA32))
@@ -92,6 +155,9 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	start_addr = addr;
 
 full_search:
+
+	addr = align_addr(addr, filp, 0);
+
 	for (vma = find_vma(mm, addr); ; vma = vma->vm_next) {
 		/* At this point:  (!vma || addr < vma->vm_end). */
 		if (end - len < addr) {
@@ -106,17 +172,20 @@ full_search:
 			}
 			return -ENOMEM;
 		}
-		if (!vma || addr + len <= vma->vm_start) {
+		if (vma)
+			vm_start = vm_start_gap(vma);
+		if (!vma || addr + len <= vm_start) {
 			/*
 			 * Remember the place where we stopped the search:
 			 */
 			mm->free_area_cache = addr + len;
 			return addr;
 		}
-		if (addr + mm->cached_hole_size < vma->vm_start)
-			mm->cached_hole_size = vma->vm_start - addr;
+		if (addr + mm->cached_hole_size < vm_start)
+			mm->cached_hole_size = vm_start - addr;
 
 		addr = vma->vm_end;
+		addr = align_addr(addr, filp, 0);
 	}
 }
 
@@ -129,6 +198,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	struct vm_area_struct *vma;
 	struct mm_struct *mm = current->mm;
 	unsigned long addr = addr0;
+	unsigned long vm_start;
 
 	/* requested length too big for entire address space */
 	if (len > TASK_SIZE)
@@ -146,7 +216,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 		addr = PAGE_ALIGN(addr);
 		vma = find_vma(mm, addr);
 		if (TASK_SIZE - len >= addr &&
-				(!vma || addr + len <= vma->vm_start))
+				(!vma || addr + len <= vm_start_gap(vma)))
 			return addr;
 	}
 
@@ -161,10 +231,13 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 
 	/* make sure it can fit in the remaining address space */
 	if (addr > len) {
-		vma = find_vma(mm, addr-len);
-		if (!vma || addr <= vma->vm_start)
+		unsigned long tmp_addr = align_addr(addr - len, filp,
+						    ALIGN_TOPDOWN);
+
+		vma = find_vma(mm, tmp_addr);
+		if (!vma || tmp_addr + len <= vm_start_gap(vma))
 			/* remember the address as a hint for next time */
-			return mm->free_area_cache = addr-len;
+			return mm->free_area_cache = tmp_addr;
 	}
 
 	if (mm->mmap_base < len)
@@ -173,23 +246,27 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	addr = mm->mmap_base-len;
 
 	do {
+		addr = align_addr(addr, filp, ALIGN_TOPDOWN);
+
 		/*
 		 * Lookup failure means no vma is above this address,
 		 * else if new region fits below vma->vm_start,
 		 * return with success:
 		 */
 		vma = find_vma(mm, addr);
-		if (!vma || addr+len <= vma->vm_start)
+		if (vma)
+			vm_start = vm_start_gap(vma);
+		if (!vma || addr + len <= vm_start)
 			/* remember the address as a hint for next time */
 			return mm->free_area_cache = addr;
 
 		/* remember the largest hole we saw so far */
-		if (addr + mm->cached_hole_size < vma->vm_start)
-			mm->cached_hole_size = vma->vm_start - addr;
+		if (addr + mm->cached_hole_size < vm_start)
+			mm->cached_hole_size = vm_start - addr;
 
 		/* try just below the current vma->vm_start */
-		addr = vma->vm_start-len;
-	} while (len < vma->vm_start);
+		addr = vm_start - len;
+	} while (len < vm_start);
 
 bottomup:
 	/*

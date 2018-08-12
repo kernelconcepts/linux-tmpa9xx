@@ -44,7 +44,7 @@
  * reserved symbols (along with \ and /), otherwise illegal to store
  * in filenames in NTFS
  */
-#define UNI_ASTERIK     (__u16) ('*' + 0xF000)
+#define UNI_ASTERISK    (__u16) ('*' + 0xF000)
 #define UNI_QUESTION    (__u16) ('?' + 0xF000)
 #define UNI_COLON       (__u16) (':' + 0xF000)
 #define UNI_GRTRTHAN    (__u16) ('>' + 0xF000)
@@ -82,6 +82,9 @@ int cifs_strtoUCS(__le16 *, const char *, int, const struct nls_table *);
 char *cifs_strndup_from_ucs(const char *src, const int maxlen,
 			    const bool is_unicode,
 			    const struct nls_table *codepage);
+extern int cifsConvertToUCS(__le16 *target, const char *source, int maxlen,
+			const struct nls_table *cp, int mapChars);
+
 #endif
 
 /*
@@ -320,14 +323,14 @@ UniToupper(register wchar_t uc)
 /*
  * UniStrupr:  Upper case a unicode string
  */
-static inline wchar_t *
-UniStrupr(register wchar_t *upin)
+static inline __le16 *
+UniStrupr(register __le16 *upin)
 {
-	register wchar_t *up;
+	register __le16 *up;
 
 	up = upin;
 	while (*up) {		/* For all characters */
-		*up = UniToupper(*up);
+		*up = cpu_to_le16(UniToupper(le16_to_cpu(*up)));
 		up++;
 	}
 	return upin;		/* Return input pointer */

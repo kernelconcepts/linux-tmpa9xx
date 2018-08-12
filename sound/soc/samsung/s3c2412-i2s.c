@@ -16,21 +16,14 @@
  * option) any later version.
  */
 
-#include <linux/init.h>
-#include <linux/module.h>
-#include <linux/device.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/clk.h>
-#include <linux/kernel.h>
 #include <linux/io.h>
+#include <linux/module.h>
 
-#include <sound/core.h>
-#include <sound/pcm.h>
-#include <sound/pcm_params.h>
-#include <sound/initval.h>
 #include <sound/soc.h>
-#include <mach/hardware.h>
+#include <sound/pcm_params.h>
 
 #include <mach/regs-gpio.h>
 #include <mach/dma.h>
@@ -38,8 +31,6 @@
 #include "dma.h"
 #include "regs-i2s-v2.h"
 #include "s3c2412-i2s.h"
-
-#define S3C2412_I2S_DEBUG 0
 
 static struct s3c2410_dma_client s3c2412_dma_client_out = {
 	.name		= "I2S PCM Stereo out"
@@ -79,10 +70,10 @@ static int s3c2412_i2s_probe(struct snd_soc_dai *dai)
 	s3c2412_i2s.dma_playback = &s3c2412_i2s_pcm_stereo_out;
 
 	s3c2412_i2s.iis_cclk = clk_get(dai->dev, "i2sclk");
-	if (s3c2412_i2s.iis_cclk == NULL) {
+	if (IS_ERR(s3c2412_i2s.iis_cclk)) {
 		pr_err("failed to get i2sclk clock\n");
 		iounmap(s3c2412_i2s.regs);
-		return -ENODEV;
+		return PTR_ERR(s3c2412_i2s.iis_cclk);
 	}
 
 	/* Set MPLL as the source for IIS CLK */
@@ -186,7 +177,7 @@ static __devexit int s3c2412_iis_dev_remove(struct platform_device *pdev)
 
 static struct platform_driver s3c2412_iis_driver = {
 	.probe  = s3c2412_iis_dev_probe,
-	.remove = s3c2412_iis_dev_remove,
+	.remove = __devexit_p(s3c2412_iis_dev_remove),
 	.driver = {
 		.name = "s3c2412-iis",
 		.owner = THIS_MODULE,

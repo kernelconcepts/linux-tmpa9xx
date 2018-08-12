@@ -18,9 +18,6 @@
 #include <linux/uaccess.h>
 #include <linux/io.h>
 
-/* stores the physical address of elf header of crash image */
-unsigned long long elfcorehdr_addr = ELFCORE_ADDR_MAX;
-
 /**
  * copy_oldmem_page() - copy one page from old kernel memory
  * @pfn: page frame number to be copied
@@ -42,7 +39,7 @@ ssize_t copy_oldmem_page(unsigned long pfn, char *buf,
 	if (!csize)
 		return 0;
 
-	vaddr = ioremap(pfn << PAGE_SHIFT, PAGE_SIZE);
+	vaddr = ioremap(__pfn_to_phys(pfn), PAGE_SIZE);
 	if (!vaddr)
 		return -ENOMEM;
 

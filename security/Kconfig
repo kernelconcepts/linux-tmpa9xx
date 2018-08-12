@@ -38,7 +38,9 @@ config TRUSTED_KEYS
 
 config ENCRYPTED_KEYS
 	tristate "ENCRYPTED KEYS"
-	depends on KEYS && TRUSTED_KEYS
+	depends on KEYS
+	select CRYPTO
+	select CRYPTO_HMAC
 	select CRYPTO_AES
 	select CRYPTO_CBC
 	select CRYPTO_SHA256
@@ -93,6 +95,16 @@ config SECURITY
 	  model will be used.
 
 	  If you are unsure how to answer this question, answer N.
+
+config PAGE_TABLE_ISOLATION
+	bool "Remove the kernel mapping in user mode"
+	default y
+	depends on X86_64 && SMP
+	help
+	  This enforces a strict kernel and user space isolation, in order
+	  to close hardware side channels on kernel address information.
+
+	  If you are unsure how to answer this question, answer Y.
 
 config SECURITYFS
 	bool "Enable the securityfs filesystem"
@@ -167,6 +179,7 @@ config INTEL_TXT
 config LSM_MMAP_MIN_ADDR
 	int "Low address space for LSM to protect from user allocation"
 	depends on SECURITY && SECURITY_SELINUX
+	default 32768 if ARM
 	default 65536
 	help
 	  This is the portion of low virtual memory which should be protected
@@ -185,7 +198,7 @@ source security/smack/Kconfig
 source security/tomoyo/Kconfig
 source security/apparmor/Kconfig
 
-source security/integrity/ima/Kconfig
+source security/integrity/Kconfig
 
 choice
 	prompt "Default security module"

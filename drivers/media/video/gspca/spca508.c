@@ -18,6 +18,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #define MODULE_NAME "spca508"
 
 #include "gspca.h"
@@ -592,7 +594,7 @@ static const u16 spca508_sightcam_init_data[][2] = {
 /* This line seems to setup the frame/canvas */
 	{0x000f, 0x8402},
 
-/* Theese 6 lines are needed to startup the webcam */
+/* These 6 lines are needed to startup the webcam */
 	{0x0090, 0x8110},
 	{0x0001, 0x8114},
 	{0x0001, 0x8114},
@@ -1275,7 +1277,7 @@ static int reg_write(struct usb_device *dev,
 	PDEBUG(D_USBO, "reg write i:0x%04x = 0x%02x",
 		index, value);
 	if (ret < 0)
-		err("reg write: error %d", ret);
+		pr_err("reg write: error %d\n", ret);
 	return ret;
 }
 
@@ -1297,7 +1299,7 @@ static int reg_read(struct gspca_dev *gspca_dev,
 	PDEBUG(D_USBI, "reg read i:%04x --> %02x",
 		index, gspca_dev->usb_buf[0]);
 	if (ret < 0) {
-		err("reg_read err %d", ret);
+		pr_err("reg_read err %d\n", ret);
 		return ret;
 	}
 	return gspca_dev->usb_buf[0];
@@ -1375,7 +1377,6 @@ static int sd_config(struct gspca_dev *gspca_dev,
 {
 	struct sd *sd = (struct sd *) gspca_dev;
 	struct cam *cam;
-	int data1, data2;
 	const u16 (*init_data)[2];
 	static const u16 (*(init_data_tb[]))[2] = {
 		spca508_vista_init_data,	/* CreativeVista 0 */
@@ -1385,6 +1386,9 @@ static int sd_config(struct gspca_dev *gspca_dev,
 		spca508cs110_init_data,		/* MicroInnovationIC200 4 */
 		spca508_init_data,		/* ViewQuestVQ110 5 */
 	};
+
+#ifdef GSPCA_DEBUG
+	int data1, data2;
 
 	/* Read from global register the USB product and vendor IDs, just to
 	 * prove that we can communicate with the device.  This works, which
@@ -1400,6 +1404,7 @@ static int sd_config(struct gspca_dev *gspca_dev,
 
 	data1 = reg_read(gspca_dev, 0x8621);
 	PDEBUG(D_PROBE, "Window 1 average luminance: %d", data1);
+#endif
 
 	cam = &gspca_dev->cam;
 	cam->cam_mode = sif_mode;

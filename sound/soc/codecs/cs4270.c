@@ -128,7 +128,6 @@ static const char *supply_names[] = {
 /* Private data for the CS4270 */
 struct cs4270_private {
 	enum snd_soc_control_type control_type;
-	void *control_data;
 	unsigned int mclk; /* Input frequency of the MCLK pin */
 	unsigned int mode; /* The mode (I2S or left-justified) */
 	unsigned int slave_mode;
@@ -193,12 +192,12 @@ static struct cs4270_mode_ratios cs4270_mode_ratios[] = {
 /* The number of MCLK/LRCK ratios supported by the CS4270 */
 #define NUM_MCLK_RATIOS		ARRAY_SIZE(cs4270_mode_ratios)
 
-static int cs4270_reg_is_readable(unsigned int reg)
+static int cs4270_reg_is_readable(struct snd_soc_codec *codec, unsigned int reg)
 {
 	return (reg >= CS4270_FIRSTREG) && (reg <= CS4270_LASTREG);
 }
 
-static int cs4270_reg_is_volatile(unsigned int reg)
+static int cs4270_reg_is_volatile(struct snd_soc_codec *codec, unsigned int reg)
 {
 	/* Unreadable registers are considered volatile */
 	if ((reg < CS4270_FIRSTREG) || (reg > CS4270_LASTREG))
@@ -262,7 +261,6 @@ static int cs4270_set_dai_fmt(struct snd_soc_dai *codec_dai,
 {
 	struct snd_soc_codec *codec = codec_dai->codec;
 	struct cs4270_private *cs4270 = snd_soc_codec_get_drvdata(codec);
-	int ret = 0;
 
 	/* set DAI format */
 	switch (format & SND_SOC_DAIFMT_FORMAT_MASK) {
@@ -272,7 +270,7 @@ static int cs4270_set_dai_fmt(struct snd_soc_dai *codec_dai,
 		break;
 	default:
 		dev_err(codec->dev, "invalid dai format\n");
-		ret = -EINVAL;
+		return -EINVAL;
 	}
 
 	/* set master/slave audio interface */
@@ -285,10 +283,11 @@ static int cs4270_set_dai_fmt(struct snd_soc_dai *codec_dai,
 		break;
 	default:
 		/* all other modes are unsupported by the hardware */
-		ret = -EINVAL;
+		dev_err(codec->dev, "Unknown master/slave configuration\n");
+		return -EINVAL;
 	}
 
-	return ret;
+	return 0;
 }
 
 /**
@@ -490,8 +489,6 @@ static int cs4270_probe(struct snd_soc_codec *codec)
 	struct cs4270_private *cs4270 = snd_soc_codec_get_drvdata(codec);
 	int i, ret;
 
-	codec->control_data = cs4270->control_data;
-
 	/* Tell ASoC what kind of I/O to use to read the registers.  ASoC will
 	 * then do the I2C transactions itself.
 	 */
@@ -604,7 +601,6 @@ static int cs4270_soc_suspend(struct snd_soc_codec *codec, pm_message_t mesg)
 static int cs4270_soc_resume(struct snd_soc_codec *codec)
 {
 	struct cs4270_private *cs4270 = snd_soc_codec_get_drvdata(codec);
-	struct i2c_client *i2c_client = codec->control_data;
 	int reg;
 
 	regulator_bulk_enable(ARRAY_SIZE(cs4270->supplies),
@@ -615,14 +611,7 @@ static int cs4270_soc_resume(struct snd_soc_codec *codec)
 	ndelay(500);
 
 	/* first restore the entire register cache ... */
-	for (reg = CS4270_FIRSTREG; reg <= CS4270_LASTREG; reg++) {
-		u8 val = snd_soc_read(codec, reg);
-
-		if (i2c_smbus_write_byte_data(i2c_client, reg, val)) {
-			dev_err(codec->dev, "i2c write failed\n");
-			return -EIO;
-		}
-	}
+	snd_soc_cache_sync(codec);
 
 	/* ... then disable the power-down bits */
 	reg = snd_soc_read(codec, CS4270_PWRCTL);
@@ -636,10 +625,7 @@ static int cs4270_soc_resume(struct snd_soc_codec *codec)
 #endif /* CONFIG_PM */
 
 /*
- * ASoC codec device structure
- *
- * Assign this variable to the codec_dev field of the machine driver's
- * snd_soc_device structure.
+ * ASoC codec driver structure
  */
 static const struct snd_soc_codec_driver soc_codec_device_cs4270 = {
 	.probe =		cs4270_probe,
@@ -693,7 +679,6 @@ static int cs4270_i2c_probe(struct i2c_client *i2c_client,
 	}
 
 	i2c_set_clientdata(i2c_client, cs4270);
-	cs4270->control_data = i2c_client;
 	cs4270->control_type = SND_SOC_I2C;
 
 	ret = snd_soc_register_codec(&i2c_client->dev,
@@ -719,7 +704,7 @@ static int cs4270_i2c_remove(struct i2c_client *i2c_client)
 /*
  * cs4270_id - I2C device IDs supported by this driver
  */
-static struct i2c_device_id cs4270_id[] = {
+static const struct i2c_device_id cs4270_id[] = {
 	{"cs4270", 0},
 	{}
 };
@@ -743,8 +728,6 @@ static struct i2c_driver cs4270_i2c_driver = {
 
 static int __init cs4270_init(void)
 {
-	pr_info("Cirrus Logic CS4270 ALSA SoC Codec Driver\n");
-
 	return i2c_add_driver(&cs4270_i2c_driver);
 }
 module_init(cs4270_init);

@@ -11,6 +11,7 @@
 
 #include <linux/usb/input.h>
 #include <linux/slab.h>
+#include <linux/module.h>
 
 #define DRIVER_DESC    "ATI/Philips USB RF remote driver"
 #define DRIVER_VERSION "0.3"
@@ -612,8 +613,8 @@ static int ati_remote2_input_init(struct ati_remote2 *ar2)
 	idev->open = ati_remote2_open;
 	idev->close = ati_remote2_close;
 
-	idev->getkeycode_new = ati_remote2_getkeycode;
-	idev->setkeycode_new = ati_remote2_setkeycode;
+	idev->getkeycode = ati_remote2_getkeycode;
+	idev->setkeycode = ati_remote2_setkeycode;
 
 	idev->name = ar2->name;
 	idev->phys = ar2->phys;
@@ -737,14 +738,17 @@ static ssize_t ati_remote2_store_channel_mask(struct device *dev,
 
 	mutex_lock(&ati_remote2_mutex);
 
-	if (mask != ar2->channel_mask && !ati_remote2_setup(ar2, mask))
-		ar2->channel_mask = mask;
+	if (mask != ar2->channel_mask) {
+		r = ati_remote2_setup(ar2, mask);
+		if (!r)
+			ar2->channel_mask = mask;
+	}
 
 	mutex_unlock(&ati_remote2_mutex);
 
 	usb_autopm_put_interface(ar2->intf[0]);
 
-	return count;
+	return r ? r : count;
 }
 
 static ssize_t ati_remote2_show_mode_mask(struct device *dev,
@@ -810,26 +814,49 @@ static int ati_remote2_probe(struct usb_interface *interface, const struct usb_d
 
 	ar2->udev = udev;
 
+	/* Sanity check, first interface must have an endpoint */
+	if (alt->desc.bNumEndpoints < 1 || !alt->endpoint) {
+		dev_err(&interface->dev,
+			"%s(): interface 0 must have an endpoint\n", __func__);
+		r = -ENODEV;
+		goto fail1;
+	}
 	ar2->intf[0] = interface;
 	ar2->ep[0] = &alt->endpoint[0].desc;
 
+	/* Sanity check, the device must have two interfaces */
 	ar2->intf[1] = usb_ifnum_to_if(udev, 1);
+	if ((udev->actconfig->desc.bNumInterfaces < 2) || !ar2->intf[1]) {
+		dev_err(&interface->dev, "%s(): need 2 interfaces, found %d\n",
+			__func__, udev->actconfig->desc.bNumInterfaces);
+		r = -ENODEV;
+		goto fail1;
+	}
+
 	r = usb_driver_claim_interface(&ati_remote2_driver, ar2->intf[1], ar2);
 	if (r)
 		goto fail1;
+
+	/* Sanity check, second interface must have an endpoint */
 	alt = ar2->intf[1]->cur_altsetting;
+	if (alt->desc.bNumEndpoints < 1 || !alt->endpoint) {
+		dev_err(&interface->dev,
+			"%s(): interface 1 must have an endpoint\n", __func__);
+		r = -ENODEV;
+		goto fail2;
+	}
 	ar2->ep[1] = &alt->endpoint[0].desc;
 
 	r = ati_remote2_urb_init(ar2);
 	if (r)
-		goto fail2;
+		goto fail3;
 
 	ar2->channel_mask = channel_mask;
 	ar2->mode_mask = mode_mask;
 
 	r = ati_remote2_setup(ar2, ar2->channel_mask);
 	if (r)
-		goto fail2;
+		goto fail3;
 
 	usb_make_path(udev, ar2->phys, sizeof(ar2->phys));
 	strlcat(ar2->phys, "/input0", sizeof(ar2->phys));
@@ -838,11 +865,11 @@ static int ati_remote2_probe(struct usb_interface *interface, const struct usb_d
 
 	r = sysfs_create_group(&udev->dev.kobj, &ati_remote2_attr_group);
 	if (r)
-		goto fail2;
+		goto fail3;
 
 	r = ati_remote2_input_init(ar2);
 	if (r)
-		goto fail3;
+		goto fail4;
 
 	usb_set_intfdata(interface, ar2);
 
@@ -850,10 +877,11 @@ static int ati_remote2_probe(struct usb_interface *interface, const struct usb_d
 
 	return 0;
 
- fail3:
+ fail4:
 	sysfs_remove_group(&udev->dev.kobj, &ati_remote2_attr_group);
- fail2:
+ fail3:
 	ati_remote2_urb_cleanup(ar2);
+ fail2:
 	usb_driver_release_interface(&ati_remote2_driver, ar2->intf[1]);
  fail1:
 	kfree(ar2);

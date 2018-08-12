@@ -164,19 +164,6 @@ fail1:
 }
 
 /*
- * complete_edac_pci_list_del
- *
- *	RCU completion callback to indicate item is deleted
- */
-static void complete_edac_pci_list_del(struct rcu_head *head)
-{
-	struct edac_pci_ctl_info *pci;
-
-	pci = container_of(head, struct edac_pci_ctl_info, rcu);
-	INIT_LIST_HEAD(&pci->link);
-}
-
-/*
  * del_edac_pci_from_global_list
  *
  *	remove the PCI control struct from the global list
@@ -184,8 +171,12 @@ static void complete_edac_pci_list_del(struct rcu_head *head)
 static void del_edac_pci_from_global_list(struct edac_pci_ctl_info *pci)
 {
 	list_del_rcu(&pci->link);
-	call_rcu(&pci->rcu, complete_edac_pci_list_del);
-	rcu_barrier();
+
+	/* these are for safe removal of devices from global list while
+	 * NMI handlers may be traversing list
+	 */
+	synchronize_rcu();
+	INIT_LIST_HEAD(&pci->link);
 }
 
 #if 0
@@ -284,13 +275,12 @@ static void edac_pci_workq_setup(struct edac_pci_ctl_info *pci,
  */
 static void edac_pci_workq_teardown(struct edac_pci_ctl_info *pci)
 {
-	int status;
-
 	debugf0("%s()\n", __func__);
 
-	status = cancel_delayed_work(&pci->work);
-	if (status == 0)
-		flush_workqueue(edac_workqueue);
+	pci->op_state = OP_OFFLINE;
+
+	cancel_delayed_work_sync(&pci->work);
+	flush_workqueue(edac_workqueue);
 }
 
 /*

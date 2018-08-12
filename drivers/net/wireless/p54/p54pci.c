@@ -20,6 +20,7 @@
 #include <linux/etherdevice.h>
 #include <linux/delay.h>
 #include <linux/completion.h>
+#include <linux/module.h>
 #include <net/mac80211.h>
 
 #include "p54.h"
@@ -331,10 +332,9 @@ static void p54p_tx(struct ieee80211_hw *dev, struct sk_buff *skb)
 	struct p54p_ring_control *ring_control = priv->ring_control;
 	struct p54p_desc *desc;
 	dma_addr_t mapping;
-	u32 device_idx, idx, i;
+	u32 idx, i;
 
 	spin_lock_irqsave(&priv->lock, flags);
-	device_idx = le32_to_cpu(ring_control->device_idx[1]);
 	idx = le32_to_cpu(ring_control->host_idx[1]);
 	i = idx % ARRAY_SIZE(ring_control->tx_data);
 

@@ -316,17 +316,19 @@ s_MgrMakeProbeRequest(
     return pTxPacket;
 }
 
-void vCommandTimerWait(void *hDeviceContext, unsigned int MSecond)
+void vCommandTimerWait(void *hDeviceContext, unsigned long MSecond)
 {
-    PSDevice        pDevice = (PSDevice)hDeviceContext;
+	PSDevice pDevice = (PSDevice)hDeviceContext;
 
-    init_timer(&pDevice->sTimerCommand);
-    pDevice->sTimerCommand.data = (unsigned long)pDevice;
-    pDevice->sTimerCommand.function = (TimerFunction)vRunCommand;
-    // RUN_AT :1 msec ~= (HZ/1024)
-    pDevice->sTimerCommand.expires = (unsigned int)RUN_AT((MSecond * HZ) >> 10);
-    add_timer(&pDevice->sTimerCommand);
-    return;
+	init_timer(&pDevice->sTimerCommand);
+
+	pDevice->sTimerCommand.data = (unsigned long)pDevice;
+	pDevice->sTimerCommand.function = (TimerFunction)vRunCommand;
+	pDevice->sTimerCommand.expires = RUN_AT((MSecond * HZ) / 1000);
+
+	add_timer(&pDevice->sTimerCommand);
+
+	return;
 }
 
 void vRunCommand(void *hDeviceContext)
@@ -421,7 +423,7 @@ void vRunCommand(void *hDeviceContext)
                     pMgmt->eScanState = WMAC_IS_SCANNING;
                     pDevice->byScanBBType = pDevice->byBBType;  //lucas
                     pDevice->bStopDataPkt = TRUE;
-                    // Turn off RCR_BSSID filter everytime
+                    // Turn off RCR_BSSID filter every time
                     MACvRegBitsOff(pDevice, MAC_REG_RCR, RCR_BSSID);
                     pDevice->byRxMode &= ~RCR_BSSID;
 
@@ -604,7 +606,7 @@ void vRunCommand(void *hDeviceContext)
             // if Infra mode
             if ((pMgmt->eCurrMode == WMAC_MODE_ESS_STA) && (pMgmt->eCurrState == WMAC_STATE_JOINTED)) {
                 // Call mgr to begin the deauthentication
-                // reason = (3) beacuse sta has left ESS
+                // reason = (3) because sta has left ESS
 	      if (pMgmt->eCurrState >= WMAC_STATE_AUTH) {
 		vMgrDeAuthenBeginSta((void *)pDevice,
 				     pMgmt,
@@ -642,7 +644,7 @@ void vRunCommand(void *hDeviceContext)
                     if (Status != CMD_STATUS_SUCCESS){
 			DBG_PRT(MSG_LEVEL_DEBUG,
 				KERN_INFO "WLAN_CMD_IBSS_CREATE fail!\n");
-                    };
+                    }
                     BSSvAddMulticastNode(pDevice);
                 }
                 s_bClearBSSID_SCAN(pDevice);
@@ -658,7 +660,7 @@ void vRunCommand(void *hDeviceContext)
                     if (Status != CMD_STATUS_SUCCESS){
 			DBG_PRT(MSG_LEVEL_DEBUG,
 				KERN_INFO "WLAN_CMD_IBSS_CREATE fail!\n");
-                    };
+                    }
                     BSSvAddMulticastNode(pDevice);
                     s_bClearBSSID_SCAN(pDevice);
 /*
@@ -793,7 +795,7 @@ void vRunCommand(void *hDeviceContext)
 		if (Status != CMD_STATUS_SUCCESS) {
 			DBG_PRT(MSG_LEVEL_DEBUG,
 				KERN_INFO "vMgrCreateOwnIBSS fail!\n");
-                };
+                }
                 // alway turn off unicast bit
                 MACvRegBitsOff(pDevice, MAC_REG_RCR, RCR_UNICAST);
                 pDevice->byRxMode &= ~RCR_UNICAST;
@@ -827,7 +829,7 @@ void vRunCommand(void *hDeviceContext)
 
                     pMgmt->sNodeDBTable[0].wEnQueueCnt--;
                 }
-            };
+            }
 
             // PS nodes tx
             for (ii = 1; ii < (MAX_NODE_NUM + 1); ii++) {

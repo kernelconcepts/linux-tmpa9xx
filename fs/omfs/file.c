@@ -4,7 +4,6 @@
  * Released under GPL v2.
  */
 
-#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/buffer_head.h>
@@ -346,7 +345,7 @@ static int omfs_setattr(struct dentry *dentry, struct iattr *attr)
 	struct inode *inode = dentry->d_inode;
 	int error;
 
-	error = inode_change_ok(inode, attr);
+	error = setattr_prepare(dentry, attr);
 	if (error)
 		return error;
 
@@ -372,7 +371,6 @@ const struct address_space_operations omfs_aops = {
 	.readpages = omfs_readpages,
 	.writepage = omfs_writepage,
 	.writepages = omfs_writepages,
-	.sync_page = block_sync_page,
 	.write_begin = omfs_write_begin,
 	.write_end = generic_write_end,
 	.bmap = omfs_bmap,

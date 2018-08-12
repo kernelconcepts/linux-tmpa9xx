@@ -20,6 +20,8 @@
 #include <plat/cpu.h>
 #include <plat/prcm.h>
 
+#include "vp.h"
+
 #include "prm2xxx_3xxx.h"
 #include "cm2xxx_3xxx.h"
 #include "prm-regbits-24xx.h"
@@ -118,7 +120,8 @@ int omap2_prm_assert_hardreset(s16 prm_mod, u8 shift)
 /**
  * omap2_prm_deassert_hardreset - deassert a submodule hardreset line and wait
  * @prm_mod: PRM submodule base (e.g. CORE_MOD)
- * @shift: register bit shift corresponding to the reset line to deassert
+ * @rst_shift: register bit shift corresponding to the reset line to deassert
+ * @st_shift: register bit shift for the status of the deasserted submodule
  *
  * Some IPs like dsp or iva contain processors that require an HW
  * reset line to be asserted / deasserted in order to fully enable the
@@ -129,28 +132,83 @@ int omap2_prm_assert_hardreset(s16 prm_mod, u8 shift)
  * -EINVAL upon an argument error, -EEXIST if the submodule was already out
  * of reset, or -EBUSY if the submodule did not exit reset promptly.
  */
-int omap2_prm_deassert_hardreset(s16 prm_mod, u8 shift)
+int omap2_prm_deassert_hardreset(s16 prm_mod, u8 rst_shift, u8 st_shift)
 {
-	u32 mask;
+	u32 rst, st;
 	int c;
 
 	if (!(cpu_is_omap24xx() || cpu_is_omap34xx()))
 		return -EINVAL;
 
-	mask = 1 << shift;
+	rst = 1 << rst_shift;
+	st = 1 << st_shift;
 
 	/* Check the current status to avoid de-asserting the line twice */
-	if (omap2_prm_read_mod_bits_shift(prm_mod, OMAP2_RM_RSTCTRL, mask) == 0)
+	if (omap2_prm_read_mod_bits_shift(prm_mod, OMAP2_RM_RSTCTRL, rst) == 0)
 		return -EEXIST;
 
 	/* Clear the reset status by writing 1 to the status bit */
-	omap2_prm_rmw_mod_reg_bits(0xffffffff, mask, prm_mod, OMAP2_RM_RSTST);
+	omap2_prm_rmw_mod_reg_bits(0xffffffff, st, prm_mod, OMAP2_RM_RSTST);
 	/* de-assert the reset control line */
-	omap2_prm_rmw_mod_reg_bits(mask, 0, prm_mod, OMAP2_RM_RSTCTRL);
+	omap2_prm_rmw_mod_reg_bits(rst, 0, prm_mod, OMAP2_RM_RSTCTRL);
 	/* wait the status to be set */
 	omap_test_timeout(omap2_prm_read_mod_bits_shift(prm_mod, OMAP2_RM_RSTST,
-						  mask),
+						  st),
 			  MAX_MODULE_HARDRESET_WAIT, c);
 
 	return (c == MAX_MODULE_HARDRESET_WAIT) ? -EBUSY : 0;
+}
+
+/* PRM VP */
+
+/*
+ * struct omap3_vp - OMAP3 VP register access description.
+ * @tranxdone_status: VP_TRANXDONE_ST bitmask in PRM_IRQSTATUS_MPU reg
+ */
+struct omap3_vp {
+	u32 tranxdone_status;
+};
+
+static struct omap3_vp omap3_vp[] = {
+	[OMAP3_VP_VDD_MPU_ID] = {
+		.tranxdone_status = OMAP3430_VP1_TRANXDONE_ST_MASK,
+	},
+	[OMAP3_VP_VDD_CORE_ID] = {
+		.tranxdone_status = OMAP3430_VP2_TRANXDONE_ST_MASK,
+	},
+};
+
+#define MAX_VP_ID ARRAY_SIZE(omap3_vp);
+
+u32 omap3_prm_vp_check_txdone(u8 vp_id)
+{
+	struct omap3_vp *vp = &omap3_vp[vp_id];
+	u32 irqstatus;
+
+	irqstatus = omap2_prm_read_mod_reg(OCP_MOD,
+					   OMAP3_PRM_IRQSTATUS_MPU_OFFSET);
+	return irqstatus & vp->tranxdone_status;
+}
+
+void omap3_prm_vp_clear_txdone(u8 vp_id)
+{
+	struct omap3_vp *vp = &omap3_vp[vp_id];
+
+	omap2_prm_write_mod_reg(vp->tranxdone_status,
+				OCP_MOD, OMAP3_PRM_IRQSTATUS_MPU_OFFSET);
+}
+
+u32 omap3_prm_vcvp_read(u8 offset)
+{
+	return omap2_prm_read_mod_reg(OMAP3430_GR_MOD, offset);
+}
+
+void omap3_prm_vcvp_write(u32 val, u8 offset)
+{
+	omap2_prm_write_mod_reg(val, OMAP3430_GR_MOD, offset);
+}
+
+u32 omap3_prm_vcvp_rmw(u32 mask, u32 bits, u8 offset)
+{
+	return omap2_prm_rmw_mod_reg_bits(mask, bits, OMAP3430_GR_MOD, offset);
 }

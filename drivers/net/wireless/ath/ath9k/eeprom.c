@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2009 Atheros Communications Inc.
+ * Copyright (c) 2008-2011 Atheros Communications Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -87,6 +87,38 @@ bool ath9k_hw_get_lower_upper_index(u8 target, u8 *pList, u16 listSize,
 		}
 	}
 	return false;
+}
+
+void ath9k_hw_usb_gen_fill_eeprom(struct ath_hw *ah, u16 *eep_data,
+				  int eep_start_loc, int size)
+{
+	int i = 0, j, addr;
+	u32 addrdata[8];
+	u32 data[8];
+
+	for (addr = 0; addr < size; addr++) {
+		addrdata[i] = AR5416_EEPROM_OFFSET +
+			((addr + eep_start_loc) << AR5416_EEPROM_S);
+		i++;
+		if (i == 8) {
+			REG_READ_MULTI(ah, addrdata, data, i);
+
+			for (j = 0; j < i; j++) {
+				*eep_data = data[j];
+				eep_data++;
+			}
+			i = 0;
+		}
+	}
+
+	if (i != 0) {
+		REG_READ_MULTI(ah, addrdata, data, i);
+
+		for (j = 0; j < i; j++) {
+			*eep_data = data[j];
+			eep_data++;
+		}
+	}
 }
 
 bool ath9k_hw_nvram_read(struct ath_common *common, u32 off, u16 *data)
@@ -332,10 +364,9 @@ void ath9k_hw_get_gain_boundaries_pdadcs(struct ath_hw *ah,
 
 	if (match) {
 		if (AR_SREV_9287(ah)) {
-			/* FIXME: array overrun? */
 			for (i = 0; i < numXpdGains; i++) {
 				minPwrT4[i] = data_9287[idxL].pwrPdg[i][0];
-				maxPwrT4[i] = data_9287[idxL].pwrPdg[i][4];
+				maxPwrT4[i] = data_9287[idxL].pwrPdg[i][intercepts - 1];
 				ath9k_hw_fill_vpd_table(minPwrT4[i], maxPwrT4[i],
 						data_9287[idxL].pwrPdg[i],
 						data_9287[idxL].vpdPdg[i],
@@ -345,7 +376,7 @@ void ath9k_hw_get_gain_boundaries_pdadcs(struct ath_hw *ah,
 		} else if (eeprom_4k) {
 			for (i = 0; i < numXpdGains; i++) {
 				minPwrT4[i] = data_4k[idxL].pwrPdg[i][0];
-				maxPwrT4[i] = data_4k[idxL].pwrPdg[i][4];
+				maxPwrT4[i] = data_4k[idxL].pwrPdg[i][intercepts - 1];
 				ath9k_hw_fill_vpd_table(minPwrT4[i], maxPwrT4[i],
 						data_4k[idxL].pwrPdg[i],
 						data_4k[idxL].vpdPdg[i],
@@ -355,7 +386,7 @@ void ath9k_hw_get_gain_boundaries_pdadcs(struct ath_hw *ah,
 		} else {
 			for (i = 0; i < numXpdGains; i++) {
 				minPwrT4[i] = data_def[idxL].pwrPdg[i][0];
-				maxPwrT4[i] = data_def[idxL].pwrPdg[i][4];
+				maxPwrT4[i] = data_def[idxL].pwrPdg[i][intercepts - 1];
 				ath9k_hw_fill_vpd_table(minPwrT4[i], maxPwrT4[i],
 						data_def[idxL].pwrPdg[i],
 						data_def[idxL].vpdPdg[i],
@@ -424,12 +455,7 @@ void ath9k_hw_get_gain_boundaries_pdadcs(struct ath_hw *ah,
 		pPdGainBoundaries[i] =
 			min((u16)MAX_RATE_POWER, pPdGainBoundaries[i]);
 
-		if ((i == 0) && !AR_SREV_5416_20_OR_LATER(ah)) {
-			minDelta = pPdGainBoundaries[0] - 23;
-			pPdGainBoundaries[0] = 23;
-		} else {
-			minDelta = 0;
-		}
+		minDelta = 0;
 
 		if (i == 0) {
 			if (AR_SREV_9280_20_OR_LATER(ah))

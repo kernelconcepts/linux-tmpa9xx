@@ -1705,7 +1705,7 @@ sub push_parameter($$$) {
 
 	$param = xml_escape($param);
 
-	# strip spaces from $param so that it is one continous string
+	# strip spaces from $param so that it is one continuous string
 	# on @parameterlist;
 	# this fixes a problem where check_sections() cannot find
 	# a parameter like "addr[6 + 2]" because it actually appears
@@ -2044,6 +2044,9 @@ sub process_file($) {
 
     $section_counter = 0;
     while (<IN>) {
+	while (s/\\\s*$//) {
+	    $_ .= <IN>;
+	}
 	if ($state == 0) {
 	    if (/$doc_start/o) {
 		$state = 1;		# next line is always the function name

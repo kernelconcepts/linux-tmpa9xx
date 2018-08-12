@@ -19,6 +19,7 @@
 #include <linux/platform_device.h>
 #include <linux/spi/spi.h>
 #include <linux/slab.h>
+#include <linux/of_device.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
@@ -65,21 +66,10 @@ SND_SOC_DAPM_OUTPUT("VOUTL"),
 SND_SOC_DAPM_OUTPUT("VOUTR"),
 };
 
-static const struct snd_soc_dapm_route intercon[] = {
+static const struct snd_soc_dapm_route wm8728_intercon[] = {
 	{"VOUTL", NULL, "DAC"},
 	{"VOUTR", NULL, "DAC"},
 };
-
-static int wm8728_add_widgets(struct snd_soc_codec *codec)
-{
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
-
-	snd_soc_dapm_new_controls(dapm, wm8728_dapm_widgets,
-				  ARRAY_SIZE(wm8728_dapm_widgets));
-	snd_soc_dapm_add_routes(dapm, intercon, ARRAY_SIZE(intercon));
-
-	return 0;
-}
 
 static int wm8728_mute(struct snd_soc_dai *dai, int mute)
 {
@@ -255,7 +245,6 @@ static int wm8728_probe(struct snd_soc_codec *codec)
 
 	snd_soc_add_controls(codec, wm8728_snd_controls,
 				ARRAY_SIZE(wm8728_snd_controls));
-	wm8728_add_widgets(codec);
 
 	return ret;
 }
@@ -275,7 +264,17 @@ static struct snd_soc_codec_driver soc_codec_dev_wm8728 = {
 	.reg_cache_size = ARRAY_SIZE(wm8728_reg_defaults),
 	.reg_word_size = sizeof(u16),
 	.reg_cache_default = wm8728_reg_defaults,
+	.dapm_widgets = wm8728_dapm_widgets,
+	.num_dapm_widgets = ARRAY_SIZE(wm8728_dapm_widgets),
+	.dapm_routes = wm8728_intercon,
+	.num_dapm_routes = ARRAY_SIZE(wm8728_intercon),
 };
+
+static const struct of_device_id wm8728_of_match[] = {
+	{ .compatible = "wlf,wm8728", },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, wm8728_of_match);
 
 #if defined(CONFIG_SPI_MASTER)
 static int __devinit wm8728_spi_probe(struct spi_device *spi)
@@ -306,8 +305,9 @@ static int __devexit wm8728_spi_remove(struct spi_device *spi)
 
 static struct spi_driver wm8728_spi_driver = {
 	.driver = {
-		.name	= "wm8728-codec",
+		.name	= "wm8728",
 		.owner	= THIS_MODULE,
+		.of_match_table = wm8728_of_match,
 	},
 	.probe		= wm8728_spi_probe,
 	.remove		= __devexit_p(wm8728_spi_remove),
@@ -350,8 +350,9 @@ MODULE_DEVICE_TABLE(i2c, wm8728_i2c_id);
 
 static struct i2c_driver wm8728_i2c_driver = {
 	.driver = {
-		.name = "wm8728-codec",
+		.name = "wm8728",
 		.owner = THIS_MODULE,
+		.of_match_table = wm8728_of_match,
 	},
 	.probe =    wm8728_i2c_probe,
 	.remove =   __devexit_p(wm8728_i2c_remove),

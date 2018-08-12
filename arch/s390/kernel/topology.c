@@ -17,7 +17,6 @@
 #include <linux/smp.h>
 #include <linux/cpuset.h>
 #include <asm/delay.h>
-#include <asm/s390_ext.h>
 
 #define PTF_HORIZONTAL	(0UL)
 #define PTF_VERTICAL	(1UL)
@@ -52,25 +51,27 @@ static cpumask_t cpu_group_map(struct mask_info *info, unsigned int cpu)
 {
 	cpumask_t mask;
 
-	cpus_clear(mask);
+	cpumask_clear(&mask);
 	if (!topology_enabled || !MACHINE_HAS_TOPOLOGY) {
 		cpumask_copy(&mask, cpumask_of(cpu));
 		return mask;
 	}
 	while (info) {
-		if (cpu_isset(cpu, info->mask)) {
+		if (cpumask_test_cpu(cpu, &info->mask)) {
 			mask = info->mask;
 			break;
 		}
 		info = info->next;
 	}
-	if (cpus_empty(mask))
-		mask = cpumask_of_cpu(cpu);
+	if (cpumask_empty(&mask))
+		cpumask_copy(&mask, cpumask_of(cpu));
 	return mask;
 }
 
-static void add_cpus_to_mask(struct topology_cpu *tl_cpu,
-			     struct mask_info *book, struct mask_info *core)
+static struct mask_info *add_cpus_to_mask(struct topology_cpu *tl_cpu,
+					  struct mask_info *book,
+					  struct mask_info *core,
+					  int z10)
 {
 	unsigned int cpu;
 
@@ -85,14 +86,20 @@ static void add_cpus_to_mask(struct topology_cpu *tl_cpu,
 			if (cpu_logical_map(lcpu) != rcpu)
 				continue;
 #ifdef CONFIG_SCHED_BOOK
-			cpu_set(lcpu, book->mask);
+			cpumask_set_cpu(lcpu, &book->mask);
 			cpu_book_id[lcpu] = book->id;
 #endif
-			cpu_set(lcpu, core->mask);
-			cpu_core_id[lcpu] = core->id;
+			cpumask_set_cpu(lcpu, &core->mask);
+			if (z10) {
+				cpu_core_id[lcpu] = rcpu;
+				core = core->next;
+			} else {
+				cpu_core_id[lcpu] = core->id;
+			}
 			smp_cpu_polarization[lcpu] = tl_cpu->pp;
 		}
 	}
+	return core;
 }
 
 static void clear_masks(void)
@@ -101,13 +108,13 @@ static void clear_masks(void)
 
 	info = &core_info;
 	while (info) {
-		cpus_clear(info->mask);
+		cpumask_clear(&info->mask);
 		info = info->next;
 	}
 #ifdef CONFIG_SCHED_BOOK
 	info = &book_info;
 	while (info) {
-		cpus_clear(info->mask);
+		cpumask_clear(&info->mask);
 		info = info->next;
 	}
 #endif
@@ -124,18 +131,41 @@ static void tl_to_cores(struct sysinfo_15_1_x *info)
 {
 #ifdef CONFIG_SCHED_BOOK
 	struct mask_info *book = &book_info;
+	struct cpuid cpu_id;
 #else
 	struct mask_info *book = NULL;
 #endif
 	struct mask_info *core = &core_info;
 	union topology_entry *tle, *end;
+	int z10 = 0;
 
-
+#ifdef CONFIG_SCHED_BOOK
+	get_cpu_id(&cpu_id);
+	z10 = cpu_id.machine == 0x2097 || cpu_id.machine == 0x2098;
+#endif
 	spin_lock_irq(&topology_lock);
 	clear_masks();
 	tle = info->tle;
 	end = (union topology_entry *)((unsigned long)info + info->length);
 	while (tle < end) {
+#ifdef CONFIG_SCHED_BOOK
+		if (z10) {
+			switch (tle->nl) {
+			case 1:
+				book = book->next;
+				book->id = tle->container.id;
+				break;
+			case 0:
+				core = add_cpus_to_mask(&tle->cpu, book, core, z10);
+				break;
+			default:
+				clear_masks();
+				goto out;
+			}
+			tle = next_tle(tle);
+			continue;
+		}
+#endif
 		switch (tle->nl) {
 #ifdef CONFIG_SCHED_BOOK
 		case 2:
@@ -148,7 +178,7 @@ static void tl_to_cores(struct sysinfo_15_1_x *info)
 			core->id = tle->container.id;
 			break;
 		case 0:
-			add_cpus_to_mask(&tle->cpu, book, core);
+			add_cpus_to_mask(&tle->cpu, book, core, z10);
 			break;
 		default:
 			clear_masks();
@@ -300,8 +330,8 @@ out:
 }
 __initcall(init_topology_update);
 
-static void alloc_masks(struct sysinfo_15_1_x *info, struct mask_info *mask,
-			int offset)
+static void __init alloc_masks(struct sysinfo_15_1_x *info,
+			       struct mask_info *mask, int offset)
 {
 	int i, nr_masks;
 
@@ -329,8 +359,8 @@ void __init s390_init_cpu_topology(void)
 	for (i = 0; i < TOPOLOGY_NR_MAG; i++)
 		printk(" %d", info->mag[i]);
 	printk(" / %d\n", info->mnest);
-	alloc_masks(info, &core_info, 2);
+	alloc_masks(info, &core_info, 1);
 #ifdef CONFIG_SCHED_BOOK
-	alloc_masks(info, &book_info, 3);
+	alloc_masks(info, &book_info, 2);
 #endif
 }

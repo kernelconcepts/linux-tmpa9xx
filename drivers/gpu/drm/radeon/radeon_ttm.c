@@ -248,8 +248,8 @@ static int radeon_move_blit(struct ttm_buffer_object *bo,
 	if (unlikely(r)) {
 		return r;
 	}
-	old_start = old_mem->start << PAGE_SHIFT;
-	new_start = new_mem->start << PAGE_SHIFT;
+	old_start = (u64)old_mem->start << PAGE_SHIFT;
+	new_start = (u64)new_mem->start << PAGE_SHIFT;
 
 	switch (old_mem->mem_type) {
 	case TTM_PL_VRAM:
@@ -277,7 +277,12 @@ static int radeon_move_blit(struct ttm_buffer_object *bo,
 		DRM_ERROR("Trying to move memory with CP turned off.\n");
 		return -EINVAL;
 	}
-	r = radeon_copy(rdev, old_start, new_start, new_mem->num_pages, fence);
+
+	BUILD_BUG_ON((PAGE_SIZE % RADEON_GPU_PAGE_SIZE) != 0);
+
+	r = radeon_copy(rdev, old_start, new_start,
+			new_mem->num_pages * (PAGE_SIZE / RADEON_GPU_PAGE_SIZE), /* GPU pages */
+			fence);
 	/* FIXME: handle copy error */
 	r = ttm_bo_move_accel_cleanup(bo, (void *)fence, NULL,
 				      evict, no_wait_reserve, no_wait_gpu, new_mem);
@@ -450,6 +455,29 @@ static int radeon_ttm_io_mem_reserve(struct ttm_bo_device *bdev, struct ttm_mem_
 			return -EINVAL;
 		mem->bus.base = rdev->mc.aper_base;
 		mem->bus.is_iomem = true;
+#ifdef __alpha__
+		/*
+		 * Alpha: use bus.addr to hold the ioremap() return,
+		 * so we can modify bus.base below.
+		 */
+		if (mem->placement & TTM_PL_FLAG_WC)
+			mem->bus.addr =
+				ioremap_wc(mem->bus.base + mem->bus.offset,
+					   mem->bus.size);
+		else
+			mem->bus.addr =
+				ioremap_nocache(mem->bus.base + mem->bus.offset,
+						mem->bus.size);
+
+		/*
+		 * Alpha: Use just the bus offset plus
+		 * the hose/domain memory base for bus.base.
+		 * It then can be used to build PTEs for VRAM
+		 * access, as done in ttm_bo_vm_fault().
+		 */
+		mem->bus.base = (mem->bus.base & 0x0ffffffffUL) +
+			rdev->ddev->hose->dense_mem_base;
+#endif
 		break;
 	default:
 		return -EINVAL;
@@ -529,7 +557,7 @@ int radeon_ttm_init(struct radeon_device *rdev)
 		DRM_ERROR("Failed initializing VRAM heap.\n");
 		return r;
 	}
-	r = radeon_bo_create(rdev, NULL, 256 * 1024, PAGE_SIZE, true,
+	r = radeon_bo_create(rdev, 256 * 1024, PAGE_SIZE, true,
 				RADEON_GEM_DOMAIN_VRAM,
 				&rdev->stollen_vga_memory);
 	if (r) {
@@ -661,6 +689,7 @@ struct radeon_ttm_backend {
 	unsigned long			num_pages;
 	struct page			**pages;
 	struct page			*dummy_read_page;
+	dma_addr_t			*dma_addrs;
 	bool				populated;
 	bool				bound;
 	unsigned			offset;
@@ -669,12 +698,14 @@ struct radeon_ttm_backend {
 static int radeon_ttm_backend_populate(struct ttm_backend *backend,
 				       unsigned long num_pages,
 				       struct page **pages,
-				       struct page *dummy_read_page)
+				       struct page *dummy_read_page,
+				       dma_addr_t *dma_addrs)
 {
 	struct radeon_ttm_backend *gtt;
 
 	gtt = container_of(backend, struct radeon_ttm_backend, backend);
 	gtt->pages = pages;
+	gtt->dma_addrs = dma_addrs;
 	gtt->num_pages = num_pages;
 	gtt->dummy_read_page = dummy_read_page;
 	gtt->populated = true;
@@ -687,6 +718,7 @@ static void radeon_ttm_backend_clear(struct ttm_backend *backend)
 
 	gtt = container_of(backend, struct radeon_ttm_backend, backend);
 	gtt->pages = NULL;
+	gtt->dma_addrs = NULL;
 	gtt->num_pages = 0;
 	gtt->dummy_read_page = NULL;
 	gtt->populated = false;
@@ -707,7 +739,7 @@ static int radeon_ttm_backend_bind(struct ttm_backend *backend,
 		     gtt->num_pages, bo_mem, backend);
 	}
 	r = radeon_gart_bind(gtt->rdev, gtt->offset,
-			     gtt->num_pages, gtt->pages);
+			     gtt->num_pages, gtt->pages, gtt->dma_addrs);
 	if (r) {
 		DRM_ERROR("failed to bind %lu pages at 0x%08X\n",
 			  gtt->num_pages, gtt->offset);

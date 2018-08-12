@@ -409,7 +409,7 @@ static int tower_open (struct inode *inode, struct file *file)
 			  dev->udev,
 			  usb_rcvintpipe(dev->udev, dev->interrupt_in_endpoint->bEndpointAddress),
 			  dev->interrupt_in_buffer,
-			  le16_to_cpu(dev->interrupt_in_endpoint->wMaxPacketSize),
+			  usb_endpoint_maxp(dev->interrupt_in_endpoint),
 			  tower_interrupt_in_callback,
 			  dev,
 			  dev->interrupt_in_interval);
@@ -928,7 +928,7 @@ static int tower_probe (struct usb_interface *interface, const struct usb_device
 		err("Couldn't allocate read_buffer");
 		goto error;
 	}
-	dev->interrupt_in_buffer = kmalloc (le16_to_cpu(dev->interrupt_in_endpoint->wMaxPacketSize), GFP_KERNEL);
+	dev->interrupt_in_buffer = kmalloc (usb_endpoint_maxp(dev->interrupt_in_endpoint), GFP_KERNEL);
 	if (!dev->interrupt_in_buffer) {
 		err("Couldn't allocate interrupt_in_buffer");
 		goto error;
@@ -951,24 +951,6 @@ static int tower_probe (struct usb_interface *interface, const struct usb_device
 	dev->interrupt_in_interval = interrupt_in_interval ? interrupt_in_interval : dev->interrupt_in_endpoint->bInterval;
 	dev->interrupt_out_interval = interrupt_out_interval ? interrupt_out_interval : dev->interrupt_out_endpoint->bInterval;
 
-	/* we can register the device now, as it is ready */
-	usb_set_intfdata (interface, dev);
-
-	retval = usb_register_dev (interface, &tower_class);
-
-	if (retval) {
-		/* something prevented us from registering this driver */
-		err ("Not able to get a minor for this device.");
-		usb_set_intfdata (interface, NULL);
-		goto error;
-	}
-	dev->minor = interface->minor;
-
-	/* let the user know what node this device is now attached to */
-	dev_info(&interface->dev, "LEGO USB Tower #%d now attached to major "
-		 "%d minor %d\n", (dev->minor - LEGO_USB_TOWER_MINOR_BASE),
-		 USB_MAJOR, dev->minor);
-
 	/* get the firmware version and log it */
 	result = usb_control_msg (udev,
 				  usb_rcvctrlpipe(udev, 0),
@@ -989,6 +971,23 @@ static int tower_probe (struct usb_interface *interface, const struct usb_device
 		 get_version_reply.minor,
 		 le16_to_cpu(get_version_reply.build_no));
 
+	/* we can register the device now, as it is ready */
+	usb_set_intfdata (interface, dev);
+
+	retval = usb_register_dev (interface, &tower_class);
+
+	if (retval) {
+		/* something prevented us from registering this driver */
+		err ("Not able to get a minor for this device.");
+		usb_set_intfdata (interface, NULL);
+		goto error;
+	}
+	dev->minor = interface->minor;
+
+	/* let the user know what node this device is now attached to */
+	dev_info(&interface->dev, "LEGO USB Tower #%d now attached to major "
+		 "%d minor %d\n", (dev->minor - LEGO_USB_TOWER_MINOR_BASE),
+		 USB_MAJOR, dev->minor);
 
 exit:
 	dbg(2, "%s: leave, return value 0x%.8lx (dev)", __func__, (long) dev);

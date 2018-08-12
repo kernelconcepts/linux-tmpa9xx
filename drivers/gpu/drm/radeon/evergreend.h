@@ -64,6 +64,8 @@
 #define GB_BACKEND_MAP  				0x98FC
 #define DMIF_ADDR_CONFIG  				0xBD4
 #define HDP_ADDR_CONFIG  				0x2F48
+#define HDP_MISC_CNTL  					0x2F4C
+#define		HDP_FLUSH_INVALIDATE_CACHE      	(1 << 0)
 
 #define	CC_SYS_RB_BACKEND_DISABLE			0x3F88
 #define	GC_USER_RB_BACKEND_DISABLE			0x9B7C
@@ -74,6 +76,10 @@
 #define	CGTS_USER_TCC_DISABLE				0x914C
 
 #define	CONFIG_MEMSIZE					0x5428
+
+#define	BIF_FB_EN						0x5490
+#define		FB_READ_EN					(1 << 0)
+#define		FB_WRITE_EN					(1 << 1)
 
 #define CP_ME_CNTL					0x86D8
 #define		CP_ME_HALT					(1 << 28)
@@ -166,10 +172,16 @@
 #define		SE_DB_BUSY					(1 << 30)
 #define		SE_CB_BUSY					(1 << 31)
 /* evergreen */
+#define	CG_THERMAL_CTRL					0x72c
+#define		TOFFSET_MASK			        0x00003FE0
+#define		TOFFSET_SHIFT			        5
 #define	CG_MULT_THERMAL_STATUS				0x740
 #define		ASIC_T(x)			        ((x) << 16)
-#define		ASIC_T_MASK			        0x7FF0000
+#define		ASIC_T_MASK			        0x07FF0000
 #define		ASIC_T_SHIFT			        16
+#define	CG_TS0_STATUS					0x760
+#define		TS0_ADC_DOUT_MASK			0x000003FF
+#define		TS0_ADC_DOUT_SHIFT			0
 /* APU */
 #define	CG_THERMAL_STATUS			        0x678
 
@@ -186,6 +198,9 @@
 #define		NOOFCHAN_MASK					0x00003000
 #define MC_SHARED_CHREMAP					0x2008
 
+#define MC_SHARED_BLACKOUT_CNTL           		0x20ac
+#define		BLACKOUT_MODE_MASK			0x00000007
+
 #define	MC_ARB_RAMCFG					0x2760
 #define		NOOFBANK_SHIFT					0
 #define		NOOFBANK_MASK					0x00000003
@@ -200,6 +215,7 @@
 #define		BURSTLENGTH_SHIFT				9
 #define		BURSTLENGTH_MASK				0x00000200
 #define		CHANSIZE_OVERRIDE				(1 << 11)
+#define	FUS_MC_ARB_RAMCFG				0x2768
 #define	MC_VM_AGP_TOP					0x2028
 #define	MC_VM_AGP_BOT					0x202C
 #define	MC_VM_AGP_BASE					0x2030
@@ -221,6 +237,12 @@
 #define	MC_VM_MD_L1_TLB0_CNTL				0x2654
 #define	MC_VM_MD_L1_TLB1_CNTL				0x2658
 #define	MC_VM_MD_L1_TLB2_CNTL				0x265C
+#define	MC_VM_MD_L1_TLB3_CNTL				0x2698
+
+#define	FUS_MC_VM_MD_L1_TLB0_CNTL			0x265C
+#define	FUS_MC_VM_MD_L1_TLB1_CNTL			0x2660
+#define	FUS_MC_VM_MD_L1_TLB2_CNTL			0x2664
+
 #define	MC_VM_SYSTEM_APERTURE_DEFAULT_ADDR		0x203C
 #define	MC_VM_SYSTEM_APERTURE_HIGH_ADDR			0x2038
 #define	MC_VM_SYSTEM_APERTURE_LOW_ADDR			0x2034
@@ -255,6 +277,7 @@
 #define	SCRATCH_UMSK					0x8540
 #define	SCRATCH_ADDR					0x8544
 
+#define	SMX_SAR_CTL0					0xA008
 #define	SMX_DC_CTL0					0xA020
 #define		USE_HASH_FUNCTION				(1 << 0)
 #define		NUMBER_OF_SETS(x)				((x) << 1)
@@ -337,6 +360,7 @@
 #define		COLOR_BUFFER_SIZE(x)				((x) << 0)
 #define		POSITION_BUFFER_SIZE(x)				((x) << 8)
 #define		SMX_BUFFER_SIZE(x)				((x) << 16)
+#define	SX_MEMORY_EXPORT_BASE				0x9010
 #define	SX_MISC						0x28350
 
 #define CB_PERF_CTR0_SEL_0				0x9A20
@@ -435,6 +459,10 @@
 #       define LATENCY_LOW_WATERMARK(x)                   ((x) << 0)
 #       define LATENCY_HIGH_WATERMARK(x)                  ((x) << 16)
 
+#define	PIPE0_DMIF_BUFFER_CONTROL			  0x0ca0
+#       define DMIF_BUFFERS_ALLOCATED(x)                  ((x) << 0)
+#       define DMIF_BUFFERS_ALLOCATED_COMPLETED           (1 << 4)
+
 #define IH_RB_CNTL                                        0x3e00
 #       define IH_RB_ENABLE                               (1 << 0)
 #       define IH_IB_SIZE(x)                              ((x) << 1) /* log2 */
@@ -452,7 +480,7 @@
 #define IH_RB_WPTR_ADDR_LO                                0x3e14
 #define IH_CNTL                                           0x3e18
 #       define ENABLE_INTR                                (1 << 0)
-#       define IH_MC_SWAP(x)                              ((x) << 2)
+#       define IH_MC_SWAP(x)                              ((x) << 1)
 #       define IH_MC_SWAP_NONE                            0
 #       define IH_MC_SWAP_16BIT                           1
 #       define IH_MC_SWAP_32BIT                           2
@@ -533,7 +561,7 @@
 #       define LB_D5_VBLANK_INTERRUPT                   (1 << 3)
 #       define DC_HPD5_INTERRUPT                        (1 << 17)
 #       define DC_HPD5_RX_INTERRUPT                     (1 << 18)
-#define DISP_INTERRUPT_STATUS_CONTINUE5                 0x6050
+#define DISP_INTERRUPT_STATUS_CONTINUE5                 0x6150
 #       define LB_D6_VLINE_INTERRUPT                    (1 << 2)
 #       define LB_D6_VBLANK_INTERRUPT                   (1 << 3)
 #       define DC_HPD6_INTERRUPT                        (1 << 17)
@@ -755,13 +783,21 @@
 
 #define SQ_CONST_MEM_BASE				0x8df8
 
+#define SQ_ESGS_RING_BASE				0x8c40
 #define SQ_ESGS_RING_SIZE				0x8c44
+#define SQ_GSVS_RING_BASE				0x8c48
 #define SQ_GSVS_RING_SIZE				0x8c4c
+#define SQ_ESTMP_RING_BASE				0x8c50
 #define SQ_ESTMP_RING_SIZE				0x8c54
+#define SQ_GSTMP_RING_BASE				0x8c58
 #define SQ_GSTMP_RING_SIZE				0x8c5c
+#define SQ_VSTMP_RING_BASE				0x8c60
 #define SQ_VSTMP_RING_SIZE				0x8c64
+#define SQ_PSTMP_RING_BASE				0x8c68
 #define SQ_PSTMP_RING_SIZE				0x8c6c
+#define SQ_LSTMP_RING_BASE				0x8e10
 #define SQ_LSTMP_RING_SIZE				0x8e14
+#define SQ_HSTMP_RING_BASE				0x8e18
 #define SQ_HSTMP_RING_SIZE				0x8e1c
 #define VGT_TF_RING_SIZE				0x8988
 
@@ -876,6 +912,10 @@
 #define DB_HTILE_DATA_BASE				0x28014
 #define DB_Z_INFO					0x28040
 #       define Z_ARRAY_MODE(x)                          ((x) << 4)
+#       define DB_TILE_SPLIT(x)                         (((x) & 0x7) << 8)
+#       define DB_NUM_BANKS(x)                          (((x) & 0x3) << 12)
+#       define DB_BANK_WIDTH(x)                         (((x) & 0x3) << 16)
+#       define DB_BANK_HEIGHT(x)                        (((x) & 0x3) << 20)
 #define DB_STENCIL_INFO					0x28044
 #define DB_Z_READ_BASE					0x28048
 #define DB_STENCIL_READ_BASE				0x2804c
@@ -918,12 +958,39 @@
 #define	CB_COLOR0_SLICE					0x28c68
 #define	CB_COLOR0_VIEW					0x28c6c
 #define	CB_COLOR0_INFO					0x28c70
+#	define CB_FORMAT(x)				((x) << 2)
 #       define CB_ARRAY_MODE(x)                         ((x) << 8)
 #       define ARRAY_LINEAR_GENERAL                     0
 #       define ARRAY_LINEAR_ALIGNED                     1
 #       define ARRAY_1D_TILED_THIN1                     2
 #       define ARRAY_2D_TILED_THIN1                     4
+#	define CB_SOURCE_FORMAT(x)			((x) << 24)
+#	define CB_SF_EXPORT_FULL			0
+#	define CB_SF_EXPORT_NORM			1
 #define	CB_COLOR0_ATTRIB				0x28c74
+#       define CB_TILE_SPLIT(x)                         (((x) & 0x7) << 5)
+#       define ADDR_SURF_TILE_SPLIT_64B                 0
+#       define ADDR_SURF_TILE_SPLIT_128B                1
+#       define ADDR_SURF_TILE_SPLIT_256B                2
+#       define ADDR_SURF_TILE_SPLIT_512B                3
+#       define ADDR_SURF_TILE_SPLIT_1KB                 4
+#       define ADDR_SURF_TILE_SPLIT_2KB                 5
+#       define ADDR_SURF_TILE_SPLIT_4KB                 6
+#       define CB_NUM_BANKS(x)                          (((x) & 0x3) << 10)
+#       define ADDR_SURF_2_BANK                         0
+#       define ADDR_SURF_4_BANK                         1
+#       define ADDR_SURF_8_BANK                         2
+#       define ADDR_SURF_16_BANK                        3
+#       define CB_BANK_WIDTH(x)                         (((x) & 0x3) << 13)
+#       define ADDR_SURF_BANK_WIDTH_1                   0
+#       define ADDR_SURF_BANK_WIDTH_2                   1
+#       define ADDR_SURF_BANK_WIDTH_4                   2
+#       define ADDR_SURF_BANK_WIDTH_8                   3
+#       define CB_BANK_HEIGHT(x)                        (((x) & 0x3) << 16)
+#       define ADDR_SURF_BANK_HEIGHT_1                  0
+#       define ADDR_SURF_BANK_HEIGHT_2                  1
+#       define ADDR_SURF_BANK_HEIGHT_4                  2
+#       define ADDR_SURF_BANK_HEIGHT_8                  3
 #define	CB_COLOR0_DIM					0x28c78
 /* only CB0-7 blocks have these regs */
 #define	CB_COLOR0_CMASK					0x28c7c
@@ -1084,14 +1151,66 @@
 #define	CB_COLOR7_CLEAR_WORD3				0x28e3c
 
 #define SQ_TEX_RESOURCE_WORD0_0                         0x30000
+#	define TEX_DIM(x)				((x) << 0)
+#	define SQ_TEX_DIM_1D				0
+#	define SQ_TEX_DIM_2D				1
+#	define SQ_TEX_DIM_3D				2
+#	define SQ_TEX_DIM_CUBEMAP			3
+#	define SQ_TEX_DIM_1D_ARRAY			4
+#	define SQ_TEX_DIM_2D_ARRAY			5
+#	define SQ_TEX_DIM_2D_MSAA			6
+#	define SQ_TEX_DIM_2D_ARRAY_MSAA			7
 #define SQ_TEX_RESOURCE_WORD1_0                         0x30004
 #       define TEX_ARRAY_MODE(x)                        ((x) << 28)
 #define SQ_TEX_RESOURCE_WORD2_0                         0x30008
 #define SQ_TEX_RESOURCE_WORD3_0                         0x3000C
 #define SQ_TEX_RESOURCE_WORD4_0                         0x30010
+#	define TEX_DST_SEL_X(x)				((x) << 16)
+#	define TEX_DST_SEL_Y(x)				((x) << 19)
+#	define TEX_DST_SEL_Z(x)				((x) << 22)
+#	define TEX_DST_SEL_W(x)				((x) << 25)
+#	define SQ_SEL_X					0
+#	define SQ_SEL_Y					1
+#	define SQ_SEL_Z					2
+#	define SQ_SEL_W					3
+#	define SQ_SEL_0					4
+#	define SQ_SEL_1					5
 #define SQ_TEX_RESOURCE_WORD5_0                         0x30014
 #define SQ_TEX_RESOURCE_WORD6_0                         0x30018
+#       define TEX_TILE_SPLIT(x)                        (((x) & 0x7) << 29)
 #define SQ_TEX_RESOURCE_WORD7_0                         0x3001c
+#       define TEX_BANK_WIDTH(x)                        (((x) & 0x3) << 8)
+#       define TEX_BANK_HEIGHT(x)                       (((x) & 0x3) << 10)
+#       define TEX_NUM_BANKS(x)                         (((x) & 0x3) << 16)
 
+#define SQ_VTX_CONSTANT_WORD0_0				0x30000
+#define SQ_VTX_CONSTANT_WORD1_0				0x30004
+#define SQ_VTX_CONSTANT_WORD2_0				0x30008
+#	define SQ_VTXC_BASE_ADDR_HI(x)			((x) << 0)
+#	define SQ_VTXC_STRIDE(x)			((x) << 8)
+#	define SQ_VTXC_ENDIAN_SWAP(x)			((x) << 30)
+#	define SQ_ENDIAN_NONE				0
+#	define SQ_ENDIAN_8IN16				1
+#	define SQ_ENDIAN_8IN32				2
+#define SQ_VTX_CONSTANT_WORD3_0				0x3000C
+#	define SQ_VTCX_SEL_X(x)				((x) << 3)
+#	define SQ_VTCX_SEL_Y(x)				((x) << 6)
+#	define SQ_VTCX_SEL_Z(x)				((x) << 9)
+#	define SQ_VTCX_SEL_W(x)				((x) << 12)
+#define SQ_VTX_CONSTANT_WORD4_0				0x30010
+#define SQ_VTX_CONSTANT_WORD5_0                         0x30014
+#define SQ_VTX_CONSTANT_WORD6_0                         0x30018
+#define SQ_VTX_CONSTANT_WORD7_0                         0x3001c
+
+/* cayman 3D regs */
+#define CAYMAN_VGT_OFFCHIP_LDS_BASE			0x89B0
+#define CAYMAN_DB_EQAA					0x28804
+#define CAYMAN_DB_DEPTH_INFO				0x2803C
+#define CAYMAN_PA_SC_AA_CONFIG				0x28BE0
+#define         CAYMAN_MSAA_NUM_SAMPLES_SHIFT           0
+#define         CAYMAN_MSAA_NUM_SAMPLES_MASK            0x7
+#define CAYMAN_SX_SCATTER_EXPORT_BASE			0x28358
+/* cayman packet3 addition */
+#define	CAYMAN_PACKET3_DEALLOC_STATE			0x14
 
 #endif

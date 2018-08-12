@@ -136,8 +136,8 @@ void __init ixdp2351_init_irq(void)
 	     irq++) {
 		if (IXDP2351_INTA_IRQ_MASK(irq) & IXDP2351_INTA_IRQ_VALID) {
 			set_irq_flags(irq, IRQF_VALID);
-			set_irq_handler(irq, handle_level_irq);
-			set_irq_chip(irq, &ixdp2351_inta_chip);
+			irq_set_chip_and_handler(irq, &ixdp2351_inta_chip,
+						 handle_level_irq);
 		}
 	}
 
@@ -147,13 +147,13 @@ void __init ixdp2351_init_irq(void)
 	     irq++) {
 		if (IXDP2351_INTB_IRQ_MASK(irq) & IXDP2351_INTB_IRQ_VALID) {
 			set_irq_flags(irq, IRQF_VALID);
-			set_irq_handler(irq, handle_level_irq);
-			set_irq_chip(irq, &ixdp2351_intb_chip);
+			irq_set_chip_and_handler(irq, &ixdp2351_intb_chip,
+						 handle_level_irq);
 		}
 	}
 
-	set_irq_chained_handler(IRQ_IXP23XX_INTA, ixdp2351_inta_handler);
-	set_irq_chained_handler(IRQ_IXP23XX_INTB, ixdp2351_intb_handler);
+	irq_set_chained_handler(IRQ_IXP23XX_INTA, ixdp2351_inta_handler);
+	irq_set_chained_handler(IRQ_IXP23XX_INTB, ixdp2351_intb_handler);
 }
 
 /*
@@ -168,7 +168,7 @@ void __init ixdp2351_init_irq(void)
  */
 #define DEVPIN(dev, pin) ((pin) | ((dev) << 3))
 
-static int __init ixdp2351_map_irq(struct pci_dev *dev, u8 slot, u8 pin)
+static int __init ixdp2351_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
 {
 	u8 bus = dev->bus->number;
 	u32 devpin = DEVPIN(PCI_SLOT(dev->devfn), pin);
@@ -331,6 +331,6 @@ MACHINE_START(IXDP2351, "Intel IXDP2351 Development Platform")
 	.map_io		= ixdp2351_map_io,
 	.init_irq	= ixdp2351_init_irq,
 	.timer		= &ixp23xx_timer,
-	.boot_params	= 0x00000100,
+	.atag_offset	= 0x100,
 	.init_machine	= ixdp2351_init,
 MACHINE_END

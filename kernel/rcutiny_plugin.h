@@ -23,14 +23,9 @@
  */
 
 #include <linux/kthread.h>
+#include <linux/module.h>
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
-
-#ifdef CONFIG_RCU_TRACE
-#define RCU_TRACE(stmt)	stmt
-#else /* #ifdef CONFIG_RCU_TRACE */
-#define RCU_TRACE(stmt)
-#endif /* #else #ifdef CONFIG_RCU_TRACE */
 
 /* Global control variables for rcupdate callback mechanism. */
 struct rcu_ctrlblk {
@@ -38,17 +33,20 @@ struct rcu_ctrlblk {
 	struct rcu_head **donetail;	/* ->next pointer of last "done" CB. */
 	struct rcu_head **curtail;	/* ->next pointer of last CB. */
 	RCU_TRACE(long qlen);		/* Number of pending CBs. */
+	RCU_TRACE(char *name);		/* Name of RCU type. */
 };
 
 /* Definition for rcupdate control block. */
 static struct rcu_ctrlblk rcu_sched_ctrlblk = {
 	.donetail	= &rcu_sched_ctrlblk.rcucblist,
 	.curtail	= &rcu_sched_ctrlblk.rcucblist,
+	RCU_TRACE(.name = "rcu_sched")
 };
 
 static struct rcu_ctrlblk rcu_bh_ctrlblk = {
 	.donetail	= &rcu_bh_ctrlblk.rcucblist,
 	.curtail	= &rcu_bh_ctrlblk.rcucblist,
+	RCU_TRACE(.name = "rcu_bh")
 };
 
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
@@ -100,23 +98,28 @@ struct rcu_preempt_ctrlblk {
 	u8 completed;		/* Last grace period completed. */
 				/*  If all three are equal, RCU is idle. */
 #ifdef CONFIG_RCU_BOOST
-	s8 boosted_this_gp;	/* Has boosting already happened? */
 	unsigned long boost_time; /* When to start boosting (jiffies) */
 #endif /* #ifdef CONFIG_RCU_BOOST */
 #ifdef CONFIG_RCU_TRACE
 	unsigned long n_grace_periods;
 #ifdef CONFIG_RCU_BOOST
 	unsigned long n_tasks_boosted;
+				/* Total number of tasks boosted. */
 	unsigned long n_exp_boosts;
+				/* Number of tasks boosted for expedited GP. */
 	unsigned long n_normal_boosts;
-	unsigned long n_normal_balk_blkd_tasks;
-	unsigned long n_normal_balk_gp_tasks;
-	unsigned long n_normal_balk_boost_tasks;
-	unsigned long n_normal_balk_boosted;
-	unsigned long n_normal_balk_notyet;
-	unsigned long n_normal_balk_nos;
-	unsigned long n_exp_balk_blkd_tasks;
-	unsigned long n_exp_balk_nos;
+				/* Number of tasks boosted for normal GP. */
+	unsigned long n_balk_blkd_tasks;
+				/* Refused to boost: no blocked tasks. */
+	unsigned long n_balk_exp_gp_tasks;
+				/* Refused to boost: nothing blocking GP. */
+	unsigned long n_balk_boost_tasks;
+				/* Refused to boost: already boosting. */
+	unsigned long n_balk_notyet;
+				/* Refused to boost: not yet time. */
+	unsigned long n_balk_nos;
+				/* Refused to boost: not sure why, though. */
+				/*  This can happen due to race conditions. */
 #endif /* #ifdef CONFIG_RCU_BOOST */
 #endif /* #ifdef CONFIG_RCU_TRACE */
 };
@@ -126,6 +129,7 @@ static struct rcu_preempt_ctrlblk rcu_preempt_ctrlblk = {
 	.rcb.curtail = &rcu_preempt_ctrlblk.rcb.rcucblist,
 	.nexttail = &rcu_preempt_ctrlblk.rcb.rcucblist,
 	.blkd_tasks = LIST_HEAD_INIT(rcu_preempt_ctrlblk.blkd_tasks),
+	RCU_TRACE(.rcb.name = "rcu_preempt")
 };
 
 static int rcu_preempted_readers_exp(void);
@@ -201,7 +205,6 @@ static struct list_head *rcu_next_node_entry(struct task_struct *t)
 
 #ifdef CONFIG_RCU_BOOST
 static void rcu_initiate_boost_trace(void);
-static void rcu_initiate_exp_boost_trace(void);
 #endif /* #ifdef CONFIG_RCU_BOOST */
 
 /*
@@ -219,41 +222,21 @@ static void show_tiny_preempt_stats(struct seq_file *m)
 		   "N."[!rcu_preempt_ctrlblk.gp_tasks],
 		   "E."[!rcu_preempt_ctrlblk.exp_tasks]);
 #ifdef CONFIG_RCU_BOOST
-	seq_printf(m, "             ttb=%c btg=",
-		   "B."[!rcu_preempt_ctrlblk.boost_tasks]);
-	switch (rcu_preempt_ctrlblk.boosted_this_gp) {
-	case -1:
-		seq_puts(m, "exp");
-		break;
-	case 0:
-		seq_puts(m, "no");
-		break;
-	case 1:
-		seq_puts(m, "begun");
-		break;
-	case 2:
-		seq_puts(m, "done");
-		break;
-	default:
-		seq_printf(m, "?%d?", rcu_preempt_ctrlblk.boosted_this_gp);
-	}
-	seq_printf(m, " ntb=%lu neb=%lu nnb=%lu j=%04x bt=%04x\n",
+	seq_printf(m, "%sttb=%c ntb=%lu neb=%lu nnb=%lu j=%04x bt=%04x\n",
+		   "             ",
+		   "B."[!rcu_preempt_ctrlblk.boost_tasks],
 		   rcu_preempt_ctrlblk.n_tasks_boosted,
 		   rcu_preempt_ctrlblk.n_exp_boosts,
 		   rcu_preempt_ctrlblk.n_normal_boosts,
 		   (int)(jiffies & 0xffff),
 		   (int)(rcu_preempt_ctrlblk.boost_time & 0xffff));
-	seq_printf(m, "             %s: nt=%lu gt=%lu bt=%lu b=%lu ny=%lu nos=%lu\n",
-		   "normal balk",
-		   rcu_preempt_ctrlblk.n_normal_balk_blkd_tasks,
-		   rcu_preempt_ctrlblk.n_normal_balk_gp_tasks,
-		   rcu_preempt_ctrlblk.n_normal_balk_boost_tasks,
-		   rcu_preempt_ctrlblk.n_normal_balk_boosted,
-		   rcu_preempt_ctrlblk.n_normal_balk_notyet,
-		   rcu_preempt_ctrlblk.n_normal_balk_nos);
-	seq_printf(m, "             exp balk: bt=%lu nos=%lu\n",
-		   rcu_preempt_ctrlblk.n_exp_balk_blkd_tasks,
-		   rcu_preempt_ctrlblk.n_exp_balk_nos);
+	seq_printf(m, "%s: nt=%lu egt=%lu bt=%lu ny=%lu nos=%lu\n",
+		   "             balk",
+		   rcu_preempt_ctrlblk.n_balk_blkd_tasks,
+		   rcu_preempt_ctrlblk.n_balk_exp_gp_tasks,
+		   rcu_preempt_ctrlblk.n_balk_boost_tasks,
+		   rcu_preempt_ctrlblk.n_balk_notyet,
+		   rcu_preempt_ctrlblk.n_balk_nos);
 #endif /* #ifdef CONFIG_RCU_BOOST */
 }
 
@@ -263,6 +246,13 @@ static void show_tiny_preempt_stats(struct seq_file *m)
 
 #include "rtmutex_common.h"
 
+#define RCU_BOOST_PRIO CONFIG_RCU_BOOST_PRIO
+
+/* Controls for rcu_kthread() kthread. */
+static struct task_struct *rcu_kthread_task;
+static DECLARE_WAIT_QUEUE_HEAD(rcu_kthread_wq);
+static unsigned long have_rcu_kthread_work;
+
 /*
  * Carry out RCU priority boosting on the task indicated by ->boost_tasks,
  * and advance ->boost_tasks to the next task in the ->blkd_tasks list.
@@ -271,25 +261,59 @@ static int rcu_boost(void)
 {
 	unsigned long flags;
 	struct rt_mutex mtx;
-	struct list_head *np;
 	struct task_struct *t;
+	struct list_head *tb;
 
-	if (rcu_preempt_ctrlblk.boost_tasks == NULL)
+	if (rcu_preempt_ctrlblk.boost_tasks == NULL &&
+	    rcu_preempt_ctrlblk.exp_tasks == NULL)
 		return 0;  /* Nothing to boost. */
+
 	raw_local_irq_save(flags);
-	rcu_preempt_ctrlblk.boosted_this_gp++;
-	t = container_of(rcu_preempt_ctrlblk.boost_tasks, struct task_struct,
-			 rcu_node_entry);
-	np = rcu_next_node_entry(t);
+
+	/*
+	 * Recheck with irqs disabled: all tasks in need of boosting
+	 * might exit their RCU read-side critical sections on their own
+	 * if we are preempted just before disabling irqs.
+	 */
+	if (rcu_preempt_ctrlblk.boost_tasks == NULL &&
+	    rcu_preempt_ctrlblk.exp_tasks == NULL) {
+		raw_local_irq_restore(flags);
+		return 0;
+	}
+
+	/*
+	 * Preferentially boost tasks blocking expedited grace periods.
+	 * This cannot starve the normal grace periods because a second
+	 * expedited grace period must boost all blocked tasks, including
+	 * those blocking the pre-existing normal grace period.
+	 */
+	if (rcu_preempt_ctrlblk.exp_tasks != NULL) {
+		tb = rcu_preempt_ctrlblk.exp_tasks;
+		RCU_TRACE(rcu_preempt_ctrlblk.n_exp_boosts++);
+	} else {
+		tb = rcu_preempt_ctrlblk.boost_tasks;
+		RCU_TRACE(rcu_preempt_ctrlblk.n_normal_boosts++);
+	}
+	RCU_TRACE(rcu_preempt_ctrlblk.n_tasks_boosted++);
+
+	/*
+	 * We boost task t by manufacturing an rt_mutex that appears to
+	 * be held by task t.  We leave a pointer to that rt_mutex where
+	 * task t can find it, and task t will release the mutex when it
+	 * exits its outermost RCU read-side critical section.  Then
+	 * simply acquiring this artificial rt_mutex will boost task
+	 * t's priority.  (Thanks to tglx for suggesting this approach!)
+	 */
+	t = container_of(tb, struct task_struct, rcu_node_entry);
 	rt_mutex_init_proxy_locked(&mtx, t);
 	t->rcu_boost_mutex = &mtx;
 	t->rcu_read_unlock_special |= RCU_READ_UNLOCK_BOOSTED;
 	raw_local_irq_restore(flags);
 	rt_mutex_lock(&mtx);
-	RCU_TRACE(rcu_preempt_ctrlblk.n_tasks_boosted++);
-	rcu_preempt_ctrlblk.boosted_this_gp++;
-	rt_mutex_unlock(&mtx);
-	return rcu_preempt_ctrlblk.boost_tasks != NULL;
+	rt_mutex_unlock(&mtx);  /* Keep lockdep happy. */
+
+	return rcu_preempt_ctrlblk.boost_tasks != NULL ||
+	       rcu_preempt_ctrlblk.exp_tasks != NULL;
 }
 
 /*
@@ -304,42 +328,25 @@ static int rcu_boost(void)
  */
 static int rcu_initiate_boost(void)
 {
-	if (!rcu_preempt_blocked_readers_cgp()) {
-		RCU_TRACE(rcu_preempt_ctrlblk.n_normal_balk_blkd_tasks++);
+	if (!rcu_preempt_blocked_readers_cgp() &&
+	    rcu_preempt_ctrlblk.exp_tasks == NULL) {
+		RCU_TRACE(rcu_preempt_ctrlblk.n_balk_exp_gp_tasks++);
 		return 0;
 	}
-	if (rcu_preempt_ctrlblk.gp_tasks != NULL &&
-	    rcu_preempt_ctrlblk.boost_tasks == NULL &&
-	    rcu_preempt_ctrlblk.boosted_this_gp == 0 &&
-	    ULONG_CMP_GE(jiffies, rcu_preempt_ctrlblk.boost_time)) {
-		rcu_preempt_ctrlblk.boost_tasks = rcu_preempt_ctrlblk.gp_tasks;
-		invoke_rcu_kthread();
-		RCU_TRACE(rcu_preempt_ctrlblk.n_normal_boosts++);
+	if (rcu_preempt_ctrlblk.exp_tasks != NULL ||
+	    (rcu_preempt_ctrlblk.gp_tasks != NULL &&
+	     rcu_preempt_ctrlblk.boost_tasks == NULL &&
+	     ULONG_CMP_GE(jiffies, rcu_preempt_ctrlblk.boost_time))) {
+		if (rcu_preempt_ctrlblk.exp_tasks == NULL)
+			rcu_preempt_ctrlblk.boost_tasks =
+				rcu_preempt_ctrlblk.gp_tasks;
+		invoke_rcu_callbacks();
 	} else
 		RCU_TRACE(rcu_initiate_boost_trace());
 	return 1;
 }
 
-/*
- * Initiate boosting for an expedited grace period.
- */
-static void rcu_initiate_expedited_boost(void)
-{
-	unsigned long flags;
-
-	raw_local_irq_save(flags);
-	if (!list_empty(&rcu_preempt_ctrlblk.blkd_tasks)) {
-		rcu_preempt_ctrlblk.boost_tasks =
-			rcu_preempt_ctrlblk.blkd_tasks.next;
-		rcu_preempt_ctrlblk.boosted_this_gp = -1;
-		invoke_rcu_kthread();
-		RCU_TRACE(rcu_preempt_ctrlblk.n_exp_boosts++);
-	} else
-		RCU_TRACE(rcu_initiate_exp_boost_trace());
-	raw_local_irq_restore(flags);
-}
-
-#define RCU_BOOST_DELAY_JIFFIES DIV_ROUND_UP(CONFIG_RCU_BOOST_DELAY * HZ, 1000);
+#define RCU_BOOST_DELAY_JIFFIES DIV_ROUND_UP(CONFIG_RCU_BOOST_DELAY * HZ, 1000)
 
 /*
  * Do priority-boost accounting for the start of a new grace period.
@@ -347,19 +354,9 @@ static void rcu_initiate_expedited_boost(void)
 static void rcu_preempt_boost_start_gp(void)
 {
 	rcu_preempt_ctrlblk.boost_time = jiffies + RCU_BOOST_DELAY_JIFFIES;
-	if (rcu_preempt_ctrlblk.boosted_this_gp > 0)
-		rcu_preempt_ctrlblk.boosted_this_gp = 0;
 }
 
 #else /* #ifdef CONFIG_RCU_BOOST */
-
-/*
- * If there is no RCU priority boosting, we don't boost.
- */
-static int rcu_boost(void)
-{
-	return 0;
-}
 
 /*
  * If there is no RCU priority boosting, we don't initiate boosting,
@@ -369,13 +366,6 @@ static int rcu_boost(void)
 static int rcu_initiate_boost(void)
 {
 	return rcu_preempt_blocked_readers_cgp();
-}
-
-/*
- * If there is no RCU priority boosting, we don't initiate expedited boosting.
- */
-static void rcu_initiate_expedited_boost(void)
-{
 }
 
 /*
@@ -418,7 +408,7 @@ static void rcu_preempt_cpu_qs(void)
 	if (!rcu_preempt_gp_in_progress())
 		return;
 	/*
-	 * Check up on boosting.  If there are no readers blocking the
+	 * Check up on boosting.  If there are readers blocking the
 	 * current grace period, leave.
 	 */
 	if (rcu_initiate_boost())
@@ -435,7 +425,7 @@ static void rcu_preempt_cpu_qs(void)
 
 	/* If there are done callbacks, cause them to be invoked. */
 	if (*rcu_preempt_ctrlblk.rcb.donetail != NULL)
-		invoke_rcu_kthread();
+		invoke_rcu_callbacks();
 }
 
 /*
@@ -578,7 +568,7 @@ static void rcu_read_unlock_special(struct task_struct *t)
 		empty = !rcu_preempt_blocked_readers_cgp();
 		empty_exp = rcu_preempt_ctrlblk.exp_tasks == NULL;
 		np = rcu_next_node_entry(t);
-		list_del(&t->rcu_node_entry);
+		list_del_init(&t->rcu_node_entry);
 		if (&t->rcu_node_entry == rcu_preempt_ctrlblk.gp_tasks)
 			rcu_preempt_ctrlblk.gp_tasks = np;
 		if (&t->rcu_node_entry == rcu_preempt_ctrlblk.exp_tasks)
@@ -587,7 +577,6 @@ static void rcu_read_unlock_special(struct task_struct *t)
 		if (&t->rcu_node_entry == rcu_preempt_ctrlblk.boost_tasks)
 			rcu_preempt_ctrlblk.boost_tasks = np;
 #endif /* #ifdef CONFIG_RCU_BOOST */
-		INIT_LIST_HEAD(&t->rcu_node_entry);
 
 		/*
 		 * If this was the last task on the current list, and if
@@ -657,7 +646,7 @@ static void rcu_preempt_check_callbacks(void)
 		rcu_preempt_cpu_qs();
 	if (&rcu_preempt_ctrlblk.rcb.rcucblist !=
 	    rcu_preempt_ctrlblk.rcb.donetail)
-		invoke_rcu_kthread();
+		invoke_rcu_callbacks();
 	if (rcu_preempt_gp_in_progress() &&
 	    rcu_cpu_blocking_cur_gp() &&
 	    rcu_preempt_running_reader())
@@ -683,7 +672,7 @@ static void rcu_preempt_remove_callbacks(struct rcu_ctrlblk *rcp)
  */
 static void rcu_preempt_process_callbacks(void)
 {
-	rcu_process_callbacks(&rcu_preempt_ctrlblk.rcb);
+	__rcu_process_callbacks(&rcu_preempt_ctrlblk.rcb);
 }
 
 /*
@@ -705,20 +694,6 @@ void call_rcu(struct rcu_head *head, void (*func)(struct rcu_head *rcu))
 	local_irq_restore(flags);
 }
 EXPORT_SYMBOL_GPL(call_rcu);
-
-void rcu_barrier(void)
-{
-	struct rcu_synchronize rcu;
-
-	init_rcu_head_on_stack(&rcu.head);
-	init_completion(&rcu.completion);
-	/* Will wake me after RCU finished. */
-	call_rcu(&rcu.head, wakeme_after_rcu);
-	/* Wait for it. */
-	wait_for_completion(&rcu.completion);
-	destroy_rcu_head_on_stack(&rcu.head);
-}
-EXPORT_SYMBOL_GPL(rcu_barrier);
 
 /*
  * synchronize_rcu - wait until a grace period has elapsed.
@@ -812,13 +787,16 @@ void synchronize_rcu_expedited(void)
 	rpcp->exp_tasks = rpcp->blkd_tasks.next;
 	if (rpcp->exp_tasks == &rpcp->blkd_tasks)
 		rpcp->exp_tasks = NULL;
-	local_irq_restore(flags);
 
 	/* Wait for tail of ->blkd_tasks list to drain. */
-	if (rcu_preempted_readers_exp())
-		rcu_initiate_expedited_boost();
+	if (!rcu_preempted_readers_exp())
+		local_irq_restore(flags);
+	else {
+		rcu_initiate_boost();
+		local_irq_restore(flags);
 		wait_event(sync_rcu_preempt_exp_wq,
 			   !rcu_preempted_readers_exp());
+	}
 
 	/* Clean up and exit. */
 	barrier(); /* ensure expedited GP seen before counter increment. */
@@ -852,7 +830,7 @@ void exit_rcu(void)
 	if (t->rcu_read_lock_nesting == 0)
 		return;
 	t->rcu_read_lock_nesting = 1;
-	rcu_read_unlock();
+	__rcu_read_unlock();
 }
 
 #else /* #ifdef CONFIG_TINY_PREEMPT_RCU */
@@ -868,15 +846,6 @@ static void show_tiny_preempt_stats(struct seq_file *m)
 }
 
 #endif /* #ifdef CONFIG_RCU_TRACE */
-
-/*
- * Because preemptible RCU does not exist, it is never necessary to
- * boost preempted RCU readers.
- */
-static int rcu_boost(void)
-{
-	return 0;
-}
 
 /*
  * Because preemptible RCU does not exist, it never has any callbacks
@@ -904,6 +873,78 @@ static void rcu_preempt_process_callbacks(void)
 
 #endif /* #else #ifdef CONFIG_TINY_PREEMPT_RCU */
 
+#ifdef CONFIG_RCU_BOOST
+
+/*
+ * Wake up rcu_kthread() to process callbacks now eligible for invocation
+ * or to boost readers.
+ */
+static void invoke_rcu_callbacks(void)
+{
+	have_rcu_kthread_work = 1;
+	wake_up(&rcu_kthread_wq);
+}
+
+/*
+ * This kthread invokes RCU callbacks whose grace periods have
+ * elapsed.  It is awakened as needed, and takes the place of the
+ * RCU_SOFTIRQ that is used for this purpose when boosting is disabled.
+ * This is a kthread, but it is never stopped, at least not until
+ * the system goes down.
+ */
+static int rcu_kthread(void *arg)
+{
+	unsigned long work;
+	unsigned long morework;
+	unsigned long flags;
+
+	for (;;) {
+		wait_event_interruptible(rcu_kthread_wq,
+					 have_rcu_kthread_work != 0);
+		morework = rcu_boost();
+		local_irq_save(flags);
+		work = have_rcu_kthread_work;
+		have_rcu_kthread_work = morework;
+		local_irq_restore(flags);
+		if (work)
+			rcu_process_callbacks(NULL);
+		schedule_timeout_interruptible(1); /* Leave CPU for others. */
+	}
+
+	return 0;  /* Not reached, but needed to shut gcc up. */
+}
+
+/*
+ * Spawn the kthread that invokes RCU callbacks.
+ */
+static int __init rcu_spawn_kthreads(void)
+{
+	struct sched_param sp;
+
+	rcu_kthread_task = kthread_run(rcu_kthread, NULL, "rcu_kthread");
+	sp.sched_priority = RCU_BOOST_PRIO;
+	sched_setscheduler_nocheck(rcu_kthread_task, SCHED_FIFO, &sp);
+	return 0;
+}
+early_initcall(rcu_spawn_kthreads);
+
+#else /* #ifdef CONFIG_RCU_BOOST */
+
+/*
+ * Start up softirq processing of callbacks.
+ */
+void invoke_rcu_callbacks(void)
+{
+	raise_softirq(RCU_SOFTIRQ);
+}
+
+void rcu_init(void)
+{
+	open_softirq(RCU_SOFTIRQ, rcu_process_callbacks);
+}
+
+#endif /* #else #ifdef CONFIG_RCU_BOOST */
+
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 #include <linux/kernel_stat.h>
 
@@ -919,36 +960,23 @@ void __init rcu_scheduler_starting(void)
 
 #endif /* #ifdef CONFIG_DEBUG_LOCK_ALLOC */
 
-#ifdef CONFIG_RCU_BOOST
-#define RCU_BOOST_PRIO CONFIG_RCU_BOOST_PRIO
-#else /* #ifdef CONFIG_RCU_BOOST */
-#define RCU_BOOST_PRIO 1
-#endif /* #else #ifdef CONFIG_RCU_BOOST */
-
 #ifdef CONFIG_RCU_TRACE
 
 #ifdef CONFIG_RCU_BOOST
 
 static void rcu_initiate_boost_trace(void)
 {
-	if (rcu_preempt_ctrlblk.gp_tasks == NULL)
-		rcu_preempt_ctrlblk.n_normal_balk_gp_tasks++;
-	else if (rcu_preempt_ctrlblk.boost_tasks != NULL)
-		rcu_preempt_ctrlblk.n_normal_balk_boost_tasks++;
-	else if (rcu_preempt_ctrlblk.boosted_this_gp != 0)
-		rcu_preempt_ctrlblk.n_normal_balk_boosted++;
-	else if (!ULONG_CMP_GE(jiffies, rcu_preempt_ctrlblk.boost_time))
-		rcu_preempt_ctrlblk.n_normal_balk_notyet++;
-	else
-		rcu_preempt_ctrlblk.n_normal_balk_nos++;
-}
-
-static void rcu_initiate_exp_boost_trace(void)
-{
 	if (list_empty(&rcu_preempt_ctrlblk.blkd_tasks))
-		rcu_preempt_ctrlblk.n_exp_balk_blkd_tasks++;
+		rcu_preempt_ctrlblk.n_balk_blkd_tasks++;
+	else if (rcu_preempt_ctrlblk.gp_tasks == NULL &&
+		 rcu_preempt_ctrlblk.exp_tasks == NULL)
+		rcu_preempt_ctrlblk.n_balk_exp_gp_tasks++;
+	else if (rcu_preempt_ctrlblk.boost_tasks != NULL)
+		rcu_preempt_ctrlblk.n_balk_boost_tasks++;
+	else if (!ULONG_CMP_GE(jiffies, rcu_preempt_ctrlblk.boost_time))
+		rcu_preempt_ctrlblk.n_balk_notyet++;
 	else
-		rcu_preempt_ctrlblk.n_exp_balk_nos++;
+		rcu_preempt_ctrlblk.n_balk_nos++;
 }
 
 #endif /* #ifdef CONFIG_RCU_BOOST */

@@ -680,7 +680,7 @@ mpc52xx_ata_remove_one(struct device *dev)
 /* ======================================================================== */
 
 static int __devinit
-mpc52xx_ata_probe(struct platform_device *op, const struct of_device_id *match)
+mpc52xx_ata_probe(struct platform_device *op)
 {
 	unsigned int ipb_freq;
 	struct resource res_mem;
@@ -780,7 +780,7 @@ mpc52xx_ata_probe(struct platform_device *op, const struct of_device_id *match)
 	}
 
 	task_irq = bcom_get_task_irq(dmatsk);
-	ret = request_irq(task_irq, &mpc52xx_ata_task_irq, IRQF_DISABLED,
+	ret = request_irq(task_irq, &mpc52xx_ata_task_irq, 0,
 				"ATA task", priv);
 	if (ret) {
 		dev_err(&op->dev, "error requesting DMA IRQ\n");
@@ -883,7 +883,7 @@ static struct of_device_id mpc52xx_ata_of_match[] = {
 };
 
 
-static struct of_platform_driver mpc52xx_ata_of_platform_driver = {
+static struct platform_driver mpc52xx_ata_of_platform_driver = {
 	.probe		= mpc52xx_ata_probe,
 	.remove		= mpc52xx_ata_remove,
 #ifdef CONFIG_PM
@@ -906,13 +906,13 @@ static int __init
 mpc52xx_ata_init(void)
 {
 	printk(KERN_INFO "ata: MPC52xx IDE/ATA libata driver\n");
-	return of_register_platform_driver(&mpc52xx_ata_of_platform_driver);
+	return platform_driver_register(&mpc52xx_ata_of_platform_driver);
 }
 
 static void __exit
 mpc52xx_ata_exit(void)
 {
-	of_unregister_platform_driver(&mpc52xx_ata_of_platform_driver);
+	platform_driver_unregister(&mpc52xx_ata_of_platform_driver);
 }
 
 module_init(mpc52xx_ata_init);

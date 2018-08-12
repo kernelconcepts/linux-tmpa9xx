@@ -25,7 +25,6 @@ struct cfserl {
 	spinlock_t sync;
 	bool usestx;
 };
-#define STXLEN(layr) (layr->usestx ? 1 : 0)
 
 static int cfserl_receive(struct cflayer *layr, struct cfpkt *pkt);
 static int cfserl_transmit(struct cflayer *layr, struct cfpkt *pkt);
@@ -34,13 +33,10 @@ static void cfserl_ctrlcmd(struct cflayer *layr, enum caif_ctrlcmd ctrl,
 
 struct cflayer *cfserl_create(int type, int instance, bool use_stx)
 {
-	struct cfserl *this = kmalloc(sizeof(struct cfserl), GFP_ATOMIC);
-	if (!this) {
-		pr_warn("Out of memory\n");
+	struct cfserl *this = kzalloc(sizeof(struct cfserl), GFP_ATOMIC);
+	if (!this)
 		return NULL;
-	}
 	caif_assert(offsetof(struct cfserl, layer) == 0);
-	memset(this, 0, sizeof(struct cfserl));
 	this->layer.receive = cfserl_receive;
 	this->layer.transmit = cfserl_transmit;
 	this->layer.ctrlcmd = cfserl_ctrlcmd;
@@ -180,15 +176,10 @@ static int cfserl_receive(struct cflayer *l, struct cfpkt *newpkt)
 static int cfserl_transmit(struct cflayer *layer, struct cfpkt *newpkt)
 {
 	struct cfserl *layr = container_obj(layer);
-	int ret;
 	u8 tmp8 = CFSERL_STX;
 	if (layr->usestx)
 		cfpkt_add_head(newpkt, &tmp8, 1);
-	ret = layer->dn->transmit(layer->dn, newpkt);
-	if (ret < 0)
-		cfpkt_extr_head(newpkt, &tmp8, 1);
-
-	return ret;
+	return layer->dn->transmit(layer->dn, newpkt);
 }
 
 static void cfserl_ctrlcmd(struct cflayer *layr, enum caif_ctrlcmd ctrl,

@@ -73,12 +73,9 @@ static inline int TEMP_FROM_REG(s16 reg)
 	return reg / 8 * 625 / 10;
 }
 
-static inline s16 TEMP_TO_REG(int val)
+static inline s16 TEMP_TO_REG(long val)
 {
-	if (val <= -60000)
-		return -60000 * 10 / 625 * 8;
-	if (val >= 160000)
-		return 160000 * 10 / 625 * 8;
+	val = clamp_val(val, -60000, 160000);
 	return val * 10 / 625 * 8;
 }
 
@@ -117,16 +114,16 @@ static struct lm92_data *lm92_update_device(struct device *dev)
 	if (time_after(jiffies, data->last_updated + HZ)
 	 || !data->valid) {
 		dev_dbg(&client->dev, "Updating lm92 data\n");
-		data->temp1_input = swab16(i2c_smbus_read_word_data(client,
-				    LM92_REG_TEMP));
-		data->temp1_hyst = swab16(i2c_smbus_read_word_data(client,
-				    LM92_REG_TEMP_HYST));
-		data->temp1_crit = swab16(i2c_smbus_read_word_data(client,
-				    LM92_REG_TEMP_CRIT));
-		data->temp1_min = swab16(i2c_smbus_read_word_data(client,
-				    LM92_REG_TEMP_LOW));
-		data->temp1_max = swab16(i2c_smbus_read_word_data(client,
-				    LM92_REG_TEMP_HIGH));
+		data->temp1_input = i2c_smbus_read_word_swapped(client,
+				    LM92_REG_TEMP);
+		data->temp1_hyst = i2c_smbus_read_word_swapped(client,
+				    LM92_REG_TEMP_HYST);
+		data->temp1_crit = i2c_smbus_read_word_swapped(client,
+				    LM92_REG_TEMP_CRIT);
+		data->temp1_min = i2c_smbus_read_word_swapped(client,
+				    LM92_REG_TEMP_LOW);
+		data->temp1_max = i2c_smbus_read_word_swapped(client,
+				    LM92_REG_TEMP_HIGH);
 
 		data->last_updated = jiffies;
 		data->valid = 1;
@@ -158,7 +155,7 @@ static ssize_t set_##value(struct device *dev, struct device_attribute *attr, co
  \
 	mutex_lock(&data->update_lock); \
 	data->value = TEMP_TO_REG(val); \
-	i2c_smbus_write_word_data(client, reg, swab16(data->value)); \
+	i2c_smbus_write_word_swapped(client, reg, data->value); \
 	mutex_unlock(&data->update_lock); \
 	return count; \
 }
@@ -192,10 +189,12 @@ static ssize_t set_temp1_crit_hyst(struct device *dev, struct device_attribute *
 	struct lm92_data *data = i2c_get_clientdata(client);
 	long val = simple_strtol(buf, NULL, 10);
 
+	val = clamp_val(val, -120000, 220000);
 	mutex_lock(&data->update_lock);
-	data->temp1_hyst = TEMP_FROM_REG(data->temp1_crit) - val;
-	i2c_smbus_write_word_data(client, LM92_REG_TEMP_HYST,
-				  swab16(TEMP_TO_REG(data->temp1_hyst)));
+	 data->temp1_hyst =
+		TEMP_TO_REG(TEMP_FROM_REG(data->temp1_crit) - val);
+	i2c_smbus_write_word_swapped(client, LM92_REG_TEMP_HYST,
+				     data->temp1_hyst);
 	mutex_unlock(&data->update_lock);
 	return count;
 }

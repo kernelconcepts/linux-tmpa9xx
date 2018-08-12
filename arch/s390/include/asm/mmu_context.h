@@ -12,18 +12,16 @@
 #include <asm/pgalloc.h>
 #include <asm/uaccess.h>
 #include <asm/tlbflush.h>
-#include <asm-generic/mm_hooks.h>
 
 static inline int init_new_context(struct task_struct *tsk,
 				   struct mm_struct *mm)
 {
+	spin_lock_init(&mm->context.list_lock);
+	INIT_LIST_HEAD(&mm->context.pgtable_list);
+	INIT_LIST_HEAD(&mm->context.gmap_list);
 	atomic_set(&mm->context.attach_count, 0);
 	mm->context.flush_mm = 0;
-	mm->context.asce_bits = _ASCE_TABLE_LENGTH | _ASCE_USER_BITS;
-#ifdef CONFIG_64BIT
-	mm->context.asce_bits |= _ASCE_TYPE_REGION3;
-#endif
-	if (current->mm->context.alloc_pgste) {
+	if (current->mm && current->mm->context.alloc_pgste) {
 		/*
 		 * alloc_pgste indicates, that any NEW context will be created
 		 * with extended page tables. The old context is unchanged. The
@@ -35,15 +33,20 @@ static inline int init_new_context(struct task_struct *tsk,
 		 * and if has_pgste is set, it will create extended page
 		 * tables.
 		 */
-		mm->context.noexec = 0;
 		mm->context.has_pgste = 1;
 		mm->context.alloc_pgste = 1;
 	} else {
-		mm->context.noexec = (user_mode == SECONDARY_SPACE_MODE);
 		mm->context.has_pgste = 0;
 		mm->context.alloc_pgste = 0;
 	}
-	mm->context.asce_limit = STACK_TOP_MAX;
+	if (mm->context.asce_limit == 0) {
+		/* context created by exec, set asce limit to 4TB */
+		mm->context.asce_bits = _ASCE_TABLE_LENGTH | _ASCE_USER_BITS;
+#ifdef CONFIG_64BIT
+		mm->context.asce_bits |= _ASCE_TYPE_REGION3;
+#endif
+		mm->context.asce_limit = STACK_TOP_MAX;
+	}
 	crst_table_init((unsigned long *) mm->pgd, pgd_entry_type(mm));
 	return 0;
 }
@@ -63,10 +66,8 @@ static inline void update_mm(struct mm_struct *mm, struct task_struct *tsk)
 	S390_lowcore.user_asce = mm->context.asce_bits | __pa(pgd);
 	if (user_mode != HOME_SPACE_MODE) {
 		/* Load primary space page table origin. */
-		pgd = mm->context.noexec ? get_shadow_table(pgd) : pgd;
-		S390_lowcore.user_exec_asce = mm->context.asce_bits | __pa(pgd);
 		asm volatile(LCTL_OPCODE" 1,1,%0\n"
-			     : : "m" (S390_lowcore.user_exec_asce) );
+			     : : "m" (S390_lowcore.user_asce) );
 	} else
 		/* Load home space page table origin. */
 		asm volatile(LCTL_OPCODE" 13,13,%0"
@@ -94,6 +95,15 @@ static inline void activate_mm(struct mm_struct *prev,
                                struct mm_struct *next)
 {
         switch_mm(prev, next, current);
+}
+
+static inline void arch_dup_mmap(struct mm_struct *oldmm,
+				 struct mm_struct *mm)
+{
+}
+
+static inline void arch_exit_mmap(struct mm_struct *mm)
+{
 }
 
 #endif /* __S390_MMU_CONTEXT_H */

@@ -125,7 +125,7 @@ nfs4_callback_up(struct svc_serv *serv)
 	else
 		goto out_err;
 
-	return svc_prepare_thread(serv, &serv->sv_pools[0]);
+	return svc_prepare_thread(serv, &serv->sv_pools[0], NUMA_NO_NODE);
 
 out_err:
 	if (ret == 0)
@@ -149,22 +149,24 @@ nfs41_callback_svc(void *vrqstp)
 	set_freezable();
 
 	while (!kthread_should_stop()) {
-		prepare_to_wait(&serv->sv_cb_waitq, &wq, TASK_INTERRUPTIBLE);
+		prepare_to_wait(&serv->sv_cb_waitq, &wq, TASK_UNINTERRUPTIBLE);
 		spin_lock_bh(&serv->sv_cb_lock);
 		if (!list_empty(&serv->sv_cb_list)) {
 			req = list_first_entry(&serv->sv_cb_list,
 					struct rpc_rqst, rq_bc_list);
 			list_del(&req->rq_bc_list);
 			spin_unlock_bh(&serv->sv_cb_lock);
+			finish_wait(&serv->sv_cb_waitq, &wq);
 			dprintk("Invoking bc_svc_process()\n");
 			error = bc_svc_process(serv, req, rqstp);
 			dprintk("bc_svc_process() returned w/ error code= %d\n",
 				error);
 		} else {
 			spin_unlock_bh(&serv->sv_cb_lock);
-			schedule();
+			/* schedule_timeout to game the hung task watchdog */
+			schedule_timeout(60 * HZ);
+			finish_wait(&serv->sv_cb_waitq, &wq);
 		}
-		finish_wait(&serv->sv_cb_waitq, &wq);
 	}
 	return 0;
 }
@@ -199,7 +201,7 @@ nfs41_callback_up(struct svc_serv *serv, struct rpc_xprt *xprt)
 	INIT_LIST_HEAD(&serv->sv_cb_list);
 	spin_lock_init(&serv->sv_cb_lock);
 	init_waitqueue_head(&serv->sv_cb_waitq);
-	rqstp = svc_prepare_thread(serv, &serv->sv_pools[0]);
+	rqstp = svc_prepare_thread(serv, &serv->sv_pools[0], NUMA_NO_NODE);
 	if (IS_ERR(rqstp)) {
 		svc_xprt_put(serv->sv_bc_xprt);
 		serv->sv_bc_xprt = NULL;

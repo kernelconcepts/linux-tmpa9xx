@@ -25,7 +25,6 @@
 #include <asm/mach/time.h>
 #include <asm/mach/map.h>
 #include <mach/iomux-mx21.h>
-#include <mach/mxc_nand.h>
 
 #include "devices-imx21.h"
 
@@ -33,7 +32,7 @@
  * Memory-mapped I/O on MX21ADS base board
  */
 #define MX21ADS_MMIO_BASE_ADDR   0xf5000000
-#define MX21ADS_MMIO_SIZE        SZ_16M
+#define MX21ADS_MMIO_SIZE        0xc00000
 
 #define MX21ADS_REG_ADDR(offset)    (void __force __iomem *) \
 		(MX21ADS_MMIO_BASE_ADDR + (offset))
@@ -280,6 +279,8 @@ static struct platform_device *platform_devices[] __initdata = {
 
 static void __init mx21ads_board_init(void)
 {
+	imx21_soc_init();
+
 	mxc_gpio_setup_multiple_pins(mx21ads_pins, ARRAY_SIZE(mx21ads_pins),
 			"mx21ads");
 
@@ -304,9 +305,11 @@ static struct sys_timer mx21ads_timer = {
 
 MACHINE_START(MX21ADS, "Freescale i.MX21ADS")
 	/* maintainer: Freescale Semiconductor, Inc. */
-	.boot_params    = MX21_PHYS_OFFSET + 0x100,
-	.map_io         = mx21ads_map_io,
-	.init_irq       = mx21_init_irq,
-	.init_machine   = mx21ads_board_init,
-	.timer          = &mx21ads_timer,
+	.atag_offset = 0x100,
+	.map_io = mx21ads_map_io,
+	.init_early = imx21_init_early,
+	.init_irq = mx21_init_irq,
+	.handle_irq = imx21_handle_irq,
+	.timer = &mx21ads_timer,
+	.init_machine = mx21ads_board_init,
 MACHINE_END

@@ -116,7 +116,7 @@ static int fan_alarm_init(struct gpio_fan_data *fan_data,
 		return 0;
 
 	INIT_WORK(&fan_data->alarm_work, fan_alarm_notify);
-	set_irq_type(alarm_irq, IRQ_TYPE_EDGE_BOTH);
+	irq_set_irq_type(alarm_irq, IRQ_TYPE_EDGE_BOTH);
 	err = request_irq(alarm_irq, fan_alarm_irq_handler, IRQF_SHARED,
 			  "GPIO fan alarm", fan_data);
 	if (err)
@@ -195,7 +195,7 @@ static int get_fan_speed_index(struct gpio_fan_data *fan_data)
 	return -EINVAL;
 }
 
-static int rpm_to_speed_index(struct gpio_fan_data *fan_data, int rpm)
+static int rpm_to_speed_index(struct gpio_fan_data *fan_data, unsigned long rpm)
 {
 	struct gpio_fan_speed *speed = fan_data->speed;
 	int i;
@@ -539,18 +539,7 @@ static struct platform_driver gpio_fan_driver = {
 	},
 };
 
-static int __init gpio_fan_init(void)
-{
-	return platform_driver_register(&gpio_fan_driver);
-}
-
-static void __exit gpio_fan_exit(void)
-{
-	platform_driver_unregister(&gpio_fan_driver);
-}
-
-module_init(gpio_fan_init);
-module_exit(gpio_fan_exit);
+module_platform_driver(gpio_fan_driver);
 
 MODULE_AUTHOR("Simon Guinot <sguinot@lacie.com>");
 MODULE_DESCRIPTION("GPIO FAN driver");

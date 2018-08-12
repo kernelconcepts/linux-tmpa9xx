@@ -27,6 +27,7 @@
 #include <linux/interrupt.h>
 #include <linux/pm_runtime.h>
 #include <linux/intel_mid_dma.h>
+#include <linux/module.h>
 
 #define MAX_CHAN	4 /*max ch across controllers*/
 #include "intel_mid_dma_regs.h"
@@ -115,16 +116,15 @@ DMAC1 interrupt Functions*/
 
 /**
  * dmac1_mask_periphral_intr -	mask the periphral interrupt
- * @midc: dma channel for which masking is required
+ * @mid: dma device for which masking is required
  *
  * Masks the DMA periphral interrupt
  * this is valid for DMAC1 family controllers only
  * This controller should have periphral mask registers already mapped
  */
-static void dmac1_mask_periphral_intr(struct intel_mid_dma_chan *midc)
+static void dmac1_mask_periphral_intr(struct middma_device *mid)
 {
 	u32 pimr;
-	struct middma_device *mid = to_middma_device(midc->chan.device);
 
 	if (mid->pimr_mask) {
 		pimr = readl(mid->mask_reg + LNW_PERIPHRAL_MASK);
@@ -184,7 +184,6 @@ static void enable_dma_interrupt(struct intel_mid_dma_chan *midc)
 static void disable_dma_interrupt(struct intel_mid_dma_chan *midc)
 {
 	/*Check LPE PISR, make sure fwd is disabled*/
-	dmac1_mask_periphral_intr(midc);
 	iowrite32(MASK_INTR_REG(midc->ch_id), midc->dma_base + MASK_BLOCK);
 	iowrite32(MASK_INTR_REG(midc->ch_id), midc->dma_base + MASK_TFR);
 	iowrite32(MASK_INTR_REG(midc->ch_id), midc->dma_base + MASK_ERR);
@@ -911,8 +910,8 @@ static int intel_mid_dma_alloc_chan_resources(struct dma_chan *chan)
 
 /**
  * midc_handle_error -	Handle DMA txn error
- * @mid: controller where error occured
- * @midc: chan where error occured
+ * @mid: controller where error occurred
+ * @midc: chan where error occurred
  *
  * Scan the descriptor for error
  */
@@ -1099,7 +1098,7 @@ static int mid_setup_dma(struct pci_dev *pdev)
 		dma->mask_reg = ioremap(LNW_PERIPHRAL_MASK_BASE,
 					LNW_PERIPHRAL_MASK_SIZE);
 		if (dma->mask_reg == NULL) {
-			pr_err("ERR_MDMA:Cant map periphral intr space !!\n");
+			pr_err("ERR_MDMA:Can't map periphral intr space !!\n");
 			return -ENOMEM;
 		}
 	} else
@@ -1114,7 +1113,6 @@ static int mid_setup_dma(struct pci_dev *pdev)
 
 		midch->chan.device = &dma->common;
 		midch->chan.cookie =  1;
-		midch->chan.chan_id = i;
 		midch->ch_id = dma->chan_base + i;
 		pr_debug("MDMA:Init CH %d, ID %d\n", i, midch->ch_id);
 
@@ -1150,7 +1148,6 @@ static int mid_setup_dma(struct pci_dev *pdev)
 	dma_cap_set(DMA_SLAVE, dma->common.cap_mask);
 	dma_cap_set(DMA_PRIVATE, dma->common.cap_mask);
 	dma->common.dev = &pdev->dev;
-	dma->common.chancnt = dma->max_chan;
 
 	dma->common.device_alloc_chan_resources =
 					intel_mid_dma_alloc_chan_resources;
@@ -1292,8 +1289,7 @@ static int __devinit intel_mid_dma_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_dma;
 
-	pm_runtime_set_active(&pdev->dev);
-	pm_runtime_enable(&pdev->dev);
+	pm_runtime_put_noidle(&pdev->dev);
 	pm_runtime_allow(&pdev->dev);
 	return 0;
 
@@ -1322,6 +1318,9 @@ err_enable_device:
 static void __devexit intel_mid_dma_remove(struct pci_dev *pdev)
 {
 	struct middma_device *device = pci_get_drvdata(pdev);
+
+	pm_runtime_get_noresume(&pdev->dev);
+	pm_runtime_forbid(&pdev->dev);
 	middma_shutdown(pdev);
 	pci_dev_put(pdev);
 	kfree(device);
@@ -1348,8 +1347,8 @@ int dma_suspend(struct pci_dev *pci, pm_message_t state)
 		if (device->ch[i].in_use)
 			return -EAGAIN;
 	}
+	dmac1_mask_periphral_intr(device);
 	device->state = SUSPENDED;
-	pci_set_drvdata(pci, device);
 	pci_save_state(pci);
 	pci_disable_device(pci);
 	pci_set_power_state(pci, PCI_D3hot);
@@ -1373,25 +1372,31 @@ int dma_resume(struct pci_dev *pci)
 	pci_restore_state(pci);
 	ret = pci_enable_device(pci);
 	if (ret) {
-		pr_err("MDMA: device cant be enabled for %x\n", pci->device);
+		pr_err("MDMA: device can't be enabled for %x\n", pci->device);
 		return ret;
 	}
 	device->state = RUNNING;
 	iowrite32(REG_BIT0, device->dma_base + DMA_CFG);
-	pci_set_drvdata(pci, device);
 	return 0;
 }
 
 static int dma_runtime_suspend(struct device *dev)
 {
 	struct pci_dev *pci_dev = to_pci_dev(dev);
-	return dma_suspend(pci_dev, PMSG_SUSPEND);
+	struct middma_device *device = pci_get_drvdata(pci_dev);
+
+	device->state = SUSPENDED;
+	return 0;
 }
 
 static int dma_runtime_resume(struct device *dev)
 {
 	struct pci_dev *pci_dev = to_pci_dev(dev);
-	return dma_resume(pci_dev);
+	struct middma_device *device = pci_get_drvdata(pci_dev);
+
+	device->state = RUNNING;
+	iowrite32(REG_BIT0, device->dma_base + DMA_CFG);
+	return 0;
 }
 
 static int dma_runtime_idle(struct device *dev)

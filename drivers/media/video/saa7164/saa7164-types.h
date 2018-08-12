@@ -78,9 +78,9 @@ enum tmBusType {
 struct tmComResBusInfo {
 	enum tmBusType Type;
 	u16	m_wMaxReqSize;
-	u8	*m_pdwSetRing;
+	u8 __iomem *m_pdwSetRing;
 	u32	m_dwSizeSetRing;
-	u8	*m_pdwGetRing;
+	u8 __iomem *m_pdwGetRing;
 	u32	m_dwSizeGetRing;
 	u32	m_dwSetWritePos;
 	u32	m_dwSetReadPos;
@@ -412,7 +412,7 @@ struct tmComResVBIFormatDescrHeader {
 	u8	StartLine; /* NTSC Start = 10 */
 	u8	EndLine; /* NTSC = 21 */
 	u8	FieldRate; /* 60 for NTSC */
-	u8	bNumLines; /* Unsed - scheduled for removal */
+	u8	bNumLines; /* Unused - scheduled for removal */
 } __attribute__((packed));
 
 struct tmComResProbeCommit {

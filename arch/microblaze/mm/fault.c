@@ -48,7 +48,7 @@ static int store_updates_sp(struct pt_regs *regs)
 {
 	unsigned int inst;
 
-	if (get_user(inst, (unsigned int *)regs->pc))
+	if (get_user(inst, (unsigned int __user *)regs->pc))
 		return 0;
 	/* check for 1 in the rD field */
 	if (((inst >> 21) & 0x1f) != 1)
@@ -215,6 +215,8 @@ good_area:
 	if (unlikely(fault & VM_FAULT_ERROR)) {
 		if (fault & VM_FAULT_OOM)
 			goto out_of_memory;
+		else if (fault & VM_FAULT_SIGSEGV)
+			goto bad_area;
 		else if (fault & VM_FAULT_SIGBUS)
 			goto do_sigbus;
 		BUG();

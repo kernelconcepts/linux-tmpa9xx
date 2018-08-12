@@ -335,7 +335,6 @@ static sector_t qnx4_bmap(struct address_space *mapping, sector_t block)
 static const struct address_space_operations qnx4_aops = {
 	.readpage	= qnx4_readpage,
 	.writepage	= qnx4_writepage,
-	.sync_page	= block_sync_page,
 	.write_begin	= qnx4_write_begin,
 	.write_end	= generic_write_end,
 	.bmap		= qnx4_bmap
@@ -380,7 +379,7 @@ struct inode *qnx4_iget(struct super_block *sb, unsigned long ino)
 	inode->i_mode    = le16_to_cpu(raw_inode->di_mode);
 	inode->i_uid     = (uid_t)le16_to_cpu(raw_inode->di_uid);
 	inode->i_gid     = (gid_t)le16_to_cpu(raw_inode->di_gid);
-	inode->i_nlink   = le16_to_cpu(raw_inode->di_nlink);
+	set_nlink(inode, le16_to_cpu(raw_inode->di_nlink));
 	inode->i_size    = le32_to_cpu(raw_inode->di_size);
 	inode->i_mtime.tv_sec   = le32_to_cpu(raw_inode->di_mtime);
 	inode->i_mtime.tv_nsec = 0;

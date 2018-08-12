@@ -4,7 +4,7 @@
  * The NetLabel system manages static and dynamic label mappings for network
  * protocols such as CIPSO and RIPSO.
  *
- * Author: Paul Moore <paul.moore@hp.com>
+ * Author: Paul Moore <paul@paul-moore.com>
  *
  */
 
@@ -38,7 +38,7 @@
 #include <linux/in6.h>
 #include <net/netlink.h>
 #include <net/request_sock.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 
 struct cipso_v4_doi;
 
@@ -395,10 +395,10 @@ int netlbl_secattr_catmap_walk(struct netlbl_lsm_secattr_catmap *catmap,
 			       u32 offset);
 int netlbl_secattr_catmap_walk_rng(struct netlbl_lsm_secattr_catmap *catmap,
 				   u32 offset);
-int netlbl_secattr_catmap_setbit(struct netlbl_lsm_secattr_catmap *catmap,
+int netlbl_secattr_catmap_setbit(struct netlbl_lsm_secattr_catmap **catmap,
 				 u32 bit,
 				 gfp_t flags);
-int netlbl_secattr_catmap_setrng(struct netlbl_lsm_secattr_catmap *catmap,
+int netlbl_secattr_catmap_setrng(struct netlbl_lsm_secattr_catmap **catmap,
 				 u32 start,
 				 u32 end,
 				 gfp_t flags);
@@ -506,14 +506,14 @@ static inline int netlbl_secattr_catmap_walk_rng(
 	return -ENOENT;
 }
 static inline int netlbl_secattr_catmap_setbit(
-	                              struct netlbl_lsm_secattr_catmap *catmap,
+				      struct netlbl_lsm_secattr_catmap **catmap,
 				      u32 bit,
 				      gfp_t flags)
 {
 	return 0;
 }
 static inline int netlbl_secattr_catmap_setrng(
-	                              struct netlbl_lsm_secattr_catmap *catmap,
+				      struct netlbl_lsm_secattr_catmap **catmap,
 				      u32 start,
 				      u32 end,
 				      gfp_t flags)

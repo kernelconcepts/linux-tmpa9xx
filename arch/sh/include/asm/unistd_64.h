@@ -279,7 +279,7 @@
 #define __NR_fsetxattr		256
 #define __NR_getxattr		257
 #define __NR_lgetxattr		258
-#define __NR_fgetxattr		269
+#define __NR_fgetxattr		259
 #define __NR_listxattr		260
 #define __NR_llistxattr		261
 #define __NR_flistxattr		262
@@ -390,10 +390,18 @@
 #define __NR_fanotify_init	367
 #define __NR_fanotify_mark	368
 #define __NR_prlimit64		369
+#define __NR_name_to_handle_at	370
+#define __NR_open_by_handle_at	371
+#define __NR_clock_adjtime	372
+#define __NR_syncfs		373
+#define __NR_sendmmsg		374
+#define __NR_setns		375
+#define __NR_process_vm_readv	376
+#define __NR_process_vm_writev	377
 
 #ifdef __KERNEL__
 
-#define NR_syscalls 370
+#define NR_syscalls 378
 
 #define __ARCH_WANT_IPC_PARSE_VERSION
 #define __ARCH_WANT_OLD_READDIR

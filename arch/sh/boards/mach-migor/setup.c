@@ -12,8 +12,8 @@
 #include <linux/interrupt.h>
 #include <linux/input.h>
 #include <linux/input/sh_keysc.h>
-#include <linux/mfd/sh_mobile_sdhi.h>
 #include <linux/mmc/host.h>
+#include <linux/mmc/sh_mobile_sdhi.h>
 #include <linux/mtd/physmap.h>
 #include <linux/mtd/nand.h>
 #include <linux/i2c.h>
@@ -214,7 +214,7 @@ static struct platform_device migor_nand_flash_device = {
 	}
 };
 
-const static struct fb_videomode migor_lcd_modes[] = {
+static const struct fb_videomode migor_lcd_modes[] = {
 	{
 #if defined(CONFIG_SH_MIGOR_RTA_WVGA)
 		.name = "LB070WV1",
@@ -399,7 +399,7 @@ static struct resource sdhi_cn9_resources[] = {
 	[0] = {
 		.name	= "SDHI",
 		.start	= 0x04ce0000,
-		.end	= 0x04ce01ff,
+		.end	= 0x04ce00ff,
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
@@ -448,9 +448,7 @@ static struct i2c_board_info migor_i2c_camera[] = {
 	},
 };
 
-static struct ov772x_camera_info ov7725_info = {
-	.flags		= OV772X_FLAG_8BIT,
-};
+static struct ov772x_camera_info ov7725_info;
 
 static struct soc_camera_link ov7725_link = {
 	.power		= ov7725_power,

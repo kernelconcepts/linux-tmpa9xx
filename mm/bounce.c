@@ -4,7 +4,7 @@
  */
 
 #include <linux/mm.h>
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/swap.h>
 #include <linux/gfp.h>
 #include <linux/bio.h>
@@ -14,6 +14,7 @@
 #include <linux/init.h>
 #include <linux/hash.h>
 #include <linux/highmem.h>
+#include <linux/bootmem.h>
 #include <asm/tlbflush.h>
 
 #include <trace/events/block.h>
@@ -26,12 +27,10 @@ static mempool_t *page_pool, *isa_page_pool;
 #ifdef CONFIG_HIGHMEM
 static __init int init_emergency_pool(void)
 {
-	struct sysinfo i;
-	si_meminfo(&i);
-	si_swapinfo(&i);
-
-	if (!i.totalhigh)
+#ifndef CONFIG_MEMORY_HOTPLUG
+	if (max_pfn <= max_low_pfn)
 		return 0;
+#endif
 
 	page_pool = mempool_create_page_pool(POOL_SIZE, 0);
 	BUG_ON(!page_pool);
@@ -133,7 +132,7 @@ static void bounce_end_io(struct bio *bio, mempool_t *pool, int err)
 	/*
 	 * free up bounce indirect pages used
 	 */
-	__bio_for_each_segment(bvec, bio, i, 0) {
+	bio_for_each_segment_all(bvec, bio, i) {
 		org_vec = bio_orig->bi_io_vec + i;
 		if (bvec->bv_page == org_vec->bv_page)
 			continue;

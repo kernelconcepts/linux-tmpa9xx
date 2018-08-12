@@ -20,6 +20,7 @@
 #include <linux/io.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
+#include <linux/export.h>
 
 unsigned long PCIBIOS_MIN_IO = 0x0000;
 unsigned long PCIBIOS_MIN_MEM = 0;
@@ -84,7 +85,7 @@ int __devinit register_pci_controller(struct pci_channel *hose)
 	hose_tail = &hose->next;
 
 	/*
-	 * Do not panic here but later - this might hapen before console init.
+	 * Do not panic here but later - this might happen before console init.
 	 */
 	if (!hose->io_map_base) {
 		printk(KERN_WARNING

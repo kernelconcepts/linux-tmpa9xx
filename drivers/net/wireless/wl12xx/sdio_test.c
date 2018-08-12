@@ -30,6 +30,7 @@
 #include <linux/mmc/sdio_func.h>
 #include <linux/mmc/sdio_ids.h>
 #include <linux/mmc/card.h>
+#include <linux/mmc/host.h>
 #include <linux/gpio.h>
 #include <linux/wl12xx.h>
 #include <linux/kthread.h>
@@ -142,13 +143,22 @@ static int wl1271_sdio_set_power(struct wl1271 *wl, bool enable)
 		ret = pm_runtime_get_sync(&func->dev);
 		if (ret < 0)
 			goto out;
+
+		/* Runtime PM might be disabled, power up the card manually */
+		ret = mmc_power_restore_host(func->card->host);
+		if (ret < 0)
+			goto out;
+
 		sdio_claim_host(func);
 		sdio_enable_func(func);
-		sdio_release_host(func);
 	} else {
-		sdio_claim_host(func);
 		sdio_disable_func(func);
 		sdio_release_host(func);
+
+		/* Runtime PM might be disabled, power off the card manually */
+		ret = mmc_power_save_host(func->card->host);
+		if (ret < 0)
+			goto out;
 
 		/* Power down the card */
 		ret = pm_runtime_put_sync(&func->dev);
@@ -189,7 +199,12 @@ static int wl1271_fetch_firmware(struct wl1271 *wl)
 	const struct firmware *fw;
 	int ret;
 
-	ret = request_firmware(&fw, WL1271_FW_NAME, wl1271_wl_to_dev(wl));
+	if (wl->chip.id == CHIP_ID_1283_PG20)
+		ret = request_firmware(&fw, WL128X_FW_NAME,
+				       wl1271_wl_to_dev(wl));
+	else
+		ret = request_firmware(&fw, WL127X_FW_NAME,
+				       wl1271_wl_to_dev(wl));
 
 	if (ret < 0) {
 		wl1271_error("could not get firmware: %d", ret);
@@ -227,14 +242,14 @@ static int wl1271_fetch_nvs(struct wl1271 *wl)
 	const struct firmware *fw;
 	int ret;
 
-	ret = request_firmware(&fw, WL1271_NVS_NAME, wl1271_wl_to_dev(wl));
+	ret = request_firmware(&fw, WL12XX_NVS_NAME, wl1271_wl_to_dev(wl));
 
 	if (ret < 0) {
 		wl1271_error("could not get nvs file: %d", ret);
 		return ret;
 	}
 
-	wl->nvs = kmemdup(fw->data, sizeof(struct wl1271_nvs_file), GFP_KERNEL);
+	wl->nvs = kmemdup(fw->data, fw->size, GFP_KERNEL);
 
 	if (!wl->nvs) {
 		wl1271_error("could not allocate memory for the nvs file");
@@ -288,6 +303,11 @@ static int wl1271_chip_wakeup(struct wl1271 *wl)
 		wl1271_notice("chip id 0x%x (1271 PG20)",
 				wl->chip.id);
 		break;
+	case CHIP_ID_1283_PG20:
+		wl1271_notice("chip id 0x%x (1283 PG20)",
+				wl->chip.id);
+		break;
+	case CHIP_ID_1283_PG10:
 	default:
 		wl1271_warning("unsupported chip id: 0x%x", wl->chip.id);
 		return -ENODEV;
@@ -407,6 +427,9 @@ static int __devinit wl1271_probe(struct sdio_func *func,
 	/* Grab access to FN0 for ELP reg. */
 	func->card->quirks |= MMC_QUIRK_LENIENT_FN0;
 
+	/* Use block mode for transferring over one block size of data */
+	func->card->quirks |= MMC_QUIRK_BLKSZ_FOR_BYTE_MODE;
+
 	wlan_data = wl12xx_get_platform_data();
 	if (IS_ERR(wlan_data)) {
 		ret = PTR_ERR(wlan_data);
@@ -416,9 +439,9 @@ static int __devinit wl1271_probe(struct sdio_func *func,
 
 	wl->irq = wlan_data->irq;
 	wl->ref_clock = wlan_data->board_ref_clock;
+	wl->tcxo_clock = wlan_data->board_tcxo_clock;
 
 	sdio_set_drvdata(func, wl_test);
-
 
 	/* power up the device */
 	ret = wl1271_chip_wakeup(wl);

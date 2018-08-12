@@ -229,7 +229,7 @@ static struct resource cpmac_low_res[] = {
 		.name	= "irq",
 		.flags	= IORESOURCE_IRQ,
 		.start	= 27,
-		.end 	= 27,
+		.end	= 27,
 	},
 };
 
@@ -541,6 +541,7 @@ static int __init ar7_register_uarts(void)
 	uart_port.type		= PORT_AR7;
 	uart_port.uartclk	= clk_get_rate(bus_clk) / 2;
 	uart_port.iotype	= UPIO_MEM32;
+	uart_port.flags		= UPF_FIXED_TYPE;
 	uart_port.regshift	= 2;
 
 	uart_port.line		= 0;

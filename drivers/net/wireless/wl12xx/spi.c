@@ -21,6 +21,7 @@
  *
  */
 
+#include <linux/interrupt.h>
 #include <linux/irq.h>
 #include <linux/module.h>
 #include <linux/crc7.h>
@@ -66,7 +67,10 @@
 /* HW limitation: maximum possible chunk size is 4095 bytes */
 #define WSPI_MAX_CHUNK_SIZE    4092
 
-#define WSPI_MAX_NUM_OF_CHUNKS (WL1271_AGGR_BUFFER_SIZE / WSPI_MAX_CHUNK_SIZE)
+/* Maximum number of SPI write chunks */
+#define WSPI_MAX_NUM_OF_CHUNKS \
+	((WL1271_AGGR_BUFFER_SIZE / WSPI_MAX_CHUNK_SIZE) + 1)
+
 
 static inline struct spi_device *wl_to_spi(struct wl1271 *wl)
 {
@@ -110,6 +114,7 @@ static void wl1271_spi_reset(struct wl1271 *wl)
 	spi_message_add_tail(&t, &m);
 
 	spi_sync(wl_to_spi(wl), &m);
+
 	wl1271_dump(DEBUG_SPI, "spi reset -> ", cmd, WSPI_INIT_CMD_LEN);
 	kfree(cmd);
 }
@@ -272,9 +277,10 @@ static void wl1271_spi_raw_read(struct wl1271 *wl, int addr, void *buf,
 static void wl1271_spi_raw_write(struct wl1271 *wl, int addr, void *buf,
 			  size_t len, bool fixed)
 {
+	/* SPI write buffers - 2 for each chunk */
 	struct spi_transfer t[2 * WSPI_MAX_NUM_OF_CHUNKS];
 	struct spi_message m;
-	u32 commands[WSPI_MAX_NUM_OF_CHUNKS];
+	u32 commands[WSPI_MAX_NUM_OF_CHUNKS]; /* 1 command per chunk */
 	u32 *cmd;
 	u32 chunk_len;
 	int i;
@@ -319,28 +325,23 @@ static void wl1271_spi_raw_write(struct wl1271 *wl, int addr, void *buf,
 	spi_sync(wl_to_spi(wl), &m);
 }
 
-static irqreturn_t wl1271_irq(int irq, void *cookie)
+static irqreturn_t wl1271_hardirq(int irq, void *cookie)
 {
-	struct wl1271 *wl;
+	struct wl1271 *wl = cookie;
 	unsigned long flags;
 
 	wl1271_debug(DEBUG_IRQ, "IRQ");
 
-	wl = cookie;
-
 	/* complete the ELP completion */
 	spin_lock_irqsave(&wl->wl_lock, flags);
+	set_bit(WL1271_FLAG_IRQ_RUNNING, &wl->flags);
 	if (wl->elp_compl) {
 		complete(wl->elp_compl);
 		wl->elp_compl = NULL;
 	}
-
-	if (!test_and_set_bit(WL1271_FLAG_IRQ_RUNNING, &wl->flags))
-		ieee80211_queue_work(wl->hw, &wl->irq_work);
-	set_bit(WL1271_FLAG_IRQ_PENDING, &wl->flags);
 	spin_unlock_irqrestore(&wl->wl_lock, flags);
 
-	return IRQ_HANDLED;
+	return IRQ_WAKE_THREAD;
 }
 
 static int wl1271_spi_set_power(struct wl1271 *wl, bool enable)
@@ -359,7 +360,8 @@ static struct wl1271_if_operations spi_ops = {
 	.power		= wl1271_spi_set_power,
 	.dev		= wl1271_spi_wl_to_dev,
 	.enable_irq	= wl1271_spi_enable_interrupts,
-	.disable_irq	= wl1271_spi_disable_interrupts
+	.disable_irq	= wl1271_spi_disable_interrupts,
+	.set_block_size = NULL,
 };
 
 static int __devinit wl1271_probe(struct spi_device *spi)
@@ -367,6 +369,7 @@ static int __devinit wl1271_probe(struct spi_device *spi)
 	struct wl12xx_platform_data *pdata;
 	struct ieee80211_hw *hw;
 	struct wl1271 *wl;
+	unsigned long irqflags;
 	int ret;
 
 	pdata = spi->dev.platform_data;
@@ -404,6 +407,13 @@ static int __devinit wl1271_probe(struct spi_device *spi)
 	}
 
 	wl->ref_clock = pdata->board_ref_clock;
+	wl->tcxo_clock = pdata->board_tcxo_clock;
+	wl->platform_quirks = pdata->platform_quirks;
+
+	if (wl->platform_quirks & WL12XX_PLATFORM_QUIRK_EDGE_IRQ)
+		irqflags = IRQF_TRIGGER_RISING;
+	else
+		irqflags = IRQF_TRIGGER_HIGH | IRQF_ONESHOT;
 
 	wl->irq = spi->irq;
 	if (wl->irq < 0) {
@@ -412,13 +422,13 @@ static int __devinit wl1271_probe(struct spi_device *spi)
 		goto out_free;
 	}
 
-	ret = request_irq(wl->irq, wl1271_irq, 0, DRIVER_NAME, wl);
+	ret = request_threaded_irq(wl->irq, wl1271_hardirq, wl1271_irq,
+				   irqflags,
+				   DRIVER_NAME, wl);
 	if (ret < 0) {
 		wl1271_error("request_irq() failed: %d", ret);
 		goto out_free;
 	}
-
-	set_irq_type(wl->irq, IRQ_TYPE_EDGE_RISING);
 
 	disable_irq(wl->irq);
 
@@ -429,8 +439,6 @@ static int __devinit wl1271_probe(struct spi_device *spi)
 	ret = wl1271_register_hw(wl);
 	if (ret)
 		goto out_irq;
-
-	wl1271_notice("initialized");
 
 	return 0;
 
@@ -468,30 +476,20 @@ static struct spi_driver wl1271_spi_driver = {
 
 static int __init wl1271_init(void)
 {
-	int ret;
-
-	ret = spi_register_driver(&wl1271_spi_driver);
-	if (ret < 0) {
-		wl1271_error("failed to register spi driver: %d", ret);
-		goto out;
-	}
-
-out:
-	return ret;
+	return spi_register_driver(&wl1271_spi_driver);
 }
 
 static void __exit wl1271_exit(void)
 {
 	spi_unregister_driver(&wl1271_spi_driver);
-
-	wl1271_notice("unloaded");
 }
 
 module_init(wl1271_init);
 module_exit(wl1271_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Luciano Coelho <luciano.coelho@nokia.com>");
+MODULE_AUTHOR("Luciano Coelho <coelho@ti.com>");
 MODULE_AUTHOR("Juuso Oikarinen <juuso.oikarinen@nokia.com>");
-MODULE_FIRMWARE(WL1271_FW_NAME);
+MODULE_FIRMWARE(WL127X_FW_NAME);
+MODULE_FIRMWARE(WL128X_FW_NAME);
 MODULE_ALIAS("spi:wl1271");

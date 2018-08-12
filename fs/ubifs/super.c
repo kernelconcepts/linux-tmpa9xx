@@ -129,7 +129,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 		goto out_ino;
 
 	inode->i_flags |= (S_NOCMTIME | S_NOATIME);
-	inode->i_nlink = le32_to_cpu(ino->nlink);
+	set_nlink(inode, le32_to_cpu(ino->nlink));
 	inode->i_uid   = le32_to_cpu(ino->uid);
 	inode->i_gid   = le32_to_cpu(ino->gid);
 	inode->i_atime.tv_sec  = (int64_t)le64_to_cpu(ino->atime_sec);
@@ -382,7 +382,7 @@ done:
 	end_writeback(inode);
 }
 
-static void ubifs_dirty_inode(struct inode *inode)
+static void ubifs_dirty_inode(struct inode *inode, int flags)
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
@@ -1583,6 +1583,12 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 	c->remounting_rw = 1;
 	c->ro_mount = 0;
 
+	if (c->space_fixup) {
+		err = ubifs_fixup_free_space(c);
+		if (err)
+			return err;
+	}
+
 	err = check_free_space(c);
 	if (err)
 		goto out;
@@ -1697,12 +1703,6 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 		 * because, for example, the old index size was imprecise.
 		 */
 		err = dbg_check_space_info(c);
-	}
-
-	if (c->space_fixup) {
-		err = ubifs_fixup_free_space(c);
-		if (err)
-			goto out;
 	}
 
 	mutex_unlock(&c->umount_mutex);
@@ -1848,7 +1848,6 @@ static void ubifs_put_super(struct super_block *sb)
 	bdi_destroy(&c->bdi);
 	ubi_close_volume(c->ubi);
 	mutex_unlock(&c->umount_mutex);
-	kfree(c);
 }
 
 static int ubifs_remount_fs(struct super_block *sb, int *flags, char *data)
@@ -1971,61 +1970,64 @@ static struct ubi_volume_desc *open_ubi(const char *name, int mode)
 	return ERR_PTR(-EINVAL);
 }
 
+static struct ubifs_info *alloc_ubifs_info(struct ubi_volume_desc *ubi)
+{
+	struct ubifs_info *c;
+
+	c = kzalloc(sizeof(struct ubifs_info), GFP_KERNEL);
+	if (c) {
+		spin_lock_init(&c->cnt_lock);
+		spin_lock_init(&c->cs_lock);
+		spin_lock_init(&c->buds_lock);
+		spin_lock_init(&c->space_lock);
+		spin_lock_init(&c->orphan_lock);
+		init_rwsem(&c->commit_sem);
+		mutex_init(&c->lp_mutex);
+		mutex_init(&c->tnc_mutex);
+		mutex_init(&c->log_mutex);
+		mutex_init(&c->umount_mutex);
+		mutex_init(&c->bu_mutex);
+		mutex_init(&c->write_reserve_mutex);
+		init_waitqueue_head(&c->cmt_wq);
+		c->buds = RB_ROOT;
+		c->old_idx = RB_ROOT;
+		c->size_tree = RB_ROOT;
+		c->orph_tree = RB_ROOT;
+		INIT_LIST_HEAD(&c->infos_list);
+		INIT_LIST_HEAD(&c->idx_gc);
+		INIT_LIST_HEAD(&c->replay_list);
+		INIT_LIST_HEAD(&c->replay_buds);
+		INIT_LIST_HEAD(&c->uncat_list);
+		INIT_LIST_HEAD(&c->empty_list);
+		INIT_LIST_HEAD(&c->freeable_list);
+		INIT_LIST_HEAD(&c->frdi_idx_list);
+		INIT_LIST_HEAD(&c->unclean_leb_list);
+		INIT_LIST_HEAD(&c->old_buds);
+		INIT_LIST_HEAD(&c->orph_list);
+		INIT_LIST_HEAD(&c->orph_new);
+		c->no_chk_data_crc = 1;
+
+		c->highest_inum = UBIFS_FIRST_INO;
+		c->lhead_lnum = c->ltail_lnum = UBIFS_LOG_LNUM;
+
+		ubi_get_volume_info(ubi, &c->vi);
+		ubi_get_device_info(c->vi.ubi_num, &c->di);
+	}
+	return c;
+}
+
 static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 {
-	struct ubi_volume_desc *ubi = sb->s_fs_info;
-	struct ubifs_info *c;
+	struct ubifs_info *c = sb->s_fs_info;
 	struct inode *root;
 	int err;
 
-	c = kzalloc(sizeof(struct ubifs_info), GFP_KERNEL);
-	if (!c)
-		return -ENOMEM;
-
-	spin_lock_init(&c->cnt_lock);
-	spin_lock_init(&c->cs_lock);
-	spin_lock_init(&c->buds_lock);
-	spin_lock_init(&c->space_lock);
-	spin_lock_init(&c->orphan_lock);
-	init_rwsem(&c->commit_sem);
-	mutex_init(&c->lp_mutex);
-	mutex_init(&c->tnc_mutex);
-	mutex_init(&c->log_mutex);
-	mutex_init(&c->mst_mutex);
-	mutex_init(&c->umount_mutex);
-	mutex_init(&c->bu_mutex);
-	mutex_init(&c->write_reserve_mutex);
-	init_waitqueue_head(&c->cmt_wq);
-	c->buds = RB_ROOT;
-	c->old_idx = RB_ROOT;
-	c->size_tree = RB_ROOT;
-	c->orph_tree = RB_ROOT;
-	INIT_LIST_HEAD(&c->infos_list);
-	INIT_LIST_HEAD(&c->idx_gc);
-	INIT_LIST_HEAD(&c->replay_list);
-	INIT_LIST_HEAD(&c->replay_buds);
-	INIT_LIST_HEAD(&c->uncat_list);
-	INIT_LIST_HEAD(&c->empty_list);
-	INIT_LIST_HEAD(&c->freeable_list);
-	INIT_LIST_HEAD(&c->frdi_idx_list);
-	INIT_LIST_HEAD(&c->unclean_leb_list);
-	INIT_LIST_HEAD(&c->old_buds);
-	INIT_LIST_HEAD(&c->orph_list);
-	INIT_LIST_HEAD(&c->orph_new);
-	c->no_chk_data_crc = 1;
-
 	c->vfs_sb = sb;
-	c->highest_inum = UBIFS_FIRST_INO;
-	c->lhead_lnum = c->ltail_lnum = UBIFS_LOG_LNUM;
-
-	ubi_get_volume_info(ubi, &c->vi);
-	ubi_get_device_info(c->vi.ubi_num, &c->di);
-
 	/* Re-open the UBI device in read-write mode */
 	c->ubi = ubi_open_volume(c->vi.ubi_num, c->vi.vol_id, UBI_READWRITE);
 	if (IS_ERR(c->ubi)) {
 		err = PTR_ERR(c->ubi);
-		goto out_free;
+		goto out;
 	}
 
 	/*
@@ -2038,7 +2040,6 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 	 */
 	c->bdi.name = "ubifs",
 	c->bdi.capabilities = BDI_CAP_MAP_COPY;
-	c->bdi.unplug_io_fn = default_unplug_io_fn;
 	err  = bdi_init(&c->bdi);
 	if (err)
 		goto out_close;
@@ -2092,24 +2093,29 @@ out_bdi:
 	bdi_destroy(&c->bdi);
 out_close:
 	ubi_close_volume(c->ubi);
-out_free:
-	kfree(c);
+out:
 	return err;
 }
 
 static int sb_test(struct super_block *sb, void *data)
 {
-	dev_t *dev = data;
+	struct ubifs_info *c1 = data;
 	struct ubifs_info *c = sb->s_fs_info;
 
-	return c->vi.cdev == *dev;
+	return c->vi.cdev == c1->vi.cdev;
+}
+
+static int sb_set(struct super_block *sb, void *data)
+{
+	sb->s_fs_info = data;
+	return set_anon_super(sb, NULL);
 }
 
 static struct dentry *ubifs_mount(struct file_system_type *fs_type, int flags,
 			const char *name, void *data)
 {
 	struct ubi_volume_desc *ubi;
-	struct ubi_volume_info vi;
+	struct ubifs_info *c;
 	struct super_block *sb;
 	int err;
 
@@ -2126,19 +2132,25 @@ static struct dentry *ubifs_mount(struct file_system_type *fs_type, int flags,
 			name, (int)PTR_ERR(ubi));
 		return ERR_CAST(ubi);
 	}
-	ubi_get_volume_info(ubi, &vi);
 
-	dbg_gen("opened ubi%d_%d", vi.ubi_num, vi.vol_id);
+	c = alloc_ubifs_info(ubi);
+	if (!c) {
+		err = -ENOMEM;
+		goto out_close;
+	}
 
-	sb = sget(fs_type, &sb_test, &set_anon_super, &vi.cdev);
+	dbg_gen("opened ubi%d_%d", c->vi.ubi_num, c->vi.vol_id);
+
+	sb = sget(fs_type, sb_test, sb_set, c);
 	if (IS_ERR(sb)) {
 		err = PTR_ERR(sb);
+		kfree(c);
 		goto out_close;
 	}
 
 	if (sb->s_root) {
 		struct ubifs_info *c1 = sb->s_fs_info;
-
+		kfree(c);
 		/* A new mount point for already mounted UBIFS */
 		dbg_gen("this ubi volume is already mounted");
 		if (!!(flags & MS_RDONLY) != c1->ro_mount) {
@@ -2147,11 +2159,6 @@ static struct dentry *ubifs_mount(struct file_system_type *fs_type, int flags,
 		}
 	} else {
 		sb->s_flags = flags;
-		/*
-		 * Pass 'ubi' to 'fill_super()' in sb->s_fs_info where it is
-		 * replaced by 'c'.
-		 */
-		sb->s_fs_info = ubi;
 		err = ubifs_fill_super(sb, data, flags & MS_SILENT ? 1 : 0);
 		if (err)
 			goto out_deact;
@@ -2171,11 +2178,18 @@ out_close:
 	return ERR_PTR(err);
 }
 
+static void kill_ubifs_super(struct super_block *s)
+{
+	struct ubifs_info *c = s->s_fs_info;
+	kill_anon_super(s);
+	kfree(c);
+}
+
 static struct file_system_type ubifs_fs_type = {
 	.name    = "ubifs",
 	.owner   = THIS_MODULE,
 	.mount   = ubifs_mount,
-	.kill_sb = kill_anon_super,
+	.kill_sb = kill_ubifs_super,
 };
 
 /*
@@ -2249,19 +2263,12 @@ static int __init ubifs_init(void)
 		return -EINVAL;
 	}
 
-	err = register_filesystem(&ubifs_fs_type);
-	if (err) {
-		ubifs_err("cannot register file system, error %d", err);
-		return err;
-	}
-
-	err = -ENOMEM;
 	ubifs_inode_slab = kmem_cache_create("ubifs_inode_slab",
 				sizeof(struct ubifs_inode), 0,
 				SLAB_MEM_SPREAD | SLAB_RECLAIM_ACCOUNT,
 				&inode_slab_ctor);
 	if (!ubifs_inode_slab)
-		goto out_reg;
+		return -ENOMEM;
 
 	register_shrinker(&ubifs_shrinker_info);
 
@@ -2273,15 +2280,20 @@ static int __init ubifs_init(void)
 	if (err)
 		goto out_compr;
 
+	err = register_filesystem(&ubifs_fs_type);
+	if (err) {
+		ubifs_err("cannot register file system, error %d", err);
+		goto out_dbg;
+	}
 	return 0;
 
+out_dbg:
+	dbg_debugfs_exit();
 out_compr:
 	ubifs_compressors_exit();
 out_shrinker:
 	unregister_shrinker(&ubifs_shrinker_info);
 	kmem_cache_destroy(ubifs_inode_slab);
-out_reg:
-	unregister_filesystem(&ubifs_fs_type);
 	return err;
 }
 /* late_initcall to let compressors initialize first */

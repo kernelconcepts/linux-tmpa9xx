@@ -32,7 +32,7 @@
 
    Read and analyze data in the eeprom.  Use tveeprom to figure out
    the packet structure, since this is another Hauppauge device and
-   internally it has a family resemblence to ivtv-type devices
+   internally it has a family resemblance to ivtv-type devices
 
 */
 
@@ -123,15 +123,10 @@ int pvr2_eeprom_analyze(struct pvr2_hdw *hdw)
 	memset(&tvdata,0,sizeof(tvdata));
 
 	eeprom = pvr2_eeprom_fetch(hdw);
-	if (!eeprom) return -EINVAL;
+	if (!eeprom)
+		return -EINVAL;
 
-	{
-		struct i2c_client fake_client;
-		/* Newer version expects a useless client interface */
-		fake_client.addr = hdw->eeprom_addr;
-		fake_client.adapter = &hdw->i2c_adap;
-		tveeprom_hauppauge_analog(&fake_client,&tvdata,eeprom);
-	}
+	tveeprom_hauppauge_analog(NULL, &tvdata, eeprom);
 
 	trace_eeprom("eeprom assumed v4l tveeprom module");
 	trace_eeprom("eeprom direct call results:");

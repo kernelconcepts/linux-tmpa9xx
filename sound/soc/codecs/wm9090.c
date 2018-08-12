@@ -139,12 +139,10 @@ static const u16 wm9090_reg_defaults[] = {
 
 /* This struct is used to save the context */
 struct wm9090_priv {
-	struct mutex mutex;
 	struct wm9090_platform_data pdata;
-	void *control_data;
 };
 
-static int wm9090_volatile(unsigned int reg)
+static int wm9090_volatile(struct snd_soc_codec *codec, unsigned int reg)
 {
 	switch (reg) {
 	case WM9090_SOFTWARE_RESET:
@@ -179,19 +177,19 @@ static void wait_for_dc_servo(struct snd_soc_codec *codec)
 }
 
 static const unsigned int in_tlv[] = {
-	TLV_DB_RANGE_HEAD(6),
+	TLV_DB_RANGE_HEAD(3),
 	0, 0, TLV_DB_SCALE_ITEM(-600, 0, 0),
 	1, 3, TLV_DB_SCALE_ITEM(-350, 350, 0),
 	4, 6, TLV_DB_SCALE_ITEM(600, 600, 0),
 };
 static const unsigned int mix_tlv[] = {
-	TLV_DB_RANGE_HEAD(4),
+	TLV_DB_RANGE_HEAD(2),
 	0, 2, TLV_DB_SCALE_ITEM(-1200, 300, 0),
 	3, 3, TLV_DB_SCALE_ITEM(0, 0, 0),
 };
 static const DECLARE_TLV_DB_SCALE(out_tlv, -5700, 100, 0);
 static const unsigned int spkboost_tlv[] = {
-	TLV_DB_RANGE_HEAD(7),
+	TLV_DB_RANGE_HEAD(2),
 	0, 6, TLV_DB_SCALE_ITEM(0, 150, 0),
 	7, 7, TLV_DB_SCALE_ITEM(1200, 0, 0),
 };
@@ -518,7 +516,7 @@ static int wm9090_set_bias_level(struct snd_soc_codec *codec,
 			for (i = 1; i < codec->driver->reg_cache_size; i++) {
 				if (reg_cache[i] == wm9090_reg_defaults[i])
 					continue;
-				if (wm9090_volatile(i))
+				if (wm9090_volatile(codec, i))
 					continue;
 
 				ret = snd_soc_write(codec, i, reg_cache[i]);
@@ -550,11 +548,8 @@ static int wm9090_set_bias_level(struct snd_soc_codec *codec,
 
 static int wm9090_probe(struct snd_soc_codec *codec)
 {
-	struct wm9090_priv *wm9090 = snd_soc_codec_get_drvdata(codec);
-	u16 *reg_cache = codec->reg_cache;
 	int ret;
 
-	codec->control_data = wm9090->control_data;
 	ret = snd_soc_codec_set_cache_io(codec, 8, 16, SND_SOC_I2C);
 	if (ret != 0) {
 		dev_err(codec->dev, "Failed to set cache I/O: %d\n", ret);
@@ -576,22 +571,30 @@ static int wm9090_probe(struct snd_soc_codec *codec)
 	/* Configure some defaults; they will be written out when we
 	 * bring the bias up.
 	 */
-	reg_cache[WM9090_IN1_LINE_INPUT_A_VOLUME] |= WM9090_IN1_VU
-		| WM9090_IN1A_ZC;
-	reg_cache[WM9090_IN1_LINE_INPUT_B_VOLUME] |= WM9090_IN1_VU
-		| WM9090_IN1B_ZC;
-	reg_cache[WM9090_IN2_LINE_INPUT_A_VOLUME] |= WM9090_IN2_VU
-		| WM9090_IN2A_ZC;
-	reg_cache[WM9090_IN2_LINE_INPUT_B_VOLUME] |= WM9090_IN2_VU
-		| WM9090_IN2B_ZC;
-	reg_cache[WM9090_SPEAKER_VOLUME_LEFT] |=
-		WM9090_SPKOUT_VU | WM9090_SPKOUTL_ZC;
-	reg_cache[WM9090_LEFT_OUTPUT_VOLUME] |=
-		WM9090_HPOUT1_VU | WM9090_HPOUT1L_ZC;
-	reg_cache[WM9090_RIGHT_OUTPUT_VOLUME] |=
-		WM9090_HPOUT1_VU | WM9090_HPOUT1R_ZC;
+	snd_soc_update_bits(codec, WM9090_IN1_LINE_INPUT_A_VOLUME,
+			    WM9090_IN1_VU | WM9090_IN1A_ZC,
+			    WM9090_IN1_VU | WM9090_IN1A_ZC);
+	snd_soc_update_bits(codec, WM9090_IN1_LINE_INPUT_B_VOLUME,
+			    WM9090_IN1_VU | WM9090_IN1B_ZC,
+			    WM9090_IN1_VU | WM9090_IN1B_ZC);
+	snd_soc_update_bits(codec, WM9090_IN2_LINE_INPUT_A_VOLUME,
+			    WM9090_IN2_VU | WM9090_IN2A_ZC,
+			    WM9090_IN2_VU | WM9090_IN2A_ZC);
+	snd_soc_update_bits(codec, WM9090_IN2_LINE_INPUT_B_VOLUME,
+			    WM9090_IN2_VU | WM9090_IN2B_ZC,
+			    WM9090_IN2_VU | WM9090_IN2B_ZC);
+	snd_soc_update_bits(codec, WM9090_SPEAKER_VOLUME_LEFT,
+			    WM9090_SPKOUT_VU | WM9090_SPKOUTL_ZC,
+			    WM9090_SPKOUT_VU | WM9090_SPKOUTL_ZC);
+	snd_soc_update_bits(codec, WM9090_LEFT_OUTPUT_VOLUME,
+			    WM9090_HPOUT1_VU | WM9090_HPOUT1L_ZC,
+			    WM9090_HPOUT1_VU | WM9090_HPOUT1L_ZC);
+	snd_soc_update_bits(codec, WM9090_RIGHT_OUTPUT_VOLUME,
+			    WM9090_HPOUT1_VU | WM9090_HPOUT1R_ZC,
+			    WM9090_HPOUT1_VU | WM9090_HPOUT1R_ZC);
 
-	reg_cache[WM9090_CLOCKING_1] |= WM9090_TOCLK_ENA;
+	snd_soc_update_bits(codec, WM9090_CLOCKING_1,
+			    WM9090_TOCLK_ENA, WM9090_TOCLK_ENA);
 
 	wm9090_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
 
@@ -655,8 +658,6 @@ static int wm9090_i2c_probe(struct i2c_client *i2c,
 		       sizeof(wm9090->pdata));
 
 	i2c_set_clientdata(i2c, wm9090);
-	wm9090->control_data = i2c;
-	mutex_init(&wm9090->mutex);
 
 	ret =  snd_soc_register_codec(&i2c->dev,
 			&soc_codec_dev_wm9090,  NULL, 0);
@@ -677,6 +678,7 @@ static int __devexit wm9090_i2c_remove(struct i2c_client *i2c)
 
 static const struct i2c_device_id wm9090_id[] = {
 	{ "wm9090", 0 },
+	{ "wm9093", 0 },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, wm9090_id);

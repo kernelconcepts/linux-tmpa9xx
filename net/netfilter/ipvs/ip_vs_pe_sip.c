@@ -37,13 +37,9 @@ static int get_callid(const char *dptr, unsigned int dataoff,
 		if (ret > 0)
 			break;
 		if (!ret)
-			return 0;
+			return -EINVAL;
 		dataoff += *matchoff;
 	}
-
-	/* Empty callid is useless */
-	if (!*matchlen)
-		return -EINVAL;
 
 	/* Too large is useless */
 	if (*matchlen > IP_VS_PEDATA_MAXLEN)
@@ -71,6 +67,7 @@ ip_vs_sip_fill_param(struct ip_vs_conn_param *p, struct sk_buff *skb)
 	struct ip_vs_iphdr iph;
 	unsigned int dataoff, datalen, matchoff, matchlen;
 	const char *dptr;
+	int retc;
 
 	ip_vs_fill_iphdr(p->af, skb_network_header(skb), &iph);
 
@@ -83,20 +80,21 @@ ip_vs_sip_fill_param(struct ip_vs_conn_param *p, struct sk_buff *skb)
 	if (dataoff >= skb->len)
 		return -EINVAL;
 
+	if ((retc=skb_linearize(skb)) < 0)
+		return retc;
 	dptr = skb->data + dataoff;
 	datalen = skb->len - dataoff;
 
-	if (get_callid(dptr, dataoff, datalen, &matchoff, &matchlen))
+	if (get_callid(dptr, 0, datalen, &matchoff, &matchlen))
 		return -EINVAL;
-
-	p->pe_data = kmalloc(matchlen, GFP_ATOMIC);
-	if (!p->pe_data)
-		return -ENOMEM;
 
 	/* N.B: pe_data is only set on success,
 	 * this allows fallback to the default persistence logic on failure
 	 */
-	memcpy(p->pe_data, dptr + matchoff, matchlen);
+	p->pe_data = kmemdup(dptr + matchoff, matchlen, GFP_ATOMIC);
+	if (!p->pe_data)
+		return -ENOMEM;
+
 	p->pe_data_len = matchlen;
 
 	return 0;

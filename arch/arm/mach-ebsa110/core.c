@@ -66,8 +66,8 @@ static void __init ebsa110_init_irq(void)
 	local_irq_restore(flags);
 
 	for (irq = 0; irq < NR_IRQS; irq++) {
-		set_irq_chip(irq, &ebsa110_irq_chip);
-		set_irq_handler(irq, handle_level_irq);
+		irq_set_chip_and_handler(irq, &ebsa110_irq_chip,
+					 handle_level_irq);
 		set_irq_flags(irq, IRQF_VALID | IRQF_PROBE);
 	}
 }
@@ -280,7 +280,7 @@ arch_initcall(ebsa110_init);
 
 MACHINE_START(EBSA110, "EBSA110")
 	/* Maintainer: Russell King */
-	.boot_params	= 0x00000400,
+	.atag_offset	= 0x400,
 	.reserve_lp0	= 1,
 	.reserve_lp2	= 1,
 	.soft_reboot	= 1,

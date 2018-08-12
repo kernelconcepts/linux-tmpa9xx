@@ -88,7 +88,7 @@ struct workqueue_struct *user_dlm_worker;
  *		  signifies a bast fired on the lock.
  */
 #define DLMFS_CAPABILITIES "bast stackglue"
-extern int param_set_dlmfs_capabilities(const char *val,
+static int param_set_dlmfs_capabilities(const char *val,
 					struct kernel_param *kp)
 {
 	printk(KERN_ERR "%s: readonly parameter\n", kp->name);
@@ -212,7 +212,7 @@ static int dlmfs_file_setattr(struct dentry *dentry, struct iattr *attr)
 	struct inode *inode = dentry->d_inode;
 
 	attr->ia_valid &= ~ATTR_SIZE;
-	error = inode_change_ok(inode, attr);
+	error = setattr_prepare(dentry, attr);
 	if (error)
 		return error;
 

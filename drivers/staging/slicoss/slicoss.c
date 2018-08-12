@@ -1490,7 +1490,7 @@ static struct slic_rspbuf *slic_rspqueue_getnext(struct adapter *adapter)
 		slic_reg64_write(adapter, &adapter->slic_regs->slic_rbar64,
 			(rspq->paddr[rspq->pageindex] | SLIC_RSPQ_BUFSINPAGE),
 			&adapter->slic_regs->slic_addr_upper, 0, DONT_FLUSH);
-		rspq->pageindex = (++rspq->pageindex) % rspq->num_pages;
+		rspq->pageindex = (rspq->pageindex + 1) % rspq->num_pages;
 		rspq->offset = 0;
 		rspq->rspbuf = (struct slic_rspbuf *)
 						rspq->vaddr[rspq->pageindex];
@@ -3724,7 +3724,7 @@ static const struct net_device_ops slic_netdev_ops = {
 	.ndo_do_ioctl		= slic_ioctl,
 	.ndo_set_mac_address	= slic_mac_set_address,
 	.ndo_get_stats		= slic_get_stats,
-	.ndo_set_multicast_list	= slic_mcast_set_list,
+	.ndo_set_rx_mode	= slic_mcast_set_list,
 	.ndo_validate_addr	= eth_validate_addr,
 	.ndo_change_mtu		= eth_change_mtu,
 };

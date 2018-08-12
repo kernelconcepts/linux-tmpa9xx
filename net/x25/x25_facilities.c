@@ -31,7 +31,7 @@
  * x25_parse_facilities - Parse facilities from skb into the facilities structs
  *
  * @skb: sk_buff to parse
- * @facilities: Regular facilites, updated as facilities are found
+ * @facilities: Regular facilities, updated as facilities are found
  * @dte_facs: ITU DTE facilities, updated as DTE facilities are found
  * @vc_fac_mask: mask is updated with all facilities found
  *
@@ -44,7 +44,7 @@
 int x25_parse_facilities(struct sk_buff *skb, struct x25_facilities *facilities,
 		struct x25_dte_facilities *dte_facs, unsigned long *vc_fac_mask)
 {
-	unsigned char *p = skb->data;
+	unsigned char *p;
 	unsigned int len;
 
 	*vc_fac_mask = 0;
@@ -60,13 +60,15 @@ int x25_parse_facilities(struct sk_buff *skb, struct x25_facilities *facilities,
 	memset(dte_facs->called_ae, '\0', sizeof(dte_facs->called_ae));
 	memset(dte_facs->calling_ae, '\0', sizeof(dte_facs->calling_ae));
 
-	if (skb->len < 1)
+	if (!pskb_may_pull(skb, 1))
 		return 0;
 
-	len = *p++;
+	len = skb->data[0];
 
-	if (len >= skb->len)
+	if (!pskb_may_pull(skb, 1 + len))
 		return -1;
+
+	p = skb->data + 1;
 
 	while (len > 0) {
 		switch (*p & X25_FAC_CLASS_MASK) {
@@ -269,6 +271,7 @@ int x25_negotiate_facilities(struct sk_buff *skb, struct sock *sk,
 
 	memset(&theirs, 0, sizeof(theirs));
 	memcpy(new, ours, sizeof(*new));
+	memset(dte, 0, sizeof(*dte));
 
 	len = x25_parse_facilities(skb, &theirs, dte, &x25->vc_facil_mask);
 	if (len < 0)

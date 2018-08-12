@@ -22,6 +22,7 @@
 
 #include <linux/blkdev.h>
 #include <linux/mempool.h>
+#include <linux/export.h>
 #include <linux/bio.h>
 #include <linux/workqueue.h>
 #include <linux/slab.h>
@@ -760,6 +761,9 @@ EXPORT_SYMBOL(bio_integrity_clone);
 int bioset_integrity_create(struct bio_set *bs, int pool_size)
 {
 	unsigned int max_slab = vecs_to_idx(BIO_MAX_PAGES);
+
+	if (bs->bio_integrity_pool)
+		return 0;
 
 	bs->bio_integrity_pool =
 		mempool_create_slab_pool(pool_size, bip_slab[max_slab].slab);

@@ -29,6 +29,7 @@
 #include <linux/err.h>
 #include <linux/device.h>
 #include <linux/sysdev.h>
+#include <linux/syscore_ops.h>
 #include <linux/interrupt.h>
 #include <linux/ioport.h>
 #include <linux/mutex.h>
@@ -37,7 +38,7 @@
 #include <linux/io.h>
 
 #include <mach/hardware.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 #include <asm/irq.h>
 
 #include <mach/regs-clock.h>
@@ -45,6 +46,7 @@
 #include <plat/clock.h>
 #include <plat/cpu.h>
 #include <plat/s3c244x.h>
+#include <plat/pm.h>
 
 #include <plat/gpio-core.h>
 #include <plat/gpio-cfg.h>
@@ -167,6 +169,12 @@ int __init s3c2442_init(void)
 {
 	printk("S3C2442: Initialising architecture\n");
 
+#ifdef CONFIG_PM
+	register_syscore_ops(&s3c2410_pm_syscore_ops);
+#endif
+	register_syscore_ops(&s3c244x_pm_syscore_ops);
+	register_syscore_ops(&s3c24xx_irq_syscore_ops);
+
 	return sysdev_register(&s3c2442_sysdev);
 }
 
@@ -174,6 +182,6 @@ void __init s3c2442_map_io(void)
 {
 	s3c244x_map_io();
 
-	s3c24xx_gpiocfg_default.set_pull = s3c_gpio_setpull_1down;
-	s3c24xx_gpiocfg_default.get_pull = s3c_gpio_getpull_1down;
+	s3c24xx_gpiocfg_default.set_pull = s3c24xx_gpio_setpull_1down;
+	s3c24xx_gpiocfg_default.get_pull = s3c24xx_gpio_getpull_1down;
 }

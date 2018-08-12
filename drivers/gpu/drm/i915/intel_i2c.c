@@ -28,6 +28,7 @@
  */
 #include <linux/i2c.h>
 #include <linux/i2c-algo-bit.h>
+#include <linux/export.h>
 #include "drmP.h"
 #include "drm.h"
 #include "intel_drv.h"
@@ -259,7 +260,7 @@ gmbus_xfer(struct i2c_adapter *adapter,
 				if (wait_for(I915_READ(GMBUS2 + reg_offset) & (GMBUS_SATOER | GMBUS_HW_RDY), 50))
 					goto timeout;
 				if (I915_READ(GMBUS2 + reg_offset) & GMBUS_SATOER)
-					return 0;
+					goto clear_err;
 
 				val = I915_READ(GMBUS3 + reg_offset);
 				do {
@@ -287,7 +288,7 @@ gmbus_xfer(struct i2c_adapter *adapter,
 				if (wait_for(I915_READ(GMBUS2 + reg_offset) & (GMBUS_SATOER | GMBUS_HW_RDY), 50))
 					goto timeout;
 				if (I915_READ(GMBUS2 + reg_offset) & GMBUS_SATOER)
-					return 0;
+					goto clear_err;
 
 				val = loop = 0;
 				do {
@@ -302,14 +303,31 @@ gmbus_xfer(struct i2c_adapter *adapter,
 		if (i + 1 < num && wait_for(I915_READ(GMBUS2 + reg_offset) & (GMBUS_SATOER | GMBUS_HW_WAIT_PHASE), 50))
 			goto timeout;
 		if (I915_READ(GMBUS2 + reg_offset) & GMBUS_SATOER)
-			return 0;
+			goto clear_err;
 	}
 
-	return num;
+	goto done;
+
+clear_err:
+	/* Toggle the Software Clear Interrupt bit. This has the effect
+	 * of resetting the GMBUS controller and so clearing the
+	 * BUS_ERROR raised by the slave's NAK.
+	 */
+	I915_WRITE(GMBUS1 + reg_offset, GMBUS_SW_CLR_INT);
+	I915_WRITE(GMBUS1 + reg_offset, 0);
+
+done:
+	/* Mark the GMBUS interface as disabled. We will re-enable it at the
+	 * start of the next xfer, till then let it sleep.
+	 */
+	I915_WRITE(GMBUS0 + reg_offset, 0);
+	return i;
 
 timeout:
 	DRM_INFO("GMBUS timed out, falling back to bit banging on pin %d [%s]\n",
 		 bus->reg0 & 0xff, bus->adapter.name);
+	I915_WRITE(GMBUS0 + reg_offset, 0);
+
 	/* Hardware may not support GMBUS over these pins? Try GPIO bitbanging instead. */
 	bus->force_bit = intel_gpio_create(dev_priv, bus->reg0 & 0xff);
 	if (!bus->force_bit)
@@ -392,7 +410,7 @@ int intel_setup_gmbus(struct drm_device *dev)
 	return 0;
 
 err:
-	while (--i) {
+	while (i--) {
 		struct intel_gmbus *bus = &dev_priv->gmbus[i];
 		i2c_del_adapter(&bus->adapter);
 	}
@@ -405,13 +423,7 @@ void intel_gmbus_set_speed(struct i2c_adapter *adapter, int speed)
 {
 	struct intel_gmbus *bus = to_intel_gmbus(adapter);
 
-	/* speed:
-	 * 0x0 = 100 KHz
-	 * 0x1 = 50 KHz
-	 * 0x2 = 400 KHz
-	 * 0x3 = 1000 Khz
-	 */
-	bus->reg0 = (bus->reg0 & ~(0x3 << 8)) | (speed << 8);
+	bus->reg0 = (bus->reg0 & ~(0x3 << 8)) | speed;
 }
 
 void intel_gmbus_force_bit(struct i2c_adapter *adapter, bool force_bit)

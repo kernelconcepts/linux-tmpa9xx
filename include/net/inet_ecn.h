@@ -30,6 +30,14 @@ static inline int INET_ECN_is_capable(__u8 dsfield)
 	return dsfield & INET_ECN_ECT_0;
 }
 
+/*
+ * RFC 3168 9.1.1
+ *  The full-functionality option for ECN encapsulation is to copy the
+ *  ECN codepoint of the inside header to the outside header on
+ *  encapsulation if the inside header is not-ECT or ECT, and to set the
+ *  ECN codepoint of the outside header to ECT(0) if the ECN codepoint of
+ *  the inside header is CE.
+ */
 static inline __u8 INET_ECN_encapsulate(__u8 outer, __u8 inner)
 {
 	outer &= ~INET_ECN_MASK;
@@ -38,9 +46,19 @@ static inline __u8 INET_ECN_encapsulate(__u8 outer, __u8 inner)
 	return outer;
 }
 
-#define	INET_ECN_xmit(sk) do { inet_sk(sk)->tos |= INET_ECN_ECT_0; } while (0)
-#define	INET_ECN_dontxmit(sk) \
-	do { inet_sk(sk)->tos &= ~INET_ECN_MASK; } while (0)
+static inline void INET_ECN_xmit(struct sock *sk)
+{
+	inet_sk(sk)->tos |= INET_ECN_ECT_0;
+	if (inet6_sk(sk) != NULL)
+		inet6_sk(sk)->tclass |= INET_ECN_ECT_0;
+}
+
+static inline void INET_ECN_dontxmit(struct sock *sk)
+{
+	inet_sk(sk)->tos &= ~INET_ECN_MASK;
+	if (inet6_sk(sk) != NULL)
+		inet6_sk(sk)->tclass &= ~INET_ECN_MASK;
+}
 
 #define IP6_ECN_flow_init(label) do {		\
       (label) &= ~htonl(INET_ECN_MASK << 20);	\
@@ -91,11 +109,24 @@ static inline void ipv4_copy_dscp(unsigned int dscp, struct iphdr *inner)
 
 struct ipv6hdr;
 
-static inline int IP6_ECN_set_ce(struct ipv6hdr *iph)
+/* Note:
+ * IP_ECN_set_ce() has to tweak IPV4 checksum when setting CE,
+ * meaning both changes have no effect on skb->csum if/when CHECKSUM_COMPLETE
+ * In IPv6 case, no checksum compensates the change in IPv6 header,
+ * so we have to update skb->csum.
+ */
+static inline int IP6_ECN_set_ce(struct sk_buff *skb, struct ipv6hdr *iph)
 {
+	__be32 from, to;
+
 	if (INET_ECN_is_not_ect(ipv6_get_dsfield(iph)))
 		return 0;
-	*(__be32*)iph |= htonl(INET_ECN_CE << 20);
+
+	from = *(__be32 *)iph;
+	to = from | htonl(INET_ECN_CE << 20);
+	*(__be32 *)iph = to;
+	if (skb->ip_summed == CHECKSUM_COMPLETE)
+		skb->csum = csum_add(csum_sub(skb->csum, from), to);
 	return 1;
 }
 
@@ -120,7 +151,7 @@ static inline int INET_ECN_set_ce(struct sk_buff *skb)
 
 	case cpu_to_be16(ETH_P_IPV6):
 		if (skb->network_header + sizeof(struct ipv6hdr) <= skb->tail)
-			return IP6_ECN_set_ce(ipv6_hdr(skb));
+			return IP6_ECN_set_ce(skb, ipv6_hdr(skb));
 		break;
 	}
 

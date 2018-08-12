@@ -321,8 +321,8 @@ static int __devinit nuc900_nand_probe(struct platform_device *pdev)
 		goto fail3;
 	}
 
-	add_mtd_partitions(&(nuc900_nand->mtd), partitions,
-						ARRAY_SIZE(partitions));
+	mtd_device_register(&(nuc900_nand->mtd), partitions,
+			    ARRAY_SIZE(partitions));
 
 	platform_set_drvdata(pdev, nuc900_nand);
 
@@ -339,6 +339,7 @@ static int __devexit nuc900_nand_remove(struct platform_device *pdev)
 	struct nuc900_nand *nuc900_nand = platform_get_drvdata(pdev);
 	struct resource *res;
 
+	nand_release(&nuc900_nand->mtd);
 	iounmap(nuc900_nand->reg);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);

@@ -12,8 +12,10 @@
  *  GNU General Public License for more details.
  */
 
+#include <linux/export.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
+#include <linux/kmod.h>
 #include <linux/sched.h>
 #include <linux/freezer.h>
 #include "rc-core-priv.h"
@@ -114,18 +116,20 @@ int ir_raw_event_store_edge(struct rc_dev *dev, enum raw_event_type type)
 	s64			delta; /* ns */
 	DEFINE_IR_RAW_EVENT(ev);
 	int			rc = 0;
+	int			delay;
 
 	if (!dev->raw)
 		return -EINVAL;
 
 	now = ktime_get();
 	delta = ktime_to_ns(ktime_sub(now, dev->raw->last_event));
+	delay = MS_TO_NS(dev->input_dev->rep[REP_DELAY]);
 
 	/* Check for a long duration since last event or if we're
 	 * being called for the first time, note that delta can't
 	 * possibly be negative.
 	 */
-	if (delta > IR_MAX_DURATION || !dev->raw->last_type)
+	if (delta > delay || !dev->raw->last_type)
 		type |= IR_START_EVENT;
 	else
 		ev.duration = delta;
@@ -153,7 +157,7 @@ EXPORT_SYMBOL_GPL(ir_raw_event_store_edge);
  * @type:	the type of the event that has occurred
  *
  * This routine (which may be called from an interrupt context) works
- * in similiar manner to ir_raw_event_store_edge.
+ * in similar manner to ir_raw_event_store_edge.
  * This routine is intended for devices with limited internal buffer
  * It automerges samples of same type, and handles timeouts
  */
@@ -221,7 +225,7 @@ void ir_raw_event_handle(struct rc_dev *dev)
 {
 	unsigned long flags;
 
-	if (!dev->raw)
+	if (!dev->raw || !dev->raw->thread)
 		return;
 
 	spin_lock_irqsave(&dev->raw->lock, flags);
@@ -248,6 +252,7 @@ int ir_raw_event_register(struct rc_dev *dev)
 {
 	int rc;
 	struct ir_raw_handler *handler;
+	struct task_struct *thread;
 
 	if (!dev)
 		return -EINVAL;
@@ -265,13 +270,15 @@ int ir_raw_event_register(struct rc_dev *dev)
 		goto out;
 
 	spin_lock_init(&dev->raw->lock);
-	dev->raw->thread = kthread_run(ir_raw_event_thread, dev->raw,
-				       "rc%ld", dev->devno);
+	thread = kthread_run(ir_raw_event_thread, dev->raw, "rc%ld",
+			     dev->devno);
 
-	if (IS_ERR(dev->raw->thread)) {
-		rc = PTR_ERR(dev->raw->thread);
+	if (IS_ERR(thread)) {
+		rc = PTR_ERR(thread);
 		goto out;
 	}
+
+	dev->raw->thread = thread;
 
 	mutex_lock(&ir_raw_handler_lock);
 	list_add_tail(&dev->raw->list, &ir_raw_client_list);
@@ -353,6 +360,7 @@ static void init_decoders(struct work_struct *work)
 	load_rc6_decode();
 	load_jvc_decode();
 	load_sony_decode();
+	load_mce_kbd_decode();
 	load_lirc_codec();
 
 	/* If needed, we may later add some init code. In this case,
