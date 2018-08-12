@@ -12,6 +12,8 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/dma-mapping.h>
 #include <linux/gpio.h>
 

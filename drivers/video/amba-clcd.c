@@ -484,7 +484,7 @@ static int clcdfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *inf
 	ustart = fb->fb.fix.smem_start + var->yoffset * fb->fb.fix.line_length;
 	offset = var->yres * fb->fb.fix.line_length / 2;
 
-	clcdfb_set_start(fb, ustart, offset);
+	clcdfb_set_start(fb);
 
 	return 0;
 }
