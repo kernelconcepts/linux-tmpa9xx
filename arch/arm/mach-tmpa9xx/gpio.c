@@ -3,7 +3,7 @@
  *
  * Generic TMPA9xx GPIO handling
  *
- * Copyright (c) 2009, 2010 Florian Boor <florian.boor@kernelconcepts.de>
+ * Copyright (c) 2009, 2010, 2018 Florian Boor <florian.boor@kernelconcepts.de>
  * Copyright (c) 2011 Michael Hunold <michael@mihu.de>
  *
  * Based on mach-ep93xx/gpio.c
@@ -28,11 +28,16 @@
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
+#include <linux/gpio.h>
+#include <linux/slab.h>
+
 
 #include <mach/regs.h>
 #include <mach/gpio.h>
 #include <asm/gpio.h>
 #include <mach/irqs.h>
+
+static struct irq_chip tmpa9xx_gpio_irq_chip;
 
 struct tmpa9xx_gpio_chip {
 	struct gpio_chip chip;
@@ -328,30 +333,30 @@ static int irq_set_type(struct irq_data *data, unsigned int flow_type)
 		reg_level_sel &= ~port_mask;
 		reg_edge_both &= ~port_mask;
 		reg_raise_high |= port_mask;
-		set_irq_handler(g->irq, handle_edge_irq);
+		 irq_set_chip_and_handler(g->irq, &tmpa9xx_gpio_irq_chip, handle_edge_irq);
 		break;
 	case IRQ_TYPE_EDGE_FALLING:
 		reg_level_sel &= ~port_mask;
 		reg_edge_both &= ~port_mask;
 		reg_raise_high &= ~port_mask;
-		set_irq_handler(g->irq, handle_edge_irq);
+		irq_set_chip_and_handler(g->irq, &tmpa9xx_gpio_irq_chip, handle_edge_irq);
 		break;
 	case IRQ_TYPE_LEVEL_HIGH:
 		reg_level_sel |= port_mask;
 		reg_edge_both &= ~port_mask;
 		reg_raise_high |= port_mask;
-		set_irq_handler(g->irq, handle_level_irq);
+		irq_set_chip_and_handler(g->irq, &tmpa9xx_gpio_irq_chip, handle_level_irq);
 		break;
 	case IRQ_TYPE_LEVEL_LOW:
 		reg_level_sel |= port_mask;
 		reg_edge_both &= ~port_mask;
 		reg_raise_high &= ~port_mask;
-		set_irq_handler(g->irq, handle_level_irq);
+		irq_set_chip_and_handler(g->irq, &tmpa9xx_gpio_irq_chip, handle_level_irq);
 		break;
 	case IRQ_TYPE_EDGE_BOTH:
 		reg_level_sel &= ~port_mask;
 		reg_edge_both |= port_mask;
-		set_irq_handler(g->irq, handle_edge_irq);
+		irq_set_chip_and_handler(g->irq, &tmpa9xx_gpio_irq_chip, handle_edge_irq);
 		break;
 	default:
 		pr_err("tmpa9xx: failed to set irq type %d for gpio %d\n",
@@ -490,9 +495,8 @@ int __init tmpa9xx_gpio_init(void)
 	for (i = 0; i < TMPA9XX_NUM_GPIO_IRQS; i++) {
 		gpio_irq = gpio_to_irq(0) + i;
 		irq_gpio_desc[i].irq = gpio_irq;
-		set_irq_chip_data(gpio_irq, (void *)&irq_gpio_desc[i]);
-		set_irq_chip(gpio_irq, &tmpa9xx_gpio_irq_chip);
-		set_irq_handler(gpio_irq, handle_level_irq);
+		irq_set_chip_data(gpio_irq, (void *)&irq_gpio_desc[i]);
+		irq_set_chip_and_handler(gpio_irq, &tmpa9xx_gpio_irq_chip, handle_level_irq);
 		set_irq_flags(gpio_irq, IRQF_VALID);
 	}
 
