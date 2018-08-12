@@ -284,6 +284,25 @@ config USB_IMX
 	   dynamically linked module called "imx_udc" and force all
 	   gadget drivers to also be dynamically linked.
 
+config USB_GADGET_TMPA9XX
+       boolean "TMPA9xx USB Device Controller"
+       select USB_GADGET_DUALSPEED
+       depends on ARCH_TMPA9XX
+       help
+       The TOSHIBA ARM MCU TMPA9xxCRAXBG has a full speed USB Device
+           Controller with support for 3 configurable endpoints (plus
+           endpoint zero).
+
+           Say "y" to link the driver statically, or "m" to build a
+           dynamically linked module called "tmpa9xx_udc" and force all
+           gadget drivers to also be dynamically linked.
+
+config USB_TMPA9XX
+       tristate
+       depends on USB_GADGET_TMPA9XX
+       default USB_GADGET
+       select USB_GADGET_SELECTED
+
 config USB_S3C2410
 	tristate "S3C2410 USB Device Controller"
 	depends on ARCH_S3C2410

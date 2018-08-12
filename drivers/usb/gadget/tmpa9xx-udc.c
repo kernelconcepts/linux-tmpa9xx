@@ -1461,8 +1461,8 @@ again:
 out:
 	enable_irq(udc->irq);
 }
-
-int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind) (struct usb_gadget *))
+#if 0
+static int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind) (struct usb_gadget *))
 {
 	struct tmpa9xx_udc *udc = &controller;
 	int ret;
@@ -1528,7 +1528,7 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	return 0;
 }
 EXPORT_SYMBOL(usb_gadget_unregister_driver);
-
+#endif
 static void pwctl_power_reset(struct tmpa9xx_udc *udc)
 {
 	u32 reg_data;

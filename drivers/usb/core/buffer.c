@@ -29,8 +29,6 @@ static size_t pool_max[HCD_BUFFER_POOLS] = {
 	32, 128, 512, 2048,
 };
 
-#endif
-
 void __init usb_init_pool_max(void)
 {
 	/*
@@ -46,6 +44,8 @@ void __init usb_init_pool_max(void)
 	else
 		BUILD_BUG();		/* We don't allow this */
 }
+
+#endif
 
 /* SETUP primitives */
 
