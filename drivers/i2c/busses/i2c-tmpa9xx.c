@@ -395,7 +395,6 @@ static int __devinit tmpa9xx_i2c_probe(struct platform_device *pdev)
 	adapter->algo_data = priv;
 	adapter->class = I2C_CLASS_HWMON;
 	adapter->dev.parent = &pdev->dev;
-	adapter->id = 0;
 	adapter->nr = pdev->id;
 	priv->i2c_adapter = adapter;
 
