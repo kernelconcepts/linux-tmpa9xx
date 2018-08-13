@@ -18,7 +18,7 @@
 
 #ifdef CONFIG_USB_OHCI_HCD_TMPA9XX
 #include <mach/sram.h>
-#else
+#endif
 
 /*
  * DMA-Coherent Buffers
@@ -44,8 +44,6 @@ void __init usb_init_pool_max(void)
 	else
 		BUILD_BUG();		/* We don't allow this */
 }
-
-#endif
 
 /* SETUP primitives */
 
