@@ -53,7 +53,7 @@
 /*
  * Ethernet
  */
-#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
+#if defined CONFIG_ETHERNET || defined CONFIG_ETHERNET_MODULE
 static struct resource dm9000_resources[] = {
 	{
 		.start	= 0x60000002,
@@ -279,7 +279,7 @@ static struct platform_device topas_keys_device = {
 };
 
 static struct platform_device *devices_baseboard[] __initdata = {
-#if defined CONFIG_NET_ETHERNET || defined CONFIG_NET_ETHERNET_MODULE
+#if defined CONFIG_ETHERNET || defined CONFIG_ETHERNET_MODULE
 	&topas_dm9000_device,
 #endif
 	&topas_led_device,
