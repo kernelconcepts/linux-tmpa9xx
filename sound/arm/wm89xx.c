@@ -67,6 +67,8 @@ struct snd_wm89xx
 	struct snd_pcm_substream *rx_substream;
 	/* if non-null, current subtream running */
 	struct snd_pcm_substream *tx_substream;
+
+	int snd_speaker_volume;
 };
 
 #define i2c_packet_send(reg, val) \
@@ -74,6 +76,24 @@ struct snd_wm89xx
 	int ret = i2c_smbus_write_byte_data(i2c_client, reg, val); \
 	if (ret) \
 		dev_err(&i2c_client->dev, "i2c_smbus_write_byte_data() failed, ret %d\n", ret); \
+	}
+
+// define as function because return value is required
+static s32 i2c_packet_read(struct i2c_client* i2c_client, u8 reg) 
+	{ 
+	s32 ret = i2c_smbus_read_byte_data(i2c_client, reg); 
+	if (ret) 
+	{
+		dev_err(&i2c_client->dev, "i2c_smbus_read_byte_data() failed, ret %d\n", ret); 
+		return 0; // something needs to be returned -> send 0
+	}
+	else
+	{
+		printk("read ret: %d\n", ret);
+		return ret; // if not failed this contains the data
+	}
+	//printk("If you read this something is really fucked up");
+	//return 0; // for compiler - should not occur
 	}
 
 #ifdef CONFIG_MACH_TOPASA900
@@ -98,10 +118,12 @@ static void init_wm89xx_i2c(struct i2c_client *i2c_client)
 	i2c_packet_send(0x62,0x02);	/* R49 0X002 */
 	i2c_packet_send(0x64,0x01);	/* R50 0X001 */
 	i2c_packet_send(0x66,0x01);	/* R51 0X001 */
-	i2c_packet_send(0x69,0x3f);	/* R52 0X13f */
-	i2c_packet_send(0x6b,0x3f);	/* R53 0X13f */
+	i2c_packet_send(0x69,0x3f);	/* R52 0X13f - volume left speaker - 0x3f seems to be max*/
+	i2c_packet_send(0x6b,0x3f);	/* R53 0X13f - volume right speaker*/
 }
 #endif
+
+
 
 #ifdef CONFIG_MACH_TONGA2_TFTTIMER
 static void init_wm89xx_i2c(struct i2c_client *i2c_client)
@@ -271,6 +293,7 @@ static int snd_wm89xx_hw_params(struct snd_pcm_substream *substream,
 	*  We're relying on the driver not supporting full duplex mode
 	*  to allow us to grab all the memory.
 	*/
+	//printk("VOR DEM IF IN snd_wm89xx_hw_params");
 	if (snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(hwparams)) < 0 )
 		return -ENOMEM;
 
@@ -518,6 +541,7 @@ static int __devinit snd_wm89xx_pcm(struct snd_wm89xx *chip)
 		return ret;
 	}
 
+
 	/*
 	 * this sets up our initial buffers and sets the dma_type to isa.
 	 * isa works but I'm not sure why (or if) it's the right choice
@@ -537,6 +561,72 @@ static int __devinit snd_wm89xx_pcm(struct snd_wm89xx *chip)
 	return 0;
 }
 
+// ALSA CONTROLS FOR TOPASA900 
+
+#ifdef CONFIG_MACH_TOPASA900
+
+
+static int snd_volumeCtl_mono_info(struct snd_kcontrol *kcontrol, //
+		struct snd_ctl_elem_info *uinfo)
+{
+	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+	uinfo->count = 1;
+	uinfo->value.integer.min = 0;
+	uinfo->value.integer.max = 0x3f;
+	//printk("snd_volumeCtl_mono_info was called\n"); // only for debug purposes
+	return 0;
+}
+
+static s32 snd_volumeCtl_get(struct snd_kcontrol* kcontrol, //
+		struct snd_ctl_elem_value *ucontrol)
+{
+	//create a "chip struct" (wm89xx struct) that holds the snd_speaker_volume variable
+	struct snd_wm89xx *wm89xx = snd_kcontrol_chip(kcontrol);
+	struct i2c_client *i2c_client = wm89xx->i2c_client;
+	//printk("snd_volumeCtl_get was called(before i2cPacketRead)\n"); // only for debug purposes
+	ucontrol->value.integer.value[0] = wm89xx->snd_speaker_volume;
+	//printk("snd_volumeCtl_get was called(after i2cPacketRead). Result: %ld\n", ucontrol->value.integer.value[0]); // only for debug purposes
+	return 0;
+}
+
+static int snd_volumeCtl_put(struct snd_kcontrol *kcontrol, //
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_wm89xx *wm89xx = snd_kcontrol_chip(kcontrol);
+	struct i2c_client *i2c_client = wm89xx->i2c_client;
+	int changed = 0;
+	if (wm89xx->snd_speaker_volume != ucontrol->value.integer.value[0])
+	{
+		u8 volumeToWrite = ucontrol->value.integer.value[0];
+		// write the volume to both speakers
+		i2c_packet_send(0x69, volumeToWrite);
+		i2c_packet_send(0x6b, volumeToWrite);
+		changed = 1;
+		wm89xx->snd_speaker_volume = volumeToWrite;
+		//printk("Volume was set to %d\n", wm89xx->snd_speaker_volume);
+	}
+	//printk("snd_volumeCtl_put was called\n"); // only for debug purposes
+	return changed;
+}
+
+
+static struct snd_kcontrol_new volumeControl /*__devinitdata*/ = {
+	.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
+	.name = "Master Playback Volume",
+	.index = 0,
+	.access = SNDRV_CTL_ELEM_ACCESS_READWRITE,
+	.private_value = 0xffff,
+	.info = snd_volumeCtl_mono_info,
+	.get = snd_volumeCtl_get,
+	.put = snd_volumeCtl_put
+};
+
+
+
+#endif
+
+// constructor
+
 static int wm89xx_i2c_probe(struct i2c_client *i2c_client, const struct i2c_device_id *iid)
 {
 	struct snd_wm89xx *wm89xx;
@@ -546,6 +636,7 @@ static int wm89xx_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 
 	init_wm89xx_i2c(i2c_client);
 
+	//create card (old version of snd_card_new)
 	snd_card_create(-1, id, THIS_MODULE, sizeof(struct snd_wm89xx), &card);
 	if (!card) {
 		dev_err(&i2c_client->dev, "snd_card_create() failed\n");
@@ -561,6 +652,7 @@ static int wm89xx_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 	wm89xx->dev = &i2c_client->dev;
 	wm89xx->card = card;
 	wm89xx->i2c_client = i2c_client;
+	wm89xx->snd_speaker_volume = 0x3f; // this is (probably ?) max vol -> 63
 
 	ret = snd_device_new(card, SNDRV_DEV_LOWLEVEL, wm89xx, &snd_wm89xx_ops);
 	if (ret) {
@@ -568,6 +660,16 @@ static int wm89xx_i2c_probe(struct i2c_client *i2c_client, const struct i2c_devi
 		ret = -ENODEV;
 		goto err1;
 	}
+
+	//now create the new alsa control
+
+	ret = snd_ctl_add(card, snd_ctl_new1(&volumeControl, wm89xx));
+	if (ret < 0){
+		dev_err(&i2c_client->dev, "failed to initialise volume control\n");
+		ret = -ENODEV;
+		goto err1;
+	}
+
 
 	ret = snd_wm89xx_pcm(wm89xx);
 	if (ret) {
@@ -599,6 +701,8 @@ err1:
 
 	return 0;
 }
+
+//destructor
 
 static int wm89xx_i2c_remove(struct i2c_client *i2c_client)
 {
